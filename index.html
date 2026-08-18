@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,7 +10,7 @@
 </head>
 <body>
 <iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Imx410 Iso Gain Explainer" srcdoc="&lt;!doctype html&gt;
-&lt;html lang=&quot;zh-Hant&quot;&gt;
+&lt;html lang=&quot;en&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;utf-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
@@ -975,7 +975,7 @@ html&gt;body{padding:0}&lt;/style&gt;
 
   &lt;div class=&quot;hero&quot;&gt;
     &lt;div&gt;&lt;h2&gt;一個 ISO，五個硬體階段&lt;/h2&gt;&lt;div class=&quot;sub&quot;&gt;SIGMA fp Ver.5.02 · Sony IMX410 · ROM 規則與 sensor OTP 分層&lt;/div&gt;&lt;/div&gt;
-    &lt;div class=&quot;status&quot;&gt;&lt;span&gt;&lt;i class=&quot;dot&quot;&gt;&lt;/i&gt;韌體已確認&lt;/span&gt;&lt;span&gt;&lt;i class=&quot;dot otp&quot;&gt;&lt;/i&gt;OTP／實機值&lt;/span&gt;&lt;button class=&quot;lang-toggle&quot; id=&quot;lang-toggle&quot; type=&quot;button&quot; aria-label=&quot;Switch to English&quot;&gt;EN&lt;/button&gt;&lt;/div&gt;
+    &lt;div class=&quot;status&quot;&gt;&lt;span&gt;&lt;i class=&quot;dot&quot;&gt;&lt;/i&gt;韌體已確認&lt;/span&gt;&lt;span&gt;&lt;i class=&quot;dot otp&quot;&gt;&lt;/i&gt;OTP／實機值&lt;/span&gt;&lt;button class=&quot;lang-toggle&quot; id=&quot;lang-toggle&quot; type=&quot;button&quot; aria-label=&quot;切換為繁體中文&quot;&gt;中&lt;/button&gt;&lt;/div&gt;
   &lt;/div&gt;
 
   &lt;div class=&quot;controls&quot;&gt;
@@ -1018,7 +1018,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     (()=&gt;{
       const root=document.getElementById(&#x27;imx410-explainer&#x27;);
       const $=id=&gt;root.querySelector(&#x27;#&#x27;+id);
-      let lang=&#x27;zh-Hant&#x27;;try{if(localStorage.getItem(&#x27;imx410-lang&#x27;)===&#x27;en&#x27;)lang=&#x27;en&#x27;}catch(_error){}
+      let lang=&#x27;en&#x27;;try{const saved=localStorage.getItem(&#x27;imx410-lang&#x27;);if(saved===&#x27;en&#x27;||saved===&#x27;zh-Hant&#x27;)lang=saved}catch(_error){}
       const translations={
         &#x27;一個 ISO，五個硬體階段&#x27;:&#x27;One ISO, five hardware stages&#x27;,
         &#x27;SIGMA fp Ver.5.02 · Sony IMX410 · ROM 規則與 sensor OTP 分層&#x27;:&#x27;SIGMA fp Ver.5.02 · Sony IMX410 · ROM rules and sensor OTP layers&#x27;,
