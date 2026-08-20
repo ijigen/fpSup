@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIGMA fp 萬能監控台</title>
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#14181d; --panel2:#1b2027; --line:#262d36;
+    --fg:#e6edf3; --dim:#8b98a5; --accent:#4cc2ff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px}
+  header .sub{color:var(--dim);font-size:11px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);display:inline-block;box-shadow:0 0 8px currentColor;color:var(--bad)}
+  .dot.live{background:var(--ok);color:var(--ok)}
+  #stat{margin-left:auto;color:var(--dim);font-size:11px;text-align:right;line-height:1.5}
+  main{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;padding:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .card h2{margin:0;padding:9px 12px;font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+  .card h2 .src{font-size:9.5px;color:#5b6570;text-transform:none}
+  .body{padding:12px}
+  .kv{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed #20262e}
+  .kv:last-child{border:none}
+  .kv .k{color:var(--dim)} .kv .v{color:var(--fg);font-variant-numeric:tabular-nums}
+  .big{font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:1px}
+  .axis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:8px}
+  .axis .lab{color:var(--dim);font-size:10px} .axis .val{font-size:20px;font-variant-numeric:tabular-nums}
+  .axis .x{color:#f0776a}.axis .y{color:#7ee787}.axis .z{color:#79c0ff}
+  canvas{width:100%;display:block;background:var(--panel2);border-radius:6px}
+  .frame{position:relative;width:100%;aspect-ratio:3/2;background:var(--panel2);border-radius:6px;overflow:hidden}
+  .box{position:absolute;border:2px solid var(--accent);border-radius:2px;box-shadow:0 0 6px rgba(76,194,255,.5)}
+  .box.aat{border-color:var(--warn)}
+  .box .lbl{position:absolute;top:-16px;left:0;font-size:9px;color:var(--accent);white-space:nowrap}
+  .box.aat .lbl{color:var(--warn)}
+  .pill{padding:1px 7px;border-radius:10px;font-size:11px}
+  .pill.ok{background:rgba(63,185,80,.15);color:var(--ok)} .pill.warn{background:rgba(210,153,34,.15);color:var(--warn)} .pill.bad{background:rgba(248,81,73,.15);color:var(--bad)} .pill.dim{background:#20262e;color:var(--dim)}
+  .muted{color:#5b6570;font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <span id="conn" class="dot"></span>
+  <h1>SIGMA fp 萬能監控台</h1>
+  <span class="sub">live camera state over USB shell</span>
+  <div id="stat">—</div>
+</header>
+<main>
+  <section class="card">
+    <h2>陀螺儀 Gyro <span class="src">0xC31E3FCC→0x2E00644C · ~2500Hz</span></h2>
+    <div class="body">
+      <div class="axis">
+        <div><div class="lab">X (pitch)</div><div class="val x" id="gx">—</div></div>
+        <div><div class="lab">Y (yaw)</div><div class="val y" id="gy">—</div></div>
+        <div><div class="lab">Z (roll)</div><div class="val z" id="gz">—</div></div>
+      </div>
+      <canvas id="gyroPlot" width="560" height="120"></canvas>
+      <div class="muted" style="margin-top:6px">dps = raw/131 · orientation YxZ</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>加速計 / 水平儀 Accel <span class="src">0xC377790C · MMA8452Q · ~100Hz</span></h2>
+    <div class="body">
+      <div class="axis">
+        <div><div class="lab">X (g)</div><div class="val x" id="ax">—</div></div>
+        <div><div class="lab">Y (g)</div><div class="val y" id="ay">—</div></div>
+        <div><div class="lab">Z (g)</div><div class="val z" id="az">—</div></div>
+      </div>
+      <canvas id="levelPlot" width="560" height="150"></canvas>
+      <div class="kv" style="margin-top:6px"><span class="k">roll / pitch</span><span class="v" id="rp">—</span></div>
+      <div class="muted">g = raw/1024 · 軸向為相機水平儀值(暫定映射)</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>曝光 Exposure <span class="src">0xC343A6A0</span></h2>
+    <div class="body">
+      <div class="kv"><span class="k">ISO</span><span class="v" id="iso">—</span></div>
+      <div class="kv"><span class="k">gain_state</span><span class="v" id="gainstate">—</span></div>
+      <div class="kv"><span class="k">conversion gain</span><span class="v" id="hcg">—</span></div>
+      <div class="kv"><span class="k">analog gain</span><span class="v" id="again">—</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>對焦 AF <span class="src">0xC3404678 / 0xC33D1958</span></h2>
+    <div class="body">
+      <div class="kv"><span class="k">mode</span><span class="v" id="afmode">—</span></div>
+      <div class="kv"><span class="k">state</span><span class="v" id="afstate">—</span></div>
+      <div class="kv"><span class="k">contrast peak</span><span class="v" id="afpeak">—</span></div>
+      <div class="kv"><span class="k">drift</span><span class="v" id="afdrift">—</span></div>
+      <canvas id="afPlot" width="560" height="70" style="margin-top:8px"></canvas>
+    </div>
+  </section>
+
+  <section class="card" style="grid-column:span 2">
+    <h2>追蹤 / 人臉 Tracking &amp; Faces <span class="src">AAT 0xC3033E00 · faces 0xC37CCA9C</span></h2>
+    <div class="body">
+      <div class="frame" id="frame"></div>
+      <div class="kv" style="margin-top:8px"><span class="k">AAT box</span><span class="v" id="aat">—</span></div>
+      <div class="kv"><span class="k">faces</span><span class="v" id="faces">—</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Shell <span class="src">worker state</span></h2>
+    <div class="body">
+      <div class="kv"><span class="k">commands served</span><span class="v" id="cmds">—</span></div>
+      <div class="kv"><span class="k">faults</span><span class="v" id="faults">—</span></div>
+      <div class="kv"><span class="k">poll rate</span><span class="v" id="rate">—</span></div>
+      <div class="kv"><span class="k">source</span><span class="v" id="src">—</span></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const FRAME_W=320, FRAME_H=213;         // face/AAT coordinate space (from RE)
+const gyroHist={x:[],y:[],z:[]}, afHist=[], HIST=180;
+let lastT=performance.now(), frames=0;
+
+function push(arr,v){arr.push(v); if(arr.length>HIST)arr.shift();}
+function plot(cv, series, colors, ymax){
+  const ctx=cv.getContext('2d'), W=cv.width, H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#20262e'; ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+  series.forEach((s,i)=>{
+    if(!s.length)return; ctx.strokeStyle=colors[i]; ctx.lineWidth=1.5; ctx.beginPath();
+    s.forEach((v,j)=>{const x=j/(HIST-1)*W, y=H/2 - (v/ymax)*(H/2*0.9); j?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.stroke();
+  });
+}
+function fmt(n,d=2){return (n==null||isNaN(n))?'—':Number(n).toFixed(d);}
+function drawLevel(cv, roll, pitch){
+  const ctx=cv.getContext('2d'), W=cv.width, H=cv.height, cx=W/2, cy=H/2, R=Math.min(W,H)/2-8;
+  ctx.clearRect(0,0,W,H);
+  // outer ring + crosshair
+  ctx.strokeStyle='#2b333d'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
+  // artificial horizon line rotated by roll, shifted by pitch
+  const r=(roll||0)*Math.PI/180, px=Math.max(-1,Math.min(1,(pitch||0)/45))*R*0.9;
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(-r);
+  const lvl=Math.abs(roll||0)<1.5 && Math.abs(pitch||0)<1.5;
+  ctx.strokeStyle=lvl?'#3fb950':'#4cc2ff'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-R*0.8, px); ctx.lineTo(R*0.8, px); ctx.stroke();
+  ctx.restore();
+  // bubble (offset from center by tilt)
+  const bx=cx+Math.max(-1,Math.min(1,(roll||0)/45))*R*0.9, by=cy+px;
+  ctx.fillStyle=lvl?'#3fb950':'#d29922';
+  ctx.beginPath(); ctx.arc(bx,by,6,0,7); ctx.fill();
+}
+
+// IMU cards driven by the fast /imu.json loop (2-transaction snapshot)
+function renderIMU(s){
+  if(s.gyro){push(gyroHist.x,s.gyro.x);push(gyroHist.y,s.gyro.y);push(gyroHist.z,s.gyro.z);
+    $('gx').textContent=fmt(s.gyro.x,1); $('gy').textContent=fmt(s.gyro.y,1); $('gz').textContent=fmt(s.gyro.z,1);}
+  plot($('gyroPlot'),[gyroHist.x,gyroHist.y,gyroHist.z],['#f0776a','#7ee787','#79c0ff'],300);
+  if(s.accel){$('ax').textContent=fmt(s.accel.x,2); $('ay').textContent=fmt(s.accel.y,2); $('az').textContent=fmt(s.accel.z,2);
+    $('rp').textContent=`${fmt(s.accel.roll,1)}° / ${fmt(s.accel.pitch,1)}°`;
+    drawLevel($('levelPlot'), s.accel.roll, s.accel.pitch);}
+}
+
+function render(s){
+  // exposure
+  if(s.exposure){$('iso').textContent=s.exposure.iso??'—'; $('gainstate').textContent=s.exposure.gain_state??'—';
+    $('hcg').textContent=s.exposure.hcg?'HCG (high)':'LCG (low)'; $('again').textContent=fmt(s.exposure.analog_gain,2);}
+  // af
+  if(s.af){$('afmode').textContent=s.af.mode??'—';
+    const st=s.af.state||'—', cls=st==='locked'?'ok':(st==='searching'?'warn':'dim');
+    $('afstate').innerHTML=`<span class="pill ${cls}">${st}</span>`;
+    $('afpeak').textContent=s.af.contrast_peak??'—'; $('afdrift').textContent=s.af.drift??'—';
+    push(afHist, s.af.contrast_peak||0);}
+  plot($('afPlot'),[afHist],['#4cc2ff'], Math.max(1,...afHist)||1);
+  // tracking + faces
+  const fr=$('frame'); fr.querySelectorAll('.box').forEach(b=>b.remove());
+  const place=(r,cls,lbl)=>{const b=document.createElement('div');b.className='box '+cls;
+    b.style.left=(r.x/FRAME_W*100)+'%';b.style.top=(r.y/FRAME_H*100)+'%';
+    b.style.width=(r.w/FRAME_W*100)+'%';b.style.height=(r.h/FRAME_H*100)+'%';
+    b.innerHTML=`<span class="lbl">${lbl}</span>`;fr.appendChild(b);};
+  if(s.aat&&s.aat.w){place(s.aat,'aat',`AAT ${s.aat.confidence??''}`); $('aat').textContent=`${s.aat.x},${s.aat.y} ${s.aat.w}×${s.aat.h} conf ${s.aat.confidence??'—'}`;}
+  else $('aat').textContent='—';
+  if(s.faces&&s.faces.length){s.faces.forEach((f,i)=>place(f,'','face'+(i+1))); $('faces').textContent=`${s.faces.length} detected`;}
+  else $('faces').textContent='none';
+  // shell
+  if(s.shell){$('cmds').textContent=s.shell.commands??'—'; $('faults').textContent=s.shell.faults??'—';}
+  $('src').textContent=s.source||'—';
+}
+
+async function tick(){
+  try{
+    const r=await fetch('/state.json',{cache:'no-store'});
+    const s=await r.json();
+    $('conn').className='dot live'; render(s);
+    frames++; const now=performance.now();
+    if(now-lastT>=1000){$('rate').textContent=frames+' Hz'; frames=0; lastT=now;}
+  }catch(e){ $('conn').className='dot'; $('stat').textContent='disconnected: '+e.message; }
+  $('stat').innerHTML='fpshelld · '+new Date().toLocaleTimeString();
+}
+// fast IMU loop: 2-transaction snapshot -> ~5-7 Hz level/gyro
+async function imuTick(){
+  try{ const r=await fetch('/imu.json',{cache:'no-store'}); renderIMU(await r.json()); }catch(e){}
+}
+// sequential polling: wait for each refresh to finish before the next (no request backlog)
+async function loop(){ await tick(); setTimeout(loop, 30); }
+async function imuLoop(){ await imuTick(); setTimeout(imuLoop, 20); }
+loop(); imuLoop();
+</script>
+</body>
+</html>

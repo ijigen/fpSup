@@ -19,8 +19,15 @@ camera screen to colorbars over USB.
 |---|---|
 | `autorun/` | `AutoRun.full-shell.txt` (gated worker + `shl` full-shell forward) · `AutoRun.v27-stable.txt` (minimal stable fallback: mem read/set only) |
 | `daemon/` | `fpshelld.c` host daemon (owns the vendor interface, serialises clients, EP05 OUT / EP84 IN) · `PROTOCOL.md` |
-| `worker/` | `shell_rw_worker.S` camera-side worker · `build_swap.py` (+ `build_stage5_autorun.py`) that assembles the worker into a deployable AutoRun |
+| `worker/` | `shell_rw_worker.S` camera-side worker · `build_swap.py` (+ `build_stage5_autorun.py`) that assembles it into a deployable AutoRun · `imu_snapshot.S` + `build_imu_snapshot.py` — a position-independent IMU-gather blob injected at runtime via `mem set` (no autorun change) |
+| `console/` | `fpstate.py` live web console + `dashboard.html` — reads camera state over the shell and serves it at `http://localhost:8770/` (gyro / accel level / exposure / AF / tracking / faces) |
 | `docs/` | `V27_FREEZE_ROOTCAUSE.md` (why the shell froze the camera, fully diagnosed) · `SHELL_COMMANDS_AND_EXECUTOR.md` (command set + the `FUN_c03d9c20` executor ABI) |
+
+**Live console.** `console/fpstate.py` turns the shell into a monitoring dashboard. The IMU cards
+(gyroscope in dps, accelerometer in g, electronic level) are driven by a fast `/imu.json` path: one
+injected snapshot routine (`worker/imu_snapshot.S`) gathers gyro-latest + accel XYZ in a single `call`,
+drained in one `mem read` — 2 transactions (~10 Hz), no autorun change. Note: gyro's ring cursor `*(rb)`
+is an ABSOLUTE pointer; the latest sample is at `*(rb) - 4` (samples at `rb+4 + n*8`, `pad==0`).
 
 ### Use
 1. Copy `autorun/AutoRun.full-shell.txt` to a fast UHS-II SD card as `AutoRun.txt`.
@@ -60,8 +67,14 @@ it does not brick or damage the camera. Keep `AutoRun.v27-stable.txt` as a fallb
 |---|---|
 | `autorun/` | `AutoRun.full-shell.txt`(gated worker + `shl` 全 shell 轉發)· `AutoRun.v27-stable.txt`(最小穩定 fallback:只有 mem read/set) |
 | `daemon/` | `fpshelld.c` 主機 daemon(獨佔 vendor 介面、序列化 client、EP05 OUT / EP84 IN)· `PROTOCOL.md` |
-| `worker/` | `shell_rw_worker.S` 相機端 worker · `build_swap.py`(+ `build_stage5_autorun.py`)把 worker 組成可部署 AutoRun |
+| `worker/` | `shell_rw_worker.S` 相機端 worker · `build_swap.py`(+ `build_stage5_autorun.py`)組成可部署 AutoRun · `imu_snapshot.S` + `build_imu_snapshot.py` —— 一個 position-independent 的 IMU 抓取 blob,執行時用 `mem set` 注入(不改 autorun) |
+| `console/` | `fpstate.py` 即時 web 控制台 + `dashboard.html` —— 透過 shell 讀相機狀態,開在 `http://localhost:8770/`(gyro / accel 水平儀 / 曝光 / AF / 追蹤 / 人臉) |
 | `docs/` | `V27_FREEZE_ROOTCAUSE.md`(shell 為何會凍住相機,完整診斷)· `SHELL_COMMANDS_AND_EXECUTOR.md`(命令集 + `FUN_c03d9c20` 執行器 ABI) |
+
+**即時控制台。** `console/fpstate.py` 把 shell 變成監控 dashboard。IMU 卡片(gyro dps、accel g、電子水平儀)
+走一條快路 `/imu.json`:注入一個 snapshot 常式(`worker/imu_snapshot.S`),一次 `call` 把 gyro 最新樣本 +
+accel XYZ 打包,一次 `mem read` 拿回 —— 2 transactions(~10 Hz)、不改 autorun。注意:gyro ring 的 cursor
+`*(rb)` 是**絕對指標**,最新樣本在 `*(rb) - 4`(樣本位於 `rb+4 + n*8`,`pad==0` 驗證對齊)。
 
 ### 使用
 1. 把 `autorun/AutoRun.full-shell.txt` 複製到快的 UHS-II SD 卡,命名為 `AutoRun.txt`。
