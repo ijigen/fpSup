@@ -21,6 +21,7 @@ camera screen to colorbars over USB.
 | `daemon/` | `fpshelld.c` host daemon (owns the vendor interface, serialises clients, EP05 OUT / EP84 IN) · `PROTOCOL.md` |
 | `worker/` | `shell_rw_worker.S` camera-side worker · `build_swap.py` (+ `build_stage5_autorun.py`) that assembles it into a deployable AutoRun · `imu_snapshot.S` + `build_imu_snapshot.py` — a position-independent IMU-gather blob injected at runtime via `mem set` (no autorun change) |
 | `console/` | `fpstate.py` live web console + `dashboard.html` — reads camera state over the shell and serves it at `http://localhost:8770/` (gyro / accel level / exposure / AF / tracking / faces) |
+| `lens/` | `lens_probe.py` + `lens_read.S` — actively query the attached L-mount lens's own register space over USB (reuses the camera's `CmdRead` lens-comm fn). Full ABI + hazard in `LENS_QUERY.md` |
 | `docs/` | `V27_FREEZE_ROOTCAUSE.md` (why the shell froze the camera, fully diagnosed) · `SHELL_COMMANDS_AND_EXECUTOR.md` (command set + the `FUN_c03d9c20` executor ABI) |
 
 **Live console.** `console/fpstate.py` turns the shell into a monitoring dashboard. The IMU cards
