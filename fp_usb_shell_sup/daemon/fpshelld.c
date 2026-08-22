@@ -408,6 +408,49 @@ int main(int argc, char **argv) {
                     }
                 }
             }
+        } else if (!strncmp(request, "BATCHPUSH ", 10)) {
+            /* BATCHPUSH <framesize> <nframes>: set push_N args (STATE+0x70/74/78), send
+             * `call 0xC072F600` on EP05 (triggers N ctx4 pushes from 0x50000000), then bulk-IN
+             * each frame (FN_WAIT in push_N syncs each to our bulk-IN → no per-grab command,
+             * no usleep, no stall). Measures true push rate. */
+            long fs = 0, nf = 0;
+            if (sscanf(request + 10, "%ld %ld", &fs, &nf) != 2 || fs <= 0 || fs > 0xFF0000 || nf <= 0 || nf > 20000)
+                write_all(client, "ERR usage: BATCHPUSH <framesize<=16M> <nframes<=20000>\n");
+            else if (io.mock) write_all(client, "ERR mock\n");
+            else {
+                char p[64]; char r2[128];
+                snprintf(p, sizeof p, "mem set 0xC072F070 0x%lx", (unsigned long)nf);
+                transact(&io, CMD_ECHO, p, sequence++, r2, sizeof r2);
+                transact(&io, CMD_ECHO, "mem set 0xC072F074 0x50000000", sequence++, r2, sizeof r2);
+                snprintf(p, sizeof p, "mem set 0xC072F078 0x%lx", (unsigned long)fs);
+                transact(&io, CMD_ECHO, p, sequence++, r2, sizeof r2);
+                uint8_t tx[USB_OUT_SIZE] = {0};
+                build_frame((fpsh_frame *)tx, CMD_ECHO, sequence++, "call 0xC072F600");
+                int t = 0, rc = libusb_bulk_transfer(io.camera, EP_OUT, tx, USB_OUT_SIZE, &t, 5000);
+                if (rc || t != USB_OUT_SIZE) write_all(client, "ERR call-out\n");
+                else {
+                    unsigned char *buf = malloc((size_t)fs * nf);
+                    if (!buf) write_all(client, "ERR nomem\n");
+                    else {
+                        int total = 0, err = 0; struct timeval a, b; gettimeofday(&a, NULL);
+                        for (long i = 0; i < nf; i++) {
+                            int got = 0; rc = libusb_bulk_transfer(io.camera, EP_IN, buf + (size_t)i * fs, (int)fs, &got, 5000);
+                            if (rc || got != fs) { err = rc; break; }
+                            total += got;
+                        }
+                        gettimeofday(&b, NULL);
+                        double ms = (b.tv_sec - a.tv_sec) * 1000.0 + (b.tv_usec - a.tv_usec) / 1000.0;
+                        unsigned char ack[FRAME_SIZE]; int g = 0;
+                        libusb_bulk_transfer(io.camera, EP_IN, ack, FRAME_SIZE, &g, 5000);
+                        FILE *f = fopen("/tmp/batchpush.bin", "wb"); if (f) { fwrite(buf, 1, total, f); fclose(f); }
+                        snprintf(response, sizeof response,
+                            "OK frames=%ld/%ld bytes=%d ms=%.2f MBps=%.1f perframe=%.3fms err=%s saved=/tmp/batchpush.bin\n",
+                            fs ? (long)(total / fs) : 0, nf, total, ms,
+                            ms > 0 ? total / (ms / 1000.0) / 1048576.0 : 0, nf > 0 ? ms / nf : 0, libusb_error_name(err));
+                        write_all(client, response); free(buf);
+                    }
+                }
+            }
         } else write_all(client, "ERR unknown-command\n");
         close(client);
     }
