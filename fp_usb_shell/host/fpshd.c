@@ -93,6 +93,25 @@ static void cam_close(void)
 
 /* Send one command frame, collect the (possibly chunked) reply into out.
  * Returns reply length, or -1. */
+/* Read and discard anything still sitting on the IN pipe.
+ *
+ * Every failed exchange used to leave its late reply there, and the next command
+ * would read that instead of its own, mismatch the sequence, and leave one
+ * behind in turn. The failure rate climbed from 3% to 45% over a session that
+ * way -- not a transport fault at all, but a queue nobody emptied. */
+static void drain_in(void)
+{
+    unsigned char junk[FRAME_SIZE];
+    for (int i = 0; i < 16; i++) {
+        int moved = 0;
+        if (libusb_bulk_transfer(g_cam, EP_IN, junk, FRAME_SIZE, &moved, 5) != 0)
+            break;
+        if (moved == 0)
+            break;
+    }
+}
+
+
 static int exchange(uint8_t command, const char *arg, char *out, size_t outcap)
 {
     if (cam_open() != 0) return -1;
@@ -135,15 +154,16 @@ static int exchange(uint8_t command, const char *arg, char *out, size_t outcap)
         rc = libusb_bulk_transfer(g_cam, EP_IN, (unsigned char *)&rx, FRAME_SIZE,
                                   &moved, g_timeout);
         if (rc != 0 || moved != FRAME_SIZE) {
-            if (rc == LIBUSB_ERROR_NO_DEVICE) cam_close();
-            else if (rc == LIBUSB_ERROR_PIPE) libusb_clear_halt(g_cam, EP_IN);
+            if (rc == LIBUSB_ERROR_NO_DEVICE) { cam_close(); return -1; }
+            if (rc == LIBUSB_ERROR_PIPE) libusb_clear_halt(g_cam, EP_IN);
+            drain_in();
             return -1;
         }
-        if (memcmp(rx.magic, "FPSH", 4) || rx.version != 1) return -1;
+        if (memcmp(rx.magic, "FPSH", 4) || rx.version != 1) { drain_in(); return -1; }
         uint32_t want = rx.checksum;
         rx.checksum = 0;
-        if (crc32((const uint8_t *)&rx, FRAME_SIZE) != want) return -1;
-        if (rx.sequence != tx.sequence) return -1;
+        if (crc32((const uint8_t *)&rx, FRAME_SIZE) != want) { drain_in(); return -1; }
+        if (rx.sequence != tx.sequence) { drain_in(); return -1; }
 
         uint16_t n = rx.payload_length;
         if (n > PAYLOAD_SIZE) n = PAYLOAD_SIZE;
