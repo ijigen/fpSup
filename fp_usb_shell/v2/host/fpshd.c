@@ -30,6 +30,7 @@
 #define IFACE        0
 #define EP_OUT       0x01
 #define EP_IN        0x82
+#define FPSHD_VERSION "2.0.0"
 #define MAX_REPLY    8192
 #define USB_OUT_SIZE 1024
 #define CMD_MAX      512
@@ -194,7 +195,8 @@ int main(int argc, char **argv)
     if (bind(srv, (struct sockaddr *)&a, sizeof a) || listen(srv, 8)) {
         fprintf(stderr, "bind/listen %s: %s\n", sock_path, strerror(errno)); return 1;
     }
-    fprintf(stderr, "fpshd: %s  vid=%04x pid=%04x  iface=%d ep_out=%02x ep_in=%02x\n",
+    fprintf(stderr, "fpshd " FPSHD_VERSION ": %s  vid=%04x pid=%04x  iface=%d "
+            "ep_out=%02x ep_in=%02x\n",
             sock_path, g_vid, g_pid, IFACE, EP_OUT, EP_IN);
 
     char line[MAX_REPLY], reply[MAX_REPLY];
@@ -209,8 +211,8 @@ int main(int argc, char **argv)
         if (!strcmp(line, "QUIT")) { write_line(c, "OK bye\n"); close(c); g_stop = 1; break; }
         if (!strcmp(line, "STATUS")) {
             char s[160];
-            snprintf(s, sizeof s, "OK name=fpshd protocol=1 frame=64 payload=44 "
-                     "transport=EP01-EP82 iface=0 camera=%s seq=%u\n",
+            snprintf(s, sizeof s, "OK name=fpshd version=" FPSHD_VERSION " protocol=1 frame=64 "
+                     "payload=44 transport=EP01-EP82 iface=0 camera=%s seq=%u\n",
                      g_cam ? "open" : "closed", g_seq);
             write_line(c, s); close(c); continue;
         }

@@ -75,19 +75,61 @@ autorun/AutoRun.txt  what goes on the card
 docs/                reverse-engineering notes (Traditional Chinese)
 ```
 
+## Requirements
+
+- A SIGMA fp (this is developed against Ver. 5.02) and an SD card
+- macOS or Linux, and `libusb-1.0` — `brew install libusb`, or
+  `apt install libusb-1.0-0-dev`
+- `clang` targeting `armv7-none-eabi` to assemble the camera-side worker; any
+  recent clang can do this, no cross toolchain needed
+- Python 3 for the build script
+
+Nothing is flashed. Everything the camera runs is written into RAM at boot by an
+`AutoRun.txt` on the card, and is gone the moment you power off — including all
+seven firmware patches.
+
 ## Use
 
 ```sh
 make                                  # builds fpshd, lsdesc and the AutoRun
+make LIBUSB=/path/to/libusb           # if libusb is somewhere unusual
 make card CARD=/Volumes/<card name>
-
-# Boot the camera with USB UNPLUGGED. The screen shows a progress bar and ends
-# at fpSup! — a bar that stops is a load that stopped there. Then attach USB.
-./fpshd &
-./host/fpsh ping
-./host/fpsh mem get 0xC072F000,,0x34    # worker state
-./lsdesc                                # what the host enumerated
 ```
+
+Then, in this order:
+
+1. **Unplug USB** and power the camera on with the card in it
+2. Watch the screen: a progress bar runs to `fpSup!`. **A bar that stops is a
+   load that stopped there** — the position tells you which block failed
+3. Attach the USB cable
+
+```sh
+./fpshd &
+./host/fpsh ping                          # OK pong seq=1
+./host/fpsh mem get 0xC072F000,,0x34      # worker state
+./lsdesc                                  # what the host enumerated
+./host/fpsh display colorbar 1 0          # any of the 77 firmware shell commands
+```
+
+The boot order matters: the USB gadget is built when the cable is attached, so
+the patches have to land first, and the patched words sit in code that has not
+run yet, so no stale instruction-cache line can shadow them.
+
+## If something does not work
+
+| symptom | what it means |
+|---|---|
+| The progress bar stops partway | The load stopped there. Read which block it was from `build_autorun.py`'s output |
+| The screen never shows anything | AutoRun did not run. Check the file is `\AutoRun.txt` at the card root, and that the card is not write-protected |
+| No device appears on the host | The gadget did not enumerate. Boot with USB unplugged and attach afterwards; if it still fails, remove the seven `mem set 0xC0CF37xx` lines and confirm stock PTP comes back |
+| `fpsh ping` times out | Check `./lsdesc` first. If the interface is there, read the worker state — `served` should climb and `faults` counts idle timeouts, not errors |
+| The camera is unresponsive | Pull the battery. Nothing here is persistent, so the next boot is clean |
+
+## Reverting
+
+Delete the AutoRun from the card, or delete just the `mem set 0xC0CF37xx` lines
+to keep the shell out of the way and get stock PTP back. Either way a power cycle
+restores the camera completely — nothing is written to non-volatile storage.
 
 ## Running code on the camera
 
@@ -199,19 +241,58 @@ autorun/AutoRun.txt  放進卡片的東西
 docs/                逆向筆記(繁體中文)
 ```
 
+### 需求
+
+- 一台 SIGMA fp(針對 Ver. 5.02 開發)與一張 SD 卡
+- macOS 或 Linux,以及 `libusb-1.0` —— `brew install libusb`,
+  或 `apt install libusb-1.0-0-dev`
+- 能以 `armv7-none-eabi` 為目標的 `clang`,用來組譯相機端的 worker;
+  近期的 clang 都可以,不需要另外裝交叉工具鏈
+- Python 3(建置腳本用)
+
+**不需要重刷韌體。** 相機執行的一切都是開機時由卡上的 `AutoRun.txt` 寫進 RAM 的,
+一關機就消失 —— 包括那七個韌體 patch。
+
 ### 使用
 
 ```sh
 make                                  # 建置 fpshd、lsdesc 與 AutoRun
+make LIBUSB=/path/to/libusb           # libusb 在特殊位置時
 make card CARD=/Volumes/<卡片名稱>
-
-# 相機**拔掉 USB** 開機。畫面會顯示進度條,最後停在 fpSup! ——
-# 進度條停在哪,就是載入停在哪。然後才插上 USB。
-./fpshd &
-./host/fpsh ping
-./host/fpsh mem get 0xC072F000,,0x34    # worker 狀態
-./lsdesc                                # 主機列舉到什麼
 ```
+
+然後照這個順序:
+
+1. **拔掉 USB**,插卡開機
+2. 看螢幕:進度條會跑到 `fpSup!`。**進度條停在哪,就是載入停在哪** ——
+   位置直接告訴你是哪一段失敗
+3. 插上 USB 線
+
+```sh
+./fpshd &
+./host/fpsh ping                          # OK pong seq=1
+./host/fpsh mem get 0xC072F000,,0x34      # worker 狀態
+./lsdesc                                  # 主機列舉到什麼
+./host/fpsh display colorbar 1 0          # 韌體 77 條 shell 指令的任何一條
+```
+
+開機順序有意義:USB gadget 是插線時才建立的,所以 patch 必須先落地;
+而被 patch 的那些字所在的程式碼此時還沒被執行過,不會有殘留的 I-cache 行蓋掉修改。
+
+### 出問題的時候
+
+| 症狀 | 意思 |
+|---|---|
+| 進度條停在中間 | 載入停在那裡。對照 `build_autorun.py` 的輸出就知道是哪一段 |
+| 螢幕完全沒反應 | AutoRun 根本沒執行。確認檔案是卡片根目錄的 `\AutoRun.txt`,以及卡片沒有防寫 |
+| 主機看不到裝置 | gadget 沒列舉。先確認是「拔線開機、開完再插」;若仍失敗,把七行 `mem set 0xC0CF37xx` 刪掉,確認原廠 PTP 會回來 |
+| `fpsh ping` 逾時 | 先跑 `./lsdesc`。介面在的話就讀 worker 狀態 —— `served` 應該會增加,而 `faults` 算的是閒置逾時不是錯誤 |
+| 相機沒反應 | 拔電池。這裡沒有任何東西是持久的,下次開機就是乾淨的 |
+
+### 還原
+
+把 AutoRun 從卡片刪掉,或只刪那七行 `mem set 0xC0CF37xx` 讓 shell 讓開、換回原廠 PTP。
+不論哪種,重開電源就完全復原 —— **沒有任何東西寫進非揮發儲存**。
 
 ### 在相機上執行程式碼
 
