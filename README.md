@@ -18,7 +18,7 @@ Ordered by how far along each one is.
 
 | # | Project | What it is | Status |
 |---|---|---|---|
-| 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — [v2.0.0](fp_usb_shell/v2/), verified on hardware |
+| 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — [v2.0.0](fp_usb_shell/), verified on hardware |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/) published; one open item |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **core verified on hardware**, integration pending |
 | 4 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
@@ -54,8 +54,23 @@ Kept because what they established still holds and the rest of the work leans on
 
 Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 
-**Reference:** [the firmware shell's 77 commands](docs/SHELL_COMMANDS.md), with the
-usage text asked from a live camera.
+**Reference**
+
+| | |
+|---|---|
+| [`docs/SHELL_COMMANDS.md`](docs/SHELL_COMMANDS.md) | the firmware shell's 77 commands, with the usage text asked from a live camera |
+| [`docs/SHELL_CAPABILITIES.md`](docs/SHELL_CAPABILITIES.md) | what those commands can actually reach — memory and I2C writes, the menu setters, sensor readout modes |
+| [`docs/FREEZE_ROOTCAUSE.md`](docs/FREEZE_ROOTCAUSE.md) | why the first USB shell froze the camera, mechanism and all |
+
+**Code**
+
+| | |
+|---|---|
+| [`fp_usb_shell/`](fp_usb_shell/) | the shell itself |
+| [`focus/`](focus/) | DFD and lens data |
+| [`gyro/`](gyro/) | IMU snapshot and the gyro AutoRun builder |
+| [`console/`](console/) | a live view of camera state |
+| [`history/`](history/) | superseded work, kept for what it established |
 
 ---
 
@@ -67,7 +82,7 @@ usage text asked from a live camera.
 
 | # | 項目 | 內容 | 進度 |
 |---|---|---|---|
-| 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸工具 | **已釋出** — [v2.0.0](fp_usb_shell/v2/),實機驗證過 |
+| 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸工具 | **已釋出** — [v2.0.0](fp_usb_shell/),實機驗證過 |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、gain 與 sensor 控制 | **研究完成** — [互動說明頁](https://ijigen.github.io/fpSup/)已發布;一項未解 |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro、六軸記錄與 Gyroflow 工作流 | **核心已實機驗證**,整合中 |
 | 4 | [**focus sup**](projects/focus-sup.md) | DFD、焦點模型、鏡頭控制與追焦 | AF 已深度反編譯;收集器未建 |
@@ -102,4 +117,20 @@ usage text asked from a live camera.
 
 全部靠 SD 卡上的 `AutoRun.txt` 在 RAM 裡執行,**沒有任何東西需要重刷韌體**。
 
-**參考資料:**[韌體 shell 的 77 條指令](docs/SHELL_COMMANDS.md),用法全部是在實機上問出來的。
+**參考資料**
+
+| | |
+|---|---|
+| [`docs/SHELL_COMMANDS.md`](docs/SHELL_COMMANDS.md) | 韌體 shell 的 77 條指令,用法全部是在實機上問出來的 |
+| [`docs/SHELL_CAPABILITIES.md`](docs/SHELL_CAPABILITIES.md) | 那些指令實際搆得到什麼 —— 記憶體與 I2C 寫入、選單設定器、感光元件讀出模式 |
+| [`docs/FREEZE_ROOTCAUSE.md`](docs/FREEZE_ROOTCAUSE.md) | 第一版 USB shell 為什麼會凍住相機,連機制一起 |
+
+**程式**
+
+| | |
+|---|---|
+| [`fp_usb_shell/`](fp_usb_shell/) | shell 本體 |
+| [`focus/`](focus/) | DFD 與鏡頭資料 |
+| [`gyro/`](gyro/) | IMU 快照與陀螺 AutoRun 建置 |
+| [`console/`](console/) | 相機狀態即時檢視 |
+| [`history/`](history/) | 被取代的工作,保留是因為它建立的東西 |

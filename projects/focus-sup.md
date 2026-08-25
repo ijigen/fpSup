@@ -133,6 +133,7 @@ of them are not limits of the camera:
   task context, never from an interrupt. Block ids index the ROM table at
   `0xC0B94364`
 - A LUMIX lens carries no SIGMA DFD blocks but has its own tables at `0x001500`
+- Code: [`focus/lens/`](../focus/lens/)
 - **The lens-data program is verified end to end** — create `\LENS`, read blocks
   0x2d and 0x0a, parse focal length and minimum focus distance, sanitise the file
   name, write, and read the file back to confirm
@@ -142,8 +143,33 @@ of them are not limits of the camera:
 AF-C consumes green-channel high-frequency energy produced by the SIG engine at
 `0x30050000`, and the two-band metric above is readable live. So a DFD collector
 is sweep focus + read the stats + read mposm — **no Bayer frame extraction
-needed**. The green AF band already streams at 0.125 ms/frame with no stall
-(`dfd_live.py`).
+needed**. The green AF band already streams at 0.125 ms/frame with no stall.
+**Method, addresses and code: [`focus/dfd/`](../focus/dfd/).**
+
+### Phase detection — read, but never verifiable here
+
+The firmware carries a **complete phase-detect drive path**, decompiled in
+detail: `CalcCafDriveSpeed`, the phase-to-pulse conversion, the `pkcnt`
+accumulation with its stability predicate, and the near-peak deceleration.
+
+**On this body it is dead code.** The AF-model subclass vtable's slot `0x184`
+returns 0 unconditionally, and the only call site to `CalcCafDriveSpeed` is
+guarded by exactly that — so it never runs. The same gate also disables the
+`pkcnt` writes, the PdCaf setup, and the PDAF availability check, and
+`measured_defocus` stays at its `-0x80000000` sentinel forever.
+
+So the algorithm can be read but nothing about it can be exercised, measured or
+falsified. Every claim in that part of the notes is static analysis with no path
+to a hardware check.
+
+There is also an unresolved contradiction worth flagging: one note states that
+neither the IMX410 nor the IMX455 has on-chip phase detection, while the drive
+path exists in the firmware in full, with per-lens scaling and reliability
+inputs. Which body actually feeds it is not established here.
+
+**If you want phase-detect research to happen, sponsor an fp L.** That is the
+honest position: the code is understood, and the hardware to test it against is
+the missing piece.
 
 ### Open
 
@@ -248,6 +274,7 @@ sigma-fp-bridge 裡的
   它們會拿匯流排 mutex,所以只能在任務脈絡呼叫,不能在中斷裡。
   block id 索引 ROM 表 `0xC0B94364`
 - LUMIX 鏡頭沒有 SIGMA 的 DFD 區塊,但自己有一組表在 `0x001500`
+- 程式在 [`focus/lens/`](../focus/lens/)
 - **鏡頭資料程式已端到端驗證** —— 建立 `\LENS` 目錄、讀 block 0x2d/0x0a、
   解析焦距與最近對焦距離、檔名淨化、寫檔後回讀確認
 
@@ -255,7 +282,28 @@ sigma-fp-bridge 裡的
 
 AF-C 消耗的是 SIG 引擎 `0x30050000` 產生的綠通道高頻能量,而上面那兩個頻帶的值可以即時讀。
 所以 DFD 收集器 = 掃焦 + 讀統計 + 讀 mposm,**完全不需要把 Bayer 影格搬出來**。
-綠通道 AF band 已經能以 0.125 ms/frame 零 stall 串流(`dfd_live.py`)。
+綠通道 AF band 已經能以 0.125 ms/frame 零 stall 串流。
+**方法、位址與程式在 [`focus/dfd/`](../focus/dfd/)。**
+
+### 相位對焦 —— 讀得懂,但在這裡永遠驗證不了
+
+韌體裡有一條**完整的相位偵測驅動路徑**,而且已經被詳細反編譯:
+`CalcCafDriveSpeed`、相位到脈衝的換算、帶穩定性判準的 `pkcnt` 累積、近峰減速。
+
+**在這台機身上它是死碼。** AF-model 子類的 vtable slot `0x184` 無條件回 0,
+而 `CalcCafDriveSpeed` 唯一的呼叫點前一行檢查的正是它 —— 所以**永不執行**。
+同一個閘也關掉了 `pkcnt` 寫入、PdCaf 設定與 PDAF 可用性檢查,
+`measured_defocus` 因此永遠停在 `-0x80000000` 這個 sentinel。
+
+所以那套演算法讀得懂,但**沒有任何一項能被執行、量測或推翻**。
+筆記裡那一段的每一條主張都是純靜態分析,沒有通往實機驗證的路。
+
+另外有一個尚未解決的矛盾值得標出來:一份筆記寫著 IMX410 與 IMX455 **都沒有**片上相位對焦,
+但韌體裡那條驅動路徑卻完整存在,還帶著逐鏡頭的縮放係數與可靠度輸入。
+到底是哪一台機身在餵它,這裡沒有定論。
+
+**想要相位對焦的研究,請贊助我一台 fp L。** 這是誠實的說法:
+程式碼已經讀懂了,缺的是能拿來對照驗證的硬體。
 
 ### 未解
 
