@@ -22,7 +22,7 @@ has been proven, what is being worked on, and what is still open.
 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, RAW packaging | researched, no deliverable yet |
 | [**ui sup**](projects/ui-sup.md) | On-screen display, boot animation | in progress — text on screen works |
 | [**power sup**](projects/power-sup.md) | Boot / PTP USB-C power delivery and power saving | early — charging mechanism solved |
-| [**fpRemote**](projects/fp-remote.md) | Wireless bridge, low-resolution streaming, PTP control | early — PTP control mapped |
+| [**fpRemote**](projects/fp-remote.md) | Wireless bridge, low-resolution streaming, PTP control | **wired half works** — [sigma-fp-bridge](https://github.com/ijigen/sigma-fp-bridge) |
 | [**firmware map**](projects/firmware-map.md) | Format, subsystems, task ABI, state sources | ongoing — the ground everything stands on |
 
 ### Headline results
@@ -51,7 +51,7 @@ Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮與 RAW 封裝 | 研究完成,尚未成品 |
 | [**ui sup**](projects/ui-sup.md) | 螢幕 OSD 與開機動畫 | 進行中 — 已能在螢幕上寫字 |
 | [**power sup**](projects/power-sup.md) | 開機／PTP USB-C 供電與省電 | 起步 — 充電機制已解 |
-| [**fpRemote**](projects/fp-remote.md) | 外部無線橋接、低解析度串流、PTP 外控 | 起步 — PTP 外控已解 |
+| [**fpRemote**](projects/fp-remote.md) | 外部無線橋接、低解析度串流、PTP 外控 | **有線那半已可用** — [sigma-fp-bridge](https://github.com/ijigen/sigma-fp-bridge) |
 | [**firmware map**](projects/firmware-map.md) | 韌體格式、子系統、任務 ABI、狀態來源 | 持續累積 — 其他全部的地基 |
 
 ### 主要成果
