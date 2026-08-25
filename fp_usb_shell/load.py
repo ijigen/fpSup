@@ -33,27 +33,21 @@ def sh(*cmd) -> str:
 
 
 def mem_set(addr: int, value: int) -> None:
-    sh('shl', f'mem set 0x{addr:08X} 0x{value:08X}')
+    sh(f'mem set 0x{addr:08X} 0x{value:08X}')
 
 
-def mem_get(addr: int, count: int) -> list:
-    """Read `count` words.  Returns whatever 32-bit values the dump contained.
+def mem_get(addr, count):
+    """Read `count` words.  The shell answers one line per word:
 
-    The native shell prints its own format, so rather than assume one, pull every
-    eight-digit hex token out of the reply and drop the ones that are the echoed
-    address column.  If that heuristic ever mis-parses, --probe shows the raw text.
+        get : A:0xc072f000, D:0x4C485356
+
+    Parsed exactly rather than by scraping hex tokens, so a reply that is not a
+    dump -- an error, an echo -- yields nothing instead of plausible numbers.
     """
-    out = sh('shl', f'mem get 0x{addr:08X},,0x{count * 4:X}')
-    vals = []
-    for line in out.splitlines():
-        toks = re.findall(r'\b[0-9A-Fa-f]{8}\b', line)
-        if not toks:
-            continue
-        # a dump line usually leads with the address it is describing
-        if int(toks[0], 16) in range(addr - 4, addr + count * 4 + 4):
-            toks = toks[1:]
-        vals += [int(t, 16) for t in toks]
-    return vals
+    out = sh(f'mem get 0x{addr:08X},,0x{count * 4:X}')
+    seen = {int(a, 16): int(d, 16) for a, d in
+            re.findall(r'A:0x([0-9A-Fa-f]+),\s*D:0x([0-9A-Fa-f]+)', out)}
+    return [seen[addr + i * 4] for i in range(count) if addr + i * 4 in seen]
 
 
 def prove(addr: int) -> None:
@@ -85,7 +79,7 @@ def main() -> int:
     a = ap.parse_args()
 
     if a.probe:
-        print(sh('shl', f'mem get 0x{a.addr:08X},,0x20'))
+        print(sh(f'mem get 0x{a.addr:08X},,0x20'))
         return 0
 
     src = pathlib.Path(a.source)
