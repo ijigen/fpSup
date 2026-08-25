@@ -464,7 +464,15 @@ display osd 1
 # hoping the tail is free. Everything derives its address from this pointer:
 # asking for 64 KiB instead of 4 already moved the base from 0x44F6ADC0 to
 # 0x45026680, and every hard-coded address went with it.
-memmgr bufmem get 0 0x20000 0x40
+# Three arguments, never four. The handler parses the alignment and stores it
+# into the size slot -- `str r3, [sp, #4]` at 0xC03FA580, where the size went
+# at 0xC03FA558; the alignment slot at [sp, #0xc] is only ever written with 0.
+# So `get 0 0x20000 0x40` asked for 64 bytes and was handed the 128-byte
+# minimum, while everything past it belonged to a 256 KiB buffer owned by
+# 0xC03A4EEC that is reinitialised when recording starts. That is where the
+# shell's capture buffer and the gyro logger's halves had been living, and why
+# the picture tore and the camera froze at unpredictable moments.
+memmgr bufmem get 0 131072
 
 # --- start the worker --------------------------------------------------------
 # A one-shot branch from the gyro callback: bootstrap calls the routine it
