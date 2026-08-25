@@ -59,7 +59,12 @@ def main() -> int:
         disp = (entry - a.hook - 8) >> 2
         if not -0x800000 <= disp < 0x800000:
             raise SystemExit('the hook site is out of branch range of the entry')
-        word = 0xEA000000 | (disp & 0xFFFFFF)
+        # BL, not B. The site holds a BLX -- a call -- and the routine there
+        # returns through lr. Branching without link leaves lr holding whatever
+        # the caller had, so `pop {.., pc}` returns into the middle of the call
+        # chain and the camera goes down on the first firing. Two freezes were
+        # spent blaming the payload for this one word.
+        word = 0xEB000000 | (disp & 0xFFFFFF)
         mem_set(a.hook, word)
         back = mem_get(a.hook)
         if not back or back[0] != word:

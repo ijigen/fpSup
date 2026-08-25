@@ -72,6 +72,17 @@ that ends in `bx lr` after calling something returns into whatever the callee
 left behind. The gyro logger's `writer_open` called out five times without
 saving it, and `writer_close` four; neither had ever run.
 
+## Arm with BL, never B
+
+The borrowed sites hold a `BLX` — a call — and anything put there has to return
+through `lr`. Branching without link leaves `lr` holding whatever the caller had,
+so the routine returns into the middle of the call chain. It takes the camera
+down on the first firing, and it looks exactly like a fault in the payload: two
+freezes went to reading the gyro logger's hook before the fifty-two byte probe
+that does nothing but call and count died the same way.
+
+`0xEB000000 | ((target - site - 8) >> 2 & 0xFFFFFF)`.
+
 ## Keep your state to yourself
 
 Templates share `0xC072F500`, so a template that both stores state there and is
@@ -163,6 +174,15 @@ AAPCS 要求呼叫時堆疊八位元組對齊,而 `push` 奇數個暫存器會�
 **會呼叫別人的常式也要存 `lr`。** `blx` 會覆寫它,所以一個呼叫過別人、結尾又
 `bx lr` 的常式,會返回到被呼叫者留下的任意位址。陀螺 logger 的 `writer_open`
 呼叫了五次都沒存,`writer_close` 四次 —— 而它們從來沒跑過。
+
+## 掛 hook 要用 BL,不是 B
+
+借來的位址上放的是 `BLX` —— **一個呼叫** —— 所以放進去的常式必須靠 `lr` 返回。
+用不帶連結的 `B` 會讓 `lr` 保持呼叫者原本的值,常式就返回到呼叫鏈的中間。
+第一次觸發就會讓相機掛掉,而且**看起來完全像是 payload 的錯**:有兩次凍結被我
+拿去讀陀螺 logger 的 hook,直到那個「只做呼叫和計數」的 52 bytes 探針也一樣死掉。
+
+`0xEB000000 | ((目標 - 位址 - 8) >> 2 & 0xFFFFFF)`。
 
 ## 狀態要自己帶
 
