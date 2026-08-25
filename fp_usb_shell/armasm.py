@@ -8,7 +8,8 @@ needs more than that, it is doing something the camera cannot load anyway.
 import pathlib, struct, subprocess, sys, tempfile
 
 
-def assemble(src) -> bytes:
+def _compile(src):
+    """Assemble to an object file and return (elf_bytes,)."""
     src = pathlib.Path(src)
     with tempfile.TemporaryDirectory() as tmp:
         obj = pathlib.Path(tmp) / 'a.o'
@@ -19,7 +20,10 @@ def assemble(src) -> bytes:
             sys.stderr.write(r.stderr)
             raise SystemExit(1)
         elf = obj.read_bytes()
+    return elf
 
+
+def _parse(elf):
     (shoff, _flags, _ehsize, _phentsize, _phnum,
      shentsize, shnum, shstrndx) = struct.unpack_from('<IIHHHHHH', elf, 0x20)
     sections = [struct.unpack_from('<IIIIIIIIII', elf, shoff + i * shentsize)
@@ -30,7 +34,11 @@ def assemble(src) -> bytes:
         end = elf.index(b'\0', names + sec[0])
         return elf[names + sec[0]:end].decode()
 
-    by_name = {name_of(s): (i, s) for i, s in enumerate(sections)}
+    return elf, sections, {name_of(s): (i, s) for i, s in enumerate(sections)}
+
+
+def assemble(src) -> bytes:
+    elf, sections, by_name = _parse(_compile(src))
     text_i, text = by_name['.text']
     body = bytearray(elf[text[4]:text[4] + text[5]])
 
@@ -62,3 +70,24 @@ def assemble(src) -> bytes:
 
 def words(code: bytes):
     return struct.unpack(f'<{len(code)//4}I', code)
+
+
+def symbols(src):
+    """Map every defined .text symbol to its byte offset within the image.
+
+    The loader needs this to aim a hook at an entry point by name rather than by
+    assuming it sits at offset zero -- which it does not, once a source file
+    grows a second entry.
+    """
+    elf, sections, by_name = _parse(_compile(src))
+    text_i, _ = by_name['.text']
+    _, symtab = by_name['.symtab']
+    _, strtab = by_name['.strtab']
+    out = {}
+    for off in range(symtab[4], symtab[4] + symtab[5], symtab[9]):
+        nameoff, value, _, _, _, shndx = struct.unpack_from('<IIIBBH', elf, off)
+        if shndx != text_i or not nameoff:
+            continue
+        end = elf.index(b'\0', strtab[4] + nameoff)
+        out[elf[strtab[4] + nameoff:end].decode()] = value
+    return out
