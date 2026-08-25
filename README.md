@@ -22,7 +22,7 @@ Ordered by how far along each one is.
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/) published; one open item |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **core verified on hardware**, integration pending |
 | 4 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
-| 5 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, packaging | researched; no deliverable yet |
+| 5 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, packaging | researched; the arithmetic says which version of UHD RAW to card is reachable |
 | 6 | [**ui sup**](projects/ui-sup.md) | On-screen display, boot animation | text on screen works; colour encoding unsolved |
 | 7 | [**power sup**](projects/power-sup.md) | Boot / PTP USB-C power delivery and power saving | charging mechanism solved; the rest untouched |
 | — | [**firmware map**](projects/firmware-map.md) | Format, subsystems, task ABI, state sources | ongoing — not a product, the ground the rest stands on |
@@ -71,7 +71,7 @@ usage text asked from a live camera.
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、gain 與 sensor 控制 | **研究完成** — [互動說明頁](https://ijigen.github.io/fpSup/)已發布;一項未解 |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro、六軸記錄與 Gyroflow 工作流 | **核心已實機驗證**,整合中 |
 | 4 | [**focus sup**](projects/focus-sup.md) | DFD、焦點模型、鏡頭控制與追焦 | AF 已深度反編譯;收集器未建 |
-| 5 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮與封裝 | 研究完成;尚未成品 |
+| 5 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮與封裝 | 研究完成;算術已指出「UHD RAW 寫卡」哪個版本搆得到 |
 | 6 | [**ui sup**](projects/ui-sup.md) | 螢幕 OSD 與開機動畫 | 已能在螢幕上寫字;顏色編碼未解 |
 | 7 | [**power sup**](projects/power-sup.md) | 開機／PTP USB-C 供電與省電 | 充電機制已解;其餘未動 |
 | — | [**firmware map**](projects/firmware-map.md) | 韌體格式、子系統、任務 ABI、狀態來源 | 持續累積 —— 不是產品,是其他全部的地基 |
