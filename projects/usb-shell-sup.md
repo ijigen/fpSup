@@ -20,7 +20,8 @@ particular.
 ### Where it stands
 
 `shl <line>` hands the line to the camera's own firmware shell and returns what it
-printed; all 77 commands work. The channel is built on the camera's own PTP gadget
+printed; all 77 commands work — see the
+[command reference](../docs/SHELL_COMMANDS.md). The channel is built on the camera's own PTP gadget
 and changes seven words of descriptor template.
 
 ```
@@ -86,7 +87,8 @@ that earlier experiments had already disturbed.
 
 ### 現況
 
-`shl <line>` 把整行交給相機自己的韌體 shell 執行並回傳輸出,77 個指令全部可用。
+`shl <line>` 把整行交給相機自己的韌體 shell 執行並回傳輸出,77 個指令全部可用 ——
+見[指令表](../docs/SHELL_COMMANDS.md)。
 通道建立在相機原本的 PTP gadget 上,只改七個字的描述元範本。
 
 ```

@@ -37,6 +37,9 @@ has been proven, what is being worked on, and what is still open.
 
 Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 
+**Reference:** [the firmware shell's 77 commands](docs/SHELL_COMMANDS.md), with the
+usage text asked from a live camera.
+
 ---
 
 ## 繁體中文
@@ -64,3 +67,5 @@ Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 - **相機會自己寫出 Gyroflow 的 `.gcsv`**,停止錄影就產生,已逐列驗證。
 
 全部靠 SD 卡上的 `AutoRun.txt` 在 RAM 裡執行,**沒有任何東西需要重刷韌體**。
+
+**參考資料:**[韌體 shell 的 77 條指令](docs/SHELL_COMMANDS.md),用法全部是在實機上問出來的。
