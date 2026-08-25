@@ -18,7 +18,7 @@ has been proven, what is being worked on, and what is still open.
 | [**color sup**](projects/color-sup.md) | Colour science and the DaVinci workflow | **shipped** — working DCTL |
 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **mostly done** — [explainer](https://ijigen.github.io/fpSup/) |
 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **in progress** — core verified on hardware |
-| [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, external follow focus | researched, collector not built |
+| [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, external follow focus | AF decompiled in depth; a host-side attempt measured its own limits |
 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, RAW packaging | researched, no deliverable yet |
 | [**ui sup**](projects/ui-sup.md) | On-screen display, boot animation | in progress — text on screen works |
 | [**power sup**](projects/power-sup.md) | Boot / PTP USB-C power delivery and power saving | early — charging mechanism solved |
@@ -50,7 +50,7 @@ usage text asked from a live camera.
 | [**color sup**](projects/color-sup.md) | 色彩科學與 DaVinci 工作流 | **已有成品** — 可用的 DCTL |
 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、gain 與 sensor 控制 | **大致完成** — [互動說明頁](https://ijigen.github.io/fpSup/) |
 | [**gyro sup**](projects/gyro-sup.md) | Gyro、六軸記錄與 Gyroflow 工作流 | **進行中** — 核心已實機驗證 |
-| [**focus sup**](projects/focus-sup.md) | DFD、焦點模型、鏡頭控制與外部追焦 | 研究深入,收集器未建 |
+| [**focus sup**](projects/focus-sup.md) | DFD、焦點模型、鏡頭控制與外部追焦 | AF 已深度反編譯;主機端的嘗試量出了自己的極限 |
 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮與 RAW 封裝 | 研究完成,尚未成品 |
 | [**ui sup**](projects/ui-sup.md) | 螢幕 OSD 與開機動畫 | 進行中 — 已能在螢幕上寫字 |
 | [**power sup**](projects/power-sup.md) | 開機／PTP USB-C 供電與省電 | 起步 — 充電機制已解 |

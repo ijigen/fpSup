@@ -55,6 +55,63 @@ colour back end in use and a histogram back end that is present but disabled. Th
 selected box is converted into the AF evaluation region as `xs/xe/ys/ye` and fed
 to the drive state machine.
 
+### Prior work: focus-ai, and what it ran into
+
+[`focus-ai/`](https://github.com/ijigen/sigma-fp-bridge/tree/main/focus-ai) in
+sigma-fp-bridge drove focus from the host using face width in frame, defocus
+blur, and linear prediction against a measured 135 ms image latency. It learned
+the lens's face-width to focus-position curve during use, with no calibration
+step. It is unmaintained, and its
+[FINDINGS](https://github.com/ijigen/sigma-fp-bridge/blob/main/focus-ai/FINDINGS.md)
+are worth reading before anyone tries the same thing:
+
+- **No optical direction cue exists on these lenses.** Axial chromatic aberration
+  measured 0.1–0.6 units of R/G/B peak separation against a 25–40 unit sample
+  spacing on the 45mm and 28mm F1.4. Spherical aberration and astigmatism came
+  out symmetric around the peak (±129/±121, ±229/±221). **A single frame cannot
+  tell front focus from back focus.** Correlations that appear on natural scenes
+  are scene structure, not lens behaviour
+- **Face width is a weak signal.** 0.75% variance, degrading 9% on a 30–45° head
+  turn against a predicted 20% cosine correction, and geometry magnifies 1.3 px
+  of detection noise into about 10 units of focus error
+- **The defocus curve's shape is subject-dependent** — half-width ranges 500–1400
+  units — so no choice of sharpness metric fixes it
+- **The latency is two things, not one.** 135 ms of image acquisition plus a
+  speed-dependent command lead, because the camera reports the commanded position
+  rather than the actual one. At 8500 units/s the total compensation is 345 ms.
+  Four earlier scan-based estimates agreed with each other only because they
+  shared the same confound
+- **It stopped at recording.** Focus commands sent through tethering are silently
+  ignored once recording starts, and live view drops to 640×360, which the
+  face-width geometry reads as the subject retreating threefold
+
+### What the firmware offers that a host-side loop cannot get
+
+The findings above are limits of *what the host can see through live view*. Most
+of them are not limits of the camera:
+
+- **Direction does not have to come from one frame.** The camera's own AF gets it
+  from the contrast curve's slope and how fast that slope is decaying, and its
+  coarse band exists specifically to decide direction. Two samples, not one frame
+- **The sharpness metric is available at source.** `saf_jdat_h` and `saf_jdat_l`
+  are produced by the SIG engine from full-resolution Bayer, not by running
+  Tenengrad on a downscaled MJPEG — and they survive recording, because the AF
+  statistics engine keeps running
+- **Per-lens defocus calibration already exists.** `DefocusPerPulse` is what turns
+  "how far off am I" into "how many pulses", which is the step focus-ai had to
+  learn empirically per lens
+- **Position and distance convert exactly**, through the lens's own support points
+  interpolated in reciprocal distance
+- **Recording refuses focus in the handler, not in PTP** — the gate is
+  `captureState[0x220] == 0 && [0x7c] == 0`. That is why tethered focus commands
+  vanish during recording, and it is a firmware condition rather than a protocol
+  one
+- **GIMBAL reads absolute position** (`0x9405`) while only being able to drive
+  relative (`0x9411`), so closed-loop absolute positioning is possible.
+  **Whether that readback is the actual position or the commanded one is not
+  verified** — and given the command-lead finding above, it is the first thing to
+  check
+
 ### Focus position and distance
 
 - **The conversion is linear in reciprocal distance.** A lens supplies calibrated
@@ -131,6 +188,47 @@ needed**. The green AF band already streams at 0.125 ms/frame with no stall
 三段式管線全部反編譯完成:偵測引擎、結果資料結構、選臉/選眼優先權。
 主體追蹤(AAT)有色彩後端(使用中)與直方圖後端(存在但停用)。
 選中的框會轉換成 AF 評價區的 `xs/xe/ys/ye`,再餵給驅動狀態機。
+
+### 先前的嘗試:focus-ai,以及它撞到什麼
+
+sigma-fp-bridge 裡的
+[`focus-ai/`](https://github.com/ijigen/sigma-fp-bridge/tree/main/focus-ai)
+在主機端驅動對焦,用的是**畫面中的臉寬**、**離焦模糊**,以及針對量到的 135 ms 影像延遲做**線性預測**。
+它在使用過程中自己學鏡頭的「臉寬 ↔ 對焦位置」曲線,不需要校正步驟。
+該專案已停止維護,而它的
+[FINDINGS](https://github.com/ijigen/sigma-fp-bridge/blob/main/focus-ai/FINDINGS.md)
+值得任何想再做一次的人先看:
+
+- **這些鏡頭上不存在光學方向線索。** 軸向色差在 45mm 與 28mm F1.4 上量到的 R/G/B 峰值分離
+  只有 0.1–0.6 單位,而取樣間距是 25–40 單位。球差與像散在峰值兩側對稱
+  (±129/±121、±229/±221)。**單一影格分不出前焦後焦。**
+  自然場景上出現的相關性是場景結構造成的,不是鏡頭特性
+- **臉寬是弱訊號。** 變異數 0.75%;頭轉 30–45° 時只縮 9%,而餘弦修正預測是 20%;
+  而且幾何會把 1.3 px 的偵測雜訊放大成約 10 單位的對焦誤差
+- **離焦曲線的形狀跟主體有關** —— 半寬從 500 到 1400 單位 —— 所以換任何銳利度指標都救不了
+- **延遲是兩件事,不是一件。** 135 ms 的影像取得延遲,加上**隨速度變化的指令領先**,
+  因為相機回報的是**指令位置而不是實際位置**。在 8500 單位/秒時總補償是 345 ms。
+  先前四個掃描法的估計會互相吻合,只是因為它們共用同一個混淆
+- **它卡在錄影。** 一旦開始錄影,透過 tethering 送的對焦指令會被**靜默忽略**,
+  而且 live view 掉到 640×360,臉寬幾何會把那讀成「主體一秒內退後三倍」
+
+### 韌體能提供、而主機端迴圈拿不到的東西
+
+上面那些是**「主機透過 live view 能看到什麼」的限制**,大部分不是相機本身的限制:
+
+- **方向不必從單一影格取得。** 相機自己的 AF 是從對比曲線的**斜率**與**斜率遞減率**得到方向,
+  而且它的粗頻帶的存在目的就是判方向。那是兩個取樣點,不是一張影格
+- **銳利度指標可以從源頭拿。** `saf_jdat_h` / `saf_jdat_l` 是 SIG 引擎用**全解析度 Bayer**
+  算出來的,不是在縮小過的 MJPEG 上跑 Tenengrad —— 而且**錄影時它們照樣在跑**
+- **每顆鏡頭的離焦校準本來就存在。** `DefocusPerPulse` 就是把「還差多少」換成「要走幾步」的那張表,
+  正是 focus-ai 得靠經驗逐鏡頭學的東西
+- **位置與距離可以精確換算** —— 用鏡頭自己的支撐點,在倒數距離空間內插
+- **錄影中拒絕對焦是 handler 擋的,不是 PTP 的限制** —— 閘門是
+  `captureState[0x220] == 0 && [0x7c] == 0`。這就是 tethered 對焦指令在錄影時消失的原因,
+  而它是韌體條件,不是協定限制
+- **GIMBAL 讀得到絕對位置**(`0x9405`),雖然只能相對驅動(`0x9411`),
+  所以閉迴路絕對定位是可行的。**但那個回讀是實際位置還是指令位置,尚未驗證** ——
+  考慮到上面那條「指令領先」的發現,這是最該先查的一件事
 
 ### 對焦位置與距離
 

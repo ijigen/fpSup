@@ -29,6 +29,11 @@ exposed to clients as HTTP and WebSocket:
 - Exposure: aperture, shutter, ISO, white balance and the rest
 - Movie recording and format control
 - Tethered capture at roughly 56 MB/s, DNG or JPEG
+- A `focus-ai/` experiment that drove focus from face width and defocus blur. It
+  is unmaintained: focus commands through tethering are silently ignored during
+  recording, so it could not do the job it existed for. Its measurements are
+  summarised in [focus sup](focus-sup.md), along with what the firmware research
+  offers that a host-side loop cannot reach
 
 Tested mainly on macOS with a 45mm F2.8 DG DN; CINE is the exercised path, stills
 much less so; Linux is untested. **UHD 12-bit CinemaDNG is not reachable over
@@ -75,6 +80,9 @@ USB** — that limit belongs to [raw sup](raw-sup.md), not to the bridge.
 - 曝光參數:光圈、快門、ISO、白平衡等
 - 錄影與格式控制
 - Tethered 擷取約 56 MB/s,DNG 或 JPEG
+- 一個 `focus-ai/` 實驗,用臉寬與離焦模糊驅動對焦。已停止維護:
+  錄影期間透過 tethering 送的對焦指令會被靜默忽略,所以它做不到自己存在的目的。
+  它量到的東西整理在 [focus sup](focus-sup.md),連同「韌體能提供而主機端迴圈拿不到」的對照
 
 主要在 macOS 上以 45mm F2.8 DG DN 測試;CINE 是走過的路徑,靜態拍攝用得少很多;
 Linux 未測。**UHD 12-bit CinemaDNG 無法透過 USB 取得** —— 那個限制屬於
