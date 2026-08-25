@@ -63,11 +63,13 @@ reading a state that earlier experiments had already disturbed.
 ## Layout
 
 ```
-camera/worker.S      camera side, loaded at 0xC072E000
-camera/oneshot.S     template for running a routine once, from the host
+camera/worker.S      camera side, loaded at 0xC072F050
+templates/           pieces to copy and change; see templates/README.md
 armasm.py            assembles ARM source and resolves its internal calls
 build_autorun.py     assembles worker.S and emits the card script
 inject.py            writes a one-shot routine, arms it, waits for it
+load.py              writes a resident routine, verifies it, arms its hook
+putfile.py           writes a local file onto the card -- including AutoRun.txt
 host/fpshd.c         daemon, listens on /tmp/fpshd.sock
 host/fpsh            client
 host/lsdesc.c        prints the descriptor the host actually received
@@ -137,12 +139,12 @@ restores the camera completely — nothing is written to non-volatile storage.
 The shell can write memory but nothing can call it, so there is no `call`
 command and no need for one. To run something, point an address the firmware
 already calls at your routine, let it fire once, and put the original word back.
-`camera/oneshot.S` is that plumbing with a payload slot; `inject.py` writes it,
+`templates/oneshot.S` is that plumbing with a payload slot; `inject.py` writes it,
 arms the call site and waits for it to report back. Neither the AutoRun nor the
 daemon is involved.
 
 ```sh
-./inject.py camera/oneshot.S
+./inject.py templates/oneshot.S
 ./host/fpsh mem get 0xC072F500,,0x20
 ```
 
@@ -230,11 +232,13 @@ worker 的閘門是 `(DALEPENA & 0x24) == 0x24`。
 ### 目錄
 
 ```
-camera/worker.S      相機端,載入到 0xC072E000
-camera/oneshot.S     讓一段常式在相機上跑一次的範本
+camera/worker.S      相機端,載入到 0xC072F050
+templates/           拿去改的範本,見 templates/README.md
 armasm.py            ARM 組譯並解析內部呼叫
 build_autorun.py     組譯 worker.S 並產生卡片腳本
 inject.py            寫入一次性常式、武裝、等它回報
+load.py              寫入常駐常式、逐字驗證、掛上 hook
+putfile.py           把本機檔案寫進卡裡 —— 包含 AutoRun.txt 本身
 host/fpshd.c         daemon,監聽 /tmp/fpshd.sock
 host/fpsh            客戶端
 host/lsdesc.c        印出主機實際列舉到的描述元
@@ -299,12 +303,12 @@ make card CARD=/Volumes/<卡片名稱>
 ### 在相機上執行程式碼
 
 shell 能寫記憶體但不能呼叫,所以**沒有 `call` 指令,也不需要**。做法是把韌體本來就會
-呼叫的位址指向我們的常式,讓它跑一次,再自己把原值寫回去。`camera/oneshot.S` 就是
+呼叫的位址指向我們的常式,讓它跑一次,再自己把原值寫回去。`templates/oneshot.S` 就是
 那套外框加一個 payload 空位;`inject.py` 負責寫入、武裝、等它回報。
 AutoRun 和 daemon 都不用動。
 
 ```sh
-./inject.py camera/oneshot.S
+./inject.py templates/oneshot.S
 ./host/fpsh mem get 0xC072F500,,0x20
 ```
 

@@ -457,8 +457,12 @@ display osd 1
 display text fpSup[#######.]90
 display osd 1
 
-# --- 4 KiB DMA frame buffer; its address lands in 0xC3757A7C -----------------
-memmgr bufmem get 0 0x1000 0x40
+# --- DMA pool; its address lands in 0xC3757A7C -------------------------------
+# +0x0000 frame buffer 4 KiB   +0x2000 capture buffer 16 KiB
+# +0x6000 onward is left for whatever is loaded alongside -- the gyro logger
+# puts its state and its two 16 KiB halves there. Reserve the whole span up
+# front rather than writing past a 4 KiB allocation and hoping the tail is free.
+memmgr bufmem get 0 0x10000 0x40
 
 # --- start the worker --------------------------------------------------------
 # A one-shot branch from the gyro callback: bootstrap calls the routine it
