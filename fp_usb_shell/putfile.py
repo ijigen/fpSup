@@ -31,7 +31,7 @@ P         = 0xC072F500          # parameter block
 ECHO_SLOT = 0xC0BAC2F8          # command table entry 17, echo's handler pointer
 ECHO_ORIG = 0xC03D99A0
 POOL_PTR  = 0xC3757A7C          # where the AutoRun's pool address lands
-POOL_OFF  = 0x2000              # past the 4 KiB the shell's own frames use
+POOL_OFF  = 0x10000             # the templates' own scratch, past shell and gyro
 FOBJ_ROOM = 0x400
 
 P_STATUS, P_OPENR, P_WRITER = 0x08, 0x0C, 0x10
@@ -41,23 +41,31 @@ STATUS = {0: 'never ran', 1: 'started but did not finish', 2: 'written',
           3: 'open returned 0', 4: 'write returned 0'}
 
 
-def sh(line: str) -> str:
-    """One command, one connection -- the daemon closes after each reply."""
-    s = socket.socket(socket.AF_UNIX)
-    s.connect(SOCK)
-    s.sendall(b'SHL ' + line.encode() + b'\n')
-    out = b''
-    while True:
-        b = s.recv(65536)
-        if not b:
-            break
-        out += b
-    s.close()
-    # the daemon escapes newlines so a reply stays one line on the wire
-    text = out.decode(errors='replace')
-    if text.startswith('OK '):
-        text = text[3:]
-    return text.replace('\\n', '\n')
+def sh(line: str, retries: int = 3) -> str:
+    """One command, one connection -- the daemon closes after each reply.
+
+    Roughly one command in ten goes missing, in one direction or the other, so a
+    reply that does not come back is retried rather than believed.  The daemon
+    gives up after 200 ms, which is what makes retrying cheap.
+    """
+    for attempt in range(retries + 1):
+        s = socket.socket(socket.AF_UNIX)
+        s.connect(SOCK)
+        s.sendall(b'SHL ' + line.encode() + b'\n')
+        out = b''
+        while True:
+            b = s.recv(65536)
+            if not b:
+                break
+            out += b
+        s.close()
+        text = out.decode(errors='replace')
+        if not text.startswith('ERR'):
+            if text.startswith('OK '):
+                text = text[3:]
+            # the daemon escapes newlines so a reply stays one line on the wire
+            return text.replace('\\n', '\n')
+    return text
 
 
 def mem_set(addr, value):
@@ -91,10 +99,14 @@ def staging_area():
 
     Not `memmgr bufmem get`.  That works from the AutoRun, at boot, but issued
     live through the shell it wedged the endpoint and froze the camera -- once,
-    which was enough.  So the address is derived instead: the pool the AutoRun
-    already took, skipping the first 4 KiB, which is the frame buffer that every
-    shell command overwrites.  The gyro logger wrote megabytes from +0x2000
-    onward across many recordings, so the region is known to be ours.
+    which was enough.  So the address is derived from the pool the AutoRun
+    already took.
+
+    The offset is the whole point.  +0x2000 was the obvious spot until the shell
+    put its own capture buffer there, at which point staging a file meant writing
+    into the memory that carries every reply, and the region-is-free check caught
+    it on the first command.  The map now is: +0x0000 the shell's frames,
+    +0x2000 its capture buffer, +0x6000 the gyro logger, +0x10000 here.
     """
     got = mem_get(POOL_PTR)
     if not got or not 0x40000000 <= got[0] < 0x50000000:
@@ -119,11 +131,19 @@ def prove(addr, length):
                 raise SystemExit(f'0x{a:08X} reads {got} — staging area is not free')
 
 
+READ_CHUNK = 64                 # words per request
+
+
 def read_back(addr, count):
-    """Read `count` words in 16-word requests."""
+    """Read `count` words, in requests as large as the reply will carry.
+
+    Throughput flattens at about 44 KiB/s from 48 words up, and the reply for 64
+    is well inside the daemon's 8 KiB buffer, so there is nothing to gain by
+    going wider and something to lose if a reply is ever truncated.
+    """
     out = []
-    for base in range(0, count, 16):
-        out += mem_get(addr + base * 4, min(16, count - base))
+    for base in range(0, count, READ_CHUNK):
+        out += mem_get(addr + base * 4, min(READ_CHUNK, count - base))
     return out
 
 

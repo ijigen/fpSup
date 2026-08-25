@@ -49,7 +49,13 @@ typedef struct __attribute__((packed)) {
 _Static_assert(sizeof(fpsh_frame) == FRAME_SIZE, "frame must be 64 bytes");
 
 static uint16_t g_vid = 0x1003, g_pid = 0xc432;
-static unsigned g_timeout = 5000;
+/* A reply that has not arrived in this long is lost, not slow: the transport
+ * drops whole commands, roughly one in ten, and waiting five seconds for one of
+ * them turned a 550 character `mem get` into an average of 774 ms. The caller
+ * retries, which costs a fifth of a second instead of five. Commands that
+ * genuinely take longer -- an SD write is up to 692 ms -- report through their
+ * own status word, so a timeout there is not a failure either. */
+static unsigned g_timeout = 200;
 static libusb_context      *g_usb;
 static libusb_device_handle*g_cam;
 static uint32_t             g_seq;

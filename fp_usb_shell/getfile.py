@@ -29,6 +29,7 @@ def main():
     ap.add_argument('--size', type=lambda s: int(s, 0), default=None,
                     help='bytes to read; default comes from dir')
     ap.add_argument('--mode', type=lambda s: int(s, 0), default=1)
+    ap.add_argument('--buf', type=lambda s: int(s, 0), default=None)
     a = ap.parse_args()
 
     name = a.remote.lstrip('\\').split('\\')[-1]
@@ -47,7 +48,7 @@ def main():
     print(f'  remote  {a.remote}  {size} bytes, mode 0x{a.mode:X}')
 
     words = (size + 3) // 4
-    buf = staging_area()
+    buf = a.buf or staging_area()
     fobj = buf + words * 4 + 4
     print(f'  buffer  0x{buf:08X}, file object 0x{fobj:08X}')
 

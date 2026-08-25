@@ -459,10 +459,12 @@ display osd 1
 
 # --- DMA pool; its address lands in 0xC3757A7C -------------------------------
 # +0x0000 frame buffer 4 KiB   +0x2000 capture buffer 16 KiB
-# +0x6000 onward is left for whatever is loaded alongside -- the gyro logger
-# puts its state and its two 16 KiB halves there. Reserve the whole span up
-# front rather than writing past a 4 KiB allocation and hoping the tail is free.
-memmgr bufmem get 0 0x10000 0x40
+# +0x6000 gyro logger 40 KiB   +0x10000 template scratch 64 KiB
+# Reserve the whole span up front rather than writing past the allocation and
+# hoping the tail is free. Everything derives its address from this pointer:
+# asking for 64 KiB instead of 4 already moved the base from 0x44F6ADC0 to
+# 0x45026680, and every hard-coded address went with it.
+memmgr bufmem get 0 0x20000 0x40
 
 # --- start the worker --------------------------------------------------------
 # A one-shot branch from the gyro callback: bootstrap calls the routine it
