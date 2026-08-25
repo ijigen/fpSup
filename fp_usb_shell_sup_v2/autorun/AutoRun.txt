@@ -1,0 +1,471 @@
+# ============================================================================
+# USB shell.
+#
+# The camera keeps its own PTP gadget exactly as the firmware builds it, so the
+# firmware owns the descriptors, creates and enables the endpoints, and
+# re-creates them after a record-mode reconfiguration.  A few words are changed
+# so nothing competes for those pipes and so PTP's unused interrupt endpoint
+# becomes a second bulk IN for streaming; the rest of this file is the worker.
+#
+#   EP 0x01 OUT  commands      EP 0x82 IN  replies      EP 0x83 IN  streaming
+#
+# The worker understands one command: `shl <line>`, which runs <line> in the
+# firmware's own shell and returns what it printed.  `mem set` and `mem save`
+# come along for free, so the worker needs no memory commands of its own.
+#
+# Boot with the USB cable UNPLUGGED, then attach it.  The gadget is built on
+# attach, so the patches have to land first; and the patched words sit in code
+# that has not run yet, so no stale instruction-cache line can shadow them.
+#
+# The screen reads fpSup[........]0 through fpSup[########]100 while this runs
+# and fpSup! when it is done.  A bar that stops means the load stopped there.
+# ============================================================================
+
+# --- screen ------------------------------------------------------------------
+display monitor 0 1
+# text colour
+mem set 0xC0BB1208 0xFFFFF8B2
+# mov r5,#120 — x, clear of the battery indicator
+mem set 0xC03E46A0 0xE3A05078
+# mov r8,#16  — y
+mem set 0xC03E4698 0xE3A08010
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[........]0
+display osd 1
+display text fpSup[........]0
+display osd 1
+display text fpSup[........]0
+display osd 1
+
+# --- patches -----------------------------------------------------------------
+# PTP interface template: {bNumEndpoints, class, subclass, protocol}
+# 03/06/01/01 -> 03/ff/ff/ff.  Lengths and the endpoint set are untouched;
+# this only stops the host's PTP stack from claiming interface 0 before the
+# shell daemon can.
+mem set 0xC0CF3740 0xFFFFFF03
+# EP 0x83, SuperSpeed: interrupt -> bulk
+mem set 0xC0CF3780 0x02830507
+# EP 0x83, SuperSpeed: wMaxPacketSize 64 -> 1024, bInterval 11 -> 0
+mem set 0xC0CF3784 0x00000400
+# its SuperSpeed companion: bMaxBurst 0 -> 3
+mem set 0xC0CF3758 0x00033006
+# its SuperSpeed companion: wBytesPerInterval 64 -> 0
+mem set 0xC0CF375C 0x00000000
+# EP 0x83, full speed: interrupt -> bulk
+mem set 0xC0CF3798 0x02830507
+# EP 0x83, full speed: bInterval 100 -> 0
+mem set 0xC0CF379C 0x00000040
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[#.......]10
+display osd 1
+display text fpSup[#.......]10
+display osd 1
+display text fpSup[#.......]10
+display osd 1
+
+# --- worker state @0xC072F000, 16 words, plus the capture length ----------
+mem set 0xC072F000 0x00000000
+mem set 0xC072F004 0x00000000
+mem set 0xC072F008 0x00000000
+mem set 0xC072F00C 0x00000000
+mem set 0xC072F010 0x00000000
+mem set 0xC072F014 0x00000000
+mem set 0xC072F018 0x00000000
+mem set 0xC072F01C 0x00000000
+mem set 0xC072F020 0x00000000
+mem set 0xC072F024 0x00000000
+mem set 0xC072F028 0x00000000
+mem set 0xC072F02C 0x00000000
+mem set 0xC072F030 0x00000000
+mem set 0xC072F034 0x00000000
+mem set 0xC072F038 0x00000000
+mem set 0xC072F03C 0x00000000
+mem set 0xC072F040 0x00000000
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[##......]20
+display osd 1
+display text fpSup[##......]20
+display osd 1
+display text fpSup[##......]20
+display osd 1
+
+# --- worker code @0xC072E000..0xC072E478, 1144 bytes ---------------
+mem set 0xC072E000 0xE92D4030
+mem set 0xC072E004 0xE30CC6F9
+mem set 0xC072E008 0xE34CC01E
+mem set 0xC072E00C 0xE12FFF3C
+mem set 0xC072E010 0xE1A04000
+mem set 0xC072E014 0xE30F5000
+mem set 0xC072E018 0xE34C5072
+mem set 0xC072E01C 0xE5950000
+mem set 0xC072E020 0xE3051356
+mem set 0xC072E024 0xE3441C48
+mem set 0xC072E028 0xE1500001
+mem set 0xC072E02C 0x0A000024
+mem set 0xC072E030 0xE5851000
+mem set 0xC072E034 0xE3000794
+mem set 0xC072E038 0xE34C000D
+mem set 0xC072E03C 0xE3061FD7
+mem set 0xC072E040 0xE34F1A04
+mem set 0xC072E044 0xE5801000
+mem set 0xC072E048 0xE24DD020
+mem set 0xC072E04C 0xE3A00000
+mem set 0xC072E050 0xE58D0000
+mem set 0xC072E054 0xE3A00041
+mem set 0xC072E058 0xE58D0004
+mem set 0xC072E05C 0xE28F0068
+mem set 0xC072E060 0xE58D0008
+mem set 0xC072E064 0xE3A0001C
+mem set 0xC072E068 0xE58D000C
+mem set 0xC072E06C 0xE3020000
+mem set 0xC072E070 0xE58D0010
+mem set 0xC072E074 0xE305065F
+mem set 0xC072E078 0xE3440853
+mem set 0xC072E07C 0xE58D0014
+mem set 0xC072E080 0xE300004C
+mem set 0xC072E084 0xE58D0018
+mem set 0xC072E088 0xE3A00000
+mem set 0xC072E08C 0xE58D001C
+mem set 0xC072E090 0xE1A0000D
+mem set 0xC072E094 0xE306CA58
+mem set 0xC072E098 0xE34CC001
+mem set 0xC072E09C 0xE12FFF3C
+mem set 0xC072E0A0 0xE28DD020
+mem set 0xC072E0A4 0xE5850004
+mem set 0xC072E0A8 0xE3500000
+mem set 0xC072E0AC 0xDA000004
+mem set 0xC072E0B0 0xE3A01000
+mem set 0xC072E0B4 0xE306CBC0
+mem set 0xC072E0B8 0xE34CC001
+mem set 0xC072E0BC 0xE12FFF3C
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[###.....]32
+display osd 1
+display text fpSup[###.....]32
+display osd 1
+display text fpSup[###.....]32
+display osd 1
+
+mem set 0xC072E0C0 0xE5850008
+mem set 0xC072E0C4 0xE1A00004
+mem set 0xC072E0C8 0xE8BD8030
+mem set 0xC072E0CC 0xE92D47F0
+mem set 0xC072E0D0 0xE30F4000
+mem set 0xC072E0D4 0xE34C4072
+mem set 0xC072E0D8 0xE594000C
+mem set 0xC072E0DC 0xE2800001
+mem set 0xC072E0E0 0xE584000C
+mem set 0xC072E0E4 0xE30C0720
+mem set 0xC072E0E8 0xE3420100
+mem set 0xC072E0EC 0xE5901000
+mem set 0xC072E0F0 0xE5841030
+mem set 0xC072E0F4 0xE2011024
+mem set 0xC072E0F8 0xE3510024
+mem set 0xC072E0FC 0x1A00008C
+mem set 0xC072E100 0xE3030748
+mem set 0xC072E104 0xE34C031E
+mem set 0xC072E108 0xE5901000
+mem set 0xC072E10C 0xE584102C
+mem set 0xC072E110 0xE3510004
+mem set 0xC072E114 0x0A000086
+mem set 0xC072E118 0xEB00008D
+mem set 0xC072E11C 0xE5840010
+mem set 0xC072E120 0xE3500000
+mem set 0xC072E124 0x1A00007A
+mem set 0xC072E128 0xE3A00001
+mem set 0xC072E12C 0xE30C1350
+mem set 0xC072E130 0xE304CE81
+mem set 0xC072E134 0xE34CC01E
+mem set 0xC072E138 0xE12FFF3C
+mem set 0xC072E13C 0xE5840014
+mem set 0xC072E140 0xE3500000
+mem set 0xC072E144 0x1A000072
+mem set 0xC072E148 0xE3070A7C
+mem set 0xC072E14C 0xE34C0375
+mem set 0xC072E150 0xE5906000
+mem set 0xC072E154 0xE3A00101
+mem set 0xC072E158 0xE0866000
+mem set 0xC072E15C 0xE286A014
+mem set 0xC072E160 0xE59A0000
+mem set 0xC072E164 0xE3061873
+mem set 0xC072E168 0xE342106C
+mem set 0xC072E16C 0xE1500001
+mem set 0xC072E170 0x1A000025
+mem set 0xC072E174 0xE28A7004
+mem set 0xC072E178 0xE3060904
+mem set 0xC072E17C 0xE34C0375
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[###.....]43
+display osd 1
+display text fpSup[###.....]43
+display osd 1
+display text fpSup[###.....]43
+display osd 1
+
+mem set 0xC072E180 0xE5901000
+mem set 0xC072E184 0xE3510000
+mem set 0xC072E188 0x1A000004
+mem set 0xC072E18C 0xE3060904
+mem set 0xC072E190 0xE34C0375
+mem set 0xC072E194 0xE309CA10
+mem set 0xC072E198 0xE34CC03D
+mem set 0xC072E19C 0xE12FFF3C
+mem set 0xC072E1A0 0xE30F0040
+mem set 0xC072E1A4 0xE34C0072
+mem set 0xC072E1A8 0xE3A01000
+mem set 0xC072E1AC 0xE5801000
+mem set 0xC072E1B0 0xE3060904
+mem set 0xC072E1B4 0xE34C0375
+mem set 0xC072E1B8 0xE28F1F95
+mem set 0xC072E1BC 0xE309CAC0
+mem set 0xC072E1C0 0xE34CC03D
+mem set 0xC072E1C4 0xE12FFF3C
+mem set 0xC072E1C8 0xE3060904
+mem set 0xC072E1CC 0xE34C0375
+mem set 0xC072E1D0 0xE1A01007
+mem set 0xC072E1D4 0xE309CC20
+mem set 0xC072E1D8 0xE34CC03D
+mem set 0xC072E1DC 0xE12FFF3C
+mem set 0xC072E1E0 0xE3060904
+mem set 0xC072E1E4 0xE34C0375
+mem set 0xC072E1E8 0xE309CB20
+mem set 0xC072E1EC 0xE34CC03D
+mem set 0xC072E1F0 0xE12FFF3C
+mem set 0xC072E1F4 0xE30F0040
+mem set 0xC072E1F8 0xE34C0072
+mem set 0xC072E1FC 0xE5909000
+mem set 0xC072E200 0xE30F8080
+mem set 0xC072E204 0xE34C8072
+mem set 0xC072E208 0xEA000002
+mem set 0xC072E20C 0xE3A09000
+mem set 0xC072E210 0xE30F8080
+mem set 0xC072E214 0xE34C8072
+mem set 0xC072E218 0xE1A05009
+mem set 0xC072E21C 0xE355002C
+mem set 0xC072E220 0x83A0502C
+mem set 0xC072E224 0xE0499005
+mem set 0xC072E228 0xE2867014
+mem set 0xC072E22C 0xE3A00000
+mem set 0xC072E230 0xE1500005
+mem set 0xC072E234 0x2A000003
+mem set 0xC072E238 0xE7D81000
+mem set 0xC072E23C 0xE7C71000
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[####....]55
+display osd 1
+display text fpSup[####....]55
+display osd 1
+display text fpSup[####....]55
+display osd 1
+
+mem set 0xC072E240 0xE2800001
+mem set 0xC072E244 0xEAFFFFF9
+mem set 0xC072E248 0xE350002C
+mem set 0xC072E24C 0x2A000003
+mem set 0xC072E250 0xE3A01000
+mem set 0xC072E254 0xE7C71000
+mem set 0xC072E258 0xE2800001
+mem set 0xC072E25C 0xEAFFFFF9
+mem set 0xC072E260 0xE0888005
+mem set 0xC072E264 0xE3590000
+mem set 0xC072E268 0x13A00001
+mem set 0xC072E26C 0x03A00000
+mem set 0xC072E270 0xE1C600B6
+mem set 0xC072E274 0xE1C650BC
+mem set 0xC072E278 0xE3A00000
+mem set 0xC072E27C 0xE1C600BE
+mem set 0xC072E280 0xE5860010
+mem set 0xC072E284 0xE3E03000
+mem set 0xC072E288 0xE3A00000
+mem set 0xC072E28C 0xE7D61000
+mem set 0xC072E290 0xE0233001
+mem set 0xC072E294 0xE3A02008
+mem set 0xC072E298 0xE3130001
+mem set 0xC072E29C 0xE1A030A3
+mem set 0xC072E2A0 0x0A000002
+mem set 0xC072E2A4 0xE3081320
+mem set 0xC072E2A8 0xE34E1DB8
+mem set 0xC072E2AC 0xE0233001
+mem set 0xC072E2B0 0xE2522001
+mem set 0xC072E2B4 0x1AFFFFF7
+mem set 0xC072E2B8 0xE2800001
+mem set 0xC072E2BC 0xE3500040
+mem set 0xC072E2C0 0x3AFFFFF1
+mem set 0xC072E2C4 0xE1E03003
+mem set 0xC072E2C8 0xE5863010
+mem set 0xC072E2CC 0xEB00003A
+mem set 0xC072E2D0 0xE5840018
+mem set 0xC072E2D4 0xE3500000
+mem set 0xC072E2D8 0x1A00000D
+mem set 0xC072E2DC 0xE3A00002
+mem set 0xC072E2E0 0xE30C1350
+mem set 0xC072E2E4 0xE304CE81
+mem set 0xC072E2E8 0xE34CC01E
+mem set 0xC072E2EC 0xE12FFF3C
+mem set 0xC072E2F0 0xE584001C
+mem set 0xC072E2F4 0xE3500000
+mem set 0xC072E2F8 0x1A000005
+mem set 0xC072E2FC 0xE3590000
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[#####...]67
+display osd 1
+display text fpSup[#####...]67
+display osd 1
+display text fpSup[#####...]67
+display osd 1
+
+mem set 0xC072E300 0xCAFFFFC4
+mem set 0xC072E304 0xE5940020
+mem set 0xC072E308 0xE2800001
+mem set 0xC072E30C 0xE5840020
+mem set 0xC072E310 0xEAFFFF70
+mem set 0xC072E314 0xE5940024
+mem set 0xC072E318 0xE2800001
+mem set 0xC072E31C 0xE5840024
+mem set 0xC072E320 0xE3A00014
+mem set 0xC072E324 0xE308C9C4
+mem set 0xC072E328 0xE34CC01F
+mem set 0xC072E32C 0xE12FFF3C
+mem set 0xC072E330 0xEAFFFF68
+mem set 0xC072E334 0xE5940028
+mem set 0xC072E338 0xE2800001
+mem set 0xC072E33C 0xE5840028
+mem set 0xC072E340 0xE3A00032
+mem set 0xC072E344 0xE308C9C4
+mem set 0xC072E348 0xE34CC01F
+mem set 0xC072E34C 0xE12FFF3C
+mem set 0xC072E350 0xEAFFFF60
+mem set 0xC072E354 0xE92D40F0
+mem set 0xC072E358 0xE3A00001
+mem set 0xC072E35C 0xE306CD49
+mem set 0xC072E360 0xE34CC01E
+mem set 0xC072E364 0xE12FFF3C
+mem set 0xC072E368 0xE3070A7C
+mem set 0xC072E36C 0xE34C0375
+mem set 0xC072E370 0xE5906000
+mem set 0xC072E374 0xE3A00103
+mem set 0xC072E378 0xE0865000
+mem set 0xC072E37C 0xE3030268
+mem set 0xC072E380 0xE34C031E
+mem set 0xC072E384 0xE5907000
+mem set 0xC072E388 0xE5875000
+mem set 0xC072E38C 0xE3A00000
+mem set 0xC072E390 0xE5870004
+mem set 0xC072E394 0xE3A00B01
+mem set 0xC072E398 0xE5870008
+mem set 0xC072E39C 0xE3000813
+mem set 0xC072E3A0 0xE587000C
+mem set 0xC072E3A4 0xF57FF04F
+mem set 0xC072E3A8 0xE3A00002
+mem set 0xC072E3AC 0xE306CB81
+mem set 0xC072E3B0 0xE34CC01E
+mem set 0xC072E3B4 0xE12FFF3C
+mem set 0xC072E3B8 0xE8BD80F0
+mem set 0xC072E3BC 0xE92D40F0
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[######..]78
+display osd 1
+display text fpSup[######..]78
+display osd 1
+display text fpSup[######..]78
+display osd 1
+
+mem set 0xC072E3C0 0xE3070A7C
+mem set 0xC072E3C4 0xE34C0375
+mem set 0xC072E3C8 0xE5906000
+mem set 0xC072E3CC 0xE3A00103
+mem set 0xC072E3D0 0xE0865000
+mem set 0xC072E3D4 0xE303026C
+mem set 0xC072E3D8 0xE34C031E
+mem set 0xC072E3DC 0xE5907000
+mem set 0xC072E3E0 0xE5875000
+mem set 0xC072E3E4 0xE3A00000
+mem set 0xC072E3E8 0xE5870004
+mem set 0xC072E3EC 0xE3A00040
+mem set 0xC072E3F0 0xE5870008
+mem set 0xC072E3F4 0xE3000813
+mem set 0xC072E3F8 0xE587000C
+mem set 0xC072E3FC 0xF57FF04F
+mem set 0xC072E400 0xE3A00005
+mem set 0xC072E404 0xE306CB81
+mem set 0xC072E408 0xE34CC01E
+mem set 0xC072E40C 0xE12FFF3C
+mem set 0xC072E410 0xE8BD80F0
+mem set 0xC072E414 0xE92D000E
+mem set 0xC072E418 0xE92D4030
+mem set 0xC072E41C 0xE1A02000
+mem set 0xC072E420 0xE28D300C
+mem set 0xC072E424 0xE30F4040
+mem set 0xC072E428 0xE34C4072
+mem set 0xC072E42C 0xE5945000
+mem set 0xC072E430 0xE30F0080
+mem set 0xC072E434 0xE34C0072
+mem set 0xC072E438 0xE0800005
+mem set 0xC072E43C 0xE3001400
+mem set 0xC072E440 0xE0511005
+mem set 0xC072E444 0xDA000008
+mem set 0xC072E448 0xE2411001
+mem set 0xC072E44C 0xE303CF48
+mem set 0xC072E450 0xE34CC001
+mem set 0xC072E454 0xE12FFF3C
+mem set 0xC072E458 0xE3500000
+mem set 0xC072E45C 0xDA000002
+mem set 0xC072E460 0xE5945000
+mem set 0xC072E464 0xE0855000
+mem set 0xC072E468 0xE5845000
+mem set 0xC072E46C 0xE8BD4030
+mem set 0xC072E470 0xE28DD00C
+mem set 0xC072E474 0xE12FFF1E
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[#######.]90
+display osd 1
+display text fpSup[#######.]90
+display osd 1
+display text fpSup[#######.]90
+display osd 1
+
+# --- 4 KiB DMA frame buffer; its address lands in 0xC3757A7C -----------------
+memmgr bufmem get 0 0x1000 0x40
+
+# --- start the worker --------------------------------------------------------
+# A one-shot branch from the gyro callback: bootstrap calls the routine it
+# displaced, creates the task, and restores this word.
+mem set 0xC00D0794 0xEB197619
+
+# --- done --------------------------------------------------------------------
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup!
+display osd 1
+display text fpSup!
+display osd 1
+display text fpSup!
+display osd 1

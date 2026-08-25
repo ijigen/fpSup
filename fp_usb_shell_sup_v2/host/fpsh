@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""fpsh — client for fpshd (vendor-gadget USB shell).
+
+  fpsh ping
+  fpsh <firmware shell command...>       e.g.  fpsh mem save \\X.BIN 0xC072F000,,0x40
+  fpsh --status
+"""
+import socket, sys, os
+
+SOCK = os.environ.get("FPSHD_SOCKET", "/tmp/fpshd.sock")
+
+def call(line: str) -> str:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(70)
+    s.connect(SOCK)
+    s.sendall(line.encode() + b"\n")
+    buf = b""
+    while not buf.endswith(b"\n"):
+        chunk = s.recv(65536)
+        if not chunk:
+            break
+        buf += chunk
+    s.close()
+    return buf.decode(errors="replace").rstrip("\n")
+
+def main() -> int:
+    args = sys.argv[1:]
+    if not args:
+        print(__doc__.strip()); return 2
+    if args[0] == "--status":
+        req = "STATUS"
+    elif args[0] == "ping" and len(args) == 1:
+        req = "PING"
+    else:
+        req = "SHL " + " ".join(args)
+    r = call(req)
+    if r.startswith("OK "):
+        print(r[3:].replace("\\n", "\n").replace("\\\\", "\\"))
+        return 0
+    print(r, file=sys.stderr)
+    return 1
+
+if __name__ == "__main__":
+    sys.exit(main())
