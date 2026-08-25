@@ -10,7 +10,7 @@ boot, so a bad write costs nothing as long as it is caught before the next one.
 import argparse, pathlib, struct, sys, time
 
 from armasm import assemble
-from putfile import (sh, mem_set, mem_get, staging_area, put, read_back,
+from putfile import (sh, mem_set, mem_get, staging_area, put, read_back, check_fits,
                      CODE, CODE_END, P, ECHO_SLOT, ECHO_ORIG, HERE)
 
 P_ACTUAL, P_STATUS, P_OPENR, P_READR = 0x04, 0x08, 0x0C, 0x10
@@ -51,9 +51,14 @@ def main():
     buf = a.buf or staging_area()
     fobj = buf + words * 4 + 4
     print(f'  buffer  0x{buf:08X}, file object 0x{fobj:08X}')
+    check_fits(buf, words * 4 + 0x400, 'staging')
 
-    # poison first, so what comes back is known to have been read, not left over
-    put(buf, struct.pack(f'<{words}I', *([POISON] * words)), 'poison')
+    # Poison every 4 KiB rather than the whole buffer.  Filling 247 KB with a
+    # pattern took longer than reading the file twice over, and one marker per
+    # page catches the case it is there for -- a read that did not happen.
+    marks = list(range(0, words, 1024)) + [words - 1]
+    for i in marks:
+        mem_set(buf + i * 4, POISON)
 
     path = a.remote.encode() + b'\0'
     for off, val in ((P_ACTUAL, 0), (P_STATUS, 0), (P_OPENR, 0), (P_READR, 0),
@@ -92,9 +97,10 @@ def main():
         raise SystemExit('some words could not be read back')
     data = struct.pack(f'<{words}I', *got)[:size]
     print(f'  fetched {len(data)} bytes in {time.time()-t0:.1f}s')
-    if data.count(struct.pack('<I', POISON)) :
-        n = data.count(struct.pack('<I', POISON))
-        print(f'  WARNING {n} words still hold the poison — that much was not read')
+    left = sum(1 for i in marks if i * 4 + 4 <= len(data)
+               and struct.unpack_from('<I', data, i * 4)[0] == POISON)
+    if left:
+        print(f'  WARNING {left} of {len(marks)} markers survived — that much was not read')
 
     if a.local:
         pathlib.Path(a.local).write_bytes(data)

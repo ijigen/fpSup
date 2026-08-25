@@ -114,6 +114,38 @@ def staging_area():
     return got[0] + POOL_OFF
 
 
+POOL_SIZE = 1048576             # must match the AutoRun's `memmgr bufmem get`
+
+
+def pool_end():
+    """One past the end of what the AutoRun asked for.
+
+    Not read from `memmgr bufchk`. The memmgr commands are not safe to issue
+    live -- `bufmem get` wedged the endpoint and froze the camera earlier today,
+    and putting `bufchk` on the path every transfer takes did it again. The size
+    is a constant here and in build_autorun.py, and the two have to agree; the
+    check below is a guard against a stale one, not a discovery.
+    """
+    return mem_get(POOL_PTR)[0] + POOL_SIZE
+
+
+def check_fits(addr, length, what):
+    """Refuse rather than overflow.
+
+    Staging 247 KB into the 64 KiB that was left ran off the end of the
+    allocation into memory somebody else kept rewriting, so the verify could
+    never converge and six passes of retries took six minutes -- reported as
+    slowness, not as the out-of-bounds write it was.
+    """
+    end = pool_end()
+    if addr + length > end:
+        raise SystemExit(
+            f'{what}: 0x{addr:08X}+{length} runs {addr + length - end} bytes past '
+            f'the allocation end 0x{end:08X}.\n'
+            "Raise the size in build_autorun.py's `memmgr bufmem get` and "
+            'POOL_SIZE here, or move less at once.')
+
+
 def prove(addr, length):
     """Write a pattern across the region, read it back, then read it again.
 
@@ -260,6 +292,7 @@ def main():
     buf = a.buf or staging_area()
     fobj = buf + len(padded)
     print(f'  buffer  0x{buf:08X}, file object 0x{fobj:08X}')
+    check_fits(buf, len(padded) + FOBJ_ROOM, 'staging')
     prove(buf, len(padded) + FOBJ_ROOM)
     print('  proof   region takes writes and still holds them a second later')
 

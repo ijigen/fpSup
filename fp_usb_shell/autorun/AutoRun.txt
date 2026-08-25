@@ -472,7 +472,11 @@ display osd 1
 # 0xC03A4EEC that is reinitialised when recording starts. That is where the
 # shell's capture buffer and the gyro logger's halves had been living, and why
 # the picture tore and the camera froze at unpredictable moments.
-memmgr bufmem get 0 131072
+# 1 MiB. The USER pool reports 18 MB free in MOVIE_REC_DNG, and 128 KiB was
+# not enough to stage a quarter-megabyte file -- which showed up as a verify
+# that never converged rather than as an error, because the overflow landed in
+# memory somebody else kept rewriting.
+memmgr bufmem get 0 1048576
 
 # --- start the worker --------------------------------------------------------
 # A one-shot branch from the gyro callback: bootstrap calls the routine it
