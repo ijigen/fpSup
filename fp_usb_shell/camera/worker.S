@@ -50,6 +50,19 @@
  * dispatcher and returns whatever it printed.  That already includes `mem set`
  * and `mem save`, so the worker needs no memory commands of its own.
  *
+ * MEMORY.  The worker sits high in the cave so that 0xC072DE64 through
+ * 0xC072F000 stays clear for a gyro logger loaded alongside it — the two share
+ * one card, and the shell is how the logger gets developed.
+ *
+ *     0xC072DE64..0xC072F000   free, for the gyro logger
+ *     0xC072F000..0xC072F040   this worker's state
+ *     0xC072F050..0xC072F500   this worker's code
+ *     0xC072F500..0xC072F700   the one-shot template's scratch and code
+ *     pool +0x0000             FPSH frame buffer, 4 KiB
+ *     pool +0x2000             shell capture buffer, 16 KiB (derived from the
+ *                              pool pointer, never hard-coded)
+ *     pool +0x6000             free, for the logger's own buffers
+ *
  * STATE.  Sixteen words at 0xC072F000, readable with
  *     shl mem save \VSHL.BIN 0xC072F000,,0x40
  *
@@ -91,8 +104,13 @@
 /* --- our memory ----------------------------------------------------------- */
 .equ STATE,       0xC072F000      /* 16 words                                 */
 .equ CAP_LEN,     0xC072F040      /* bytes captured from the shell            */
-.equ CAP_BUF,     0xC072F080      /* capture buffer, ends 0xC072F480          */
-.equ CAP_MAX,     0x0400
+/* The capture buffer lives in the DMA pool, not the code cave.  In the cave it
+ * could only be about 1.4 KiB before running into the injection ceiling, and a
+ * kilobyte truncates the longer shell commands — `imager mode_list` stopped
+ * after seven of seventy sensor modes.  The pool has room to spare and the CPU
+ * copies out of it, so no coherency handling is needed. */
+.equ CAP_OFF,     0x2000          /* capture buffer sits this far past the frame */
+.equ CAP_MAX,     0x4000          /* 16 KiB                                   */
 
 /* --- bootstrap ------------------------------------------------------------ */
 .equ HOOK_SITE,   0xC00D0794      /* gyro callback, borrowed once             */
@@ -253,12 +271,16 @@ shell_ready:
 
     LDA     r0, CAP_LEN
     ldr     r9, [r0]
-    LDA     r8, CAP_BUF
+    LDA     r0, FRAMEBUF
+    ldr     r8, [r0]
+    add     r8, r8, #CAP_OFF
     b       reply
 
 reply_nothing:
     mov     r9, #0
-    LDA     r8, CAP_BUF
+    LDA     r0, FRAMEBUF
+    ldr     r8, [r0]
+    add     r8, r8, #CAP_OFF
 
 /* ==========================================================================
  * reply — send r9 bytes from r8, 44 to a frame, at least one frame.  Every
@@ -416,7 +438,9 @@ capture:
     add     r3, sp, #12                 @ &a1
     LDA     r4, CAP_LEN
     ldr     r5, [r4]
-    LDA     r0, CAP_BUF
+    LDA     r0, FRAMEBUF
+    ldr     r0, [r0]
+    add     r0, r0, #CAP_OFF
     add     r0, r0, r5
     movw    r1, #CAP_MAX
     subs    r1, r1, r5

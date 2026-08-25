@@ -13,7 +13,7 @@ from armasm import assemble, words as to_words
 HERE = pathlib.Path(__file__).resolve().parent
 DEST = HERE / 'autorun' / 'AutoRun.txt'
 
-LOAD   = 0xC072E000   # worker code
+LOAD   = 0xC072F050   # worker code — high, leaving 0xC072DE64..0xC072F000 free
 STATE  = 0xC072F000   # worker state, 16 words
 CAPLEN = 0xC072F040   # capture length
 HOOK   = 0xC00D0794   # gyro callback, borrowed once to create the task
@@ -57,8 +57,8 @@ def progress(out, pct: int):
 code = assemble(HERE / 'camera' / 'worker.S')
 words = to_words(code)
 end = LOAD + len(code)
-if end > STATE:
-    raise SystemExit(f'worker overruns its state block: 0x{end:08X} > 0x{STATE:08X}')
+if end > 0xC072F500:
+    raise SystemExit(f'worker overruns the one-shot scratch: 0x{end:08X}')
 
 disp = (LOAD - (HOOK + 8)) >> 2
 if not -(1 << 23) <= disp < (1 << 23):
