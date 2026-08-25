@@ -70,7 +70,11 @@
 
 .global entry
 entry:
-    push    {r4, r5, r6, r8, lr}
+    /* An even number of registers, deliberately.  AAPCS wants the stack eight
+     * byte aligned at a call, and pushing an odd count leaves it four -- which
+     * costs nothing until the callee reaches an LDRD, and then it is a data
+     * abort with the shell task holding the dispatcher. */
+    push    {r4, r5, r6, r7, r8, lr}
     mov     r8, r0                  @ shell context, for the reply
     LDA     r4, P
     mov     r0, #1
@@ -128,7 +132,7 @@ destroy:
     blx     ip
 
     mov     r0, #0
-    pop     {r4, r5, r6, r8, pc}
+    pop     {r4, r5, r6, r7, r8, pc}
 
 msg_ok:
     .asciz  "putfile: written"

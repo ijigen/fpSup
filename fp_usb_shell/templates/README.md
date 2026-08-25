@@ -56,6 +56,17 @@ file back always took 22 seconds, because `mem get` answers sixteen words at
 once. Verification still applies, and matters more, because a chunk that goes
 missing leaves a 240 byte hole rather than a four byte one.
 
+## Push an even number of registers
+
+AAPCS wants the stack eight byte aligned at a call, and `push` of an odd count
+leaves it four. Nothing complains. It costs nothing until the callee reaches an
+`LDRD` or `STRD`, and then it is a data abort — with the shell task holding the
+dispatcher, so the shell dies and the battery has to come out.
+
+`callfn.S` pushed nine registers and froze the camera on its first call, to the
+firmware's own monotonic clock, which is as safe a target as exists. Every other
+template here had the same fault and had simply not called anything that cared.
+
 ## Keep your state to yourself
 
 Templates share `0xC072F500`, so a template that both stores state there and is
@@ -133,6 +144,16 @@ dispatcher 的 task 裡,**可以阻塞** —— shell 自己的 `dir`、`mkdir`�
 bytes 而不是 4,14 KB 的 AutoRun 從 448 秒降到一秒以內。傳輸本身從來不慢:同一個檔案
 讀回來一直都只要 22 秒,因為 `mem get` 一次回 16 個字。驗證還是要做,而且**更重要**
 —— 掉一塊是 240 bytes 的洞,不是 4 bytes。
+
+## 推入偶數個暫存器
+
+AAPCS 要求呼叫時堆疊八位元組對齊,而 `push` 奇數個暫存器會讓它變成 4-mod-8。
+**沒有任何東西會抱怨。** 一直到被呼叫的函式遇上 `LDRD`/`STRD` 才會 data abort ——
+而那時 shell 的 dispatcher task 正卡在裡面,所以 shell 直接死掉,要拔電池。
+
+`callfn.S` 推了九個暫存器,第一次呼叫就把相機凍住 —— 而且目標是韌體自己的
+單調時鐘,已經是最安全的對象了。這裡每一個範本本來都有同樣的缺陷,只是剛好
+沒呼叫到在意的東西。
 
 ## 狀態要自己帶
 

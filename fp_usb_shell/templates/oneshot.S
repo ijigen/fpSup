@@ -40,7 +40,11 @@
 
 .global entry
 entry:
-    push    {r4, r5, lr}
+    /* An even number of registers, deliberately.  AAPCS wants the stack eight
+     * byte aligned at a call, and pushing an odd count leaves it four -- which
+     * costs nothing until the callee reaches an LDRD, and then it is a data
+     * abort with the shell task holding the dispatcher. */
+    push    {r4, r5, r6, lr}
     LDA     r12, HOOK_TARGET
     blx     r12
     mov     r4, r0                  @ keep the callback's own return value
@@ -61,7 +65,7 @@ entry:
     str     r0, [r5]                @ 'DONE' — the host polls this word
 leave:
     mov     r0, r4
-    pop     {r4, r5, pc}
+    pop     {r4, r5, r6, pc}
 
 /* ==========================================================================
  * payload — replace this.  r0-r3 and r12 are free; return a word in r0.
