@@ -67,6 +67,11 @@ dispatcher, so the shell dies and the battery has to come out.
 firmware's own monotonic clock, which is as safe a target as exists. Every other
 template here had the same fault and had simply not called anything that cared.
 
+Save `lr` too, in anything that calls out. `blx` overwrites it, so a routine
+that ends in `bx lr` after calling something returns into whatever the callee
+left behind. The gyro logger's `writer_open` called out five times without
+saving it, and `writer_close` four; neither had ever run.
+
 ## Keep your state to yourself
 
 Templates share `0xC072F500`, so a template that both stores state there and is
@@ -154,6 +159,10 @@ AAPCS 要求呼叫時堆疊八位元組對齊,而 `push` 奇數個暫存器會�
 `callfn.S` 推了九個暫存器,第一次呼叫就把相機凍住 —— 而且目標是韌體自己的
 單調時鐘,已經是最安全的對象了。這裡每一個範本本來都有同樣的缺陷,只是剛好
 沒呼叫到在意的東西。
+
+**會呼叫別人的常式也要存 `lr`。** `blx` 會覆寫它,所以一個呼叫過別人、結尾又
+`bx lr` 的常式,會返回到被呼叫者留下的任意位址。陀螺 logger 的 `writer_open`
+呼叫了五次都沒存,`writer_close` 四次 —— 而它們從來沒跑過。
 
 ## 狀態要自己帶
 

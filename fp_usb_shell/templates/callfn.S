@@ -20,9 +20,12 @@
  *      +0x00  function to call        host fills
  *      +0x04  r0                      +0x08  r1
  *      +0x0C  r2                      +0x10  r3
- *      +0x14  r10
+ *      +0x14  r10                     +0x20  r4        +0x24  r5
  *      +0x18  return value           <- read this
  *      +0x1C  0xD09E0000 when it returned; unchanged if it never did
+ *
+ * r4 and r5 are here because routines lifted out of a hook pass their working
+ * pointers in whatever register the surrounding code had them in, not in r0-r3.
  *
  * Nothing here checks the address.  A wrong one is a jump into whatever is
  * there, which is a freeze and a battery pull.
@@ -37,6 +40,8 @@
 .equ P_R10,    0x14
 .equ P_RET,    0x18
 .equ P_DONE,   0x1C
+.equ P_R4,     0x20
+.equ P_R5,     0x24
 
 .equ FMT_S,    0xC0BABB38
 
@@ -58,13 +63,17 @@ entry:
     mov     r0, #0
     str     r0, [r4, #P_DONE]
 
-    ldr     r5, [r4, #P_FN]
+    ldr     r9, [r4, #P_FN]
     ldr     r0, [r4, #P_R0]
     ldr     r1, [r4, #P_R1]
     ldr     r2, [r4, #P_R2]
     ldr     r3, [r4, #P_R3]
     ldr     r10, [r4, #P_R10]
-    blx     r5
+    ldr     r6, [r4, #P_R4]
+    ldr     r7, [r4, #P_R5]
+    mov     r4, r6
+    mov     r5, r7
+    blx     r9
 
     LDA     r4, P
     str     r0, [r4, #P_RET]
