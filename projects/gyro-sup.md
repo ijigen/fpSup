@@ -33,12 +33,33 @@ conversion step at all.
 - **Recording geometry** at `0xC37CE210` = {1936, 1090, 3244544}, which closed the
   resolution gap in the lens profile
 - IMU: ICM20321 gyro at 2500 Hz, MMA8452Q accelerometer at 100 Hz
+- **Streaming to the card as it records** (2026-08-26). Two 16 KiB halves, one
+  filling while a background thread writes the other. A six second take gave
+  eight blocks, 15036 samples at 2500.0 Hz, every CRC-32 recomputing, sequence
+  numbers unbroken, nothing dropped and nothing clamped. The take no longer has
+  to fit in memory, and a flat battery costs one block instead of everything
+
+### Fixed the day the first capture decoded
+
+The camera reported success on all of these. The file did not.
+
+- **The buffers were not ours.** `memmgr bufmem get 0 0x20000 0x40` returns 128
+  bytes: the handler parses the alignment into the size slot. Everything past
+  those 128 bytes belonged to a 256 KiB buffer that the recorder reinitialises,
+  so 16 KiB every 0.8 s landed in video memory — a torn picture, a freeze, or
+  nothing, depending on timing. Ask for three arguments, never four, and check
+  what you got with `memmgr bufchk`
+- **Every ring wrap carried four stray bytes.** The count treated the ring as
+  0x12C4 bytes when it holds 0x12C0, so each wrap shifted every later sample out
+  of phase. The breaks in a 247 KB capture fell exactly 0x12C4 apart. Stage-5 has
+  the same constant
+- **The header said `YxZ` and 0.000121385**, both corrected in stage5 long ago and
+  never here
 
 ### In progress
 
-1. Separate small buffers (about a second each) for gyro and accelerometer,
-   flushed to the card when full, to separate files
-2. Merging them into one gcsv when recording stops
+1. Accelerometer alongside the gyro in the same stream
+2. Writing the gcsv on the camera at record stop, as stage5 does
 3. Generating the Gyroflow lens profile (JSON)
 
 ### Open
@@ -68,6 +89,24 @@ conversion step at all.
   必須有背景 writer。`OVERFLOW=0` 不代表沒掉資料
 - **錄影幾何** `0xC37CE210` = {1936, 1090, 3244544},解掉 lens profile 的解析度缺口
 - IMU:ICM20321 陀螺(2500 Hz)+ MMA8452Q 加速度計(100 Hz)
+
+### 錄影中即時寫卡(2026-08-26 完成)
+
+兩個 16 KiB 半區,一邊填一邊由背景執行緒寫另一邊。六秒的一段產出八個區塊、
+15036 筆樣本、2500.0 Hz,CRC 全部相符、序號無斷點、零掉批、零截斷。
+**錄影長度不再受記憶體限制,而且沒電只會丟一個區塊而不是整段。**
+
+### 第一次成功解碼那天修掉的
+
+以下每一項相機都回報成功,是**檔案**說出真相的。
+
+- **緩衝根本不是我們的。** `memmgr bufmem get 0 0x20000 0x40` 只給 128 bytes ——
+  handler 把對齊參數寫進了 size 的位置。那 128 bytes 之後屬於一塊 256 KiB 的緩衝,
+  錄影開始時被它的擁有者重新初始化。我們每 0.8 秒往裡面寫 16 KiB,踩到影像緩衝
+  就花屏、踩到別的就凍結。**只能傳三個參數,而且配完要用 `memmgr bufchk` 驗**
+- **每次環形繞回多 4 個位元組。** 環形長度是 0x12C0,計數卻用 0x12C4,於是每繞回
+  一次後面所有樣本就位移。247 KB 的檔案裡斷點正好相隔 0x12C4。**stage5 也有**
+- **檔頭寫著 `YxZ` 和 0.000121385**,兩個都是 stage5 早就修過、這裡卻沒跟上的
 
 ### 進行中
 
