@@ -123,6 +123,7 @@ run yet, so no stale instruction-cache line can shadow them.
 | The screen never shows anything | AutoRun did not run. Check the file is `\AutoRun.txt` at the card root, and that the card is not write-protected |
 | No device appears on the host | The gadget did not enumerate. Boot with USB unplugged and attach afterwards; if it still fails, remove the seven `mem set 0xC0CF37xx` lines and confirm stock PTP comes back |
 | `fpsh ping` times out | Check `./lsdesc` first. If the interface is there, read the worker state — `served` should climb and `faults` counts idle timeouts, not errors |
+| The channel worked and then stopped | Unplug and replug USB. **A cold boot is not needed** — the firmware rebuilds the gadget on attach and the worker keeps running through it, so the round and command counters carry straight on. Verified after wedging the endpoint with several daemons competing for the interface |
 | The camera is unresponsive | Pull the battery. Nothing here is persistent, so the next boot is clean |
 
 ## Reverting
@@ -287,6 +288,7 @@ make card CARD=/Volumes/<卡片名稱>
 | 螢幕完全沒反應 | AutoRun 根本沒執行。確認檔案是卡片根目錄的 `\AutoRun.txt`,以及卡片沒有防寫 |
 | 主機看不到裝置 | gadget 沒列舉。先確認是「拔線開機、開完再插」;若仍失敗,把七行 `mem set 0xC0CF37xx` 刪掉,確認原廠 PTP 會回來 |
 | `fpsh ping` 逾時 | 先跑 `./lsdesc`。介面在的話就讀 worker 狀態 —— `served` 應該會增加,而 `faults` 算的是閒置逾時不是錯誤 |
+| 通道本來好好的突然不通 | 拔插一次 USB。**不需要冷啟動** —— 韌體會在插線時重建 gadget,而 worker 全程沒死,計數器會直接接著跑。實測過:先用多個互搶介面的 daemon 把端點弄僵,拔插一次就恢復 |
 | 相機沒反應 | 拔電池。這裡沒有任何東西是持久的,下次開機就是乾淨的 |
 
 ### 還原
