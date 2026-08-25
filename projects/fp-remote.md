@@ -2,13 +2,10 @@
 
 [English](#english) | [繁體中文](#繁體中文)
 
-A wireless bridge and low-resolution streaming, on top of PTP external control.
-**Status: the wired half already works — [`sigma-fp-bridge`](https://github.com/ijigen/sigma-fp-bridge);
-the wireless bridge has not started**
+A wireless bridge and low-resolution streaming, running through AutoRun on the
+camera rather than through PTP. **Status: not started**
 
-外部無線橋接與低解析度串流,建立在 PTP 外控之上。
-**狀態:有線那一半已經可用 —— [`sigma-fp-bridge`](https://github.com/ijigen/sigma-fp-bridge);
-無線橋接尚未開始**
+外部無線橋接與低解析度串流,走相機端的 AutoRun 而不是 PTP。**狀態:未開始**
 
 ---
 
@@ -16,51 +13,31 @@ the wireless bridge has not started**
 
 ### Goal
 
-Let an external device control and monitor the camera without a cable: commands
-over PTP, picture over a low-resolution stream, with a wireless bridge in between.
+Let an external device monitor and control the camera without a cable, with the
+camera side running our own code loaded by AutoRun — not the PTP surface that
+[bridge](bridge.md) and [gimbal](gimbal.md) use.
 
-### Already working — [sigma-fp-bridge](https://github.com/ijigen/sigma-fp-bridge)
+That choice is the point of the project. PTP means the host asks and the camera
+answers, on the camera's schedule. Code loaded by AutoRun runs inside the camera,
+can hook whatever it needs, and pushes on its own terms.
 
-A separate repository, and the wired half of this project. PTP over libusb,
-exposed to clients as HTTP and WebSocket:
+### What already exists to build on
 
-- Live view, MJPEG at about 24 fps
-- Focus control — AF/MF, tap to focus
-- Exposure: aperture, shutter, ISO, white balance and the rest
-- Movie recording and format control
-- Tethered capture at roughly 56 MB/s, DNG or JPEG
-- A `focus-ai/` experiment that drove focus from face width and defocus blur. It
-  is unmaintained: focus commands through tethering are silently ignored during
-  recording, so it could not do the job it existed for. Its measurements are
-  summarised in [focus sup](focus-sup.md), along with what the firmware research
-  offers that a host-side loop cannot reach
-
-Tested mainly on macOS with a 45mm F2.8 DG DN; CINE is the exercised path, stills
-much less so; Linux is untested. **UHD 12-bit CinemaDNG is not reachable over
-USB** — that limit belongs to [raw sup](raw-sup.md), not to the bridge.
-
-### What this project's firmware research adds
-
-- **The vendor opcode table**: `0x9016`–`0x9038` are the SetCamDataGrp family,
-  `0x9032` is SetCamDataGroupFocus, and the GIMBAL group lives at `0x94xx`
-- **The payload is TLV** (parsers `FUN_c0501350` and `FUN_c0501508`): a count at
-  `+0x04`, then entries of 12 bytes each, `{u16 tag, ..., value}`
-- **The GIMBAL command-name table** (`0xC0CF4D30`–`0xC0CF5050`): OpenApplication,
-  CloseApplication, GetParameter, ShiftParameter, SetGpsParam and the rest
-- **PTP still accepts commands while recording** — the property the bridge relies on
-- **Focus is refused while recording** by the handler itself, not by PTP: it only
-  drives when `captureState[0x220] == 0 && [0x7c] == 0`. See [focus sup](focus-sup.md)
-- PTP arms one TRB per transfer and waits synchronously; there is no standing ring.
-  EP 0x83 is its event endpoint, an interrupt endpoint whose SuperSpeed
-  `bInterval=11` gives one service opportunity every 128 ms — fine for
-  notifications, useless as a stream
+- **[usb shell sup](usb-shell-sup.md)** is the same shape of thing, working: an
+  AutoRun writes a worker into RAM, the worker serves a transport, and the
+  firmware owns the endpoints. A wireless bridge is that with a different link
+- **A third bulk pipe is already reserved** — EP 0x83 exists on the current gadget
+  specifically so a hook can push a stream without blocking the command channel
+- **A cheap picture source is proven.** The detection image channel at
+  `0xC375D8C0` is a clean 320×240 linear 8-bit greyscale frame, already carried
+  over hook-push at 0.125 ms per frame. For a remote monitor that is the obvious
+  source — no Bayer extraction, no compression, no display decoding
+- **Code can be run on the camera once, from the host**, without changing the
+  AutoRun, which makes experiments cheap
 
 ### Not done
 
-- The wireless bridge itself, hardware and protocol
-- A lower-latency stream than MJPEG live view. The detection image channel at
-  `0xC375D8C0` is a clean 320×240 greyscale frame, already proven over hook-push,
-  and is the obvious source for a cheap remote monitor
+Everything. No hardware chosen, no link protocol, no client.
 
 ---
 
@@ -68,48 +45,28 @@ USB** — that limit belongs to [raw sup](raw-sup.md), not to the bridge.
 
 ### 目標
 
-讓外部裝置不用接線就能控制與監看相機:指令走 PTP,畫面走低解析度串流,
-中間放一個無線橋接器。
+讓外部裝置不用接線就能監看與控制相機,而**相機端跑的是我們自己的程式,由 AutoRun 載入** ——
+不是 [bridge](bridge.md) 與 [gimbal](gimbal.md) 用的 PTP 介面。
 
-### 已經能用的部分 —— [sigma-fp-bridge](https://github.com/ijigen/sigma-fp-bridge)
+這個選擇正是這個專案的重點。PTP 是主機問、相機答,節奏在相機手上;
+而由 AutoRun 載入的程式**跑在相機裡面**,想 hook 什麼就 hook 什麼,推送的時機自己決定。
 
-獨立的 repo,也就是這個項目有線的那一半。PTP over libusb,對外以 HTTP 與 WebSocket 提供:
+### 已經有的基礎
 
-- Live view,MJPEG 約 24 fps
-- 對焦控制 —— AF/MF、點擊對焦
-- 曝光參數:光圈、快門、ISO、白平衡等
-- 錄影與格式控制
-- Tethered 擷取約 56 MB/s,DNG 或 JPEG
-- 一個 `focus-ai/` 實驗,用臉寬與離焦模糊驅動對焦。已停止維護:
-  錄影期間透過 tethering 送的對焦指令會被靜默忽略,所以它做不到自己存在的目的。
-  它量到的東西整理在 [focus sup](focus-sup.md),連同「韌體能提供而主機端迴圈拿不到」的對照
-
-主要在 macOS 上以 45mm F2.8 DG DN 測試;CINE 是走過的路徑,靜態拍攝用得少很多;
-Linux 未測。**UHD 12-bit CinemaDNG 無法透過 USB 取得** —— 那個限制屬於
-[raw sup](raw-sup.md),不是橋接器的問題。
-
-### 這個專案的韌體研究補上了什麼
-
-- **vendor opcode 表**:`0x9016`–`0x9038` 是 SetCamDataGrp 系列,
-  `0x9032` = SetCamDataGroupFocus,`0x94xx` 是 GIMBAL 群
-- **酬載格式是 TLV**(parser `FUN_c0501350` / `FUN_c0501508`):
-  `+0x04` count,之後每筆 12 bytes `{u16 tag, ..., value}`
-- **GIMBAL 指令名稱表**(`0xC0CF4D30`–`0xC0CF5050`):
-  OpenApplication / CloseApplication / GetParameter / ShiftParameter / SetGpsParam …
-- **PTP 在錄影期間仍可下指令** —— 橋接器倚賴的就是這個性質
-- **錄影中對焦被拒絕是 handler 自己擋的,不是 PTP 的限制** ——
-  它只在 `captureState[0x220]==0 && [0x7c]==0` 才驅動。見 [focus sup](focus-sup.md)
-- PTP 每次傳輸現場武裝一個 TRB 再同步等待,沒有常駐 ring;
-  EP 0x83 是事件用的 interrupt 端點(SS 下 `bInterval=11` → 128 ms 一次),
-  當通知可以,當串流不行
+- **[usb shell sup](usb-shell-sup.md) 就是同一個形狀的東西,而且已經在動**:
+  AutoRun 把 worker 寫進 RAM、worker 服務一條傳輸通道、端點由韌體擁有。
+  無線橋接就是把那條連結換掉
+- **第三條 bulk 管線已經留好了** —— 目前的 gadget 上 EP 0x83 的存在目的就是
+  讓 hook 推串流而不擋住指令通道
+- **便宜的畫面來源已驗證。** 偵測影像通道 `0xC375D8C0` 是乾淨的 320×240 線性 8-bit 灰階,
+  已經以 0.125 ms/frame 透過 hook-push 搬過。做遠端監看,那是最明顯的來源 ——
+  不必取 Bayer、不必壓縮、不必解顯示格式
+- **可以從主機讓程式碼在相機上跑一次**,而且不必動 AutoRun,所以實驗成本很低
 
 ### 未做
 
-- 無線橋接本身,硬體與協定
-- 比 MJPEG live view 更低延遲的串流。偵測影像通道 `0xC375D8C0` 是乾淨的
-  320×240 灰階影格,已驗證可 hook-push,是做遠端監看最明顯的來源
+全部。硬體沒選、連結協定沒定、客戶端沒有。
 
 ---
 
-**Notes / 相關筆記:** `PTP_OPCODES`, `PTP_CINEMADNG`, `PTP_FOCUS_RECORDING`,
-`PTP_READ_USER_EXPOSURE`, `GIMBAL_MANUAL`, `GHIDRA_GIMBAL_CHECKLIST`, `IMAGE_CHANNELS`
+**Notes / 相關筆記:** `IMAGE_CHANNELS`, `EGRESS_MAP`, `HOOKPUSH_PACING`
