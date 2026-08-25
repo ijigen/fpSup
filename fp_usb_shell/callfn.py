@@ -12,14 +12,14 @@ import argparse, sys
 from armasm import assemble
 from putfile import sh, mem_set, mem_get, put, CODE, CODE_END, P, ECHO_SLOT, ECHO_ORIG, HERE
 
-P_FN, P_R0, P_R1, P_R2, P_R3, P_R10, P_RET, P_DONE = (
-    0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C)
+P_FN, P_R0, P_R1, P_R2, P_R3, P_R10, P_RET, P_DONE, P_R4, P_R5 = (
+    0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C, 0x20, 0x24)
 DONE = 0xD09E0000
 
 _loaded = [False]
 
 
-def call(fn, r0=0, r1=0, r2=0, r3=0, r10=0, verbose=True):
+def call(fn, r0=0, r1=0, r2=0, r3=0, r4=0, r5=0, r10=0, verbose=True):
     """Run `fn` once.  Returns (returned_ok, value)."""
     if not _loaded[0]:
         code = assemble(HERE / 'templates' / 'callfn.S')
@@ -29,7 +29,8 @@ def call(fn, r0=0, r1=0, r2=0, r3=0, r10=0, verbose=True):
         _loaded[0] = True
 
     for off, val in ((P_FN, fn), (P_R0, r0), (P_R1, r1), (P_R2, r2),
-                     (P_R3, r3), (P_R10, r10), (P_RET, 0), (P_DONE, 0)):
+                     (P_R3, r3), (P_R4, r4), (P_R5, r5), (P_R10, r10),
+                     (P_RET, 0), (P_DONE, 0)):
         mem_set(P + off, val & 0xFFFFFFFF)
 
     mem_set(ECHO_SLOT, CODE)
@@ -51,10 +52,10 @@ def call(fn, r0=0, r1=0, r2=0, r3=0, r10=0, verbose=True):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('fn', type=lambda s: int(s, 0))
-    for r in ('r0', 'r1', 'r2', 'r3', 'r10'):
+    for r in ('r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r10'):
         ap.add_argument(f'--{r}', type=lambda s: int(s, 0), default=0)
     a = ap.parse_args()
-    ok, _ = call(a.fn, a.r0, a.r1, a.r2, a.r3, a.r10)
+    ok, _ = call(a.fn, a.r0, a.r1, a.r2, a.r3, a.r4, a.r5, a.r10)
     return 0 if ok else 1
 
 
