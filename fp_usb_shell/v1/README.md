@@ -1,3 +1,10 @@
+> **Superseded by [v2](../v2/).** This version added endpoints the firmware did not
+> know about, so recording while connected tore the channel down. It is kept for its
+> root-cause write-up of "shell freezes the camera" and its hook-push experiments.
+>
+> **已被 [v2](../v2/) 取代。** 這一版加了韌體不認得的端點,所以連著線錄影會把通道扯掉。
+> 保留它是因為「shell 為何會凍住相機」的根因分析與 hook-push 實驗紀錄仍有參考價值。
+
 # fp_usb_shell_sup — SIGMA fp USB Shell
 
 [English](#english) | [繁體中文](#繁體中文)

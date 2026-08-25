@@ -19,21 +19,15 @@ SIGMA fp firmware research and tooling project. Each development item lives in i
 - Distinguishes firmware-confirmed behavior from OTP values that still require measurement
 - Single-file static page (`index.html`); no build step required
 
-**2. fp USB Shell v2** — [`fp_usb_shell_sup_v2/`](fp_usb_shell_sup_v2/) — current
+**2. fp USB Shell** — [`fp_usb_shell/`](fp_usb_shell/)
 - Run the camera's own firmware shell commands over USB: **`shl <cmd>`** forwards any of the 77 firmware
   shell commands and returns what it printed (`mem set` and `mem save` come along for free)
-- Built on the camera's **own PTP gadget**, so the firmware owns the descriptors and the endpoints and
-  re-creates them after a record-mode reconfiguration — **recording while connected now works**, which is
-  what v1 could not do
-- Seven words of firmware are changed; PTP's unused interrupt endpoint becomes a second bulk IN, giving
-  three firmware-owned pipes: commands, replies, and streaming
-- `AutoRun.txt` RAM injection (no reflash), a host daemon, a descriptor dumper, and a template for running
-  a routine on the camera once without leaving anything behind
-
-**3. fp USB Shell v1** — [`fp_usb_shell_sup/`](fp_usb_shell_sup/) — superseded, kept for reference
-- The first working shell. It added endpoints the firmware did not know about, so they had to be enabled
-  and maintained by hand and a record-mode reconfiguration tore them down
-- Retained for its root-cause write-up of "shell freezes the camera" and the hook-push experiments
+- `AutoRun.txt` RAM injection — nothing is flashed — plus a host daemon, a descriptor dumper, and a
+  template for running a routine on the camera once without leaving anything behind
+- Two generations, with the comparison and the reasoning inside: **v2** builds the channel on the camera's
+  own PTP gadget, so the firmware owns the endpoints and re-creates them after a record-mode
+  reconfiguration — **recording while connected works**, which is what v1 could not do. v1 is kept for its
+  root-cause write-up of "shell freezes the camera" and its hook-push experiments
 
 ---
 
@@ -50,16 +44,11 @@ SIGMA fp 韌體研究與工具開發專案。每個開發項目各自放在獨�
 - 區分韌體已確認行為,以及仍需實機量測的 OTP 數值
 - 單一靜態 HTML(`index.html`),無須建置步驟
 
-**2. fp USB Shell v2** —— [`fp_usb_shell_sup_v2/`](fp_usb_shell_sup_v2/) —— 目前版本
+**2. fp USB Shell** —— [`fp_usb_shell/`](fp_usb_shell/)
 - 透過 USB 下相機自己的韌體 shell 命令:**`shl <cmd>`** 轉發 77 個韌體 shell 命令並回傳輸出
   (`mem set`、`mem save` 因此免費取得)
-- 建立在相機**原本的 PTP gadget** 上,描述元與端點都由韌體擁有,錄影模式重設後也由韌體重建 ——
-  **連著線錄影現在可以正常運作**,那正是 v1 做不到的事
-- 只改韌體七個字;把 PTP 沒人用的 interrupt 端點改成第二條 bulk IN,得到三條韌體管的管線:
-  指令、回覆、串流
-- `AutoRun.txt` RAM 注入(不需重刷)、主機 daemon、描述元檢視工具,以及「讓一段程式碼在相機上跑一次
-  且不留痕跡」的範本
-
-**3. fp USB Shell v1** —— [`fp_usb_shell_sup/`](fp_usb_shell_sup/) —— 已被取代,保留供參考
-- 第一個能用的 shell。它加了韌體不認得的端點,所以必須自己啟用與維護,而錄影模式重設會把它們掃掉
-- 保留是因為裡面有「shell 為何會凍住相機」的根因分析與 hook-push 的實驗紀錄
+- `AutoRun.txt` RAM 注入,完全不需重刷韌體;另有主機 daemon、描述元檢視工具,以及
+  「讓一段程式碼在相機上跑一次且不留痕跡」的範本
+- 兩個世代,對照與理由都在裡面:**v2** 把通道建立在相機自己的 PTP gadget 上,端點由韌體擁有、
+  錄影模式重設後由韌體重建 —— **連著線錄影可以正常運作**,那正是 v1 做不到的事。
+  v1 保留下來,是因為它的「shell 為何會凍住相機」根因分析與 hook-push 實驗紀錄仍有參考價值
