@@ -7,7 +7,9 @@ plumbing for a class of job so that the job itself is the only part you write.
 |---|---|
 | `shellcmd.S` | run code in task context by borrowing a shell command |
 | `oneshot.S` | run a routine once, from the gyro callback |
+| `bulkload.S` | carry bytes over in the command line, ~240 at a time |
 | `putfile.S` | write a host-supplied blob to a file on the card |
+| `getfile.S` | read a file off the card into memory |
 
 ## The one rule
 
@@ -47,6 +49,21 @@ same two words every time.
 Two words lost out of `putfile.S`'s 78 turned `movt ip, #0xC044` into the `blx
 ip` that followed it — a call to whatever `ip` happened to hold.
 
+Send the bytes in the command line rather than one word per `mem set`.
+`bulkload.S` moves about 240 at a time against four, which took 14 KB of AutoRun
+from 448 seconds to under one. The transport was never slow: reading the same
+file back always took 22 seconds, because `mem get` answers sixteen words at
+once. Verification still applies, and matters more, because a chunk that goes
+missing leaves a 240 byte hole rather than a four byte one.
+
+## Keep your state to yourself
+
+Templates share `0xC072F500`, so a template that both stores state there and is
+loaded by another one will corrupt it. `bulkload.S` did: its destination pointer
+sat at `+0x14`, which is `getfile.S`'s buffer, so loading getfile advanced that
+word past its own buffer and the read landed elsewhere. Every byte came back as
+the poison the host had written first — which is the only reason it was noticed.
+
 ## Memory
 
 ```
@@ -79,7 +96,9 @@ does, not a fact about it. Say which is which in the header.
 |---|---|
 | `shellcmd.S` | 借一個 shell 指令,讓程式碼跑在 task 環境 |
 | `oneshot.S` | 借陀螺回呼,跑一次 |
+| `bulkload.S` | 把資料塞在指令列送過去,一次約 240 bytes |
 | `putfile.S` | 把主機給的資料寫成卡上的檔案 |
+| `getfile.S` | 把卡上的檔案讀進記憶體 |
 
 ## 唯一的規則
 
@@ -109,6 +128,18 @@ dispatcher 的 task 裡,**可以阻塞** —— shell 自己的 `dir`、`mkdir`�
 
 **所以寫完要回讀、補寫缺的、重複到乾淨為止。** `putfile.S` 的 78 個字掉了兩個,結果
 `movt ip, #0xC044` 變成後面那條 `blx ip` —— 也就是呼叫 `ip` 當下剛好是什麼就跳去哪裡。
+
+而且**資料要塞在指令列裡送**,不要一個字一條 `mem set`。`bulkload.S` 一次搬約 240
+bytes 而不是 4,14 KB 的 AutoRun 從 448 秒降到一秒以內。傳輸本身從來不慢:同一個檔案
+讀回來一直都只要 22 秒,因為 `mem get` 一次回 16 個字。驗證還是要做,而且**更重要**
+—— 掉一塊是 240 bytes 的洞,不是 4 bytes。
+
+## 狀態要自己帶
+
+範本共用 `0xC072F500`,所以一個既在那裡存狀態、又會被別的範本載入的範本一定會出事。
+`bulkload.S` 就踩了:它的推進指標放在 `+0x14`,那是 `getfile.S` 的緩衝參數,結果載入
+getfile 的程式碼時把它推過了頭,讀取落在別的地方。回來的每個位元組都是主機事先寫的
+毒值 —— **那也是唯一發現它的原因**。
 
 ## 記憶體
 

@@ -21,8 +21,12 @@ from armasm import assemble
 HERE = pathlib.Path(__file__).resolve().parent
 SOCK = '/tmp/fpshd.sock'
 
-CODE      = 0xC072F600          # the templates' code region
-CODE_END  = 0xC0730000
+CODE      = 0xC072F600          # the working template
+CODE_END  = 0xC072F900
+BULK      = 0xC072F900          # the bulk loader, resident alongside it
+BULK_STATE = 0xC072F5F8         # its own two words, clear of the parameter block
+BULK_END  = 0xC072FA00
+CHUNK     = 240                 # bytes per command; the line holds about 502 chars
 P         = 0xC072F500          # parameter block
 ECHO_SLOT = 0xC0BAC2F8          # command table entry 17, echo's handler pointer
 ECHO_ORIG = 0xC03D99A0
@@ -123,27 +127,72 @@ def read_back(addr, count):
     return out
 
 
+def put_slow(addr, blob, label, passes=6):
+    """One word per command.  Used for the bulk loader itself, and for repairs."""
+    w = list(struct.unpack(f'<{len(blob)//4}I', blob))
+    for i, word in enumerate(w):
+        mem_set(addr + i * 4, word)
+    for _ in range(passes):
+        got = read_back(addr, len(w))
+        bad = [i for i in range(len(w)) if got[i] != w[i]]
+        if not bad:
+            return w
+        for i in bad:
+            mem_set(addr + i * 4, w[i])
+    raise SystemExit(f'{label}: still short after {passes} passes')
+
+
+_bulk_loaded = False
+
+
+def ensure_bulk():
+    """Put the bulk loader on the camera, once per run."""
+    global _bulk_loaded
+    if _bulk_loaded:
+        return
+    code = assemble(HERE / 'templates' / 'bulkload.S')
+    if BULK + len(code) > BULK_END:
+        raise SystemExit('bulkload does not fit its region')
+    put_slow(BULK, code, 'bulk  ')
+    _bulk_loaded = True
+
+
 def put(addr, blob, label, passes=6):
     """Write, verify, rewrite what did not land, until nothing is left.
 
-    `mem set` drops writes.  Measured over 200 words: 18 lost at full speed,
-    none on the next run, 48 on the one after -- so it is not pacing, and no
-    delay makes it safe.  Reads are reliable: three verifies of the same region
-    named the same two words every time, so what is missing is genuinely not
-    there rather than misread.
+    Bytes travel in the command line, about 240 at a time, because `mem set`
+    moves four per round trip and that put 14 KB of AutoRun at 448 seconds --
+    against 22 to read the same file back, `mem get` answering sixteen words at
+    once.  The transport was never the problem.
 
-    Nothing downstream can tell a dropped word from a real one -- the two words
-    lost out of this template's 78 turned `movt ip, #0xC044` into the `blx ip`
-    that followed it, which would have called whatever address ip held.
+    Verification stays, and matters more here, not less: `mem set` drops writes
+    and whole commands go missing, so a chunk that never arrives leaves a 240
+    byte hole.  Repairs go one word at a time, which is exact.
     """
+    if len(blob) <= 256:
+        return put_slow(addr, blob, label, passes)
+
+    ensure_bulk()
     w = list(struct.unpack(f'<{len(blob)//4}I', blob))
     t0 = time.time()
-    for i, word in enumerate(w):
-        mem_set(addr + i * 4, word)
-        if i % 64 == 63:
+
+    orig = mem_get(ECHO_SLOT)
+    if not orig or orig[0] not in (ECHO_ORIG, BULK):
+        raise SystemExit(f'echo handler is {orig}, not free to borrow')
+    mem_set(ECHO_SLOT, BULK)
+    try:
+        mem_set(BULK_STATE, addr)        # destination, advanced by the loader
+        mem_set(BULK_STATE + 4, 0)       # bytes taken
+        sent = 0
+        while sent < len(blob):
+            piece = blob[sent:sent + CHUNK]
+            sh('echo ' + piece.hex())
+            sent += len(piece)
             el = time.time() - t0
-            print(f'\r  {label} {i+1}/{len(w)}  {(i+1)/el:.0f}/s  '
-                  f'{(len(w)-i-1)*el/(i+1):.0f}s left ', end='', flush=True)
+            print(f'\r  {label} {sent}/{len(blob)} B  {sent/el/1024:.1f} KiB/s ',
+                  end='', flush=True)
+    finally:
+        mem_set(ECHO_SLOT, ECHO_ORIG)
 
     repaired = 0
     for attempt in range(passes):
@@ -151,15 +200,16 @@ def put(addr, blob, label, passes=6):
         bad = [i for i in range(len(w)) if i >= len(got) or got[i] != w[i]]
         if not bad:
             dt = time.time() - t0
-            note = f', {repaired} rewritten' if repaired else ''
-            print(f'\r  {label} {len(w)} words verified in {dt:.1f}s{note}      ')
+            note = f', {repaired} repaired' if repaired else ''
+            print(f'\r  {label} {len(blob)} bytes in {dt:.1f}s '
+                  f'({len(blob)/dt/1024:.1f} KiB/s){note}          ')
             return w
         repaired += len(bad)
-        print(f'\r  {label} pass {attempt+1}: {len(bad)} did not land, rewriting  ',
+        print(f'\r  {label} pass {attempt+1}: {len(bad)} words missing, repairing ',
               end='', flush=True)
         for i in bad:
             mem_set(addr + i * 4, w[i])
-    raise SystemExit(f'{label}: still short after {passes} passes — nothing was run')
+    raise SystemExit(f'{label}: still short after {passes} passes')
 
 
 def main():
