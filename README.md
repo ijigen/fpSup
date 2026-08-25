@@ -1,5 +1,7 @@
 # fpSup
 
+[![Support fpSup on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/fpsup)
+
 [English](#english) | [繁體中文](#繁體中文)
 
 SIGMA fp firmware research and tooling. Each project has its own page with what
