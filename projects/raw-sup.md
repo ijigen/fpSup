@@ -3,9 +3,9 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Bayer capture, streaming, compression and RAW packaging.
-**Status: researched; the arithmetic says which version of the goal is reachable**
+**Status: researched; lossless UHD to card hinges on one unmeasured number**
 
-Bayer 擷取、串流、壓縮與 RAW 封裝。**狀態:研究完成;算術已經指出這個目標哪個版本搆得到**
+Bayer 擷取、串流、壓縮與 RAW 封裝。**狀態:研究完成;無損 UHD 寫卡壓在一個沒量過的數字上**
 
 ---
 
@@ -18,8 +18,7 @@ and packaging path, aiming at a custom recording path or an external recorder.
 
 ### The goal: UHD RAW to the card
 
-Recording CinemaDNG UHD 12-bit at 29.97 to the SD card, and eventually 14-bit.
-The arithmetic decides most of this, so here it is.
+Recording CinemaDNG UHD 12-bit at 29.97 to the SD card, and 14-bit after that.
 
 **Uncompressed UHD 12-bit is 12.44 MB per frame:**
 
@@ -27,27 +26,58 @@ The arithmetic decides most of this, so here it is.
 |---|---|---|
 | 30 | 373 MB/s | beyond even a top V90 UHS-II card (~250–290) |
 | 24 | 298 MB/s | still beyond |
-| 12 | 149 MB/s | **feasible** |
-| 10 | 124 MB/s | **feasible** |
+| 12 | 149 MB/s | feasible |
+| 10 | 124 MB/s | feasible |
 
-FHD 12-bit at 24 fps is 74.6 MB/s, which is the figure the camera itself allows —
-that the arithmetic reproduces it is the check that the model is right.
+FHD 12-bit at 24 fps is 74.6 MB/s, the figure the camera itself allows — that the
+arithmetic reproduces it is the check that the model is right.
 
-**Lossless compression does not rescue 29.97.** The `0x300D0000` engine's
-throughput works out to about 32 Mpixel/s — roughly a pixel per clock at a 32 MHz
-engine clock — which is 0.26 s for a UHD frame, or about **4 fps**. Even FHD only
-reaches about 15. The camera uses that engine for **still** DNG only, never for
-video, and this is why. A factor of seven is not a tuning problem.
+So uncompressed 30 fps does not fit. **Compressed might.**
 
-**So the reachable version of this goal is UHD 12-bit uncompressed at 10–12 fps**,
-through a three-address gate patch and no codec at all. That is worth having for
-timelapse, astro and product work even though it is not 29.97.
+### The compression engine, and the number that decides everything
 
-**That throughput number is an estimate, not a measurement**, and it is the single
-number the whole conclusion rests on. The engine is standalone-callable and the
-shell can now run injected code, so compressing one known frame and timing it
-would settle it. If the real figure is far higher, this all gets recomputed; if it
-matches, lossless UHD at video rate is closed and no more time goes into it.
+`0x300D0000` is a fixed-function lossless-JPEG engine — the `Compression=7` used
+for still DNG. What is known:
+
+- **Clock ≈ 300 MHz** at roughly **1 pixel per clock**, giving a ceiling near
+  **300 Mpixel/s**; the working estimate is 150–300
+- **UHD30 lossless needs 248.8 Mpixel/s.** At ~2:1 that is ~186 MB/s, which a top
+  UHS-II card holds
+- **The engine is idle during video.** Recording uses the DSP at `0x301B` and the
+  RFC readout at `0x300C`, not this one, so there is no contention to design
+  around
+- **It is cold standalone-callable**, confirmed: the wrappers bring up power
+  domain 5, the clock and IRQ 0x29 themselves, and a synthetic source buffer
+  works with no live capture
+- **The limits in the way are firmware, not silicon.** The SD-versus-SSD gate is
+  menu-layer policy (`EXCL_CinemaDNGQuality`), the firmware never compares a MB/s
+  or speed-class figure, and CinemaDNG's `Compression=1` is set by a single
+  function with a single caller
+
+**So this is potentially feasible and hinges on one unmeasured number:** the
+engine's true sustained Mpixel/s. The ceiling says yes, the floor says no, and
+nothing in the firmware measures it — there is no performance counter anywhere.
+
+The one risk that cannot be settled by reading code is whether the variable-length
+coder drops below a pixel per clock on high-entropy tiles.
+
+### The experiment that settles it
+
+While the camera is idle, drive `0x300D` on a known 1 KB-aligned buffer
+(`FUN_c05a6890` to initialise, `FUN_c05a6920` to encode) and time the IRQ-0x29
+completion against the pixel count. Repeat at a few sizes to separate fixed
+overhead from the per-pixel rate. The engine is idle when not shooting stills, so
+this is contention-safe, and the shell can now run injected code, so it costs one
+routine.
+
+### A correction worth keeping
+
+An earlier reading of this engine put its throughput at 32 Mpixel/s and concluded
+lossless UHD to card was infeasible by a factor of eight. **That number was a
+watchdog timeout with about nine times' safety margin, not a throughput figure** —
+it proves only that the engine is *at least* that fast. The conclusion built on it
+was wrong, and it was quoted again later in this repository before being caught.
+A number that is internally consistent is not thereby correct.
 
 ### 14-bit
 
@@ -99,7 +129,6 @@ configuration lives in a shadow bank at `0x3021xxxx`. `still_raw_dump`'s
 ### 目標:UHD RAW 寫進卡片
 
 在 SD 卡上錄 CinemaDNG UHD 12-bit 29.97,之後再挑戰 14-bit。
-這件事大部分由算術決定,所以直接把數字放上來。
 
 **未壓縮 UHD 12-bit 每幀 12.44 MB:**
 
@@ -107,25 +136,48 @@ configuration lives in a shadow bank at `0x3021xxxx`. `still_raw_dump`'s
 |---|---|---|
 | 30 | 373 MB/s | 超過頂級 V90 UHS-II(~250–290) |
 | 24 | 298 MB/s | 仍然超過 |
-| 12 | 149 MB/s | **可行** |
-| 10 | 124 MB/s | **可行** |
+| 12 | 149 MB/s | 可行 |
+| 10 | 124 MB/s | 可行 |
 
-FHD 12-bit 24 fps 是 74.6 MB/s,那正是相機自己允許的數字 ——
-算術能重現它,就是這個模型沒錯的檢查點。
+FHD 12-bit 24 fps 是 74.6 MB/s,正是相機自己允許的數字 —— 算術能重現它,
+就是這個模型沒錯的檢查點。
 
-**無損壓縮救不了 29.97。** `0x300D0000` 那顆引擎的吞吐算出來約 **32 Mpixel/s**
-(約 1 pixel/clock @ 32 MHz 引擎時脈),一張 UHD 要 0.26 秒,也就是**約 4 fps**。
-連 FHD 都只到約 15。相機**只在靜態 DNG 用那顆引擎、從不用在影片上**,原因就在這裡。
-差七倍不是調參數的問題。
+所以**未壓縮的 30 fps 塞不下。壓縮之後有機會。**
 
-**所以這個目標能達成的版本是:UHD 12-bit 未壓縮、10–12 fps**,
-靠三個位址的 gate patch,完全不需要 codec。
-雖然不是 29.97,但對縮時、天文、產品攝影都值得。
+### 壓縮引擎,以及決定一切的那個數字
 
-**那個吞吐數字是推估不是量測**,而整個結論就壓在它身上。
-那顆引擎可以被獨立呼叫,而 shell 現在能執行注入的程式碼 ——
-**壓一張已知的圖並計時就能定案**。實測遠高於推估的話,以上全部重算;
-吻合的話,「影片速率的無損 UHD」就正式關閉,不必再投入時間。
+`0x300D0000` 是固定功能的無損 JPEG 引擎,也就是靜態 DNG 用的 `Compression=7`。已知:
+
+- **時脈約 300 MHz**、約 **1 pixel/clock**,上限接近 **300 Mpixel/s**;工作估計 150–300
+- **UHD30 無損需要 248.8 Mpixel/s。** 以 ~2:1 計是 ~186 MB/s,頂級 UHS-II 卡放得下
+- **錄影期間這顆引擎是閒置的。** 影片走 `0x301B` 的 DSP 與 `0x300C` 的 RFC 讀出,
+  不是它,所以沒有引擎爭用要處理
+- **冷啟動獨立呼叫已確認**:包裝函式自己會把 power domain 5、時脈與 IRQ 0x29 帶起來,
+  用合成的來源緩衝就能跑,不需要實際拍攝
+- **擋路的限制是韌體不是矽。** SD 對 SSD 的閘門是選單層政策(`EXCL_CinemaDNGQuality`),
+  韌體**從不比對 MB/s 或速度等級**,而 CinemaDNG 的 `Compression=1`
+  是由**單一函式、單一呼叫者**設定的
+
+**所以這件事「潛在可行」,而且壓在一個沒人量過的數字上:**引擎的真實持續吞吐。
+上限說可以,下限說不行,而韌體裡沒有任何效能計數器可以問。
+
+唯一沒辦法靠讀程式碼定案的風險是:**變長編碼在高熵 tile 上會不會掉到 1 pixel/clock 以下。**
+
+### 能定案的實驗
+
+相機閒置時,對一塊已知的 1 KB 對齊緩衝驅動 `0x300D`
+(`FUN_c05a6890` 初始化、`FUN_c05a6920` 編碼),對 IRQ-0x29 的完成計時、除以像素數。
+換幾種尺寸重複,把固定開銷與每像素速率分離。
+引擎在沒拍靜態照時是閒置的,所以不會有爭用;而 shell 現在能執行注入的程式碼,
+成本只有一支常式。
+
+### 一個值得留著的修正
+
+早先對這顆引擎的解讀把吞吐當成 32 Mpixel/s,並據此結論「無損 UHD 寫卡差八倍,不可行」。
+**那個數字是看門狗逾時、帶著約九倍安全餘裕,不是吞吐量** ——
+它只證明引擎「至少」有那麼快。建立在它上面的結論是錯的,
+而且在這個 repo 裡又被引用了一次才被抓到。
+**一個內部自洽的數字,不因此就是對的。**
 
 ### 14-bit
 
