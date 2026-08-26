@@ -183,10 +183,10 @@ def read_back(addr, count):
         if base and (base // READ_CHUNK) % 16 == 0:
             el = time.time() - t0
             print(f'\r  read   {len(out)}/{count} words  {len(out)*4/el/1024:.1f} KiB/s'
-                  f'  {(count-len(out))*el/max(len(out),1):.0f}s left ', end='', flush=True)
+                  f'  {(count-len(out))*el/max(len(out),1):.0f}s left ', end='', flush=True, file=sys.stderr)
     if count > READ_CHUNK * 16:
         print(f'\r  read   {count} words in {time.time()-t0:.1f}s'
-              f' ({count*4/(time.time()-t0)/1024:.1f} KiB/s)          ')
+              f' ({count*4/(time.time()-t0)/1024:.1f} KiB/s)          ', file=sys.stderr)
     return out
 
 
@@ -248,7 +248,7 @@ def read_bulk(addr, nbytes, label='read  '):
                                  f'0x{addr + len(out):08X}')
             el = time.time() - t0
             print(f'\r  {label} {len(out)}/{nbytes} B  {len(out)/el/1024:.0f} KiB/s ',
-                  end='', flush=True)
+                  end='', flush=True, file=sys.stderr)
     finally:
         # Put it back, and check.  A single write is not enough: the transport
         # drops commands, and an unrestored handler means the next `echo`
@@ -261,7 +261,7 @@ def read_bulk(addr, nbytes, label='read  '):
             print(f'  WARNING echo handler still borrowed — restore it before '
                   f'anything else uses `echo`')
     dt = time.time() - t0
-    print(f'\r  {label} {nbytes} bytes in {dt:.1f}s ({nbytes/dt/1024:.0f} KiB/s)      ')
+    print(f'\r  {label} {nbytes} bytes in {dt:.1f}s ({nbytes/dt/1024:.0f} KiB/s)      ', file=sys.stderr)
     return bytes(out)
 
 
@@ -310,7 +310,7 @@ def put(addr, blob, label, passes=6):
             sent += len(piece)
             el = time.time() - t0
             print(f'\r  {label} {sent}/{len(blob)} B  {sent/el/1024:.1f} KiB/s ',
-                  end='', flush=True)
+                  end='', flush=True, file=sys.stderr)
     finally:
         mem_set(ECHO_SLOT, ECHO_ORIG)
 
@@ -322,11 +322,11 @@ def put(addr, blob, label, passes=6):
             dt = time.time() - t0
             note = f', {repaired} repaired' if repaired else ''
             print(f'\r  {label} {len(blob)} bytes in {dt:.1f}s '
-                  f'({len(blob)/dt/1024:.1f} KiB/s){note}          ')
+                  f'({len(blob)/dt/1024:.1f} KiB/s){note}          ', file=sys.stderr)
             return w
         repaired += len(bad)
         print(f'\r  {label} pass {attempt+1}: {len(bad)} words missing, repairing ',
-              end='', flush=True)
+              end='', flush=True, file=sys.stderr)
         for i in bad:
             mem_set(addr + i * 4, w[i])
     raise SystemExit(f'{label}: still short after {passes} passes')

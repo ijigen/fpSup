@@ -10,7 +10,8 @@ Tools for [gyro sup](../projects/gyro-sup.md).
 | `decode.py` | Checks a `.GYR` and converts it to Gyroflow GCSV<br>驗證 `.GYR` 並轉成 Gyroflow GCSV |
 | `load.sh` | Swaps the logger in over USB, about a second, no reboot<br>透過 USB 換上 logger,約一秒,不用重開機 |
 | `build_card.py` | Builds a card that boots the shell and the logger together<br>做一張開機就載入 shell 與 logger 的卡 |
-| `lens_profile.py` | Builds a Gyroflow lens profile; `--gyr` takes the sensor mode from the clip rather than guessing it<br>產生 Gyroflow 鏡頭 profile,`--gyr` 直接用 clip 記下的感光元件模式,不用推測 |
+| `lens_profile.py` | Builds a Gyroflow lens profile; `--gyr` takes the sensor mode from the clip rather than guessing it, `--dist-table` the lens's own distortion<br>產生 Gyroflow 鏡頭 profile,`--gyr` 用 clip 記下的模式,`--dist-table` 用鏡頭自己的畸變資料 |
+| `lens_dist.py` | Reads the lens's 17-point distortion table out of the camera<br>從相機讀出鏡頭的 17 點畸變表 |
 | `imu_snapshot.S` | One call gathers accelerometer and gyro into a fixed result block<br>一次呼叫把加速計與陀螺收進固定結果區 |
 
 ## What a capture holds
@@ -42,9 +43,21 @@ lens_profile.py   -> Gyroflow lens profile, mode taken from the .GYR
 
 ```
 gyro/decode.py A001_018.GYR --gcsv A001_018.gcsv
+gyro/lens_dist.py > dist.txt          # with the lens mounted
 gyro/lens_profile.py --size 1936x1090 --fps 29.97 --focal-mm 40 \
-    --gyr A001_018.GYR --lens "SIGMA 45mm F2.8 DG DN"
+    --gyr A001_018.GYR --dist-table dist.txt --lens "SIGMA 45mm F2.8 DG DN"
 ```
+
+The distortion is the lens's own. The firmware carries only the interpolation
+engine -- a 17-point radial map in Q15, piecewise linear, no polynomial -- and
+the coefficients are downloaded from the lens at boot and interpolated for the
+current focus distance and focal length. `lens_dist.py` reads what landed in RAM;
+`lens_profile.py` fits Gyroflow's coefficients to it.
+
+Two terms, not four. Four fit better inside the frame, 0.42 px rms against 0.74,
+and then turn over 1.4 corner-radii out and go negative -- which is exactly where
+stabilisation samples. The generator prints how far the fit stays monotonic and
+says so when that is barely past the frame.
 
 Nothing in either is measured by eye. The sample rate, orientation, scale factor
 and sensor mode come out of the capture; the readout time, geometry and focal

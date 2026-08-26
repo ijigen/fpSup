@@ -104,6 +104,56 @@ def dng_size(path):
     return w, h
 
 
+def fit_distortion(table, w, h, focal_px, terms):
+    """Fit Gyroflow's coefficients to the lens's own support points.
+
+    The firmware stores a 17-point radial map in Q15: for a corrected radius of
+    k/16 of the corner distance, the source pixel sits at S[k]. Gyroflow wants
+    r_d = f(theta + k1 theta^3 + k2 theta^5 + ...), so each point becomes one
+    equation and the coefficients fall out of least squares.
+
+    Two terms by default, not four. Four fit better inside the frame -- 0.42 px
+    RMS against 0.74 -- and then turn over 1.4 corner-radii out and go negative,
+    which is exactly where stabilisation samples. Three tenths of a pixel is not
+    worth that.
+    """
+    rmax = math.hypot(w / 2, h / 2)
+    pts = []
+    for k in range(1, 17):
+        theta = math.atan((k / 16) * rmax / focal_px)
+        pts.append((theta, table[k] * k / 16 / 32768 * rmax / focal_px))
+
+    A = [[t ** (3 + 2 * i) for i in range(terms)] for t, _ in pts]
+    b = [y - t for t, y in pts]
+    n = terms
+    N = [[sum(A[r][i] * A[r][j] for r in range(len(A))) for j in range(n)] +
+         [sum(A[r][i] * b[r] for r in range(len(A)))] for i in range(n)]
+    for i in range(n):
+        piv = max(range(i, n), key=lambda r: abs(N[r][i]))
+        N[i], N[piv] = N[piv], N[i]
+        for r in range(n):
+            if r != i and N[i][i]:
+                g = N[r][i] / N[i][i]
+                for c in range(i, n + 1):
+                    N[r][c] -= g * N[i][c]
+    coeffs = [N[i][n] / N[i][i] for i in range(n)] + [0.0] * (4 - n)
+
+    def mapped(t):
+        return t + sum(coeffs[i] * t ** (3 + 2 * i) for i in range(4))
+
+    res = [abs(mapped(t) - y) * focal_px for t, y in pts]
+    rms = math.sqrt(sum(r * r for r in res) / len(res))
+
+    corner = math.atan(rmax / focal_px)
+    prev, safe = -1.0, 0.0
+    for m in [x / 20 for x in range(2, 61)]:
+        v = mapped(corner * m)
+        if v < prev:
+            break
+        prev, safe = v, m
+    return coeffs, rms, max(res), safe
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("clip", nargs="?", help="a .DNG, or a CINEMA clip folder")
@@ -115,6 +165,11 @@ def main():
                     help="a .GYR from the same take; it carries the sensor mode the "
                          "camera was actually in, which resolution and frame rate "
                          "cannot tell apart")
+    ap.add_argument("--dist-table",
+                    help="the lens's 17 Q15 support points, from gyro/lens_dist.py; "
+                         "a comma-separated list or a file containing one")
+    ap.add_argument("--dist-terms", type=int, default=2,
+                    help="how many distortion coefficients to fit (default 2)")
     ap.add_argument("--lens", default="unknown lens")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
@@ -159,6 +214,16 @@ def main():
                   f"would have guessed {mode['mode_id']}")
         mode, scored = chosen, [chosen]
 
+    table = None
+    if a.dist_table:
+        text = a.dist_table
+        if Path(text).exists():
+            text = "\n".join(l for l in Path(text).read_text().splitlines()
+                              if not l.startswith("#"))
+        table = [int(x) for x in text.replace("\n", ",").split(",") if x.strip()]
+        if len(table) != 17:
+            raise SystemExit(f"--dist-table needs 17 values, got {len(table)}")
+
     covered_mm = SENSOR_ACTIVE_MM * min(mode["covered_w"], SENSOR_ACTIVE_W) / SENSOR_ACTIVE_W
     focal_px = w * a.focal_mm / covered_mm
     fov = 2 * math.degrees(math.atan(w / 2 / focal_px))
@@ -171,6 +236,14 @@ def main():
           f"({'full width' if full_width else f'crop, {covered_mm:.1f} mm'})")
     print(f"focal         {a.focal_mm} mm -> {focal_px:.0f} px   (FOV {fov:.1f} deg)")
     print(f"readout       {mode['readout_ms']:.3f} ms")
+    dist = [0.0, 0.0, 0.0, 0.0]
+    if table:
+        dist, rms, worst, safe = fit_distortion(table, w, h, focal_px, a.dist_terms)
+        print(f"distortion    {a.dist_terms} terms, {rms:.3f} px rms / {worst:.3f} px worst")
+        print(f"              monotonic to {safe:.1f}x the corner radius")
+        if safe < 1.5:
+            print("              WARNING that is barely past the frame; "
+                  "stabilisation samples outside it")
     if a.gyr:
         print(f"source        {a.gyr.name} -- the mode is recorded, not inferred")
     if len(scored) > 1:
@@ -209,7 +282,7 @@ def main():
         "fisheye_params": {
             "RMS_error": 0.0,
             "camera_matrix": [[focal_px, 0.0, w / 2], [0.0, focal_px, h / 2], [0.0, 0.0, 1.0]],
-            "distortion_coeffs": [0.0, 0.0, 0.0, 0.0],
+            "distortion_coeffs": dist,
         },
         "sync_settings": {}, "official": False,
     }
