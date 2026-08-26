@@ -7,9 +7,15 @@ plumbing for a class of job so that the job itself is the only part you write.
 |---|---|
 | `shellcmd.S` | run code in task context by borrowing a shell command |
 | `oneshot.S` | run a routine once, from the gyro callback |
+| `callfn.S` | call one function, from the host, and see what it returned |
+| `taskcreate.S` | start a background thread, with the ABI that works |
+| `park.S` | somewhere a resident task can wait while its code is replaced |
 | `bulkload.S` | carry bytes over in the command line, ~240 at a time |
 | `putfile.S` | write a host-supplied blob to a file on the card |
 | `getfile.S` | read a file off the card into memory |
+
+Host side, in the directory above: `memprobe.py` proves a region of memory is
+actually yours, which is not something reading the code can tell you.
 
 ## The one rule
 
@@ -123,9 +129,14 @@ does, not a fact about it. Say which is which in the header.
 |---|---|
 | `shellcmd.S` | 借一個 shell 指令,讓程式碼跑在 task 環境 |
 | `oneshot.S` | 借陀螺回呼,跑一次 |
+| `callfn.S` | 從主機呼叫任意函式一次,看它回傳什麼 |
+| `taskcreate.S` | 開背景執行緒,用實際可行的 ABI |
+| `park.S` | 讓常駐 task 在程式碼被抽換時有地方等 |
 | `bulkload.S` | 把資料塞在指令列送過去,一次約 240 bytes |
 | `putfile.S` | 把主機給的資料寫成卡上的檔案 |
 | `getfile.S` | 把卡上的檔案讀進記憶體 |
+
+主機端在上一層:`memprobe.py` 證明一塊記憶體真的是你的 —— 那是**讀程式碼看不出來**的事。
 
 ## 唯一的規則
 

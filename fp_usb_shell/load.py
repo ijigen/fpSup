@@ -22,7 +22,7 @@ from putfile import put, mem_set, mem_get, sh
 # say so. Without them the loader simply refuses when a task is running.
 
 
-def park_resident(task_name, state):
+def park_resident(task_name, state, stub_src, stub_addr):
     """Ask a resident writer to step out of the cave, and wait for it.
 
     Returns the state address if something was parked, so the caller can point
@@ -31,9 +31,14 @@ def park_resident(task_name, state):
     listing = sh('tkos tsklist')
     if not any(task_name.upper() in l.upper() for l in listing.splitlines()):
         return None
-    mem_set(state + 0x7C, 1)
+    # Place the stub here rather than expecting it from a card script: the shell's
+    # AutoRun carries the shell and nothing else, and what a payload needs to be
+    # swappable is the payload's business.
+    put(stub_addr, assemble(stub_src), 'park  ')
+    mem_set(stub_addr + symbols(stub_src)['park_state'], state)
+    mem_set(state, 1)                       # PARK
     for _ in range(50):
-        if (mem_get(state + 0x80)[0] or 0) == 1:
+        if (mem_get(state + 4)[0] or 0) == 1:   # PARKED
             print('  parked  the writer stepped out of the cave')
             return state
         time.sleep(0.1)
@@ -48,10 +53,20 @@ def refuse_if_resident():
     be rewritten. It executes whatever lands there. `tkos task` offers chgpri and
     nothing else, so there is no way to stop one short of a power cycle.
     """
-    listing = sh('tkos tsklist')
-    live = [l.strip() for l in listing.splitlines()
-            if '|' in l and l.split('|')[1].strip()
-            and int(l.split('|')[2].strip() or '0', 16) >= CAVE_LOW]
+    # `tkos tsklist` prints id|name|task|stat|pri|stksz|wait|wid, with the entry
+    # address in the third column. Anything running from the cave is running from
+    # code this loader is about to replace.
+    live = []
+    for line in sh('tkos tsklist').splitlines():
+        cols = line.split('|')
+        if len(cols) < 3:
+            continue
+        try:
+            entry = int(cols[2].strip(), 16)
+        except ValueError:
+            continue
+        if CAVE_LOW <= entry < CAVE_HIGH:
+            live.append(line.strip())
     if live:
         raise SystemExit(
             'a task is still running out of the cave:\n  ' + '\n  '.join(live) +
@@ -72,8 +87,11 @@ def main() -> int:
                     help='name of a task that runs from the cave and must be '
                          'parked before the code under it is replaced')
     ap.add_argument('--park-state', type=lambda s: int(s, 0),
-                    help='address of the payload state block holding S_PARK '
-                         '(+0x7C), S_PARKED (+0x80) and S_WRITER_PC (+0x84)')
+                    help='address of the three words the parking protocol uses: '
+                         'PARK, PARKED and RESUME, in that order')
+    ap.add_argument('--park-stub', type=pathlib.Path, default=None,
+                    help='source of the stub to park in, placed by this tool')
+    ap.add_argument('--park-stub-addr', type=lambda s: int(s, 0), default=0xC072EF00)
     ap.add_argument('--park-resume', default=None,
                     help='symbol the parked task should resume at')
     ap.add_argument('--dry-run', action='store_true')
@@ -102,15 +120,16 @@ def main() -> int:
         return 0
 
     state = None
-    if a.resident_task and a.park_state and a.park_resume:
-        state = park_resident(a.resident_task, a.park_state)
+    if a.resident_task and a.park_state and a.park_resume and a.park_stub:
+        state = park_resident(a.resident_task, a.park_state,
+                              a.park_stub, a.park_stub_addr)
     if state is None:
         refuse_if_resident()
     put(a.addr, code, 'load  ')          # writes, verifies, repairs
     if state is not None:
         resume = a.addr + symbols(src)[a.park_resume]
-        mem_set(state + 0x84, resume)
-        mem_set(state + 0x7C, 0)
+        mem_set(state + 8, resume)              # RESUME
+        mem_set(state, 0)                       # PARK
         print(f'  resumed  0x{resume:08X}')
 
     if a.hook:

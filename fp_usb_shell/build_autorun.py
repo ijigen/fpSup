@@ -18,15 +18,19 @@ import argparse, hashlib, pathlib, sys
 from armasm import assemble, symbols, words as to_words
 
 HERE = pathlib.Path(__file__).resolve().parent
-DEST = HERE / 'autorun' / 'AutoRun.txt'
+DEST_DEFAULT = HERE / 'autorun' / 'AutoRun.txt'
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--payload', help='source to load into the cave and arm')
 ap.add_argument('--entry', help='symbol in the payload the callback should reach')
 ap.add_argument('--payload-addr', type=lambda s: int(s, 0), default=0xC072DE64)
+ap.add_argument('--out', type=pathlib.Path, default=None,
+                help='where to write; defaults to this tool\'s own autorun/')
 ap.add_argument('--also', action='append', default=[], metavar='ADDR:SRC',
                 help='additional source to place at a fixed address, repeatable')
 args = ap.parse_args()
+DEST = args.out or DEST_DEFAULT
+DEST.parent.mkdir(parents=True, exist_ok=True)
 
 CAVE_LOW = 0xC072DE64
 
@@ -59,6 +63,10 @@ SCREEN = [
     (0xC03E4698, 0xE3A08010, "mov r8,#16  — y"),
 ]
 BAR_WIDTH = 8
+
+
+def word_at(seq, i):
+    return seq[i]
 
 
 def progress(out, pct: int):
@@ -138,11 +146,11 @@ for c in range(CHUNKS):
     for i in range(c * per, min((c + 1) * per, len(words))):
         w(f"mem set 0x{LOAD + i*4:08X} 0x{words[i]:08X}")
     w("")
-    progress(out, 20 + round((c + 1) * 70 / CHUNKS))
+    progress(out, 20 + round((c + 1) * 40 / CHUNKS))
     w("")
 w("# --- DMA pool; its address lands in 0xC3757A7C -------------------------------")
 w("# +0x0000 frame buffer 4 KiB   +0x2000 capture buffer 16 KiB")
-w("# +0x6000 gyro logger 40 KiB   +0x10000 template scratch 64 KiB")
+w("# +0x6000 free for whatever is loaded alongside   +0x10000 template scratch")
 w("# Reserve the whole span up front rather than writing past the allocation and")
 w("# hoping the tail is free. Everything derives its address from this pointer:")
 w("# asking for 64 KiB instead of 4 already moved the base from 0x44F6ADC0 to")
@@ -153,7 +161,7 @@ w("# at 0xC03FA558; the alignment slot at [sp, #0xc] is only ever written with 0
 w("# So `get 0 0x20000 0x40` asked for 64 bytes and was handed the 128-byte")
 w("# minimum, while everything past it belonged to a 256 KiB buffer owned by")
 w("# 0xC03A4EEC that is reinitialised when recording starts. That is where the")
-w("# shell's capture buffer and the gyro logger's halves had been living, and why")
+w("# shell's capture buffer and anything loaded beside it had been living, and why")
 w("# the picture tore and the camera froze at unpredictable moments.")
 w("# 1 MiB. The USER pool reports 18 MB free in MOVIE_REC_DNG, and 128 KiB was")
 w("# not enough to stage a quarter-megabyte file -- which showed up as a verify")
@@ -185,8 +193,17 @@ if args.payload:
     w(f"# {gsrc.name}, {len(gcode)} bytes at 0x{args.payload_addr:08X}.")
     w("# Loaded after the worker is running, so the several seconds this takes are")
     w("# also the seconds the bootstrap needs to fire and put the callback back.")
-    for i, word in enumerate(gwords):
-        w(f"mem set 0x{args.payload_addr + i*4:08X} 0x{word:08X}")
+    # The payload is often more than half the file, so it gets the rest of the
+    # bar. Without this the readout sits at 90% through several hundred silent
+    # commands and then jumps to done, which looks exactly like a stall.
+    GCHUNKS = 7
+    per = (len(gwords) + GCHUNKS - 1) // GCHUNKS
+    for c in range(GCHUNKS):
+        for i in range(c * per, min((c + 1) * per, len(gwords))):
+            w(f"mem set 0x{args.payload_addr + i*4:08X} 0x{word_at(gwords, i):08X}")
+        w("")
+        progress(out, 60 + round((c + 1) * 35 / GCHUNKS))
+        w("")
     for spec in args.also:
         addr_s, _, src_s = spec.partition(':')
         addr, extra = int(addr_s, 0), assemble(pathlib.Path(src_s))
@@ -209,7 +226,7 @@ for _ in range(3):
     w("display osd 1")
 
 text = '\n'.join(out) + '\n'
-DEST.parent.mkdir(exist_ok=True)
+DEST_DEFAULT.parent.mkdir(exist_ok=True)
 DEST.write_text(text)
 
 print(f"worker : {len(code)} bytes, {len(words)} words, 0x{LOAD:08X}..0x{end:08X}")
@@ -218,7 +235,7 @@ if args.payload:
     print(f"payload: {gsrc.name}, {len(gcode)} bytes, "
           f"0x{args.payload_addr:08X}..0x{gend:08X}, entry 0x{gentry:08X}")
 print(f"patches: {len(PATCHES)} endpoint, {len(SCREEN)} screen")
-print(f"wrote  : {DEST.relative_to(HERE)}  {len(out)} lines  "
+print(f"wrote  : {DEST_DEFAULT.relative_to(HERE)}  {len(out)} lines  "
       f"sha256={hashlib.sha256(text.encode()).hexdigest()[:16]}")
 commands = [l for l in out if l and not l.startswith('#')]
 for bad in ("mem save", "ctrl sleep", "display colorbar"):

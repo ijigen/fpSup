@@ -51,17 +51,29 @@ def assemble(src) -> bytes:
         for off in range(rel[4], rel[4] + rel[5], rel[9]):
             place, info = struct.unpack_from('<II', elf, off)
             rtype, symidx = info & 0xFF, info >> 8
-            if rtype != 28:
-                raise SystemExit(f'unsupported relocation {rtype} at {place:#x}')
             _, value, _, _, _, shndx = syms[symidx]
             if shndx != text_i:
-                raise SystemExit('call target outside .text')
-            disp = value - place - 8
-            if disp % 4:
-                raise SystemExit('misaligned call target')
+                raise SystemExit('relocation target outside .text')
             insn = struct.unpack_from('<I', body, place)[0]
-            struct.pack_into('<I', body, place,
-                             (insn & 0xFF000000) | ((disp >> 2) & 0xFFFFFF))
+            disp = value - place - 8
+            if rtype == 28:                     # R_ARM_CALL
+                if disp % 4:
+                    raise SystemExit('misaligned call target')
+                struct.pack_into('<I', body, place,
+                                 (insn & 0xFF000000) | ((disp >> 2) & 0xFFFFFF))
+            elif rtype == 4:                    # R_ARM_LDR_PC_G0
+                # A pc-relative literal load, which is how a template reaches a
+                # word the loader fills in.  The U bit carries the sign and the
+                # low twelve bits the magnitude.
+                mag = abs(disp)
+                if mag > 0xFFF:
+                    raise SystemExit(f'literal at {place:#x} is {mag} bytes away')
+                insn &= ~0x00800FFF
+                if disp >= 0:
+                    insn |= 0x00800000
+                struct.pack_into('<I', body, place, insn | mag)
+            else:
+                raise SystemExit(f'unsupported relocation {rtype} at {place:#x}')
 
     if len(body) % 4:
         body += b'\0' * (-len(body) % 4)

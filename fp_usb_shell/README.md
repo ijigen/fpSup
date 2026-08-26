@@ -74,6 +74,7 @@ host/fpshd.c         daemon, listens on /tmp/fpshd.sock
 host/fpsh            client
 host/lsdesc.c        prints the descriptor the host actually received
 autorun/AutoRun.txt  what goes on the card
+docs/TRANSFER.md     what makes transfers fast, and what made them slow
 docs/                reverse-engineering notes (Traditional Chinese)
 ```
 
@@ -243,6 +244,7 @@ host/fpshd.c         daemon,監聽 /tmp/fpshd.sock
 host/fpsh            客戶端
 host/lsdesc.c        印出主機實際列舉到的描述元
 autorun/AutoRun.txt  放進卡片的東西
+docs/TRANSFER.md     傳輸為什麼快、為什麼曾經很慢
 docs/                逆向筆記(繁體中文)
 ```
 

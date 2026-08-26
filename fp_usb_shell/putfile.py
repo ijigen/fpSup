@@ -163,7 +163,7 @@ def prove(addr, length):
                 raise SystemExit(f'0x{a:08X} reads {got} — staging area is not free')
 
 
-READ_CHUNK = 64                 # words per request
+READ_CHUNK = 128                # words per request
 
 
 def read_back(addr, count):
