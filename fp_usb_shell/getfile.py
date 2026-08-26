@@ -10,7 +10,7 @@ boot, so a bad write costs nothing as long as it is caught before the next one.
 import argparse, pathlib, struct, sys, time
 
 from armasm import assemble
-from putfile import (sh, mem_set, mem_get, staging_area, put, read_back, check_fits,
+from putfile import (sh, mem_set, mem_get, staging_area, put, read_bulk, check_fits,
                      CODE, CODE_END, P, ECHO_SLOT, ECHO_ORIG, HERE)
 
 P_ACTUAL, P_STATUS, P_OPENR, P_READR = 0x04, 0x08, 0x0C, 0x10
@@ -91,12 +91,7 @@ def main():
     if status != 2:
         return 1
 
-    t0 = time.time()
-    got = read_back(buf, words)
-    if any(v is None for v in got):
-        raise SystemExit('some words could not be read back')
-    data = struct.pack(f'<{words}I', *got)[:size]
-    print(f'  fetched {len(data)} bytes in {time.time()-t0:.1f}s')
+    data = read_bulk(buf, size, 'fetch ')
     left = sum(1 for i in marks if i * 4 + 4 <= len(data)
                and struct.unpack_from('<I', data, i * 4)[0] == POISON)
     if left:

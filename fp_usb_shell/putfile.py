@@ -25,6 +25,9 @@ CODE      = 0xC072F600          # the working template
 CODE_END  = 0xC072F900
 BULK      = 0xC072F900          # the bulk loader, resident alongside it
 BULK_STATE = 0xC072F5F8         # its own two words, clear of the parameter block
+DUMP      = 0xC072FA00          # the dense reader, in a slot of its own
+DUMP_CHUNK = 3000               # bytes per round trip; 135 KiB/s, flat past 3000
+DUMP_TEXT  = 0xF8000            # pool offset for the hex, 32 KiB from the end
 BULK_END  = 0xC072FA00
 CHUNK     = 240                 # bytes per command; the line holds about 502 chars
 P         = 0xC072F500          # parameter block
@@ -174,8 +177,16 @@ def read_back(addr, count):
     going wider and something to lose if a reply is ever truncated.
     """
     out = []
+    t0 = time.time()
     for base in range(0, count, READ_CHUNK):
         out += mem_get(addr + base * 4, min(READ_CHUNK, count - base))
+        if base and (base // READ_CHUNK) % 16 == 0:
+            el = time.time() - t0
+            print(f'\r  read   {len(out)}/{count} words  {len(out)*4/el/1024:.1f} KiB/s'
+                  f'  {(count-len(out))*el/max(len(out),1):.0f}s left ', end='', flush=True)
+    if count > READ_CHUNK * 16:
+        print(f'\r  read   {count} words in {time.time()-t0:.1f}s'
+              f' ({count*4/(time.time()-t0)/1024:.1f} KiB/s)          ')
     return out
 
 
@@ -195,6 +206,54 @@ def put_slow(addr, blob, label, passes=6):
 
 
 _bulk_loaded = False
+_dump_loaded = False
+
+
+def ensure_dump():
+    global _dump_loaded
+    if not _dump_loaded:
+        put_slow(DUMP, assemble(HERE / 'templates' / 'dump.S'), 'dump  ')
+        _dump_loaded = True
+
+
+def read_bulk(addr, nbytes, label='read  '):
+    """Read memory through dump.S rather than `mem get`.
+
+    `mem get` answers thirty-four characters for every four bytes and needs a
+    round trip every 128 words, which is 26 KiB/s on a SuperSpeed link -- the
+    text is the limit, not the wire. Bare hex at 3000 bytes a trip measures
+    135 KiB/s.
+    """
+    ensure_dump()
+    text = mem_get(POOL_PTR)[0] + DUMP_TEXT
+    orig = mem_get(ECHO_SLOT)
+    if not orig or orig[0] not in (ECHO_ORIG, DUMP):
+        raise SystemExit(f'echo handler is {orig}, not free to borrow')
+    out = bytearray()
+    t0 = time.time()
+    mem_set(ECHO_SLOT, DUMP)
+    try:
+        while len(out) < nbytes:
+            n = min(DUMP_CHUNK, nbytes - len(out))
+            for off, val in ((0x00, addr + len(out)), (0x04, n), (0x08, text)):
+                mem_set(P + off, val)
+            for _ in range(4):
+                reply = sh('echo', retries=0)
+                digits = ''.join(c for c in reply if c in '0123456789ABCDEF')
+                if len(digits) >= n * 2:
+                    out += bytes.fromhex(digits[:n * 2])
+                    break
+            else:
+                raise SystemExit(f'{label}: no reply for {n} bytes at '
+                                 f'0x{addr + len(out):08X}')
+            el = time.time() - t0
+            print(f'\r  {label} {len(out)}/{nbytes} B  {len(out)/el/1024:.0f} KiB/s ',
+                  end='', flush=True)
+    finally:
+        mem_set(ECHO_SLOT, ECHO_ORIG)
+    dt = time.time() - t0
+    print(f'\r  {label} {nbytes} bytes in {dt:.1f}s ({nbytes/dt/1024:.0f} KiB/s)      ')
+    return bytes(out)
 
 
 def ensure_bulk():

@@ -34,6 +34,11 @@
  *      state+0x00  PARK      set by the host, cleared when the body is ready
  *      state+0x04  PARKED    set here, so the host knows it is safe to write
  *      state+0x08  RESUME    where to carry on
+ *
+ * On resume r10 holds the address of those three words and nothing else is
+ * promised.  Point RESUME at a label that sets up its own registers -- resuming
+ * straight into a loop that expects r10 to be something else costs whatever
+ * that loop was in the middle of.
  * ========================================================================== */
 
 .equ FN_SLEEP, 0xC03705D8      /* sleep(ms) */
