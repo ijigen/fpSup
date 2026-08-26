@@ -83,7 +83,14 @@ def refuse_if_resident():
             '\nPull the battery before loading. Overwriting the code underneath '
             'it is a freeze, and unhooking does not stop it.')
 
-CAVE_LOW  = 0xC072DE64          # first byte the injection region owns
+CAVE_BASE = 0xC072DE64          # first byte the injection region owns
+LOADER_END = CAVE_BASE + 0x200   # loader.S lives at the bottom of it now
+# The AutoRun no longer carries the worker: it writes loader.S here, and that
+# code stays resident, because swapworker.py works by having the worker branch
+# back into it. Loading a payload over the top of it would take the ability to
+# replace the worker without a reboot -- which is worth more than the five
+# hundred and twelve bytes.
+CAVE_LOW  = LOADER_END
 CAVE_HIGH = 0xC072F000          # the shell's own state starts here
 
 

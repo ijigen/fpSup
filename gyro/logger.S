@@ -45,11 +45,21 @@
 .equ O_PATH,          0x0100      /* from r10                               */
 .equ O_HEADER,        0x0200
 .equ O_FOBJ,          0x0400
+.equ O_FOBJ2,         0x0800      /* the gcsv, open while the .GYR is read back */
+.equ O_GCSV_PATH,     0x0180      /* its path, beside the .GYR's                */
 .equ O_BUF_A,         0x1000
 .equ O_BUF_B,         0x5000
 .equ BUF_SIZE,        0x00004000
 .equ BLOCK_HEADER,    32
 .equ PAYLOAD_CAP,     0x00003FE0
+.equ F_MGR,           0xC0444658
+.equ F_VOL,           0xC0444698
+.equ F_CTOR,          0xC0365E90
+.equ F_OPEN,          0xC0365FB0
+.equ F_READ,          0xC0366060
+.equ F_WRITE,         0xC03660E8
+.equ F_CLOSE,         0xC0366020
+.equ F_DTOR,          0xC0365ED0
 .equ ACCEL_CACHE,     0xC377790C  /* i16 X, Y, Z, axis-remapped by the firmware */
 .equ ACCEL_REC,       12          /* u32 us, i16 x, i16 y, i16 z, i16 pad       */
 .equ ACCEL_ZONE,      0x0400      /* the accel records grow in their own end of  */
@@ -91,7 +101,9 @@
 .equ S_STOP_BLOCKS,   0x78        /* blocks still to write when the stop landed */
 .equ S_PARK,          0x7C        /* host asks the writer to step out of the cave */
 .equ S_PARKED,        0x80        /* writer confirms it is parked                 */
-.equ S_WRITER_PC,     0x84        /* where to resume once the body is replaced    */
+.equ S_WRITER_PC,     0x84
+.equ S_START_US,      0x88        /* the header buffer is reused for the footer */
+.equ S_READ_N,        0x8C        /* where read() drops its byte count          */        /* where to resume once the body is replaced    */
 .equ PARK_STUB,       0xC072EF00  /* never rewritten; see templates/park.S        */
 
 .macro ldr_addr reg, value
@@ -225,6 +237,7 @@ recording_started:
     movw    r0, #400
     str     r0, [r9, #12]            /* sample_period_us */
     str     r6, [r9, #16]
+    str     r6, [r10, #S_START_US]   @ the header gets overwritten by the footer
     ldrb    r0, [r8, #8]
     str     r0, [r9, #20]
     ldr     r0, [r8, #0x0C]
@@ -877,6 +890,13 @@ writer_close:
     movw    ip, #0x5ED0
     movt    ip, #0xC036
     blx     ip
+    /* The .GYR is closed and both halves are free: turn it into a .CSV.
+     * Here rather than on the callback, and after the close rather than
+     * alongside it, so the file on the card is complete before anything reads
+     * it back. Takes a few hundred milliseconds on a long take -- which costs
+     * nothing, because the card is busy anyway and the callback is not waiting. */
+    bl      gcsv_build
+
     movw    ip, #0xB6E0
     movt    ip, #0xC002
     blx     ip
@@ -936,3 +956,277 @@ put_decimal_3:
     add     r1, r1, #'0'
     strb    r1, [r0]
     bx      lr
+
+/* ==========================================================================
+ * put_int — r0 signed value, r1 destination.  Returns the destination advanced.
+ *
+ * No hardware divide on this core, and repeated subtraction on a fifteen-million
+ * microsecond timestamp is not a plan, so the divide by ten is the usual
+ * reciprocal multiply: n/10 = (n * 0xCCCCCCCD) >> 35.
+ * ========================================================================== */
+put_int:
+    push    {r4, r5, r6, r7, r8, lr}
+    mov     r4, r1
+    mov     r5, r0
+    cmp     r5, #0
+    bge     30f
+    mov     r6, #'-'
+    strb    r6, [r4], #1
+    rsb     r5, r5, #0
+30:
+    sub     sp, sp, #16
+    mov     r8, sp
+    mov     r6, #0
+31:
+    movw    r0, #0xCCCD
+    movt    r0, #0xCCCC
+    umull   r1, r0, r5, r0
+    lsr     r0, r0, #3                  @ r0 = r5 / 10
+    add     r1, r0, r0, lsl #2
+    sub     r1, r5, r1, lsl #1          @ r5 - 10*(r5/10)
+    add     r1, r1, #'0'
+    strb    r1, [r8, r6]
+    add     r6, r6, #1
+    mov     r5, r0
+    cmp     r5, #0
+    bne     31b
+32:
+    subs    r6, r6, #1
+    blt     33f
+    ldrb    r1, [r8, r6]
+    strb    r1, [r4], #1
+    b       32b
+33:
+    add     sp, sp, #16
+    mov     r0, r4
+    pop     {r4, r5, r6, r7, r8, pc}
+
+/* r0 = source (NUL-terminated), r1 = destination.  Returns it advanced. */
+put_str:
+    push    {r4, lr}
+34: ldrb    r4, [r0], #1
+    cmp     r4, #0
+    beq     35f
+    strb    r4, [r1], #1
+    b       34b
+35: mov     r0, r1
+    pop     {r4, pc}
+
+/* ==========================================================================
+ * gcsv_build — turn the .GYR just written into a Gyroflow .GCSV beside it.
+ *
+ * Runs in the writer thread, after the .GYR is closed, with both halves free.
+ * The samples are long gone from memory by then -- that is what streaming means
+ * -- so the file is read back a block at a time rather than held.
+ *
+ * This is deliberately not on the gyro callback. The earlier logger built its
+ * text there and blocked it for the better part of a second, which is how it
+ * missed the next take's start: the callback cannot see ACTIVE go 0 to 1 while
+ * it is inside itself. Here the callback sets a flag and returns in microseconds.
+ *
+ * gscale and the orientation are literals rather than formatted: they are
+ * compile-time constants, and formatting a float in ARM to match what the host
+ * decoder writes is a lot of code for a string that never changes.
+ * ========================================================================== */
+gcsv_build:
+    push    {r3, r4, r5, r6, r7, r8, r9, r10, r11, lr}
+
+    /* \A001_018.GYR -> \A001_018.CSV, beside it. */
+    add     r0, r10, #O_PATH
+    add     r1, r10, #O_GCSV_PATH
+    mov     r2, #0
+40: ldrb    r3, [r0, r2]
+    strb    r3, [r1, r2]
+    add     r2, r2, #1
+    cmp     r2, #16
+    blo     40b
+    mov     r3, #'C'
+    strb    r3, [r1, #10]
+    mov     r3, #'S'
+    strb    r3, [r1, #11]
+    mov     r3, #'V'
+    strb    r3, [r1, #12]
+
+    /* The .GYR, for reading. */
+    ldr_addr     ip, F_MGR
+    blx     ip
+    mov     r1, #0
+    ldr_addr     ip, F_VOL
+    blx     ip
+    mov     r1, r0
+    add     r0, r10, #O_FOBJ
+    ldr_addr     ip, F_CTOR
+    blx     ip
+    add     r0, r10, #O_FOBJ
+    add     r1, r10, #O_PATH
+    mov     r2, #1
+    ldr_addr     ip, F_OPEN
+    blx     ip
+    cmp     r0, #0
+    beq     gcsv_out
+
+    /* The .CSV, for writing. */
+    ldr_addr     ip, F_MGR
+    blx     ip
+    mov     r1, #0
+    ldr_addr     ip, F_VOL
+    blx     ip
+    mov     r1, r0
+    add     r0, r10, #O_FOBJ2
+    ldr_addr     ip, F_CTOR
+    blx     ip
+    add     r0, r10, #O_FOBJ2
+    add     r1, r10, #O_GCSV_PATH
+    mov     r2, #7
+    ldr_addr     ip, F_OPEN
+    blx     ip
+    cmp     r0, #0
+    beq     gcsv_close_gyr
+
+    /* Header, with the clip name lifted out of the path. */
+    add     r6, r10, #O_BUF_B
+    mov     r5, r6
+    adr     r0, gcsv_head1
+    mov     r1, r5
+    bl      put_str
+    mov     r5, r0
+    add     r0, r10, #O_PATH
+    add     r0, r0, #1                  @ past the backslash
+    mov     r1, r5
+41: ldrb    r2, [r0], #1
+    cmp     r2, #'.'
+    beq     42f
+    cmp     r2, #0
+    beq     42f
+    strb    r2, [r1], #1
+    b       41b
+42: mov     r5, r1
+    adr     r0, gcsv_head2
+    mov     r1, r5
+    bl      put_str
+    mov     r5, r0
+
+    /* Skip the file header. */
+    add     r0, r10, #O_FOBJ
+    add     r1, r10, #O_BUF_A
+    mov     r2, #160
+    add     r3, r10, #S_READ_N
+    ldr_addr     ip, F_READ
+    blx     ip
+
+    ldr     r11, [r10, #S_START_US]     @ not the header: writer_close put the
+                                        @ GFE6 footer there before this ran, and
+                                        @ every timestamp came out negative
+
+gcsv_block:
+    add     r0, r10, #O_FOBJ
+    add     r1, r10, #O_BUF_A
+    mov     r2, #32
+    add     r3, r10, #S_READ_N
+    ldr_addr     ip, F_READ
+    blx     ip
+    cmp     r0, #0
+    beq     gcsv_flush_last
+    add     r4, r10, #O_BUF_A
+    ldr     r0, [r4]
+    movw    r1, #0x4647
+    movt    r1, #0x3642                 @ GFB6
+    cmp     r0, r1
+    bne     gcsv_flush_last
+
+    ldr     r8, [r4, #16]               @ gyro samples
+    ldr     r9, [r4, #8]                @ first timestamp
+    sub     r9, r9, r11                 @ relative to record start
+    ldr     r2, [r4, #24]               @ payload bytes
+    add     r0, r10, #O_FOBJ
+    add     r1, r10, #O_BUF_A
+    add     r1, r1, #32
+    add     r3, r10, #S_READ_N
+    ldr_addr     ip, F_READ
+    blx     ip
+    cmp     r0, #0
+    beq     gcsv_flush_last
+
+    add     r7, r10, #O_BUF_A
+    add     r7, r7, #32
+gcsv_sample:
+    cmp     r8, #0
+    beq     gcsv_block
+
+    mov     r0, r9
+    mov     r1, r5
+    bl      put_int
+    mov     r5, r0
+    mov     r0, #','
+    strb    r0, [r5], #1
+    ldrsh   r0, [r7]
+    mov     r1, r5
+    bl      put_int
+    mov     r5, r0
+    mov     r0, #','
+    strb    r0, [r5], #1
+    ldrsh   r0, [r7, #2]
+    mov     r1, r5
+    bl      put_int
+    mov     r5, r0
+    mov     r0, #','
+    strb    r0, [r5], #1
+    ldrsh   r0, [r7, #6]                @ z sits past the pad
+    mov     r1, r5
+    bl      put_int
+    mov     r5, r0
+    mov     r0, #10
+    strb    r0, [r5], #1
+
+    add     r7, r7, #8
+    sub     r8, r8, #1
+    movw    r0, #400
+    add     r9, r9, r0
+
+    /* Flush well before the end: one line is at most about forty bytes. */
+    sub     r0, r5, r6
+    movw    r1, #0x3C00
+    cmp     r0, r1
+    blo     gcsv_sample
+    bl      gcsv_flush
+    b       gcsv_sample
+
+gcsv_flush_last:
+    bl      gcsv_flush
+    add     r0, r10, #O_FOBJ2
+    ldr_addr     ip, F_CLOSE
+    blx     ip
+    add     r0, r10, #O_FOBJ2
+    mov     r1, #2
+    ldr_addr     ip, F_DTOR
+    blx     ip
+gcsv_close_gyr:
+    add     r0, r10, #O_FOBJ
+    ldr_addr     ip, F_CLOSE
+    blx     ip
+    add     r0, r10, #O_FOBJ
+    mov     r1, #2
+    ldr_addr     ip, F_DTOR
+    blx     ip
+gcsv_out:
+    pop     {r3, r4, r5, r6, r7, r8, r9, r10, r11, pc}
+
+/* Write out whatever is in the text buffer and rewind it. */
+gcsv_flush:
+    push    {r0, r1, r2, lr}
+    sub     r2, r5, r6
+    cmp     r2, #0
+    beq     43f
+    add     r0, r10, #O_FOBJ2
+    mov     r1, r6
+    ldr_addr     ip, F_WRITE
+    blx     ip
+    mov     r5, r6
+43: pop     {r0, r1, r2, pc}
+
+gcsv_head1:
+    .asciz  "GYROFLOW IMU LOG\nversion,1.3\nid,sigma_fp_v502_internal_icm20321\norientation,xyz\nfwversion,SIGMA fp 5.02\nvideofilename,"
+    .align  2
+gcsv_head2:
+    .asciz  "\ntscale,0.000001\ngscale,0.000137923\nt,gx,gy,gz\n"
+    .align  2
