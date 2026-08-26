@@ -28,6 +28,8 @@ ap.add_argument('--out', type=pathlib.Path, default=None,
                 help='where to write; defaults to this tool\'s own autorun/')
 ap.add_argument('--also', action='append', default=[], metavar='ADDR:SRC',
                 help='additional source to place at a fixed address, repeatable')
+ap.add_argument('--loader', action='store_true',
+                help='put the code in VSHL.BIN and have the AutoRun read it')
 args = ap.parse_args()
 DEST = args.out or DEST_DEFAULT
 DEST.parent.mkdir(parents=True, exist_ok=True)
@@ -39,30 +41,12 @@ STATE  = 0xC072F000   # worker state, 16 words
 CAPLEN = 0xC072F040   # capture length
 HOOK   = 0xC00D0794   # gyro callback, borrowed once to create the task
 
-PATCHES = [
-    (0xC0CF3740, 0xFFFFFF03,
-     "PTP interface template: {bNumEndpoints, class, subclass, protocol}",
-     "03/06/01/01 -> 03/ff/ff/ff.  Lengths and the endpoint set are untouched;",
-     "this only stops the host's PTP stack from claiming interface 0 before the",
-     "shell daemon can."),
-    (0xC0CF3780, 0x02830507, "EP 0x83, SuperSpeed: interrupt -> bulk"),
-    (0xC0CF3784, 0x00000400, "EP 0x83, SuperSpeed: wMaxPacketSize 64 -> 1024, bInterval 11 -> 0"),
-    (0xC0CF3758, 0x00033006, "its SuperSpeed companion: bMaxBurst 0 -> 3"),
-    (0xC0CF375C, 0x00000000, "its SuperSpeed companion: wBytesPerInterval 64 -> 0"),
-    (0xC0CF3798, 0x02830507, "EP 0x83, full speed: interrupt -> bulk"),
-    (0xC0CF379C, 0x00000040, "EP 0x83, full speed: bInterval 100 -> 0"),
-]
+from patches import PATCHES, SCREEN, BAR_WIDTH
 
 # The on-screen readout.  `display text` draws into the OSD surface and
 # `display osd 1` composites it; with a colour argument it fills the layer
 # instead, which is how the surface gets wiped.  The layer runs three buffers,
 # so each step is repeated three times or the old frame shows through.
-SCREEN = [
-    (0xC0BB1208, 0xFFFFF8B2, "text colour"),
-    (0xC03E46A0, 0xE3A05078, "mov r5,#120 — x, clear of the battery indicator"),
-    (0xC03E4698, 0xE3A08010, "mov r8,#16  — y"),
-]
-BAR_WIDTH = 8
 
 
 def word_at(seq, i):
@@ -79,7 +63,8 @@ def progress(out, pct: int):
         out.append("display osd 1")
 
 
-code = assemble(HERE / 'camera' / 'worker.S')
+WORKER = HERE / 'camera' / 'worker.S'
+code = assemble(WORKER)
 words = to_words(code)
 end = LOAD + len(code)
 if end > 0xC072F700:
@@ -139,14 +124,15 @@ w(f"mem set 0x{CAPLEN:08X} 0x00000000")
 w("")
 progress(out, 20)
 w("")
-w(f"# --- worker code @0x{LOAD:08X}..0x{end:08X}, {len(code)} bytes ---------------")
 CHUNKS = 6
-per = (len(words) + CHUNKS - 1) // CHUNKS
-for c in range(CHUNKS):
-    for i in range(c * per, min((c + 1) * per, len(words))):
-        w(f"mem set 0x{LOAD + i*4:08X} 0x{words[i]:08X}")
-    w("")
-    progress(out, 20 + round((c + 1) * 40 / CHUNKS))
+if not args.loader:
+    w(f"# --- worker code @0x{LOAD:08X}..0x{end:08X}, {len(code)} bytes ---------------")
+    per = (len(words) + CHUNKS - 1) // CHUNKS
+    for c in range(CHUNKS):
+        for i in range(c * per, min((c + 1) * per, len(words))):
+            w(f"mem set 0x{LOAD + i*4:08X} 0x{words[i]:08X}")
+        w("")
+        progress(out, 20 + round((c + 1) * 40 / CHUNKS))
     w("")
 w("# --- DMA pool; its address lands in 0xC3757A7C -------------------------------")
 w("# +0x0000 frame buffer 4 KiB   +0x2000 capture buffer 16 KiB")
@@ -169,12 +155,48 @@ w("# that never converged rather than as an error, because the overflow landed i
 w("# memory somebody else kept rewriting.")
 w("memmgr bufmem get 0 1048576")
 w("")
+if args.loader:
+    # Everything the AutoRun used to spell out goes in a file, and what it
+    # spells out instead is the thing that reads the file. Four hundred `mem
+    # set` commands become a hundred and twenty-eight, and stay there: adding
+    # the gyro logger to this file costs eight hundred more today and none once
+    # the code is in the binary beside it.
+    #
+    # There is no `mem load`. The shell can save memory to a file and not the
+    # other way, so the AutoRun cannot ask for this directly -- only spell out
+    # something small that asks on its behalf.
+    lsrc = HERE / 'templates' / 'loader.S'
+    lcode = assemble(lsrc)
+    lwords = to_words(lcode)
+    # Not at LOAD. The loader's whole job is to write to LOAD, and putting it
+    # there means its copy loop overwrites the instructions it is executing --
+    # which worked, once, and only because the instruction cache still held
+    # them. It goes at the bottom of the cave instead, where nothing it places
+    # can reach it.
+    LOADER = CAVE_LOW
+    lend = LOADER + len(lcode)
+    if lend > LOAD:
+        sys.exit(f'loader at 0x{LOADER:08X}..0x{lend:08X} runs into the worker')
+    lboot = LOADER + symbols(lsrc)['boot']
+    ldisp = (lboot - HOOK - 8) >> 2
+    hook_bl = 0xEB000000 | (ldisp & 0xFFFFFF)
+
+    w(f"# --- loader @0x{LOADER:08X}..0x{lend:08X}, {len(lcode)} bytes --------------")
+    w("# Reads \\VSHL.BIN and places what it says. The worker itself is in there.")
+    per = (len(lwords) + CHUNKS - 1) // CHUNKS
+    for c in range(CHUNKS):
+        for i in range(c * per, min((c + 1) * per, len(lwords))):
+            w(f"mem set 0x{LOADER + i*4:08X} 0x{word_at(lwords, i):08X}")
+        w("")
+        progress(out, 20 + round((c + 1) * 70 / CHUNKS))
+        w("")
+
 w("# --- start the worker --------------------------------------------------------")
 w("# A one-shot branch from the gyro callback: bootstrap calls the routine it")
 w("# displaced, creates the task, and restores this word.")
 w(f"mem set 0x{HOOK:08X} 0x{hook_bl:08X}")
 w("")
-if args.payload:
+if args.payload and not args.loader:
     if not args.entry:
         sys.exit('--payload needs --entry')
     gsrc = pathlib.Path(args.payload)
@@ -225,7 +247,48 @@ for _ in range(3):
     w("display text fpSup!")
     w("display osd 1")
 
+if args.loader:
+    import struct
+    secs = [(LOAD, code)]
+    if args.payload:
+        secs.append((args.payload_addr, assemble(pathlib.Path(args.payload))))
+    for spec in args.also:
+        addr_s, _, src_s = spec.partition(':')
+        secs.append((int(addr_s, 0), assemble(pathlib.Path(src_s))))
+    table = b''
+    body = b''
+    for addr, blob in secs:
+        table += struct.pack('<II', addr, len(blob))
+        body += blob + b'\x00' * (-len(blob) % 4)
+    entry = LOAD + symbols(WORKER)['serve']
+    binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
+    binpath = DEST.parent / 'VSHL.BIN'
+    BIN_PAD = 8192
+    if len(binblob) > BIN_PAD:
+        sys.exit(f'binary is {len(binblob)} bytes, past the {BIN_PAD} it pads to')
+    binblob += b'\x00' * (BIN_PAD - len(binblob))
+    binpath.write_bytes(binblob)
+    print(f"binary : {binpath.name}  {len(binblob)} bytes, {len(secs)} section(s), "
+          f"entry 0x{entry:08X}")
+
 text = '\n'.join(out) + '\n'
+
+# Pad to a fixed length.
+#
+# `putfile` opens with mode 7, which creates and overwrites but does NOT
+# truncate: writing a shorter file leaves the tail of the longer one behind it.
+# The loader build is ten kilobytes against the old eighteen, so the card ended
+# up holding the new script followed by four hundred `mem set` commands from the
+# previous one -- which would have written the old worker straight over the
+# loader, after the loader had already been hooked. Every version being the same
+# length makes that impossible, whichever way the size goes.
+PAD_TO = 32768
+if len(text) > PAD_TO:
+    sys.exit(f'script is {len(text)} bytes, past the {PAD_TO} everything is padded to')
+filler = '# pad -- see PAD_TO: mode 7 overwrites but does not truncate\n'
+while len(text) + len(filler) <= PAD_TO:
+    text += filler
+text += '#' * (PAD_TO - len(text) - 1) + '\n' 
 DEST_DEFAULT.parent.mkdir(exist_ok=True)
 DEST.write_text(text)
 

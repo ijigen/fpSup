@@ -3,6 +3,11 @@
 .text
 /* ============================================================================
  * dump — read memory back densely, instead of one word per line.
+ *
+ * SUPERSEDED by dumpraw.S, and kept only because it is the measurement that
+ * explains why: printing hex costs about a microsecond a character and doubles
+ * the volume before paying it, so this reached 135 KiB/s where sending the
+ * bytes themselves reaches several megabytes. Nothing calls this any more.
  * ============================================================================
  *
  * `mem get` answers "get : A:0xc072f000, D:0x4C485356\n" -- thirty-four

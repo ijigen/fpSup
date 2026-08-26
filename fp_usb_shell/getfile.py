@@ -10,7 +10,7 @@ boot, so a bad write costs nothing as long as it is caught before the next one.
 import argparse, pathlib, struct, sys, time
 
 from armasm import assemble
-from putfile import (sh, mem_set, mem_get, staging_area, put, read_bulk, check_fits,
+from putfile import (sh, mem_set, mem_get, staging_area, put, read_bulk, read_direct, check_fits,
                      CODE, CODE_END, P, ECHO_SLOT, ECHO_ORIG, HERE)
 
 P_ACTUAL, P_STATUS, P_OPENR, P_READR = 0x04, 0x08, 0x0C, 0x10
@@ -47,22 +47,39 @@ def main():
             raise SystemExit(f'{name} is not in dir, and no --size was given')
     print(f'  remote  {a.remote}  {size} bytes, mode 0x{a.mode:X}')
 
+    # Ask the firmware for the buffer rather than carving one out of the
+    # megabyte grabbed at boot. That pool has to hold the gyro logger, the
+    # capture buffer and this at once, so a file could not exceed what had been
+    # reserved for every purpose together -- and two users of it colliding
+    # showed up as damage somewhere unrelated. The camera's own code asks for
+    # ten megabytes to put a photo on screen; the allocator has been measured
+    # good to thirty-two.
+    #
+    # Slack on the end, the way the firmware does it: it never asks how big a
+    # file is, it asks for more than it can be and reads the count back. A read
+    # that returns exactly what was asked for is the one to distrust.
     words = (size + 3) // 4
-    buf = a.buf or staging_area()
-    fobj = buf + words * 4 + 4
-    print(f'  buffer  0x{buf:08X}, file object 0x{fobj:08X}')
-    check_fits(buf, words * 4 + 0x400, 'staging')
+    fobj = staging_area()                # small, and wanted before the call
+    heap = a.buf is None
+    buf = 0 if heap else a.buf
+    ask = size + 0x1000 if heap else size
+    print(f'  buffer  {"from the firmware" if heap else f"0x{buf:08X}"}'
+          f', file object 0x{fobj:08X}')
+    check_fits(fobj, 0x400, 'file object')
 
     # Poison every 4 KiB rather than the whole buffer.  Filling 247 KB with a
     # pattern took longer than reading the file twice over, and one marker per
     # page catches the case it is there for -- a read that did not happen.
-    marks = list(range(0, words, 1024)) + [words - 1]
+    # Poisoning catches a read that never happened. It needs the address
+    # beforehand, which a heap buffer does not have -- there the count the
+    # firmware reports does the same job, and is checked below.
+    marks = [] if heap else list(range(0, words, 1024)) + [words - 1]
     for i in marks:
         mem_set(buf + i * 4, POISON)
 
     path = a.remote.encode() + b'\0'
     for off, val in ((P_ACTUAL, 0), (P_STATUS, 0), (P_OPENR, 0), (P_READR, 0),
-                     (P_BUF, buf), (P_LEN, size), (P_FOBJ, fobj), (P_MODE, a.mode)):
+                     (P_BUF, buf), (P_LEN, ask), (P_FOBJ, fobj), (P_MODE, a.mode)):
         mem_set(P + off, val)
     pw = path + b'\0' * (-len(path) % 4)
     for i, w in enumerate(struct.unpack(f'<{len(pw)//4}I', pw)):
@@ -83,6 +100,12 @@ def main():
             print(f'  WARNING echo handler did not restore: {back}')
 
     print(f'  reply   {reply.strip()}')
+    if heap:
+        got = mem_get(P + P_BUF)
+        if not got or not got[0]:
+            raise SystemExit('  the allocator refused; nothing was read')
+        buf = got[0]
+        print(f'  buffer  0x{buf:08X} ({ask} bytes asked for)')
     st = mem_get(P, 5)
     status = st[P_STATUS // 4]
     print(f'  status  {status} — {STATUS.get(status, "unknown")}')
@@ -91,7 +114,18 @@ def main():
     if status != 2:
         return 1
 
-    data = read_bulk(buf, size, 'fetch ')
+    actual = st[P_ACTUAL // 4]
+    if heap and actual >= ask:
+        raise SystemExit(f'  read filled the whole buffer ({actual}); the file '
+                         f'is longer than it was thought to be')
+    # The buffer came from the firmware's allocator, which the controller can
+    # reach directly -- so there is no reason to copy it through a 16 KiB
+    # staging buffer sixteen kilobytes at a time.
+    data = (read_direct(buf, size) if heap else read_bulk(buf, size, 'fetch '))
+    if heap:
+        from callfn import call
+        call(0xC001D7A0, r0=P + 0xE0, r1=2, verbose=False)   # free
+        print('  buffer  handed back')
     left = sum(1 for i in marks if i * 4 + 4 <= len(data)
                and struct.unpack_from('<I', data, i * 4)[0] == POISON)
     if left:

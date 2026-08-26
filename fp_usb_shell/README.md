@@ -1,4 +1,4 @@
-# fp USB Shell v2
+# fp USB Shell v3
 
 [English](#english) | [繁體中文](#繁體中文)
 
@@ -188,6 +188,55 @@ the first 64 bytes.
   `StartTransfer(7)`.
 
 
+## What changed in v3
+
+v2 put the code on the camera by spelling it out, and moved data by copying it
+through a staging buffer. v3 changes both, and what follows from them.
+
+**The AutoRun no longer carries the code.** It writes a 512-byte loader
+(`templates/loader.S`) which reads `\VSHL.BIN` off the card, places what the
+file says, and becomes the worker. 503 commands became 248, and the count no
+longer grows with what is being loaded — a worker change costs nothing in the
+script. There is no `mem load`; the shell can save memory to a file and not the
+other way, so the AutoRun spells out the thing that does the reading.
+
+**The worker can be replaced while it runs.** `./swapworker.py`: write the new
+binary, and the worker branches into the loader on its next round — 0.5 s, byte
+verified, no power cycle. Every worker change used to cost a reboot.
+
+**Buffers come from the firmware.** `FUN_c001d740` / `FUN_c001d7f0` /
+`FUN_c001d7a0`, the allocator the camera's own code uses to load a photo
+(10 MB) or a firmware update (32 MB). Measured good from 64 KiB to 32 MiB. The
+megabyte grabbed at boot and carved up by hand is no longer where files go.
+
+**Replies come from where the answer already is.** The worker takes a source
+address in `CAP_PTR` and points its TRB at it, instead of everything being
+copied into the 16 KiB capture buffer first. That buffer was the reason a 31 MB
+file came back in 1995 round trips.
+
+The card was never slow. Split and measured:
+
+| | |
+|---|---|
+| card into camera memory | **0.17 s, 183 MB/s** |
+| camera memory to host | 0.42 s, 73 MB/s |
+| `getfile.py` end to end | **1.17 s** (was 76 s) |
+
+One megabyte per transfer measured fastest. Bigger is sharply worse — 9.5 MB/s
+at four, 2.1 at sixteen — and the camera is doing *less* work at those sizes, so
+whatever it is lives on the host. Measured, not explained.
+
+**The daemon** takes a per-request timeout (`TMO <ms>`), will hex-encode a small
+reply on request (`HEX`), carries replies up to 16 MB, and says why a transfer
+failed instead of `ERR shl`.
+
+Also settled: **EP 0x84 does not exist on this gadget**. `DALEPENA` is `0xA7`,
+physical 9 is not enabled, and `StartTransfer` on it is refused instantly, 100
+times out of 100 — which v1's push code does not check before waiting fifty
+seconds for a transfer that never began. That is what "EP84 halts, pull the
+cable" always was. EP 0x83 is enabled, is bulk, and accepted 100 out of 100.
+
+
 ---
 
 ## 繁體中文
@@ -359,3 +408,44 @@ FPSH v1,64 byte 幀,little-endian。
   第一個需要它的 hook 就是測試。
 * v1 的 hook-push 程式碼仍指向舊端點(`0xC31E3274`、`StartTransfer(9)`);
   在這個 gadget 上要改成 `0xC31E3270` 與 `StartTransfer(7)`。
+
+## v3 改了什麼
+
+v2 把程式碼「一個字一個命令」寫進相機,把資料複製過暫存區再逐塊拉回來。
+v3 改掉這兩件事,以及由它們衍生的一切。
+
+**AutoRun 不再帶程式碼。** 它只寫一個 512 位元組的載入器(`templates/loader.S`),
+載入器去讀卡上的 `\VSHL.BIN`、把每個 section 放到指定位址,然後自己變成 worker。
+503 個命令變成 248,而且**不再隨載入的東西增加** —— 改 worker 對腳本長度毫無影響。
+shell 有 `mem save`(記憶體→檔案)但沒有反向的,所以 AutoRun 拼出來的是「去讀檔的那個東西」。
+
+**worker 可以在執行中抽換。** `./swapworker.py`:寫新的二進位,worker 下一輪就跳進載入器 ——
+**0.5 秒、逐位元組驗證、不用關機**。以前每改一行都要重開機。
+
+**緩衝跟韌體要。** `FUN_c001d740` / `FUN_c001d7f0` / `FUN_c001d7a0`,
+就是相機自己載入照片(10 MB)和韌體更新(32 MB)用的那個配置器。實測 64 KiB 到 32 MiB 都可用。
+開機搶一塊 1 MB 再手算偏移的做法,不再是檔案的落腳處。
+
+**回覆直接從資料所在的地方送出。** worker 多一個來源指標 `CAP_PTR`,TRB 直接指過去,
+不再一律先複製進 16 KiB 的擷取緩衝。那塊緩衝正是「31 MB 的檔案要 1995 次來回」的原因。
+
+**卡從來就不慢。** 分段實測:
+
+| | |
+|---|---|
+| 卡 → 相機記憶體 | **0.17 秒,183 MB/s** |
+| 相機記憶體 → 主機 | 0.42 秒,73 MB/s |
+| `getfile.py` 全程 | **1.17 秒**(原本 76 秒) |
+
+每次 1 MB 最快。**再大反而急遽變慢** —— 4 MB 掉到 9.5 MB/s,16 MB 只剩 2.1 ——
+而那些尺寸下相機做的事**更少**,所以成本在主機端。這是量出來的,不是解釋出來的。
+
+**daemon** 支援單次請求逾時(`TMO <ms>`)、可要求把小回覆用十六進位編碼(`HEX`)、
+回覆上限 16 MB,而且失敗時會說明原因,不再只回 `ERR shl`。
+
+另外確認了:**EP 0x84 在這組 gadget 上不存在**。`DALEPENA = 0xA7`,實體 9 沒有啟用,
+對它下 `StartTransfer` **100 次立刻全拒**;而 v1 的 push 程式碼不檢查回傳值,
+直接去等五十秒一個從未開始的傳輸 —— 這就是「EP84 halt 要拔線」的真相。
+EP 0x83 是啟用的、是 bulk,實測 **100 次全部成功**。
+(這一條 README 早就寫著了,今晚只是用數字撞了一次。)
+

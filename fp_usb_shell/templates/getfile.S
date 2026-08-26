@@ -17,13 +17,26 @@
  *      +0x08  status                                  <- read this
  *      +0x0C  open() return
  *      +0x10  read() return
- *      +0x14  buffer                  host fills
+ *      +0x14  buffer                  host fills, or 0 to have one asked for
  *      +0x18  bytes to read           host fills
  *      +0x1C  file object scratch     host fills, ~1 KiB
  *      +0x20  open mode               host fills
  *      +0x24  path, NUL-terminated    host fills
  *
+ *      +0xE0  heap descriptor         written here when the buffer is asked for
+ *
  * Status:  1 running   2 read   3 open returned 0   4 read returned 0
+ *          5 the allocator refused
+ *
+ * A buffer of zero means: ask the firmware for one, +0x18 bytes of it, and say
+ * where it landed. The host used to carve it out of the megabyte grabbed at
+ * boot, which meant a file could not exceed what had been reserved for every
+ * purpose at once, and two users of that pool colliding surfaced as damage
+ * somewhere unrelated. The camera's own code asks for ten megabytes to show a
+ * photo. See heapalloc.S.
+ *
+ * The block is left allocated: the host still has to read it. Freeing is
+ * heapalloc.S with operation 1, which finds the descriptor where this left it.
  *
  * read() is 0xC0366060, four arguments, forwarding to vtable slot +0x10 --
  * against write()'s three at +0x18.  The fourth is where the count goes, which
@@ -40,6 +53,7 @@
 .equ P_FOBJ,   0x1C
 .equ P_MODE,   0x20
 .equ P_PATH,   0x24
+.equ P_DESC,   0xE0     /* clear of the path, which starts at +0x24 */
 
 .equ FMT_S,    0xC0BABB38
 
@@ -50,6 +64,10 @@
 .equ F_READ,   0xC0366060     /* (obj, buf, len, *actual) */
 .equ F_CLOSE,  0xC0366020
 .equ F_DTOR,   0xC0365ED0
+
+.equ H_GET,    0xC001D740     /* (desc, type, size, 0)                        */
+.equ H_ADDR,   0xC001D7F0     /* (desc) -> address                            */
+.equ HEAP,     10             /* what the camera's own file loads use         */
 
 .macro LDA reg, value
     movw    \reg, #:lower16:\value
@@ -70,6 +88,33 @@ entry:
     mov     r0, #0
     str     r0, [r4, #P_ACTUAL]
 
+    ldr     r0, [r4, #P_BUF]
+    cmp     r0, #0
+    bne     have_buffer
+
+    add     r5, r4, #P_DESC
+    mov     r0, #0
+    str     r0, [r5]
+    str     r0, [r5, #4]
+    str     r0, [r5, #8]
+    str     r0, [r5, #12]
+    mov     r0, r5
+    mov     r1, #HEAP
+    ldr     r2, [r4, #P_LEN]
+    mov     r3, #0
+    LDA     ip, H_GET
+    blx     ip
+    mov     r0, r5
+    LDA     ip, H_ADDR
+    blx     ip
+    str     r0, [r4, #P_BUF]
+    cmp     r0, #0
+    bne     have_buffer
+    mov     r0, #5                      @ refused: say so rather than reading
+    str     r0, [r4, #P_STATUS]         @ a file into address zero
+    b       done
+
+have_buffer:
     LDA     ip, F_MGR
     blx     ip
     mov     r1, #0
@@ -121,6 +166,7 @@ destroy:
     LDA     r0, FMT_S
     blx     ip
 
+done:
     mov     r0, #0
     pop     {r4, r5, r6, r7, r8, pc}
 

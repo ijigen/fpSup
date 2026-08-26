@@ -13,6 +13,7 @@ plumbing for a class of job so that the job itself is the only part you write.
 | `bulkload.S` | carry bytes over in the command line, ~240 at a time |
 | `putfile.S` | write a host-supplied blob to a file on the card |
 | `getfile.S` | read a file off the card into memory |
+| `heapalloc.S` | ask the firmware for a buffer, and hand it back |
 
 Host side, in the directory above: `memprobe.py` proves a region of memory is
 actually yours, which is not something reading the code can tell you.
@@ -134,6 +135,7 @@ does, not a fact about it. Say which is which in the header.
 | `park.S` | 讓常駐 task 在程式碼被抽換時有地方等 |
 | `bulkload.S` | 把資料塞在指令列送過去,一次約 240 bytes |
 | `putfile.S` | 把主機給的資料寫成卡上的檔案 |
+| `heapalloc.S` | 跟韌體要一塊記憶體,用完還回去 |
 | `getfile.S` | 把卡上的檔案讀進記憶體 |
 
 主機端在上一層:`memprobe.py` 證明一塊記憶體真的是你的 —— 那是**讀程式碼看不出來**的事。
@@ -220,3 +222,34 @@ mode `0x402` —— 檔案已存在就失敗。對總是換新檔名的 logger �
 
 **驗證過的寫下來,沒驗證的也寫下來。** 從「看能跑的程式碼怎麼用」推出來的常數,
 是對韌體行為的猜測,不是事實。在檔頭裡分清楚。
+
+## heapalloc.S — 跟韌體要記憶體,不要自己占
+
+在這之前,注入的東西全住在開機時用 `memmgr bufmem get` 搶來的一塊 1 MB 池裡,
+偏移全靠手算:陀螺儀在這、擷取緩衝在那、檔案暫存區接在後面,還有一個主機端的常數
+記著整塊多大。沒有人檢查。一個檔案緩衝不可能超過「所有用途加起來的保留量」,
+而池裡兩個使用者撞在一起,症狀會出現在完全無關的地方。
+
+韌體有真正的配置器,而且相機自己的程式碼就在用 —— 照片回放要 10 MB 載入一張靜態影像,
+韌體更新要 32 MB。
+
+```
+FUN_c001d740(desc, type, size, 0)      四個參數全走暫存器,用這組
+addr = FUN_c001d7f0(desc)              回 0 表示被拒絕
+FUN_c001d7a0(desc, 2)
+```
+
+照片路徑用的是另一種形式 `FUN_c001d038(heap, size, 0, 0, 0)` —— **五個參數**,
+第五個依 AAPCS 走堆疊,而 `callfn` 只設暫存器,傳過去會是垃圾。別用那組。
+
+描述子是 16 位元組,而且**必須活過那次呼叫**:位址要事後從裡面讀,釋放時還要再用一次。
+所以它放在參數區 `+0xE0`,不是堆疊上 —— 也刻意放高,因為 `getfile` 的路徑字串從 `+0x24`
+開始,長路徑會直接蓋過去,而一個裝著別人檔名的描述子會去釋放那個檔名指到的地方。
+
+2026-08-27 實機驗證:64 KiB 到 **32 MiB** 都配得到,頭尾都寫得進去也讀得回來,
+釋放後再要拿到同一個位址,沒有洩漏。
+
+**被拒絕是正常答案,不是錯誤** —— 回放自己就要 10 MB。要用才配、用完馬上還、
+每次檢查回傳是不是 0。
+
+`getfile.S` 的緩衝欄位填 0 就會走這條路。

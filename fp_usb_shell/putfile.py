@@ -25,9 +25,38 @@ CODE      = 0xC072F800          # the working template
 CODE_END  = 0xC072FA00
 BULK      = 0xC072FA00          # the bulk loader, resident alongside it
 BULK_STATE = 0xC072F7F8         # its own two words, clear of the parameter block
-DUMP      = 0xC072FB00          # the dense reader, in a slot of its own
-DUMP_CHUNK = 3000               # bytes per round trip; 135 KiB/s, flat past 3000
-DUMP_TEXT  = 0xF8000            # pool offset for the hex, 32 KiB from the end
+DUMP      = 0xC072FB00          # the raw reader, in a slot of its own
+DUMP_END  = 0xC072FC00          # memcpy_scratch starts here
+DUMP_CAP  = 0x4000              # dumpraw's own ceiling; it truncates past this
+                                # without saying so, and a short block leaves the
+                                # host waiting for bytes that never come
+DIRECT_CHUNK = 0x100000         # bytes per round trip on the direct path
+# One megabyte measured fastest: 73 MB/s against 41 at two and 11 at three and a
+# half. Not understood, so it is a measurement rather than a rule.
+DUMP_CHUNK = DUMP_CAP - 4       # bytes per round trip, copying path
+# Three thousand was chosen when the reply went out through printf and the rate
+# went flat past that. Nothing about the raw path shares that ceiling: a chunk
+# costs one command whatever its size, and a 31 MB file at three thousand bytes
+# is eleven thousand of them. The round trip is four tenths of a millisecond and
+# the misses are two hundred, so almost all of that time was the count, not the
+# bytes. Four less than the buffer, because the address tag goes on the end and
+# the capture buffer is exactly DUMP_CAP long.
+# A run of this size used to stop answering somewhere between a hundred
+# kilobytes and three megabytes, and only a cable replug brought it back. Two
+# things fixed that: the worker never answers a raw request with nothing (the
+# host's cancelled transfer was what took the USB device off the bus), and it
+# waits three hundred milliseconds for a reply to be collected rather than fifty
+# seconds (during which it was deaf to everything). A 31 MB DNG now comes off
+# the card in one call, decodes, and is the picture that was taken.
+READ_MAX = 64 * 1024 * 1024
+READ_TIMEOUT = 200              # ms
+# The median round trip is four tenths of a millisecond, so this is not a wait
+# anyone pays: it is what a chunk is worth before giving up on it. Thirty looked
+# generous by that measure and lost seven chunks in a hundred; two hundred loses
+# one and a half, and a thousand loses exactly the same one and a half, so what
+# is left is genuinely gone rather than slow. Being early costs more than being
+# late here -- the camera has the block ready, and walking away from one it has
+# prepared is what leaves the worker unable to answer anything again.
 BULK_END  = 0xC072FB00
 CHUNK     = 240                 # bytes per command; the line holds about 502 chars
 P         = 0xC072F700          # parameter block
@@ -44,17 +73,28 @@ STATUS = {0: 'never ran', 1: 'started but did not finish', 2: 'written',
           3: 'open returned 0', 4: 'write returned 0'}
 
 
-def sh(line: str, retries: int = 3) -> str:
+def sh(line: str, retries: int = 3, raw: int = 0, timeout_ms: int = 0,
+       want_hex: bool = False) -> str:
     """One command, one connection -- the daemon closes after each reply.
 
     Roughly one command in ten goes missing, in one direction or the other, so a
     reply that does not come back is retried rather than believed.  The daemon
     gives up after 200 ms, which is what makes retrying cheap.
+
+    Not cheap enough, though, when the command itself answers in under two
+    milliseconds: a reply lost every few dozen chunks then costs more than the
+    entire rest of the read. `timeout_ms` says how long this particular command
+    is worth waiting for. Leave it alone for anything that touches the card.
     """
     for attempt in range(retries + 1):
         s = socket.socket(socket.AF_UNIX)
         s.connect(SOCK)
-        s.sendall(b'SHL ' + line.encode() + b'\n')
+        head = f'BULK {raw} '.encode() if raw else b'SHL '
+        if timeout_ms:
+            head = f'TMO {timeout_ms} '.encode() + head
+        if want_hex:
+            head = b'HEX ' + head
+        s.sendall(head + line.encode() + b'\n')
         out = b''
         while True:
             b = s.recv(65536)
@@ -64,6 +104,17 @@ def sh(line: str, retries: int = 3) -> str:
         s.close()
         text = out.decode(errors='replace')
         if not text.startswith('ERR'):
+            if text.startswith('OKX '):
+                # A raw block. The daemon hex-encodes it because a line-based
+                # socket cannot carry arbitrary bytes; decode it back here so
+                # there is one return type. Text replies survive the round trip
+                # unchanged, which matters because any reply over 128 bytes now
+                # comes this way -- including `mem get`.
+                try:
+                    return bytes.fromhex(text[4:].strip()).decode('latin-1')
+                except ValueError:
+                    return ''
+
             if text.startswith('OK '):
                 text = text[3:]
             # the daemon escapes newlines so a reply stays one line on the wire
@@ -207,45 +258,143 @@ def put_slow(addr, blob, label, passes=6):
 
 _bulk_loaded = False
 _dump_loaded = False
+_stale = [0]        # blocks that answered a different address
+
+
+DIRECT = 0xC072FC00             # dumpdirect, past dumpraw's slot
+_direct_loaded = False
+
+
+def ensure_direct():
+    global _direct_loaded
+    if not _direct_loaded:
+        code = assemble(HERE / 'templates' / 'dumpdirect.S')
+        put_slow(DIRECT, code, 'direct')
+        _direct_loaded = True
 
 
 def ensure_dump():
     global _dump_loaded
     if not _dump_loaded:
-        put_slow(DUMP, assemble(HERE / 'templates' / 'dump.S'), 'dump  ')
+        code = assemble(HERE / 'templates' / 'dumpraw.S')
+        if DUMP + len(code) > DUMP_END:
+            raise SystemExit(f'dumpraw is {len(code)} bytes and would run into '
+                             f'the scratch at 0x{DUMP_END:08X}')
+        put_slow(DUMP, code, 'dump  ')
         _dump_loaded = True
 
 
-def read_bulk(addr, nbytes, label='read  '):
-    """Read memory through dump.S rather than `mem get`.
+def read_direct(addr, nbytes, label='direct'):
+    """Read without copying: the worker points its TRB at `addr` itself.
 
-    `mem get` answers thirty-four characters for every four bytes and needs a
-    round trip every 128 words, which is 26 KiB/s on a SuperSpeed link -- the
-    text is the limit, not the wire. Bare hex at 3000 bytes a trip measures
-    135 KiB/s.
+    dumpraw stages everything through the shell's 16 KiB capture buffer, so a
+    31 MB file came back in 1995 round trips and sixteen seconds. The card was
+    never the slow part -- it reads that file into memory in 0.17 s, at
+    183 MB/s -- it was a staging buffer we were copying through for no reason.
+    A TRB carries a 24-bit length, so one transfer can be sixteen megabytes.
+
+    Same file, whole thing, 0.42 s.
+
+    `addr` must be somewhere the controller can reach as CPU-0x40000000: the
+    pool, or what the firmware's allocator returns, which is where files land.
+    The firmware's own image at 0xC0000000 is mapped some other way -- use
+    read_bulk for that.
+
+    No address tag either, so a stale reply cannot be told from a real one. That
+    mattered when there were two thousand of them; at thirty-two it is a
+    different bet, and one worth knowing you are making.
+    """
+    ensure_direct()
+    orig = mem_get(ECHO_SLOT)
+    if not orig or orig[0] not in (ECHO_ORIG, DIRECT):
+        raise SystemExit(f'echo handler is {orig}, not free to borrow')
+    out = bytearray()
+    t0 = time.time()
+    mem_set(ECHO_SLOT, DIRECT)
+    try:
+        while len(out) < nbytes:
+            n = min(DIRECT_CHUNK, nbytes - len(out))
+            for attempt in range(6):
+                r = sh(f'echo {addr + len(out):X} {n:X}', retries=0, raw=n,
+                       timeout_ms=4000)
+                if len(r) >= n and not r.startswith('ERR'):
+                    out += r[:n].encode('latin-1')
+                    break
+            else:
+                raise SystemExit(f'{label}: no reply for {n} bytes at '
+                                 f'0x{addr + len(out):08X}')
+            el = time.time() - t0
+            print(f'\r  {label} {len(out)}/{nbytes} B  {len(out)/el/1024/1024:.1f} MB/s ',
+                  end='', flush=True, file=sys.stderr)
+    finally:
+        for _ in range(8):
+            mem_set(ECHO_SLOT, ECHO_ORIG)
+            if (mem_get(ECHO_SLOT) or [0])[0] == ECHO_ORIG:
+                break
+        else:
+            print('  WARNING echo handler still borrowed')
+    dt = time.time() - t0
+    print(f'\r  {label} {nbytes} bytes in {dt:.2f}s '
+          f'({nbytes/dt/1024/1024:.1f} MB/s)      ', file=sys.stderr)
+    return bytes(out)
+
+
+def read_bulk(addr, nbytes, label='read  '):
+    """Read memory through dumpraw.S rather than `mem get`.
+
+    `mem get` answers thirty-four characters for every four bytes, which is
+    26 KiB/s. Printing bare hex instead reached 135. Neither was the link: the
+    firmware's printf costs about a microsecond a character, and hex pays it
+    twice over by doubling the volume first. dumpraw.S skips printf entirely --
+    it puts the bytes in the reply buffer and sets the length itself -- so what
+    crosses USB is the data.
+
+    That got a 3000-byte block down to 0.27 ms, and then this function spent ten
+    more setting up the next one: three parameter words, written one shell
+    command at a time, one of which dumpraw never read. The address rides on the
+    command line now, so a chunk is one command and there is nothing to set up
+    and nothing remembered between calls.
     """
     ensure_dump()
-    text = mem_get(POOL_PTR)[0] + DUMP_TEXT
     orig = mem_get(ECHO_SLOT)
     if not orig or orig[0] not in (ECHO_ORIG, DUMP):
         raise SystemExit(f'echo handler is {orig}, not free to borrow')
+    chunk = min(DUMP_CHUNK, DUMP_CAP)
+    if nbytes > READ_MAX:
+        raise SystemExit(f'{label}: {nbytes} bytes in one go is past the '
+                         f'{READ_MAX // 1024 // 1024} MiB this has been shown to '
+                         f'survive. Read it in pieces.')
     out = bytearray()
     t0 = time.time()
     mem_set(ECHO_SLOT, DUMP)
     try:
         while len(out) < nbytes:
-            n = min(DUMP_CHUNK, nbytes - len(out))
-            for off, val in ((0x00, addr + len(out)), (0x04, n), (0x08, text)):
-                mem_set(P + off, val)
-            for _ in range(12):
-                reply = sh('echo', retries=0)
-                digits = ''.join(c for c in reply if c in '0123456789ABCDEF')
-                if len(digits) >= n * 2:
-                    out += bytes.fromhex(digits[:n * 2])
-                    break
+            n = min(chunk, nbytes - len(out))
+            want = addr + len(out)
+            for attempt in range(12):
+                # The raw path needs a worker that understands it. Fall back to
+                # the header-framed one so the tool works against either.
+                # The raw path. The framed one carries a header saying how
+                # many bytes really follow, which sounded like the answer to a
+                # worker that sometimes sends none at all -- and it is, for that
+                # one symptom. It was measured: still dies, at a third of the
+                # speed. Whatever loses the link is not the reply format.
+                # Ask for four more than wanted: dumpraw puts the address it
+                # read from on the end. A raw block is otherwise anonymous, and
+                # a reply abandoned by one read and collected by the next looks
+                # exactly like the right answer -- five blocks in forty-two came
+                # back belonging to somewhere else, all of them plausible.
+                reply = sh(f'echo {want:X} {n:X}', retries=0, raw=n + 4,
+                           timeout_ms=READ_TIMEOUT)
+                if len(reply) >= n + 4 and not reply.startswith('ERR'):
+                    blk = reply[:n + 4].encode('latin-1')
+                    if int.from_bytes(blk[n:n + 4], 'little') == want:
+                        out += blk[:n]
+                        break
+                    _stale[0] += 1
             else:
                 raise SystemExit(f'{label}: no reply for {n} bytes at '
-                                 f'0x{addr + len(out):08X}')
+                                 f'0x{want:08X}')
             el = time.time() - t0
             print(f'\r  {label} {len(out)}/{nbytes} B  {len(out)/el/1024:.0f} KiB/s ',
                   end='', flush=True, file=sys.stderr)
@@ -316,7 +465,13 @@ def put(addr, blob, label, passes=6):
 
     repaired = 0
     for attempt in range(passes):
-        got = read_back(addr, len(w))
+        # read_bulk, not read_back: the same bytes at a hundred times the rate.
+        # `mem get` answers thirty-four characters for every four bytes and gets
+        # 22 KiB/s, which used to be half the cost of loading anything. dumpraw
+        # is loaded by put_slow, which still verifies the slow way -- it has to,
+        # since it is what puts dumpraw there.
+        got = list(struct.unpack(f'<{len(w)}I', read_bulk(addr, len(w) * 4,
+                                                          'verify')))
         bad = [i for i in range(len(w)) if i >= len(got) or got[i] != w[i]]
         if not bad:
             dt = time.time() - t0

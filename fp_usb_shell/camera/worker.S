@@ -66,10 +66,11 @@
  * STATE.  Sixteen words at 0xC072F000, readable with
  *     shl mem save \VSHL.BIN 0xC072F000,,0x40
  *
- *     +00 'VSHL'      +04 task id      +08 start result  +0C rounds
+ *     +00 'VSHL'      +04 task id      +08 last round faulted   +0C rounds
  *     +10 OUT arm     +14 OUT wait     +18 IN arm        +1C IN wait
  *     +20 served      +24 faults       +28 gate holds    +2C last USB_STATE
- *     +30 last DALEPENA
+ *     +30 last DALEPENA  +34 first fault: which call  +38 what it returned
+ *     +3C first gate reason (0x80000000 | DALEPENA<<8 | state)
  * ========================================================================== */
 
 /* --- firmware entry points ------------------------------------------------ */
@@ -99,16 +100,33 @@
 .equ LOG_OUT,     1
 .equ LOG_IN,      2
 .equ TRB_ARMED,   0x813
-.equ TIMEOUT,     50000
+.equ TIMEOUT,     50000         /* waiting for a command: no hurry            */
+/* Waiting for the host to collect a reply is a different question, and fifty
+ * seconds is the wrong answer to it. The host gives up after two hundred
+ * milliseconds; everything after that is the camera holding a transfer nobody
+ * is coming for, deaf to commands the whole time. That is what looked like the
+ * worker dying: rounds crawling one every ten seconds, endpoints healthy, the
+ * gate never once closed. Replugging the cable "fixed" it because
+ * re-enumeration aborts the wait.
+ *
+ * Long enough that a host which is still there will be served; short enough
+ * that one which has walked away costs a round, not a minute. */
+.equ TIMEOUT_IN,  300
 
 /* --- our memory ----------------------------------------------------------- */
 .equ STATE,       0xC072F000      /* 16 words                                 */
 .equ CAP_LEN,     0xC072F040      /* bytes captured from the shell            */
+.equ SWAP_MAGIC,  0xC072F044      /* "SWAP" here and an address below means go */
+.equ SWAP_ADDR,   0xC072F048
+.equ CAP_PTR,     0xC072F04C      /* where the reply's bytes are, if not the
+                                     capture buffer                           */
+.equ SWAP_WORD,   0x50415753      /* "SWAP" */
 /* The capture buffer lives in the DMA pool, not the code cave.  In the cave it
  * could only be about 1.4 KiB before running into the injection ceiling, and a
  * kilobyte truncates the longer shell commands — `imager mode_list` stopped
  * after seven of seventy sensor modes.  The pool has room to spare and the CPU
  * copies out of it, so no coherency handling is needed. */
+.equ POOL_FAULTS, 0x6800        /* ten fault counters, past the buffers */
 .equ CAP_OFF,     0x2000          /* capture buffer sits this far past the frame */
 .equ CAP_MAX,     0x4000          /* 16 KiB                                   */
 
@@ -135,6 +153,23 @@
  * bootstrap — entered once from the gyro callback site.  Calls the routine it
  * displaced, creates the worker task, then puts the original word back.
  * ========================================================================== */
+/* Not used by the loader build, and not dead either.
+ *
+ * `build_autorun.py --loader` puts the worker in VSHL.BIN and hooks loader.S
+ * instead, which places this code and branches straight to `serve` -- so on a
+ * card built that way nothing here ever runs, and STATE+0x00 stays zero rather
+ * than reading "VSHL".
+ *
+ * Without --loader the AutoRun spells the whole worker out and hooks this, and
+ * that build is the way back: it is one file, it depends on nothing written
+ * recently, and it is what to fall back to when the binary or the loader is the
+ * suspect. The loader has been wrong twice already -- once living at the
+ * address it was copying to, once guarding itself with a word the worker
+ * clears -- and both times this was what a card reader could put back.
+ *
+ * Its two hundred bytes used to cost fifty `mem set` commands. They now arrive
+ * in a file, so keeping it costs nothing worth counting.
+ */
 .global bootstrap
 bootstrap:
     push    {r4, r5, lr}
@@ -185,6 +220,45 @@ bootstrap_done:
     mov     r0, r4
     pop     {r4, r5, pc}
 
+/* Ahead of `serve`, not after it.
+ *
+ * `serve` reaches this with `adr`, which is pc-relative and has a small range,
+ * and every line added to `serve` pushed it further away until the assembler
+ * refused -- twice in one evening, for changes that had nothing to do with it.
+ * Sitting before its only caller, the distance shrinks as the code above it
+ * grows instead of stretching.
+ */
+/* ==========================================================================
+ * capture — the shell calls its sink as printf(fmt, a1, a2, a3), with any
+ * further arguments already on the stack, so &a1 has to sit next to them.
+ * ========================================================================== */
+capture:
+    push    {r1, r2, r3}                @ makes a contiguous va_list
+    push    {r4, r5, lr}
+    mov     r2, r0                      @ fmt
+    add     r3, sp, #12                 @ &a1
+    LDA     r4, CAP_LEN
+    ldr     r5, [r4]
+    LDA     r0, FRAMEBUF
+    ldr     r0, [r0]
+    add     r0, r0, #CAP_OFF
+    add     r0, r0, r5
+    movw    r1, #CAP_MAX
+    subs    r1, r1, r5
+    ble     capture_done
+    sub     r1, r1, #1                  @ leave room for the NUL
+    LDA     r12, FN_VSNPRINT
+    blx     r12
+    cmp     r0, #0
+    ble     capture_done
+    ldr     r5, [r4]
+    add     r5, r5, r0
+    str     r5, [r4]
+capture_done:
+    pop     {r4, r5, lr}
+    add     sp, sp, #12
+    bx      lr
+
 /* ==========================================================================
  * serve — the worker task.  r4 holds STATE for its whole life.
  * ========================================================================== */
@@ -196,6 +270,34 @@ next_round:
     ldr     r0, [r4, #0x0C]
     add     r0, r0, #1
     str     r0, [r4, #0x0C]
+
+    /* Somewhere to go, if the host has somewhere for this task to be.
+     *
+     * Every change to this file has cost a power cycle, because the code is
+     * placed at boot and this task is running inside it -- overwriting it from
+     * a borrowed shell command means overwriting the instructions doing the
+     * overwriting. Eight reboots in one evening.
+     *
+     * The way out is not to do the copying here. loader.S sits at the bottom of
+     * the cave, well clear of this code, and its `load` entry already reads
+     * VSHL.BIN, places what it says and branches to the entry named in it. This
+     * task jumping there replaces the worker with itself, from outside itself.
+     *
+     * Two words rather than one: an address alone is a jump to whatever
+     * happened to be written, and this runs every round. The magic is cleared
+     * before the branch so a half-written pair cannot fire twice. */
+    LDA     r0, SWAP_MAGIC
+    ldr     r1, [r0]
+    LDA     r2, SWAP_WORD
+    cmp     r1, r2
+    bne     no_swap
+    mov     r1, #0
+    str     r1, [r0]
+    LDA     r0, SWAP_ADDR
+    ldr     r0, [r0]
+    cmp     r0, #0
+    bxne    r0
+no_swap:
 
     /* Do not touch an endpoint the firmware has not configured yet.  DALEPENA is
      * the controller's own record of which physical endpoints exist, so it is
@@ -272,10 +374,28 @@ shell_ready:
 
     LDA     r0, CAP_LEN
     ldr     r9, [r0]
+
+    /* Send from wherever the answer already is.
+     *
+     * Everything used to be copied into the capture buffer first, and that
+     * buffer is sixteen kilobytes -- so a thirty-one megabyte file came back in
+     * nineteen hundred and ninety-five round trips, each one a request the host
+     * had to make and the camera had to be ready for. The limit was never the
+     * link or the card (the card reads that file into memory in 0.17 s, at 183
+     * MB/s); it was a staging buffer we were copying through for no reason.
+     *
+     * A TRB carries a 24-bit length, so one transfer can be sixteen megabytes.
+     * A payload that already knows where its bytes are puts the address here
+     * and the DMA reads them where they lie. The capture buffer stays for what
+     * it is actually for: catching what the firmware's printf writes. */
+    LDA     r0, CAP_PTR
+    ldr     r8, [r0]
+    cmp     r8, #0
+    bne     reply_entry
     LDA     r0, FRAMEBUF
     ldr     r8, [r0]
     add     r8, r8, #CAP_OFF
-    b       reply
+    b       reply_entry
 
 reply_nothing:
     mov     r9, #0
@@ -300,9 +420,27 @@ reply_nothing:
  * then the block itself in a single transfer, straight out of the capture buffer
  * with no copy.  Three thousand bytes go from 137 transfers to two.
  * ========================================================================== */
-reply:
+reply_entry:
+    /* The host can say in the command frame that it already knows how many bytes
+     * are coming and wants only those. That removes the header frame, and with
+     * it a race: the block's TRB is armed after the header transfer completes,
+     * so a host that reads the header and immediately asks for the block can
+     * arrive before there is anywhere to put it. Nine percent of large replies
+     * failed that way, and a failure costs a 200 ms timeout -- which was the
+     * whole difference between 4 ms and 22 ms an exchange. */
+
+    /* Read here and not at the loop head below.  fill_header writes this same
+     * field to say another frame follows, so a reply of more than 44 bytes came
+     * back round, read its own 1, and dived into the raw path -- which broke
+     * every reply longer than one frame, `version` included. */
+    ldrh    r0, [r6, #6]
+    tst     r0, #1
+    bne     reply_raw
+
     cmp     r9, #BULK_MIN
     bhs     reply_bulk
+
+reply:
     mov     r5, r9
     cmp     r5, #CHUNK
     movhi   r5, #CHUNK
@@ -346,7 +484,7 @@ fill_header:
     cmp     r0, #0
     bne     fault
     mov     r0, #LOG_IN
-    movw    r1, #TIMEOUT
+    movw    r1, #TIMEOUT_IN
     LDA     r12, FN_WAIT
     blx     r12
     str     r0, [r4, #0x1C]
@@ -357,16 +495,22 @@ fill_header:
     bgt     reply
 
 reply_done:
+    mov     r0, #0
+    LDA     r1, CAP_PTR                 @ one command's answer, not the next one's
+    str     r0, [r1]
+    str     r0, [r4, #0x08]             @ clean round: nothing to end next time
     ldr     r0, [r4, #0x20]
     add     r0, r0, #1
     str     r0, [r4, #0x20]
     b       next_round
 
 fault:
+    mov     r0, #1
+    str     r0, [r4, #0x08]             @ next arm_out has something to clean up
     ldr     r0, [r4, #0x24]
     add     r0, r0, #1
     str     r0, [r4, #0x24]
-    mov     r0, #20
+    mov     r0, #1
     LDA     r12, FN_DELAY
     blx     r12
     b       next_round
@@ -383,9 +527,26 @@ hold:
 /* --- arm EP 0x01 OUT for one command; returns the StartTransfer status ----- */
 arm_out:
     push    {r4, r5, r6, r7, lr}
+
+    /* Only after a round that went wrong.
+     *
+     * This used to end the transfer before every arm, tens of thousands of
+     * times, to drop a TRB a timed-out round might have left. The controller
+     * then rejected one Start Transfer in four -- a hundred and seventy-seven
+     * faults out of a hundred and seventy-nine, all of them here, all of them
+     * DEPCMD answering with a non-zero status, which on this controller means
+     * it had no transfer resource to give. Ending and starting a transfer every
+     * round is what spends them.
+     *
+     * A round that ended cleanly has nothing to drop. STATE+0x08 says whether
+     * the last one did: `fault` sets it, `reply_done` clears it. */
+    ldr     r0, [r4, #0x08]
+    cmp     r0, #0
+    beq     arm_out_go
     mov     r0, #LOG_OUT
     LDA     r12, FN_ENDX
-    blx     r12                         @ drop a TRB left by a timed-out round
+    blx     r12                         @ drop the TRB the bad round left
+arm_out_go:
     LDA     r0, FRAMEBUF
     ldr     r6, [r0]
     mov     r0, #TO_BUS
@@ -404,6 +565,36 @@ arm_out:
     LDA     r12, FN_STARTX
     blx     r12
     pop     {r4, r5, r6, r7, pc}
+
+/* --- the block alone, because the host said it knows the length ----------- */
+reply_raw:
+    /* Never answer with nothing.
+     *
+     * The host asked for a block of a length it already knows, and is sitting
+     * in a bulk IN waiting for exactly that many bytes. Sending none used to
+     * count the command as served and move on, which leaves the host with
+     * nothing to do but time out -- and a timeout is a cancelled transfer, and
+     * enough cancelled transfers and the firmware's own wait returns the error
+     * that takes it to FUN_c01e6ef8, which ends every endpoint and drops the
+     * device off the bus. The camera stays perfectly happy; only the USB side
+     * of it disappears, and it does not come back on its own.
+     *
+     * One byte is not the answer the host wanted, but it ends the transfer.
+     * A short read is an error it can see and retry in microseconds, instead
+     * of a silence it can only wait out. */
+    cmp     r9, #0
+    moveq   r9, #1
+    bl      arm_in_block
+    cmp     r0, #0
+    bne     fault
+    mov     r0, #LOG_IN
+    movw    r1, #TIMEOUT_IN
+    LDA     r12, FN_WAIT
+    blx     r12
+    str     r0, [r4, #0x1C]
+    cmp     r0, #0
+    bne     fault
+    b       reply_done
 
 /* --- one header frame, then the block in a single transfer ---------------- */
 reply_bulk:
@@ -430,7 +621,7 @@ reply_bulk:
     cmp     r0, #0
     bne     fault
     mov     r0, #LOG_IN
-    movw    r1, #TIMEOUT
+    movw    r1, #TIMEOUT_IN
     LDA     r12, FN_WAIT
     blx     r12
     cmp     r0, #0
@@ -440,7 +631,7 @@ reply_bulk:
     cmp     r0, #0
     bne     fault
     mov     r0, #LOG_IN
-    movw    r1, #TIMEOUT
+    movw    r1, #TIMEOUT_IN
     LDA     r12, FN_WAIT
     blx     r12
     str     r0, [r4, #0x1C]
@@ -511,33 +702,4 @@ arm_in:
     blx     r12
     pop     {r4, r5, r6, r7, pc}
 
-/* ==========================================================================
- * capture — the shell calls its sink as printf(fmt, a1, a2, a3), with any
- * further arguments already on the stack, so &a1 has to sit next to them.
- * ========================================================================== */
-capture:
-    push    {r1, r2, r3}                @ makes a contiguous va_list
-    push    {r4, r5, lr}
-    mov     r2, r0                      @ fmt
-    add     r3, sp, #12                 @ &a1
-    LDA     r4, CAP_LEN
-    ldr     r5, [r4]
-    LDA     r0, FRAMEBUF
-    ldr     r0, [r0]
-    add     r0, r0, #CAP_OFF
-    add     r0, r0, r5
-    movw    r1, #CAP_MAX
-    subs    r1, r1, r5
-    ble     capture_done
-    sub     r1, r1, #1                  @ leave room for the NUL
-    LDA     r12, FN_VSNPRINT
-    blx     r12
-    cmp     r0, #0
-    ble     capture_done
-    ldr     r5, [r4]
-    add     r5, r5, r0
-    str     r5, [r4]
-capture_done:
-    pop     {r4, r5, lr}
-    add     sp, sp, #12
-    bx      lr
+
