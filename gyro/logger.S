@@ -65,6 +65,15 @@
 .equ ACCEL_ZONE,      0x0400      /* the accel records grow in their own end of  */
 .equ ACCEL_BASE,      0x3C00      /* the buffer: BUF_SIZE - ACCEL_ZONE           */
 .equ GYRO_CAP,        0x3BE0      /* ACCEL_BASE - BLOCK_HEADER                   */
+.equ O_TEXT,          0x1A000     /* pool+0x20000: the gcsv's text, at the stop.
+                                     It used to borrow O_BUF_B, which is sixteen
+                                     kilobytes, so the text went to the card every
+                                     fifteen -- forty writes for one take, landing
+                                     while the camera finalises its own clip. The
+                                     recording is over by then and the pool has
+                                     896 KB nobody uses, verified across a
+                                     recording 224 markers out of 224.          */
+.equ TEXT_FLUSH,      0x40000     /* 256 KiB: three writes instead of forty     */
 .equ O_END,           0xF000      /* the logger owns r10-0x6000 .. +0xF000 */
 .equ PATH_MGR_SD,     0xC3438400
 .equ GYRO_DESC_PTR,   0xC31E3FCC
@@ -1084,7 +1093,9 @@ gcsv_build:
     beq     gcsv_close_gyr
 
     /* Header, with the clip name lifted out of the path. */
-    add     r6, r10, #O_BUF_B
+    movw    r6, #:lower16:O_TEXT
+    movt    r6, #:upper16:O_TEXT
+    add     r6, r10, r6
     mov     r5, r6
     adr     r0, gcsv_head1
     mov     r1, r5
@@ -1185,7 +1196,8 @@ gcsv_sample:
 
     /* Flush well before the end: one line is at most about forty bytes. */
     sub     r0, r5, r6
-    movw    r1, #0x3C00
+    movw    r1, #:lower16:TEXT_FLUSH
+    movt    r1, #:upper16:TEXT_FLUSH
     cmp     r0, r1
     blo     gcsv_sample
     bl      gcsv_flush
