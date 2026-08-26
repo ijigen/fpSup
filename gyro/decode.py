@@ -184,10 +184,14 @@ def report(capture: Capture) -> None:
         # 1080p29.97 matches enum 0106 and enum 0111, both 3032x1708 full width,
         # whose rolling-shutter readouts are 10557 us and 7828 us. `imager
         # mode_list` prints both; the clip says which it was shot in.
-        readout = {0x106: 10557, 0x111: 7828}.get(capture.sensor_mode)
-        print(f"sensor_mode: 0x{capture.sensor_mode:X}" +
-              (f"  readout_us: {readout}" if readout else "  (readout unknown)"))
-        print(f"sensor_mode2: 0x{capture.sensor_mode2:X}")
+        # Enums are decimal in `imager mode_list`; comparing them as hex is how
+        # 175 looked unrecognisable for an afternoon.
+        # From codex/analysis_imx410, extracted from the firmware's own tables.
+        READOUT_US = {3: 24982, 6: 27507, 7: 21088, 8: 6160, 56: 6160,
+                      102: 13437, 106: 10556, 107: 7256, 111: 7828, 112: 5381}
+        r = READOUT_US.get(capture.sensor_mode)
+        print(f"sensor_mode: {capture.sensor_mode}" +
+              (f"  readout_us: {r}" if r else "  (not in the extracted table)"))
     if capture.exposure_us:
         print(f"exposure_us: {capture.exposure_us}  (1/{1e6/capture.exposure_us:.0f} s)")
     print(f"dropped_samples: {capture.dropped_samples}")

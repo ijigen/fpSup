@@ -257,28 +257,45 @@ recording_started:
 
     /* Sensor mode and exposure, so the clip carries what the lens profile needs.
      *
-     * 1080p at 29.97 matches two sensor modes -- enum 0106 and enum 0111, both
+     * 1080p at 29.97 matches two sensor modes -- enum 106 and enum 111, both
      * 3032x1708 full width -- and they differ only in readout: 10557 us against
      * 7828. `imager mode_list` prints both; only the clip itself can say which
      * one it was shot in, and asking the shell during a recording disturbs the
-     * recording. The LiveView state object at 0xC375D840 holds the answer behind
-     * its +8 pointer, the same one FUN_c04375c8 hands back.
+     * recording.
+     *
+     * FUN_c0322e48(0) is the accessor `imager mode_list` uses. Its object holds
+     * the monitor mode at +4 -- which matched mode_now's enum exactly -- and a
+     * second mode at +8, which reads 106 while idle. The LiveView object this
+     * used to read gave 175, a name the firmware knows (MONIT1_60_FHD_CROP) but
+     * which is not in the seventy-row timing table at all, so it was never the
+     * sensor mode. The earlier logger called that object the mode table; it
+     * isn't, and copying the comment instead of checking cost an afternoon.
      *
      * The exposure is FUN_c030c7f0, a vtable fetch off the sensor-timing object.
-     * It is not the readout time -- across four takes it only ever returned 7989
-     * or 16654 us, which are 1/125 s and 1/60 s -- but AF consumes it as
-     * exposure/2 to find the centre of the exposure, and per-clip exposure is
-     * worth having on its own. */
-    movw    r1, #0xD840
-    movt    r1, #0xC375
-    ldr     r1, [r1, #8]
-    cmp     r1, #0
-    beq     2f
-    ldr     r2, [r1]
-    str     r2, [r9, #48]
-    ldr     r2, [r1, #0x10]
-    str     r2, [r9, #52]
-2:
+     * It is not the readout -- across four takes it returned only 7989 or 16654
+     * us, which are 1/125 s and 1/60 s -- but AF consumes it as exposure/2 to
+     * find the centre of the exposure, and per-clip exposure is worth having. */
+    /* FUN_c032c720() -- no arguments -- returns the current sensor mode enum.
+     * It is what `imager mode_now` prints, verified against it live: both said
+     * 8 for MONIT1_60.
+     *
+     * Two wrong sources came before it. The LiveView object at 0xC375D840+8
+     * gives 175, a name the firmware knows (MONIT1_60_FHD_CROP) but which is not
+     * in the seventy-row timing table at all -- the earlier logger called that
+     * object the mode table and it is not one. FUN_c0322e48(0)'s object gives
+     * the monitor mode at +4 and, at +8, 106 while idle and 56 while recording;
+     * 56 is 2016x1344, and that geometry family has no 29.97 mode at all, so it
+     * was the monitor being raised to 120 Hz for the duration, not the sensor.
+     *
+     * Which matters because 1080p29.97 12-bit has four candidates -- 106 and 111
+     * at 3032x1708, 107 and 112 at 2088x1174 -- whose readouts run from 5.4 to
+     * 10.6 ms, and the output geometry scales evenly from either family so it
+     * cannot tell them apart. Only the clip can. */
+    movw    ip, #0xC720
+    movt    ip, #0xC032
+    blx     ip
+    str     r0, [r9, #48]
+
     movw    ip, #0xC7F0
     movt    ip, #0xC030
     blx     ip

@@ -64,9 +64,11 @@ The camera reported success on all of these. The file did not.
 
 ### Open
 
-- **IMX410 mode ambiguity** — 1080p29.97 matches both mode 106 and mode 111, whose
-  rolling-shutter readout times are 10.556 ms and 7.828 ms. Focal length is
-  unaffected. The mode-index field has not been found
+- ~~IMX410 mode ambiguity~~ — **settled 2026-08-26: mode 106, readout 10.556 ms.**
+  `FUN_c032c720()` takes no arguments and returns the current sensor mode enum;
+  it is what `imager mode_now` prints, and the logger calls it at record start so
+  every clip now carries its own. A 1080p29.97 12-bit CinemaDNG take reads 106,
+  which makes the archived answer of 111 wrong by 35%
 - A heavy stop-recording path can miss the next take's start event. A header guard
   is in place, but the root cause is not removed
 

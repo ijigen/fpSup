@@ -237,7 +237,7 @@ def read_bulk(addr, nbytes, label='read  '):
             n = min(DUMP_CHUNK, nbytes - len(out))
             for off, val in ((0x00, addr + len(out)), (0x04, n), (0x08, text)):
                 mem_set(P + off, val)
-            for _ in range(4):
+            for _ in range(12):
                 reply = sh('echo', retries=0)
                 digits = ''.join(c for c in reply if c in '0123456789ABCDEF')
                 if len(digits) >= n * 2:
@@ -250,7 +250,16 @@ def read_bulk(addr, nbytes, label='read  '):
             print(f'\r  {label} {len(out)}/{nbytes} B  {len(out)/el/1024:.0f} KiB/s ',
                   end='', flush=True)
     finally:
-        mem_set(ECHO_SLOT, ECHO_ORIG)
+        # Put it back, and check.  A single write is not enough: the transport
+        # drops commands, and an unrestored handler means the next `echo`
+        # anywhere runs whatever is in the cave.
+        for _ in range(8):
+            mem_set(ECHO_SLOT, ECHO_ORIG)
+            if (mem_get(ECHO_SLOT) or [0])[0] == ECHO_ORIG:
+                break
+        else:
+            print(f'  WARNING echo handler still borrowed — restore it before '
+                  f'anything else uses `echo`')
     dt = time.time() - t0
     print(f'\r  {label} {nbytes} bytes in {dt:.1f}s ({nbytes/dt/1024:.0f} KiB/s)      ')
     return bytes(out)
