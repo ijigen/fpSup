@@ -13,14 +13,14 @@
  * roughly 245 bytes of hex instead of four of binary.  The destination is kept
  * in the parameter block and advanced here, so the host sends nothing but data.
  *
- *     mem set 0xC072F5F8 <destination>       once
+ *     mem set 0xC072F7F8 <destination>       once
  *     echo <hex><hex><hex>...                repeatedly
  *
  * Verification is still the caller's job.  Writes get dropped -- so do whole
  * commands -- and a chunk that never arrives leaves a 245 byte hole rather than
  * a four byte one.  Read the region back and repair what is missing.
  *
- * State, 0xC072F5F8, its own -- not the parameter block the others use:
+ * State, 0xC072F7F8, its own -- not the parameter block the others use:
  *      +0x00  destination, advanced by each call        host sets it once
  *      +0x04  bytes taken so far, cumulative
  * ========================================================================== */
@@ -29,7 +29,7 @@
  * templates use.  Sharing +0x14 with them cost a silent failure: loading
  * getfile.S through this loader advanced that word past getfile's own buffer,
  * so the read landed somewhere else and every byte came back as poison. */
-.equ P,        0xC072F5F8
+.equ P,        0xC072F7F8
 .equ P_BUF,    0x00           /* destination, advanced here */
 .equ P_ACTUAL, 0x04           /* bytes taken, cumulative    */
 

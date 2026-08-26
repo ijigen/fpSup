@@ -56,8 +56,8 @@
  *
  *     0xC072DE64..0xC072F000   free, for the gyro logger
  *     0xC072F000..0xC072F040   this worker's state
- *     0xC072F050..0xC072F500   this worker's code
- *     0xC072F500..0xC072F700   the one-shot template's scratch and code
+ *     0xC072F050..0xC072F700   this worker's code
+ *     0xC072F700..0xC072F700   the one-shot template's scratch and code
  *     pool +0x0000             FPSH frame buffer, 4 KiB
  *     pool +0x2000             shell capture buffer, 16 KiB (derived from the
  *                              pool pointer, never hard-coded)
@@ -122,6 +122,7 @@
                                      raise this, it corrupts other tasks      */
 .equ FRAME,       64
 .equ CHUNK,       44
+.equ BULK_MIN,    128             /* replies at least this big go in one transfer */
 .equ UNCACHED,    0x40000000
 .equ TO_BUS,      0xC0000000      /* +0xC0000000 mod 2^32 == -0x40000000      */
 
@@ -283,11 +284,25 @@ reply_nothing:
     add     r8, r8, #CAP_OFF
 
 /* ==========================================================================
- * reply — send r9 bytes from r8, 44 to a frame, at least one frame.  Every
- * frame but the last sets flags bit 0.  The received header is reused so the
- * daemon's magic and sequence checks still pass.
+ * reply — send r9 bytes from r8.
+ *
+ * Small replies go 44 to a frame, every frame but the last setting flags bit 0.
+ * The received header is reused so the daemon's magic and sequence checks still
+ * pass.
+ *
+ * Large ones do not.  Forty-four bytes per 64-byte frame, one armed transfer and
+ * one blocking wait apiece, is 1.1% of what the endpoint can carry -- it is bulk,
+ * 1024-byte packets, burst 3, so 4096 bytes fit in a single transfer.  Reading a
+ * 250 KB file that way took eighty thousand round trips at 160 microseconds each,
+ * and the slowness had nothing to do with the card or the link.
+ *
+ * So: one header frame saying how many bytes follow and carrying their CRC-32,
+ * then the block itself in a single transfer, straight out of the capture buffer
+ * with no copy.  Three thousand bytes go from 137 transfers to two.
  * ========================================================================== */
 reply:
+    cmp     r9, #BULK_MIN
+    bhs     reply_bulk
     mov     r5, r9
     cmp     r5, #CHUNK
     movhi   r5, #CHUNK
@@ -321,25 +336,9 @@ fill_header:
     strh    r0, [r6, #14]               @ status
     str     r0, [r6, #16]               @ crc field zeroed for the calculation
 
-    mvn     r3, #0
-    mov     r0, #0
-crc_next_byte:
-    ldrb    r1, [r6, r0]
-    eor     r3, r3, r1
-    mov     r2, #8
-crc_next_bit:
-    tst     r3, #1
-    lsr     r3, r3, #1
-    beq     crc_no_xor
-    LDA     r1, 0xEDB88320
-    eor     r3, r3, r1
-crc_no_xor:
-    subs    r2, r2, #1
-    bne     crc_next_bit
-    add     r0, r0, #1
-    cmp     r0, #FRAME
-    blo     crc_next_byte
-    mvn     r3, r3
+    mov     r0, r6
+    mov     r1, #FRAME
+    bl      crc_block
     str     r3, [r6, #16]
 
     bl      arm_in
@@ -357,6 +356,7 @@ crc_no_xor:
     cmp     r9, #0
     bgt     reply
 
+reply_done:
     ldr     r0, [r4, #0x20]
     add     r0, r0, #1
     str     r0, [r4, #0x20]
@@ -401,6 +401,90 @@ arm_out:
     str     r0, [r7, #12]
     dsb
     mov     r0, #PHYS_OUT
+    LDA     r12, FN_STARTX
+    blx     r12
+    pop     {r4, r5, r6, r7, pc}
+
+/* --- one header frame, then the block in a single transfer ---------------- */
+reply_bulk:
+    mov     r0, r8
+    mov     r1, r9
+    bl      crc_block                   @ r3 = CRC-32 of the block
+
+    add     r7, r6, #20
+    str     r3, [r7]                    @ payload[0..3] = the block's CRC
+    mov     r0, #2
+    strh    r0, [r6, #6]                @ flags: a raw block follows
+    strh    r9, [r6, #12]               @ payload_length = its length
+    mov     r0, #0
+    strh    r0, [r6, #14]
+    str     r0, [r6, #16]
+
+    mov     r0, r6
+    mov     r1, #FRAME
+    bl      crc_block
+    str     r3, [r6, #16]
+
+    bl      arm_in
+    str     r0, [r4, #0x18]
+    cmp     r0, #0
+    bne     fault
+    mov     r0, #LOG_IN
+    movw    r1, #TIMEOUT
+    LDA     r12, FN_WAIT
+    blx     r12
+    cmp     r0, #0
+    bne     fault
+
+    bl      arm_in_block
+    cmp     r0, #0
+    bne     fault
+    mov     r0, #LOG_IN
+    movw    r1, #TIMEOUT
+    LDA     r12, FN_WAIT
+    blx     r12
+    str     r0, [r4, #0x1C]
+    cmp     r0, #0
+    bne     fault
+    b       reply_done
+
+/* r0 = start, r1 = length -> r3 = CRC-32 */
+crc_block:
+    push    {r4, r5, r6, lr}
+    mvn     r3, #0
+    mov     r4, #0
+1:  cmp     r4, r1
+    bhs     3f
+    ldrb    r5, [r0, r4]
+    eor     r3, r3, r5
+    mov     r2, #8
+2:  tst     r3, #1
+    lsr     r3, r3, #1
+    beq     4f
+    LDA     r5, 0xEDB88320
+    eor     r3, r3, r5
+4:  subs    r2, r2, #1
+    bne     2b
+    add     r4, r4, #1
+    b       1b
+3:  mvn     r3, r3
+    pop     {r4, r5, r6, pc}
+
+/* --- arm EP 0x82 IN with r9 bytes at r8, no copy -------------------------- */
+arm_in_block:
+    push    {r4, r5, r6, r7, lr}
+    mov     r0, #TO_BUS
+    add     r5, r8, r0
+    LDA     r0, TRB_IN
+    ldr     r7, [r0]
+    str     r5, [r7]
+    mov     r0, #0
+    str     r0, [r7, #4]
+    str     r9, [r7, #8]
+    movw    r0, #TRB_ARMED
+    str     r0, [r7, #12]
+    dsb
+    mov     r0, #PHYS_IN
     LDA     r12, FN_STARTX
     blx     r12
     pop     {r4, r5, r6, r7, pc}

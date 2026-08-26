@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 FILE_HEADER = struct.Struct("<4s15I")
+LENS_REGION = 96          # v4 onward: the raw region the distortion tables sit in
 BLOCK_HEADER = struct.Struct("<4s7I")
 FOOTER = struct.Struct("<4s7I")
 SAMPLE = struct.Struct("<hhhh")
@@ -42,6 +43,7 @@ class Capture:
     sensor_mode: int
     sensor_mode2: int
     exposure_us: int
+    lens_table: tuple
     blocks: list[Block]
     footer_blocks: int
     dropped_samples: int
@@ -57,6 +59,30 @@ def delta32(value: int, origin: int) -> int:
     return (value - origin) & 0xFFFFFFFF
 
 
+def find_lens_table(region):
+    """Pick the lens's distortion support points out of the region.
+
+    Two 17-point tables sit here. One reads as all 32768 -- Q15 for 1.0, the
+    identity, which is what correction-off looks like -- and the other is the
+    lens. A real table is monotonic and stays within a few percent of the
+    identity; without that bound the search runs off the end into whatever
+    follows and reports ninety percent distortion.
+    """
+    words = struct.unpack(f"<{len(region) // 2}H", region)
+    best, best_dev = None, 0.0
+    for i in range(len(words) - 17):
+        t = words[i:i + 17]
+        if any(v == 0 for v in t):
+            continue
+        s = [t[k] * k / 16 / 32768 for k in range(17)]
+        if any(s[k] > s[k + 1] + 1e-9 for k in range(16)):
+            continue
+        dev = max(abs(s[k] - k / 16) for k in range(17))
+        if 1e-6 < dev <= 0.05 and dev > best_dev:
+            best, best_dev = t, dev
+    return best
+
+
 def read_capture(path: Path) -> Capture:
     data = path.read_bytes()
     if len(data) < FILE_HEADER.size + FOOTER.size:
@@ -65,11 +91,16 @@ def read_capture(path: Path) -> Capture:
     magic, version, rate, period, start, camera, reel, clip, orient_word, gscale_word = fields[:10]
     initial_head = fields[11]
     sensor_mode, sensor_mode2, exposure_us = fields[12], fields[13], fields[14]
-    if magic != b"GFS6" or version != 3 or not rate or not period:
+    if magic != b"GFS6" or version not in (3, 4) or not rate or not period:
         raise ValueError(f"unsupported header: {magic!r}, version={version}")
     orientation = struct.pack("<I", orient_word).split(b"\0", 1)[0].decode("ascii")
     gscale = struct.unpack("<f", struct.pack("<I", gscale_word))[0]
-    blocks, offset = [], FILE_HEADER.size
+    lens = None
+    offset = FILE_HEADER.size
+    if version >= 4:
+        lens = find_lens_table(data[offset:offset + LENS_REGION])
+        offset += LENS_REGION
+    blocks = []
     footer_values = None
     wrap_excess = 0
     while offset < len(data):
@@ -152,7 +183,7 @@ def read_capture(path: Path) -> Capture:
     if footer_blocks != len(blocks):
         raise ValueError(f"footer block count {footer_blocks} != parsed {len(blocks)}")
     return Capture(rate, period, start, camera, reel, clip, orientation, gscale,
-                   initial_head, sensor_mode, sensor_mode2, exposure_us,
+                   initial_head, sensor_mode, sensor_mode2, exposure_us, lens,
                    blocks, footer_blocks, dropped, errors, end_us)
 
 
@@ -192,6 +223,13 @@ def report(capture: Capture) -> None:
         r = READOUT_US.get(capture.sensor_mode)
         print(f"sensor_mode: {capture.sensor_mode}" +
               (f"  readout_us: {r}" if r else "  (not in the extracted table)"))
+    if capture.lens_table:
+        dev = max(abs(capture.lens_table[k] * k / 16 / 32768 - k / 16)
+                  for k in range(17))
+        print(f"lens_distortion: {dev * 100:.3f}% at most")
+        print("  " + ",".join(str(v) for v in capture.lens_table))
+    else:
+        print("lens_distortion: not in this capture, or only the identity table")
     if capture.exposure_us:
         print(f"exposure_us: {capture.exposure_us}  (1/{1e6/capture.exposure_us:.0f} s)")
     print(f"dropped_samples: {capture.dropped_samples}")

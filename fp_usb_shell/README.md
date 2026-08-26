@@ -31,6 +31,17 @@ One command: **`shl <line>`** runs `<line>` in the firmware's own shell and
 returns what it printed. `mem set` and `mem save` come along for free, so the
 worker needs no memory commands of its own.
 
+### Built on that
+
+| | |
+|---|---|
+| **Update the AutoRun in place** | The card stays in the camera. `putfile.py` writes it, `getfile.py` reads it back, and it is compared byte for byte before anything reboots -- writing a file does not run it, so a bad write costs nothing if it is caught |
+| **Files both ways** | `putfile.py` / `getfile.py`. Nothing in the shell writes arbitrary content to a path, so that part is code; the rest is `mem set` and `dir` |
+| **Swap resident code without a battery pull** | A task started from the injection region runs from it, and the firmware cannot stop one. `park.S` gives it somewhere to wait while its code is replaced. A logger swap takes about a second |
+| **Prove memory is yours** | `memprobe.py`. Memory that takes a write while the camera is idle can still be reinitialised the moment recording starts, and no amount of reading the code says so |
+| **Eight templates** | `shellcmd` for task context, `oneshot` for the callback, `callfn` to bring code up a routine at a time, `taskcreate`, `park`, `bulkload`, `putfile`, `getfile`, `dump` |
+| **Transfers that finish** | 14 KB went from 448 seconds to 0.6. None of it was the wire; see [docs/TRANSFER.md](docs/TRANSFER.md) |
+
 ## The patches
 
 | address | from → to | why |
@@ -146,7 +157,7 @@ daemon is involved.
 
 ```sh
 ./inject.py templates/oneshot.S
-./host/fpsh mem get 0xC072F500,,0x20
+./host/fpsh mem get 0xC072F700,,0x20
 ```
 
 The borrowed site is the gyro callback at `0xC00D0794` (50-90 Hz), so the payload
@@ -203,6 +214,17 @@ EP 0x83 IN   bulk 1024, burst 3    串流,給 hook 直接武裝
 
 指令只有一個:**`shl <line>`** 把整行丟給韌體自己的 shell 並回傳輸出。
 `mem set` 和 `mem save` 因此免費取得,worker 不需要自己實作記憶體指令。
+
+### 在這之上做出來的
+
+| | |
+|---|---|
+| **AutoRun 線上更新** | 卡不用拔。`putfile.py` 寫、`getfile.py` 讀回、逐位元組比對之後才重開機 —— **寫進去不等於執行**,所以只要在重開機前抓到,寫壞不用付代價 |
+| **檔案雙向讀寫** | `putfile.py` / `getfile.py`。shell 裡沒有任何指令能把任意內容寫進指定路徑,所以那一小塊是程式碼,其餘都是 `mem set` 和 `dir` |
+| **常駐程式碼線上抽換** | 從注入區建的 task 就在注入區執行,而韌體**沒有辦法終止 task**。`park.S` 讓它在程式碼被換掉時有地方等。換一次 logger 約一秒 |
+| **驗證記憶體是不是你的** | `memprobe.py`。閒置時能寫的記憶體,錄影一開始可能就被擁有者重新初始化 —— **讀程式碼永遠看不出這件事** |
+| **八個範本** | `shellcmd`(task 環境)、`oneshot`(回呼)、`callfn`(一次一個常式帶起來)、`taskcreate`、`park`、`bulkload`、`putfile`、`getfile`、`dump` |
+| **傳輸會結束** | 14 KB 從 448 秒變成 0.6 秒,而**沒有一分是線路造成的** —— 見 [docs/TRANSFER.md](docs/TRANSFER.md) |
 
 ### 那七個字
 
@@ -311,7 +333,7 @@ AutoRun 和 daemon 都不用動。
 
 ```sh
 ./inject.py templates/oneshot.S
-./host/fpsh mem get 0xC072F500,,0x20
+./host/fpsh mem get 0xC072F700,,0x20
 ```
 
 借用的呼叫點是陀螺回呼 `0xC00D0794`(50–90 Hz),所以 payload 是在那個回呼的脈絡執行:

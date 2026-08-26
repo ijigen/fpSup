@@ -31,7 +31,7 @@
 #define EP_OUT       0x01
 #define EP_IN        0x82
 #define FPSHD_VERSION "2.0.0"
-#define MAX_REPLY    8192
+#define MAX_REPLY    16384   /* the camera's capture buffer is 16 KiB */
 #define USB_OUT_SIZE 1024
 #define CMD_MAX      512
 
@@ -164,6 +164,29 @@ static int exchange(uint8_t command, const char *arg, char *out, size_t outcap)
         rx.checksum = 0;
         if (crc32((const uint8_t *)&rx, FRAME_SIZE) != want) { drain_in(); return -1; }
         if (rx.sequence != tx.sequence) { drain_in(); return -1; }
+
+        /* flags bit 1: the header is describing a block that follows in one
+         * transfer, rather than carrying 44 bytes itself. Forty-four bytes per
+         * 64-byte frame is 1.1% of what this endpoint can move -- it is bulk,
+         * 1024-byte packets, burst 3 -- and reading a 250 KB file that way took
+         * eighty thousand round trips. The block's CRC-32 rides in the header so
+         * it is still checked. */
+        if (rx.flags & 2) {
+            uint32_t n = rx.payload_length, want_block;
+            memcpy(&want_block, rx.payload, 4);
+            if (n >= outcap) { drain_in(); return -1; }
+            moved = 0;
+            rc = libusb_bulk_transfer(g_cam, EP_IN, (unsigned char *)out,
+                                      (int)n, &moved, g_timeout);
+            if (rc != 0 || moved != (int)n) {
+                if (rc == LIBUSB_ERROR_PIPE) libusb_clear_halt(g_cam, EP_IN);
+                drain_in();
+                return -1;
+            }
+            if (crc32((const uint8_t *)out, n) != want_block) { drain_in(); return -1; }
+            used = n;
+            break;
+        }
 
         uint16_t n = rx.payload_length;
         if (n > PAYLOAD_SIZE) n = PAYLOAD_SIZE;

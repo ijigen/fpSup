@@ -91,7 +91,7 @@ that does nothing but call and count died the same way.
 
 ## Keep your state to yourself
 
-Templates share `0xC072F500`, so a template that both stores state there and is
+Templates share `0xC072F700`, so a template that both stores state there and is
 loaded by another one will corrupt it. `bulkload.S` did: its destination pointer
 sat at `+0x14`, which is `getfile.S`'s buffer, so loading getfile advanced that
 word past its own buffer and the read landed elsewhere. Every byte came back as
@@ -100,8 +100,8 @@ the poison the host had written first — which is the only reason it was notice
 ## Memory
 
 ```
-0xC072F500  parameters and results, 256 bytes, yours
-0xC072F600  the routine, up to 0xC0730000
+0xC072F700  parameters and results, 256 bytes, yours
+0xC072F800  the routine, up to 0xC0730000
 ```
 
 ## Adding one
@@ -197,7 +197,7 @@ AAPCS 要求呼叫時堆疊八位元組對齊,而 `push` 奇數個暫存器會�
 
 ## 狀態要自己帶
 
-範本共用 `0xC072F500`,所以一個既在那裡存狀態、又會被別的範本載入的範本一定會出事。
+範本共用 `0xC072F700`,所以一個既在那裡存狀態、又會被別的範本載入的範本一定會出事。
 `bulkload.S` 就踩了:它的推進指標放在 `+0x14`,那是 `getfile.S` 的緩衝參數,結果載入
 getfile 的程式碼時把它推過了頭,讀取落在別的地方。回來的每個位元組都是主機事先寫的
 毒值 —— **那也是唯一發現它的原因**。
@@ -205,8 +205,8 @@ getfile 的程式碼時把它推過了頭,讀取落在別的地方。回來的�
 ## 記憶體
 
 ```
-0xC072F500  參數與結果 256 bytes,你的
-0xC072F600  常式本體,到 0xC0730000
+0xC072F700  參數與結果 256 bytes,你的
+0xC072F800  常式本體,到 0xC0730000
 ```
 
 ## 要加新的範本

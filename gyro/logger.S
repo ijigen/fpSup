@@ -218,7 +218,7 @@ recording_started:
     movw    r0, #0x4647
     movt    r0, #0x3653              /* GFS6 */
     str     r0, [r9, #0]
-    mov     r0, #3
+    mov     r0, #4                   /* v4: header carries the lens region */
     str     r0, [r9, #4]
     movw    r0, #2500
     str     r0, [r9, #8]             /* sample_rate_hz */
@@ -300,6 +300,27 @@ recording_started:
     movt    ip, #0xC030
     blx     ip
     str     r0, [r9, #56]
+
+    /* The lens's distortion support points, straight after the header.
+     *
+     * The firmware holds only the interpolation engine -- a 17-point radial map
+     * in Q15, piecewise linear -- and the coefficients come from the lens at
+     * boot, interpolated for the focus distance and focal length in force at the
+     * time. So they belong to the take, like the sensor mode, and reading them
+     * afterwards gets whatever the lens was left focused at.
+     *
+     * Ninety-six bytes of the region rather than a chosen window: two tables sit
+     * here, one of them the identity, and picking between them is the decoder's
+     * job. Copying blind keeps this end simple and honest. */
+    movw    r0, #0xD876
+    movt    r0, #0xC2F2
+    add     r1, r9, #64
+    mov     r2, #0
+4:  ldrb    r3, [r0, r2]
+    strb    r3, [r1, r2]
+    add     r2, r2, #1
+    cmp     r2, #96
+    blo     4b
 
     /* Start at current ring head; discard pre-record history. */
     ldr_addr r0, GYRO_DESC_PTR
@@ -812,7 +833,7 @@ writer_open:
 13:
     add     r0, r10, #O_FOBJ
     add     r1, r10, #O_HEADER
-    mov     r2, #64
+    mov     r2, #160                 /* 64 of header, then 96 of lens region */
     movw    ip, #0x60E8
     movt    ip, #0xC036
     blx     ip

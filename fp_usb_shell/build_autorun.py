@@ -82,7 +82,7 @@ def progress(out, pct: int):
 code = assemble(HERE / 'camera' / 'worker.S')
 words = to_words(code)
 end = LOAD + len(code)
-if end > 0xC072F500:
+if end > 0xC072F700:
     raise SystemExit(f'worker overruns the one-shot scratch: 0x{end:08X}')
 
 disp = (LOAD - (HOOK + 8)) >> 2

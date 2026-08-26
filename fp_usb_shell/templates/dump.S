@@ -15,13 +15,13 @@
  *
  * Borrowed slot: echo, handler pointer 0xC0BAC2F8. See shellcmd.S.
  *
- * Parameter block, 0xC072F500:
+ * Parameter block, 0xC072F700:
  *      +0x00  source address          host fills
  *      +0x04  byte count              host fills, at most DUMP_MAX
  *      +0x08  scratch for the text     host fills, needs 2*count + 1 bytes
  * ========================================================================== */
 
-.equ P,        0xC072F500
+.equ P,        0xC072F700
 .equ P_SRC,    0x00
 .equ P_LEN,    0x04
 .equ P_TEXT,   0x08

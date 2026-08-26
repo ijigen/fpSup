@@ -21,16 +21,16 @@ from armasm import assemble
 HERE = pathlib.Path(__file__).resolve().parent
 SOCK = '/tmp/fpshd.sock'
 
-CODE      = 0xC072F600          # the working template
-CODE_END  = 0xC072F900
-BULK      = 0xC072F900          # the bulk loader, resident alongside it
-BULK_STATE = 0xC072F5F8         # its own two words, clear of the parameter block
-DUMP      = 0xC072FA00          # the dense reader, in a slot of its own
+CODE      = 0xC072F800          # the working template
+CODE_END  = 0xC072FA00
+BULK      = 0xC072FA00          # the bulk loader, resident alongside it
+BULK_STATE = 0xC072F7F8         # its own two words, clear of the parameter block
+DUMP      = 0xC072FB00          # the dense reader, in a slot of its own
 DUMP_CHUNK = 3000               # bytes per round trip; 135 KiB/s, flat past 3000
 DUMP_TEXT  = 0xF8000            # pool offset for the hex, 32 KiB from the end
-BULK_END  = 0xC072FA00
+BULK_END  = 0xC072FB00
 CHUNK     = 240                 # bytes per command; the line holds about 502 chars
-P         = 0xC072F500          # parameter block
+P         = 0xC072F700          # parameter block
 ECHO_SLOT = 0xC0BAC2F8          # command table entry 17, echo's handler pointer
 ECHO_ORIG = 0xC03D99A0
 POOL_PTR  = 0xC3757A7C          # where the AutoRun's pool address lands

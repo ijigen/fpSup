@@ -20,18 +20,18 @@
  * that needs task context has to be started from here as a task instead.
  *
  * Layout (see README):
- *     0xC072F500  parameters and results, 256 bytes, yours
- *     0xC072F600  this code
+ *     0xC072F700  parameters and results, 256 bytes, yours
+ *     0xC072F800  this code
  *
  * Use:
  *     ./inject.py oneshot.S            assemble, write, arm, wait for it to fire
- *     ./fpsh mem get 0xC072F500,,0x20  read whatever the payload left
+ *     ./fpsh mem get 0xC072F700,,0x20  read whatever the payload left
  * ========================================================================== */
 
 .equ HOOK_SITE,   0xC00D0794
 .equ HOOK_ORIG,   0xFA046FD7      /* the BLX this site normally holds          */
 .equ HOOK_TARGET, 0xC01EC6F9      /* what that BLX calls (thumb)               */
-.equ SCRATCH,     0xC072F500      /* +00 'DONE' when finished, +04 result      */
+.equ SCRATCH,     0xC072F700      /* +00 'DONE' when finished, +04 result      */
 
 .macro LDA reg, value
     movw    \reg, #:lower16:\value

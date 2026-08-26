@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assemble a one-shot routine, write it to the camera, and let it fire once.
 
-    ./inject.py templates/oneshot.S [--addr 0xC072F600] [--dry-run]
+    ./inject.py templates/oneshot.S [--addr 0xC072F800] [--dry-run]
 
 Writes the code with `mem set` through the shell, clears the scratch word, arms
 the borrowed call site, then polls until the routine reports 'DONE'.  Nothing
@@ -16,7 +16,7 @@ FPSH = HERE / 'host' / 'fpsh'
 
 HOOK_SITE = 0xC00D0794
 HOOK_ORIG = 0xFA046FD7
-SCRATCH   = 0xC072F500
+SCRATCH   = 0xC072F700
 
 
 def sh(*cmd) -> str:
@@ -29,7 +29,7 @@ def sh(*cmd) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('source', help='e.g. templates/oneshot.S')
-    ap.add_argument('--addr', type=lambda s: int(s, 0), default=0xC072F600)
+    ap.add_argument('--addr', type=lambda s: int(s, 0), default=0xC072F800)
     ap.add_argument('--timeout', type=float, default=10.0)
     ap.add_argument('--dry-run', action='store_true')
     a = ap.parse_args()

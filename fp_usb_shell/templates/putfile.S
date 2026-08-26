@@ -18,7 +18,7 @@
  * rather than the gyro callback because file I/O blocks and takes the media
  * mutex, and because a handler is a function that may simply return.
  *
- * Parameter block, 0xC072F500:
+ * Parameter block, 0xC072F700:
  *      +0x08  status                                  <- read this
  *      +0x0C  open() return
  *      +0x10  write() return
@@ -43,7 +43,7 @@
  * somebody looks.
  * ========================================================================== */
 
-.equ P,        0xC072F500
+.equ P,        0xC072F700
 .equ P_STATUS, 0x08
 .equ P_OPENR,  0x0C
 .equ P_WRITER, 0x10
@@ -138,5 +138,5 @@ msg_ok:
     .asciz  "putfile: written"
     .align  2
 msg_bad:
-    .asciz  "putfile: FAILED, read status at 0xC072F508"
+    .asciz  "putfile: FAILED, read status at 0xC072F708"
     .align  2

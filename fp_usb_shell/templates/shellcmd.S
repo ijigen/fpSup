@@ -20,7 +20,7 @@
  * 0xC0BAC14C + n*0x18 + 0x14.  `echo` is entry 17, pointer 0xC0BAC2F8,
  * currently 0xC03D99A0 -- borrowed here because nothing depends on it.
  *
- *     ./fpsh mem set 0xC0BAC2F8 0xC072F600     point it at this code
+ *     ./fpsh mem set 0xC0BAC2F8 0xC072F800     point it at this code
  *     ./fpsh echo                              run it, synchronously
  *     ./fpsh mem set 0xC0BAC2F8 0xC03D99A0     put it back
  *

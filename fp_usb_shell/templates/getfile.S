@@ -12,7 +12,7 @@
  *
  * Borrowed slot: echo, handler pointer 0xC0BAC2F8.  See shellcmd.S.
  *
- * Parameter block, 0xC072F500:
+ * Parameter block, 0xC072F700:
  *      +0x04  bytes actually read                     <- filled by read()
  *      +0x08  status                                  <- read this
  *      +0x0C  open() return
@@ -30,7 +30,7 @@
  * is why write() can answer a bare flag: it has nowhere to report a partial.
  * ========================================================================== */
 
-.equ P,        0xC072F500
+.equ P,        0xC072F700
 .equ P_ACTUAL, 0x04
 .equ P_STATUS, 0x08
 .equ P_OPENR,  0x0C
@@ -128,5 +128,5 @@ msg_ok:
     .asciz  "getfile: read"
     .align  2
 msg_bad:
-    .asciz  "getfile: FAILED, read status at 0xC072F508"
+    .asciz  "getfile: FAILED, read status at 0xC072F708"
     .align  2

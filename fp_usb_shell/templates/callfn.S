@@ -16,7 +16,7 @@
  * r10 is set as well as r0-r3 because code written to live inside a hook tends
  * to keep its state block in a callee-saved register rather than pass it.
  *
- * Parameter block, 0xC072F500:
+ * Parameter block, 0xC072F700:
  *      +0x00  function to call        host fills
  *      +0x04  r0                      +0x08  r1
  *      +0x0C  r2                      +0x10  r3
@@ -31,7 +31,7 @@
  * there, which is a freeze and a battery pull.
  * ========================================================================== */
 
-.equ P,        0xC072F500
+.equ P,        0xC072F700
 .equ P_FN,     0x00
 .equ P_R0,     0x04
 .equ P_R1,     0x08
