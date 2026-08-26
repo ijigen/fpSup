@@ -22,14 +22,15 @@ from putfile import put, mem_set, mem_get, sh
 # say so. Without them the loader simply refuses when a task is running.
 
 
-def park_resident(task_name, state, stub_src, stub_addr):
+def park_resident(state, stub_src, stub_addr):
     """Ask a resident writer to step out of the cave, and wait for it.
 
     Returns the state address if something was parked, so the caller can point
     it at the new code afterwards.  If no task is running there is nothing to do.
     """
-    listing = sh('tkos tsklist')
-    if not any(task_name.upper() in l.upper() for l in listing.splitlines()):
+    # Whether anything is resident is decided by where it runs, not by what it is
+    # called.  A rename should not stop the loader recognising its own payload.
+    if not cave_tasks():
         return None
     # Place the stub here rather than expecting it from a card script: the shell's
     # AutoRun carries the shell and nothing else, and what a payload needs to be
@@ -45,18 +46,13 @@ def park_resident(task_name, state, stub_src, stub_addr):
     raise SystemExit('the writer did not park — pull the battery before loading')
 
 
-def refuse_if_resident():
-    """Do not overwrite code a task is running from.
+def cave_tasks():
+    """Tasks whose entry point is inside the injection region.
 
-    Unhooking the callback stops new entries; it does nothing about a writer
-    thread already created, which sits in a 5 ms loop inside the region about to
-    be rewritten. It executes whatever lands there. `tkos task` offers chgpri and
-    nothing else, so there is no way to stop one short of a power cycle.
+    `tkos tsklist` prints id|name|task|stat|pri|stksz|wait|wid, with the entry
+    address in the third column.
     """
-    # `tkos tsklist` prints id|name|task|stat|pri|stksz|wait|wid, with the entry
-    # address in the third column. Anything running from the cave is running from
-    # code this loader is about to replace.
-    live = []
+    out = []
     for line in sh('tkos tsklist').splitlines():
         cols = line.split('|')
         if len(cols) < 3:
@@ -66,7 +62,21 @@ def refuse_if_resident():
         except ValueError:
             continue
         if CAVE_LOW <= entry < CAVE_HIGH:
-            live.append(line.strip())
+            out.append(line.strip())
+    return out
+
+
+def refuse_if_resident():
+    """Do not overwrite code a task is running from.
+
+    Unhooking the callback stops new entries; it does nothing about a writer
+    thread already created, which sits in a 5 ms loop inside the region about to
+    be rewritten. It executes whatever lands there. `tkos task` offers chgpri and
+    nothing else, so there is no way to stop one short of a power cycle.
+    """
+    # Anything running from the cave is running from code this loader replaces.
+    live = cave_tasks()
+
     if live:
         raise SystemExit(
             'a task is still running out of the cave:\n  ' + '\n  '.join(live) +
@@ -83,9 +93,6 @@ def main() -> int:
     ap.add_argument('--addr',  type=lambda s: int(s, 0), default=CAVE_LOW)
     ap.add_argument('--entry', default=None, help='symbol the hook should branch to')
     ap.add_argument('--hook',  type=lambda s: int(s, 0), default=None)
-    ap.add_argument('--resident-task',
-                    help='name of a task that runs from the cave and must be '
-                         'parked before the code under it is replaced')
     ap.add_argument('--park-state', type=lambda s: int(s, 0),
                     help='address of the three words the parking protocol uses: '
                          'PARK, PARKED and RESUME, in that order')
@@ -120,9 +127,8 @@ def main() -> int:
         return 0
 
     state = None
-    if a.resident_task and a.park_state and a.park_resume and a.park_stub:
-        state = park_resident(a.resident_task, a.park_state,
-                              a.park_stub, a.park_stub_addr)
+    if a.park_state and a.park_resume and a.park_stub:
+        state = park_resident(a.park_state, a.park_stub, a.park_stub_addr)
     if state is None:
         refuse_if_resident()
     put(a.addr, code, 'load  ')          # writes, verifies, repairs
