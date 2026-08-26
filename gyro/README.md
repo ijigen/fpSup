@@ -10,6 +10,7 @@ Tools for [gyro sup](../projects/gyro-sup.md).
 | `decode.py` | Checks a `.GYR` and converts it to Gyroflow GCSV<br>驗證 `.GYR` 並轉成 Gyroflow GCSV |
 | `load.sh` | Swaps the logger in over USB, about a second, no reboot<br>透過 USB 換上 logger,約一秒,不用重開機 |
 | `build_card.py` | Builds a card that boots the shell and the logger together<br>做一張開機就載入 shell 與 logger 的卡 |
+| `lens_profile.py` | Builds a Gyroflow lens profile; `--gyr` takes the sensor mode from the clip rather than guessing it<br>產生 Gyroflow 鏡頭 profile,`--gyr` 直接用 clip 記下的感光元件模式,不用推測 |
 | `imu_snapshot.S` | One call gathers accelerometer and gyro into a fixed result block<br>一次呼叫把加速計與陀螺收進固定結果區 |
 
 ## What a capture holds
@@ -30,6 +31,25 @@ they are per camera. The block's magic, sequence and CRC are there for a
 different reason: closing a file does not commit its directory entry, so a
 capture can be on the card with no name, and those thirty-two bytes are what
 makes it recoverable.
+
+## The whole path
+
+```
+record            .GYR beside the clip, streamed as it goes
+decode.py         -> Gyroflow GCSV
+lens_profile.py   -> Gyroflow lens profile, mode taken from the .GYR
+```
+
+```
+gyro/decode.py A001_018.GYR --gcsv A001_018.gcsv
+gyro/lens_profile.py --size 1936x1090 --fps 29.97 --focal-mm 40 \
+    --gyr A001_018.GYR --lens "SIGMA 45mm F2.8 DG DN"
+```
+
+Nothing in either is measured by eye. The sample rate, orientation, scale factor
+and sensor mode come out of the capture; the readout time, geometry and focal
+length follow from the firmware's own IMX410 tables. The one number that cannot
+come from a table is the lens focal length in mm, because it depends on the lens.
 
 ## Measured
 
@@ -54,6 +74,18 @@ payload        陀螺樣本,然後加速計記錄
 `orientation` 和 `gscale` 寫在檔案裡而不是寫在這份文件裡,因為**每台相機不同**。
 區塊的魔數、序號、CRC 則是另一個理由:**關檔並不會把目錄項寫進卡**,所以一次擷取
 可能人在卡上卻沒有名字 —— 那三十二個位元組就是它還能被救回來的原因。
+
+## 完整流程
+
+```
+錄影              .GYR 與影片同時產生,邊錄邊寫
+decode.py         → Gyroflow GCSV
+lens_profile.py   → Gyroflow 鏡頭 profile,模式取自 .GYR
+```
+
+兩邊都沒有任何「目測」的數字。取樣率、orientation、比例因子、感光元件模式
+來自擷取檔本身;讀出時間、幾何、焦距由韌體自己的 IMX410 表推出。
+唯一不能從表裡來的是鏡頭焦距(mm),因為那取決於裝了什麼鏡頭。
 
 ## 實測
 
