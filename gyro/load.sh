@@ -15,7 +15,13 @@ import sys; sys.path.insert(0,'.')
 import putfile as P; print('0x%08X' % (P.mem_get(0xC3757A7C)[0] + 0x6000 + 0x7C))")
 
 cd "$SHELL_DIR"
-exec ./load.py "$HERE/logger.S" \
+./load.py "$HERE/logger.S" \
     --entry gyro_hook --hook 0xC00D0794 \
     --park-state "$PARK" --park-stub templates/park.S \
     --park-resume writer_resume "$@"
+
+# The gcsv text buffer, allocated from here rather than by the camera: the
+# writer thread calling the firmware allocator as a recording starts froze the
+# camera, and the allocator has only ever been exercised from a borrowed shell
+# command with nothing recording.
+exec python3 "$HERE/alloc_text.py"
