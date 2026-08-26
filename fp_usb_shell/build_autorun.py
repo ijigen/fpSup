@@ -4,14 +4,31 @@
 Assembles worker.S, relocates it for its load address, and emits the card script
 with a progress readout on the camera's screen.
 
-    ./build_autorun.py        -> dist/AutoRun.txt
-"""
-import hashlib, pathlib, sys
+    ./build_autorun.py                      shell only
+    ./build_autorun.py --payload X.S --entry name [--payload-addr 0xC072DE64]
 
-from armasm import assemble, words as to_words
+A payload is anything meant to live in the cave alongside the shell -- it is not
+this tool's business what.  It is loaded after the worker is running and armed
+last, because the worker's bootstrap borrows the same callback and restores it
+once its task exists; the several seconds of `mem set` that loading a payload
+takes are also the seconds that restore needs.
+"""
+import argparse, hashlib, pathlib, sys
+
+from armasm import assemble, symbols, words as to_words
 
 HERE = pathlib.Path(__file__).resolve().parent
 DEST = HERE / 'autorun' / 'AutoRun.txt'
+
+ap = argparse.ArgumentParser()
+ap.add_argument('--payload', help='source to load into the cave and arm')
+ap.add_argument('--entry', help='symbol in the payload the callback should reach')
+ap.add_argument('--payload-addr', type=lambda s: int(s, 0), default=0xC072DE64)
+ap.add_argument('--also', action='append', default=[], metavar='ADDR:SRC',
+                help='additional source to place at a fixed address, repeatable')
+args = ap.parse_args()
+
+CAVE_LOW = 0xC072DE64
 
 LOAD   = 0xC072F050   # worker code — high, leaving 0xC072DE64..0xC072F000 free
 STATE  = 0xC072F000   # worker state, 16 words
@@ -149,6 +166,41 @@ w("# A one-shot branch from the gyro callback: bootstrap calls the routine it")
 w("# displaced, creates the task, and restores this word.")
 w(f"mem set 0x{HOOK:08X} 0x{hook_bl:08X}")
 w("")
+if args.payload:
+    if not args.entry:
+        sys.exit('--payload needs --entry')
+    gsrc = pathlib.Path(args.payload)
+    gcode = assemble(gsrc)
+    gwords = to_words(gcode)
+    gend = args.payload_addr + len(gcode)
+    if args.payload_addr < CAVE_LOW or gend > STATE:
+        sys.exit(f'{gsrc.name} at 0x{args.payload_addr:08X}..0x{gend:08X} does not fit '
+                 f'the cave 0x{CAVE_LOW:08X}..0x{STATE:08X}')
+    gentry = args.payload_addr + symbols(gsrc)[args.entry]
+    gdisp = (gentry - HOOK - 8) >> 2
+    ghook = 0xEB000000 | (gdisp & 0xFFFFFF)
+
+    w("")
+    w("# --- payload -------------------------------------------------------------")
+    w(f"# {gsrc.name}, {len(gcode)} bytes at 0x{args.payload_addr:08X}.")
+    w("# Loaded after the worker is running, so the several seconds this takes are")
+    w("# also the seconds the bootstrap needs to fire and put the callback back.")
+    for i, word in enumerate(gwords):
+        w(f"mem set 0x{args.payload_addr + i*4:08X} 0x{word:08X}")
+    for spec in args.also:
+        addr_s, _, src_s = spec.partition(':')
+        addr, extra = int(addr_s, 0), assemble(pathlib.Path(src_s))
+        w("")
+        w(f"# {pathlib.Path(src_s).name}, {len(extra)} bytes at 0x{addr:08X}")
+        for i, word in enumerate(to_words(extra)):
+            w(f"mem set 0x{addr + i*4:08X} 0x{word:08X}")
+    w("")
+    w("# The logger initialises its own state block, guarded by a magic word, so")
+    w("# nothing here has to clear it -- and clearing it by hand is what made the")
+    w("# hook create a second writer thread every time.")
+    w(f"mem set 0x{HOOK:08X} 0x{ghook:08X}")
+    w("")
+
 w("# --- done --------------------------------------------------------------------")
 for _ in range(3):
     w("display osd 1 0x00000000")
@@ -162,6 +214,9 @@ DEST.write_text(text)
 
 print(f"worker : {len(code)} bytes, {len(words)} words, 0x{LOAD:08X}..0x{end:08X}")
 print(f"start  : 0x{HOOK:08X} = 0x{hook_bl:08X} -> 0x{LOAD:08X}")
+if args.payload:
+    print(f"payload: {gsrc.name}, {len(gcode)} bytes, "
+          f"0x{args.payload_addr:08X}..0x{gend:08X}, entry 0x{gentry:08X}")
 print(f"patches: {len(PATCHES)} endpoint, {len(SCREEN)} screen")
 print(f"wrote  : {DEST.relative_to(HERE)}  {len(out)} lines  "
       f"sha256={hashlib.sha256(text.encode()).hexdigest()[:16]}")
