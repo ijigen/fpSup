@@ -218,9 +218,19 @@ def report(capture: Capture) -> None:
         # Enums are decimal in `imager mode_list`; comparing them as hex is how
         # 175 looked unrecognisable for an afternoon.
         # From codex/analysis_imx410, extracted from the firmware's own tables.
-        READOUT_US = {3: 24982, 6: 27507, 7: 21088, 8: 6160, 56: 6160,
-                      102: 13437, 106: 10556, 107: 7256, 111: 7828, 112: 5381}
-        r = READOUT_US.get(capture.sensor_mode)
+        # From the same tables lens_profile.py reads, not a second copy of ten
+        # of them. The hardcoded dict had mode 123 -- full sensor, no binning,
+        # 21.3 ms -- reported as "not in the extracted table" while the tables
+        # had it all along.
+        r = None
+        try:
+            import lens_profile
+            for m in lens_profile.load_modes():
+                if int(m["mode_id"]) == capture.sensor_mode:
+                    r = round(m["readout_ms"] * 1000)
+                    break
+        except Exception:
+            pass
         print(f"sensor_mode: {capture.sensor_mode}" +
               (f"  readout_us: {r}" if r else "  (not in the extracted table)"))
     if capture.lens_table:

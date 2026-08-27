@@ -115,7 +115,10 @@
 .equ S_WRITER_PC,     0x84
 .equ S_START_US,      0x88        /* the header buffer is reused for the footer */
 .equ S_RD_END,        0x90        /* end of the valid data in the read buffer   */
-.equ S_RD_EOF,        0x94        /* the .GYR has nothing more to give          */
+.equ S_RD_EOF,        0x94
+.equ S_GEOM_W,        0x98        /* the recording geometry, read at record start */
+.equ S_GEOM_H,        0x9C
+.equ GEOMETRY,        0xC37CE210  /* {width, height, frame bytes} while recording */        /* the .GYR has nothing more to give          */
 .equ S_READ_N,        0x8C        /* where read() drops its byte count          */        /* where to resume once the body is replaced    */
 .equ PARK_STUB,       0xC072EF00  /* never rewritten; see templates/park.S        */
 
@@ -251,6 +254,20 @@ recording_started:
     str     r0, [r9, #12]            /* sample_period_us */
     str     r6, [r9, #16]
     str     r6, [r10, #S_START_US]   @ the header gets overwritten by the footer
+
+    /* What the camera is actually recording.
+     *
+     * Reads as zeros when idle, which is why it can only be sampled here. The
+     * profile needs the output width, and a DNG frame is the only other place
+     * it appears -- so taking it now is what would let the camera write its own
+     * lens profile, and lets decode.py stop needing a frame to find the size.
+     *
+     * Recorded, not used, until it has been seen to hold something. */
+    ldr_addr r0, GEOMETRY
+    ldr     r1, [r0]
+    str     r1, [r10, #S_GEOM_W]
+    ldr     r1, [r0, #4]
+    str     r1, [r10, #S_GEOM_H]
     ldrb    r0, [r8, #8]
     str     r0, [r9, #20]
     ldr     r0, [r8, #0x0C]
