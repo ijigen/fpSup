@@ -89,19 +89,52 @@ def pick_mode(modes, out_w, out_h, fps, tol_fps=0.5):
     return best, same
 
 
-def dng_size(path):
-    d = open(path, "rb").read(65536)
+def dng_info(path):
+    """Size, focal length and lens name, from the frame itself.
+
+    The focal length used to have to be typed in, or read off the camera from
+    L-mount block 0x0d. It is in every frame's EXIF -- the camera writes it --
+    along with the lens's own name, so neither has to be supplied or guessed.
+
+    EXIF hangs off the main IFD through tag 0x8769, so this follows that rather
+    than reading only the first directory.
+    """
+    d = open(path, "rb").read(262144)
     bo = "<" if d[:2] == b"II" else ">"
-    off = struct.unpack_from(bo + "I", d, 4)[0]
-    n = struct.unpack_from(bo + "H", d, off)[0]
-    w = h = None
-    for i in range(n):
-        tag, typ, cnt, val = struct.unpack_from(bo + "HHII", d, off + 2 + i * 12)
-        if tag == 0x0100:
-            w = val
-        elif tag == 0x0101:
-            h = val
-    return w, h
+    out = {}
+
+    def walk(off, seen):
+        if off <= 0 or off + 2 > len(d) or off in seen:
+            return
+        seen.add(off)
+        n = struct.unpack_from(bo + "H", d, off)[0]
+        for i in range(n):
+            e = off + 2 + i * 12
+            if e + 12 > len(d):
+                return
+            tag, typ, cnt = struct.unpack_from(bo + "HHI", d, e)
+            raw = struct.unpack_from(bo + "I", d, e + 8)[0]
+            if tag == 0x8769:                       # ExifIFD
+                walk(raw, seen)
+            elif tag == 0x0100:
+                out["w"] = raw
+            elif tag == 0x0101:
+                out["h"] = raw
+            elif tag == 0x920A and typ == 5 and raw + 8 <= len(d):
+                num, den = struct.unpack_from(bo + "II", d, raw)
+                if den:
+                    out["focal_mm"] = num / den
+            elif tag == 0xA434 and typ == 2:        # LensModel
+                blob = d[raw:raw + cnt] if cnt > 4 else d[e + 8:e + 8 + cnt]
+                out["lens"] = blob.split(b"\0")[0].decode("ascii", "replace").strip()
+
+    walk(struct.unpack_from(bo + "I", d, 4)[0], set())
+    return out
+
+
+def dng_size(path):
+    info = dng_info(path)
+    return info.get("w"), info.get("h")
 
 
 def fit_distortion(table, w, h, focal_px, terms):
@@ -158,9 +191,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("clip", nargs="?", help="a .DNG, or a CINEMA clip folder")
     ap.add_argument("--size", help="WxH, when the footage is not at hand")
-    ap.add_argument("--fps", type=float, required=True)
-    ap.add_argument("--focal-mm", type=float, required=True,
-                    help="lens focal length; L-mount block 0x0d reports it in tenths of a mm")
+    ap.add_argument("--fps", type=float,
+                    help="only needed without --gyr: the clip records its sensor mode, "
+                         "and the mode fixes the frame rate")
+    ap.add_argument("--focal-mm", type=float,
+                    help="overrides the focal length in the frame's EXIF")
     ap.add_argument("--gyr", type=Path,
                     help="a .GYR from the same take; it carries the sensor mode the "
                          "camera was actually in, which resolution and frame rate "
@@ -170,7 +205,7 @@ def main():
                          "a comma-separated list or a file containing one")
     ap.add_argument("--dist-terms", type=int, default=2,
                     help="how many distortion coefficients to fit (default 2)")
-    ap.add_argument("--lens", default="unknown lens")
+    ap.add_argument("--lens", help="overrides the lens name in the frame's EXIF")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
 
@@ -184,15 +219,27 @@ def main():
         if not frames:
             raise SystemExit(f"no .DNG in {path}")
         path = frames[0]
+    info = dng_info(path) if path else {}
     if w is None:
         if not path:
             raise SystemExit("give a clip or --size WxH")
-        w, h = dng_size(path)
+        w, h = info.get("w"), info.get("h")
     if not w or not h:
         raise SystemExit("could not read image size")
 
+    focal_mm = a.focal_mm if a.focal_mm else info.get("focal_mm")
+    if not focal_mm:
+        raise SystemExit("no focal length: the frame carries none, so pass --focal-mm")
+    lens_name = a.lens or info.get("lens") or "unknown lens"
+
     modes = load_modes()
-    mode, scored = pick_mode(modes, w, h, a.fps)
+    fps = a.fps
+    if a.fps:
+        mode, scored = pick_mode(modes, w, h, a.fps)
+    elif a.gyr:
+        mode, scored = None, []          # the capture decides, below
+    else:
+        raise SystemExit("give --fps, or --gyr so the mode can come from the clip")
 
     if a.gyr:
         # The clip knows. `FUN_c032c720()` returns the sensor mode enum and the
@@ -209,10 +256,12 @@ def main():
             raise SystemExit(f"{a.gyr} records mode {recorded}, which is not in the "
                              "extracted tables")
         chosen = by_id[str(recorded)]
-        if chosen is not mode:
+        if mode is not None and chosen is not mode:
             print(f"clip says mode {recorded}; resolution and frame rate alone "
                   f"would have guessed {mode['mode_id']}")
         mode, scored = chosen, [chosen]
+    if fps is None:
+        fps = mode["fps"]          # the mode fixes it; nothing to infer
 
     table = None
     if a.dist_table:
@@ -225,16 +274,17 @@ def main():
             raise SystemExit(f"--dist-table needs 17 values, got {len(table)}")
 
     covered_mm = SENSOR_ACTIVE_MM * min(mode["covered_w"], SENSOR_ACTIVE_W) / SENSOR_ACTIVE_W
-    focal_px = w * a.focal_mm / covered_mm
+    focal_px = w * focal_mm / covered_mm
     fov = 2 * math.degrees(math.atan(w / 2 / focal_px))
     full_width = mode["covered_w"] >= SENSOR_TOTAL_W - 64
 
-    print(f"clip          {w} x {h} @ {a.fps:.3f} fps")
+    print(f"clip          {w} x {h} @ {fps:.3f} fps")
     print(f"mode          {mode['mode_id']}  readout {mode['readout_w']}x{mode['readout_h']} "
           f"binning {mode['bin_h']}x{mode['bin_v']}  {mode['bits']}-bit")
     print(f"covers        {mode['covered_w']} sensor columns "
           f"({'full width' if full_width else f'crop, {covered_mm:.1f} mm'})")
-    print(f"focal         {a.focal_mm} mm -> {focal_px:.0f} px   (FOV {fov:.1f} deg)")
+    print(f"focal         {focal_mm} mm -> {focal_px:.0f} px   (FOV {fov:.1f} deg)"
+          + ("" if a.focal_mm else "   [from the frame]"))
     print(f"readout       {mode['readout_ms']:.3f} ms")
     dist = [0.0, 0.0, 0.0, 0.0]
     if table:
@@ -258,17 +308,17 @@ def main():
                   f"to\n  record which mode it was in. Readout mostly matters on fast pans.")
 
     profile = {
-        "name": f"SIGMA fp - {a.lens} - {w}x{h} @{a.fps:.2f} (mode {mode['mode_id']})",
+        "name": f"SIGMA fp - {lens_name} - {w}x{h} @{fps:.2f} (mode {mode['mode_id']})",
         "note": (f"Generated from the firmware's IMX410 mode tables. Mode {mode['mode_id']}: "
                  f"readout {mode['readout_w']}x{mode['readout_h']}, binning "
                  f"{mode['bin_h']}x{mode['bin_v']}, so it covers {mode['covered_w']} sensor "
                  f"columns -- {'the full width' if full_width else f'a crop spanning {covered_mm:.1f} mm'}. "
-                 f"Focal {a.focal_mm} mm therefore lands at {focal_px:.0f} px. Readout "
+                 f"Focal {focal_mm} mm therefore lands at {focal_px:.0f} px. Readout "
                  f"{mode['readout_ms']:.3f} ms is that mode's active readout. Distortion is left "
                  f"at zero: it was not measured, which is not the same as being zero."),
         "calibrated_by": "firmware IMX410 mode tables (SIGMAfp_re)",
-        "camera_brand": "SIGMA", "camera_model": "fp", "lens_model": a.lens,
-        "camera_setting": f"{w}x{h} @{a.fps:.2f} CinemaDNG",
+        "camera_brand": "SIGMA", "camera_model": "fp", "lens_model": lens_name,
+        "camera_setting": f"{w}x{h} @{fps:.2f} CinemaDNG",
         "calib_dimension": {"w": w, "h": h},
         "orig_dimension": {"w": w, "h": h},
         "output_dimension": {"w": w, "h": h},
