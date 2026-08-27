@@ -74,6 +74,8 @@
                                      896 KB nobody uses, verified across a
                                      recording 224 markers out of 224.          */
 .equ TEXT_FLUSH,      0x40000     /* 256 KiB: three writes instead of forty     */
+.equ O_READ,          0x5B000     /* pool+0x61000, past the text buffer         */
+.equ READ_SIZE,       0x9C000     /* 624 KiB, ending 12 KiB short of the pool   */
 .equ O_END,           0xF000      /* the logger owns r10-0x6000 .. +0xF000 */
 .equ PATH_MGR_SD,     0xC3438400
 .equ GYRO_DESC_PTR,   0xC31E3FCC
@@ -112,6 +114,8 @@
 .equ S_PARKED,        0x80        /* writer confirms it is parked                 */
 .equ S_WRITER_PC,     0x84
 .equ S_START_US,      0x88        /* the header buffer is reused for the footer */
+.equ S_RD_END,        0x90        /* end of the valid data in the read buffer   */
+.equ S_RD_EOF,        0x94        /* the .GYR has nothing more to give          */
 .equ S_READ_N,        0x8C        /* where read() drops its byte count          */        /* where to resume once the body is replaced    */
 .equ PARK_STUB,       0xC072EF00  /* never rewritten; see templates/park.S        */
 
@@ -1129,37 +1133,87 @@ gcsv_build:
                                         @ GFE6 footer there before this ran, and
                                         @ every timestamp came out negative
 
-gcsv_block:
+    add     r0, r10, #O_READ
+    mov     r4, r0
+    str     r0, [r10, #S_RD_END]        @ nothing buffered yet
+    mov     r0, #0
+    str     r0, [r10, #S_RD_EOF]
+    b       gcsv_refill
+
+/* --- slide the partial block to the front, top the buffer up -------------- */
+gcsv_refill:
+    /* The old path read a 32-byte header and then the payload, per block: two
+     * card operations for every 766 ms of take. Measured at 29 ms each -- one
+     * second of stop path for a 26 s clip, and twenty-three seconds for ten
+     * minutes. The card is not the reason: the camera loads a 31 MB DNG into
+     * memory in 0.17 s, at 183 MB/s. It was being asked for sixteen kilobytes
+     * at a time.
+     *
+     * 624 KiB a go instead. A block can straddle the end of a read, so whatever
+     * is left over slides to the front and the next read lands behind it --
+     * which is how this avoids needing seek, whose semantics here are unknown. */
+    add     r7, r10, #O_READ
+    ldr     r8, [r10, #S_RD_END]
+    subs    r8, r8, r4                  @ leftover bytes
+    movlo   r8, #0
+    cmp     r4, r7
+    beq     41f                         @ already at the front
+    mov     r9, #0
+40: cmp     r9, r8
+    bhs     41f
+    ldrb    r0, [r4, r9]
+    strb    r0, [r7, r9]
+    add     r9, r9, #1
+    b       40b
+41:
+    ldr     r0, [r10, #S_RD_EOF]
+    cmp     r0, #0
+    bne     42f
+    mov     r0, #0                      @ a failed read may leave this stale, and
+    str     r0, [r10, #S_READ_N]        @ a stale count is a buffer of old bytes
     add     r0, r10, #O_FOBJ
-    add     r1, r10, #O_BUF_A
-    mov     r2, #32
+    add     r1, r7, r8
+    movw    r2, #:lower16:READ_SIZE
+    movt    r2, #:upper16:READ_SIZE
+    sub     r2, r2, r8                  @ room behind the leftover
     add     r3, r10, #S_READ_N
     ldr_addr     ip, F_READ
     blx     ip
+    ldr     r0, [r10, #S_READ_N]
     cmp     r0, #0
-    beq     gcsv_flush_last
-    add     r4, r10, #O_BUF_A
-    ldr     r0, [r4]
-    movw    r1, #0x4647
-    movt    r1, #0x3642                 @ GFB6
-    cmp     r0, r1
-    bne     gcsv_flush_last
+    moveq   r1, #1
+    streq   r1, [r10, #S_RD_EOF]        @ short read: that was the last of it
+    add     r8, r8, r0
+42:
+    mov     r4, r7
+    add     r0, r7, r8
+    str     r0, [r10, #S_RD_END]
 
+gcsv_block:
+    ldr     r0, [r10, #S_RD_END]
+    sub     r0, r0, r4                  @ bytes available at r4
+    cmp     r0, #BLOCK_HEADER
+    blo     43f
+    ldr     r1, [r4]
+    movw    r2, #0x4647
+    movt    r2, #0x3642                 @ GFB6
+    cmp     r1, r2
+    bne     gcsv_flush_last             @ not a block: stop here
+    ldr     r2, [r4, #24]               @ payload bytes
+    add     r2, r2, #BLOCK_HEADER
+    cmp     r0, r2
+    bhs     44f                         @ the whole block is in the buffer
+43: ldr     r0, [r10, #S_RD_EOF]
+    cmp     r0, #0
+    bne     gcsv_flush_last             @ a truncated tail, and no more file
+    b       gcsv_refill
+44:
     ldr     r8, [r4, #16]               @ gyro samples
     ldr     r9, [r4, #8]                @ first timestamp
     sub     r9, r9, r11                 @ relative to record start
-    ldr     r2, [r4, #24]               @ payload bytes
-    add     r0, r10, #O_FOBJ
-    add     r1, r10, #O_BUF_A
-    add     r1, r1, #32
-    add     r3, r10, #S_READ_N
-    ldr_addr     ip, F_READ
-    blx     ip
-    cmp     r0, #0
-    beq     gcsv_flush_last
+    add     r7, r4, #BLOCK_HEADER       @ the samples themselves
+    add     r4, r4, r2                  @ and the next block
 
-    add     r7, r10, #O_BUF_A
-    add     r7, r7, #32
 gcsv_sample:
     cmp     r8, #0
     beq     gcsv_block
