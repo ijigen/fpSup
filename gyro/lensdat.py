@@ -14,8 +14,13 @@ done at the moment a take starts or stops.
 
 What lands on the card:
 
-    "LDAT" 1 <focal_tenths> <name[32]> <mode count>
+    "LDAT" 2 <focal_tenths> <name[32]> <movie_w> <movie_h> <mode count>
     then per mode:  <mode_id> <focal_px x 1000> <readout_us>
+
+The movie size is what the menu is set to when this runs, recorded so a profile
+built from stale data can be spotted rather than believed. The camera answers
+`setting get cam_movie_imagesize.h` once `setting readcam` has loaded the store
+-- before that it says 0, which looks like an answer.
 
 The per-mode numbers are worked out here, from the firmware's own IMX410 tables,
 so the camera has nothing to compute but the lookup. Only primes are supported:
@@ -82,11 +87,27 @@ def main():
         else:
             print('  WARNING echo handler still borrowed')
 
+    # The recording format, so the file says what it was built against. Only
+    # readable after `setting readcam`: the parameter store is empty until then
+    # and reports zero, which is indistinguishable from a real answer.
+    P.sh('setting readcam', retries=3)
+    def setting(name):
+        r = P.sh(f'setting get {name}', retries=3)
+        tail = r.strip().split('->')[-1].strip()
+        return int(tail) if tail.isdigit() else 0
+    mov_w, mov_h = setting('cam_movie_imagesize.h'), setting('cam_movie_imagesize.v')
+
     if not 10 <= focal_tenths <= 20000:
         raise SystemExit(f'  focal length reads {focal_tenths} tenths of a mm; '
                          'that is not a lens')
     print(f'  lens          {name}')
     print(f'  focal         {focal_tenths / 10} mm')
+    if mov_w:
+        # The frames come out sixteen wider and ten taller than the menu says --
+        # CinemaDNG's margin. 1920x1080 -> 1936x1090, 3840x2160 -> 3856x2170.
+        print(f'  movie size    {mov_w} x {mov_h}  (frames are {mov_w + 16} x {mov_h + 10})')
+    else:
+        print('  movie size    unknown; the profile cannot be checked against it')
 
     rows = []
     for m in load_modes():
@@ -101,8 +122,8 @@ def main():
                      round(m['readout_ms'] * 1000)))
     rows.sort()
 
-    blob = struct.pack('<4sHH32sH', b'LDAT', 1, focal_tenths,
-                       name.encode('ascii', 'replace')[:32], len(rows))
+    blob = struct.pack('<4sHH32sHHH', b'LDAT', 2, focal_tenths,
+                       name.encode('ascii', 'replace')[:32], mov_w, mov_h, len(rows))
     blob += b''.join(struct.pack('<III', *r) for r in rows)
     print(f'  modes         {len(rows)} rows, {len(blob)} bytes')
 
