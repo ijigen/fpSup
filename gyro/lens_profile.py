@@ -273,6 +273,20 @@ def main():
         if len(table) != 17:
             raise SystemExit(f"--dist-table needs 17 values, got {len(table)}")
 
+    # A mode cannot have produced a frame wider than it reads out.
+    #
+    # One take in six recorded mode 8 -- 2016 px wide -- against 3856-wide UHD
+    # frames, which is impossible, and nothing downstream would have noticed:
+    # the profile would have carried 6.160 ms of rolling shutter where the truth
+    # is 21.325, and half the focal length, and looked entirely ordinary.
+    # Whatever the camera was doing at that moment, the file cannot be right.
+    if w > mode["readout_w"]:
+        raise SystemExit(
+            f'mode {mode["mode_id"]} reads out {mode["readout_w"]} px wide and '
+            f'cannot have produced a {w} px frame. The clip most likely recorded '
+            f'the live-view mode; reshoot with a logger new enough to re-read it '
+            f'mid-take, or pass --fps to pick the mode from the footage.')
+
     covered_mm = SENSOR_ACTIVE_MM * min(mode["covered_w"], SENSOR_ACTIVE_W) / SENSOR_ACTIVE_W
     focal_px = w * focal_mm / covered_mm
     fov = 2 * math.degrees(math.atan(w / 2 / focal_px))

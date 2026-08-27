@@ -111,6 +111,12 @@ def read_capture(path: Path) -> Capture:
             if offset + FOOTER.size != len(data):
                 raise ValueError("footer is not the final 32 bytes")
             footer_values = FOOTER.unpack_from(data, offset)
+            # The mode as it stood mid-take, if the camera recorded one. The
+            # header's copy is sampled the instant the record flag goes up; this
+            # one at least a block later. They have agreed on every take so far.
+            late = footer_values[5]
+            if late and late != sensor_mode:
+                sensor_mode = late
             offset += FOOTER.size
             break
         if magic != b"GFB6" or offset + BLOCK_HEADER.size > len(data):

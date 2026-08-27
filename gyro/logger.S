@@ -118,6 +118,8 @@
 .equ S_RD_EOF,        0x94
 .equ S_GEOM_W,        0x98        /* the recording geometry, read at record start */
 .equ S_GEOM_H,        0x9C
+.equ S_MODE_LATE,     0xA0        /* the mode, re-read once recording is going  */
+.equ F_MODE_NOW,      0xC032C720  /* () -> the current sensor mode enum         */
 .equ GEOMETRY,        0xC37CE210  /* {width, height, frame bytes} while recording */        /* the .GYR has nothing more to give          */
 .equ S_READ_N,        0x8C        /* where read() drops its byte count          */        /* where to resume once the body is replaced    */
 .equ PARK_STUB,       0xC072EF00  /* never rewritten; see templates/park.S        */
@@ -828,6 +830,25 @@ writer_write_block:
     movt    ip, #0xC036
     blx     ip
 
+    /* Re-read the sensor mode, once recording is under way.
+     *
+     * The header's copy is taken the instant ACTIVE goes high, which is the
+     * least settled moment there is. This one is taken 766 ms in at the earliest
+     * -- a block's worth of samples -- and again every block after, so what
+     * reaches the footer is the mode as it was mid-take.
+     *
+     * It was added believing the header sometimes caught live view: two takes in
+     * six recorded mode 8, whose name is MONIT1_60. That reading was wrong.
+     * Every mode in this family is named MONIT-something -- 106 is
+     * MONIT1_30_HD_LOWP3 and 123 is MONIT1_25_HD_LOWP -- so the name says
+     * nothing about recording, and the re-read returns 8 for the whole take
+     * rather than disagreeing with the header. The later sample is still the
+     * more defensible one; it just does not fix what it was meant to. */
+    movw    ip, #:lower16:F_MODE_NOW
+    movt    ip, #:upper16:F_MODE_NOW
+    blx     ip
+    str     r0, [r10, #S_MODE_LATE]
+
     mov     r0, #0
     str     r0, [r5, #0x18]
     str     r0, [r5, #0x1C]
@@ -902,8 +923,9 @@ writer_close:
     ldr     r0, [r10, #S_ERROR]
     str     r0, [r1, #12]
     str     r3, [r1, #16]
+    ldr     r0, [r10, #S_MODE_LATE]     @ the mode as it was mid-take, not at the
+    str     r0, [r1, #20]               @ instant the flag went up
     mov     r0, #0
-    str     r0, [r1, #20]
     str     r0, [r1, #24]
     str     r0, [r1, #28]
     add     r0, r10, #O_FOBJ
