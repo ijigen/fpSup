@@ -27,6 +27,7 @@ SHELL = HERE.parent / 'fp_usb_shell'
 sys.path.insert(0, str(SHELL))
 
 import putfile as P                                            # noqa: E402
+from decode import read_capture as decode_capture               # noqa: E402
 
 
 def card_files(clip):
@@ -108,6 +109,39 @@ def main():
         ref.rename(a.out / csv_name)
         print(f'  {csv_name:16s} written from the .GYR')
 
+    # What the clip itself says its frame rate is, against what the mode says.
+    #
+    # SPP_metadata.xmp carries the clip's total size in kilobytes, and every
+    # frame is the same size, so the count follows -- and with the capture's
+    # duration, so does the rate. A001_014 works out at 939 frames over 31.5 s,
+    # near thirty, while its recorded mode is 60. One of the two is wrong and
+    # the profile would carry the wrong one without saying so.
+    #
+    # The gyro starts before the video and ends after it, so this always reads a
+    # little low; only a disagreement worth a factor is worth reporting.
+    def implied_fps():
+        try:
+            meta = a.out / '_meta.xmp'
+            r = P.sh(f'dir \\CINEMA\\{clip}', retries=3)
+            msize = fsize = 0
+            for line in r.splitlines():
+                parts = line.split()
+                if len(parts) >= 4 and parts[-1].upper().endswith('.XMP'):
+                    msize = int(parts[-2])
+                if len(parts) >= 4 and parts[-1].upper().endswith('.DNG') and not fsize:
+                    fsize = int(parts[-2])
+            if not (msize and fsize):
+                return None
+            fetch(f'\\CINEMA\\{clip}\\SPP_metadata.xmp', msize, meta)
+            import re
+            total = int(re.search(r'TotalSize>(\d+)', meta.read_text()).group(1))
+            meta.unlink()
+            cap = decode_capture(gyr)
+            secs = sum(len(b.samples) for b in cap.blocks) * cap.period_us / 1e6
+            return (total * 1024 / fsize) / secs if secs else None
+        except Exception:
+            return None
+
     frame_name, frame_size = first_frame(clip)
     if not frame_name:
         raise SystemExit(f'  no frames in \\CINEMA\\{clip}: cannot build a profile')
@@ -139,6 +173,18 @@ def main():
     for line in r.stdout.splitlines():
         if line.startswith(('clip', 'mode', 'focal', 'readout')):
             print('  ' + line)
+    got = implied_fps()
+    if got:
+        import json as _json
+        claimed = _json.loads(prof.read_text())['name'].split('@')[-1].split()[0]
+        try:
+            claimed = float(claimed)
+        except ValueError:
+            claimed = 0.0
+        if claimed and not 0.75 < got / claimed < 1.25:
+            print(f'  *** the clip works out at {got:.1f} fps and the mode says '
+                  f'{claimed:.2f}. One of them is wrong; the rolling shutter in '
+                  f'the profile is the mode\'s. ***')
     if not a.keep_frame:
         frame.unlink()
     print(f'\n  {a.out}/')
