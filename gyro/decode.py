@@ -49,6 +49,7 @@ class Capture:
     dropped_samples: int
     error_flags: int
     end_us: int
+    mode_history: tuple = ()
 
     @property
     def clip_name(self) -> str:
@@ -102,6 +103,7 @@ def read_capture(path: Path) -> Capture:
         offset += LENS_REGION
     blocks = []
     footer_values = None
+    mode_history = []
     wrap_excess = 0
     while offset < len(data):
         if offset + 4 > len(data):
@@ -111,14 +113,28 @@ def read_capture(path: Path) -> Capture:
             if offset + FOOTER.size != len(data):
                 raise ValueError("footer is not the final 32 bytes")
             footer_values = FOOTER.unpack_from(data, offset)
-            # The mode as it stood mid-take, if the camera recorded one. The
-            # header's copy is sampled the instant the record flag goes up; this
-            # one at least a block later. They have agreed on every take so far.
-            late = footer_values[5]
-            if late and late != sensor_mode:
-                sensor_mode = late
+            # The footer carries a second reading of the mode, taken a block or
+            # more into the take. Do NOT prefer it: `FUN_c032c720` stops
+            # reporting the sensor once recording is under way. A001_016 (59.94
+            # fps clip) and A001_017 (29.97 fps clip) both put 8 there, while
+            # their headers said 8 and 106 -- each matching its own clip. So the
+            # header, sampled the instant the record flag goes up, is the one
+            # that tracks the recording; the late value pins to the monitor,
+            # which the logger's own notes already describe being raised for the
+            # duration of a take. Kept only as a diagnostic.
+            late_sensor_mode = footer_values[5]
             offset += FOOTER.size
             break
+        if magic == b"GFM6":
+            # Every distinct sensor mode the take passed through, sampled on the
+            # writer's 5 ms poll. Written because one sample at record start
+            # races the mode change: A001_016 and A001_017, shot back to back on
+            # the same settings, recorded 8 and 106 there.
+            n = struct.unpack_from("<I", data, offset + 4)[0]
+            mode_history = [struct.unpack_from("<II", data, offset + 8 + 8 * i)
+                            for i in range(min(n, 8))]
+            offset += 72
+            continue
         if magic != b"GFB6" or offset + BLOCK_HEADER.size > len(data):
             raise ValueError(f"bad block at {offset:#x}: {magic!r}")
         _, sequence, first, last, count, flags, payload_bytes, expected_crc = BLOCK_HEADER.unpack_from(data, offset)
@@ -183,6 +199,26 @@ def read_capture(path: Path) -> Capture:
     if footer_values is None:
         raise ValueError("missing GFE6 footer (file not cleanly closed)")
     _, footer_blocks, dropped, errors, end_us, _, _, _ = footer_values
+
+    # Which mode the take actually ran in: the one that held longest, not any
+    # single sample.
+    #
+    # A single sample cannot answer it from either end. At record start the
+    # switch has not always landed -- A001_016 read 8 there and A001_017 read
+    # 106, on identical settings -- and the last sample the writer takes falls
+    # after the stop, when the camera is already back in live view, which is why
+    # a re-read "later in the take" returned 8 every time. Three takes with the
+    # full history show the shape plainly: 106 from the first poll to +12.8 s,
+    # then 8 for the last eighty milliseconds. The longest-held entry is the
+    # recording mode and the tail is the camera going home.
+    if mode_history:
+        spans = []
+        for i, (us, mode) in enumerate(mode_history):
+            stop = mode_history[i + 1][0] if i + 1 < len(mode_history) else end_us
+            spans.append((delta32(stop, us), mode))
+        held, mode = max(spans)
+        if mode != sensor_mode:
+            sensor_mode = mode
     sequences = [block.sequence for block in blocks]
     if sequences != list(range(len(sequences))):
         raise ValueError(f"non-contiguous block sequence: {sequences[:8]}...")
@@ -190,7 +226,8 @@ def read_capture(path: Path) -> Capture:
         raise ValueError(f"footer block count {footer_blocks} != parsed {len(blocks)}")
     return Capture(rate, period, start, camera, reel, clip, orientation, gscale,
                    initial_head, sensor_mode, sensor_mode2, exposure_us, lens,
-                   blocks, footer_blocks, dropped, errors, end_us)
+                   blocks, footer_blocks, dropped, errors, end_us,
+                   tuple(mode_history))
 
 
 def samples_with_time(capture: Capture):
@@ -217,6 +254,10 @@ def report(capture: Capture) -> None:
     print(f"wrap_blocks: {sum(bool(block.flags & 1) for block in capture.blocks)}")
     accel = sum(len(b.accel) for b in capture.blocks)
     print(f"accel_records: {accel}")
+    if capture.mode_history:
+        first = capture.mode_history[0][0]
+        print("mode_history: " + "  ".join(
+            f"{delta32(us, first) / 1000:+.1f}ms->{mode}" for us, mode in capture.mode_history))
     if capture.sensor_mode:
         # 1080p29.97 matches enum 0106 and enum 0111, both 3032x1708 full width,
         # whose rolling-shutter readouts are 10557 us and 7828 us. `imager
@@ -253,31 +294,82 @@ def report(capture: Capture) -> None:
     print(f"capture_span_s: {delta32(capture.end_us, capture.start_us) / 1e6:.6f}")
 
 
-def write_gcsv(path: Path, capture: Capture) -> None:
+# MMA8452Q at the two-g range, twelve bits: 1024 counts to a g.  A still camera
+# reads about 1005, which is the sensor's own offset and not something to
+# calibrate away here -- Gyroflow normalises gravity before it uses it.
+ASCALE = 1.0 / 1024
+
+
+def write_gcsv(path: Path, capture: Capture, accel: bool = False) -> None:
+    """The Gyroflow log.  With `accel`, the accelerometer goes in beside the gyro.
+
+    The camera writes the gyro-only form itself.  The accelerometer is recorded
+    in the .GYR either way -- a hundred readings a second against the gyro's
+    2500 -- but it was left out of the log: in the A/B that settled the axis
+    order it made Gyroflow's fusion worse, not better.  That test was about
+    which way round the axes go. Horizon levelling is a different question, and
+    it cannot be answered without gravity, so this puts it back for anyone who
+    wants to try.
+
+    One accelerometer reading covers twenty-five gyro samples, so each row
+    carries the most recent one.  Holding the last value rather than
+    interpolating: at a hundred hertz the error is small, and inventing readings
+    between real ones would be harder to argue with when the result is wrong.
+    """
+    accels = [a for block in capture.blocks for a in block.accel]
+    accels.sort()
+    head = [
+        ["GYROFLOW IMU LOG"], ["version", "1.3"],
+        ["id", "sigma_fp_v502_internal_icm20321"],
+        ["orientation", capture.orientation],
+        ["note", f"Stage-6 {capture.clip_name}; dropped={capture.dropped_samples}"],
+        ["fwversion", "SIGMA fp 5.02"], ["videofilename", capture.clip_name],
+        ["tscale", "0.000001"], ["gscale", format(capture.gscale, ".12g")],
+    ]
+    if accel:
+        head.append(["ascale", format(ASCALE, ".12g")])
+        head.append(["t", "gx", "gy", "gz", "ax", "ay", "az"])
+    else:
+        head.append(["t", "gx", "gy", "gz"])
+
     with path.open("w", newline="", encoding="ascii") as handle:
         writer = csv.writer(handle, lineterminator="\n")
-        writer.writerows([
-            ["GYROFLOW IMU LOG"], ["version", "1.3"],
-            ["id", "sigma_fp_v502_internal_icm20321"],
-            ["orientation", capture.orientation],
-            ["note", f"Stage-6 {capture.clip_name}; dropped={capture.dropped_samples}"],
-            ["fwversion", "SIGMA fp 5.02"], ["videofilename", capture.clip_name],
-            ["tscale", "0.000001"], ["gscale", format(capture.gscale, ".12g")],
-            ["t", "gx", "gy", "gz"],
-        ])
+        writer.writerows(head)
+        if not accel:
+            for timestamp, (x, y, z) in samples_with_time(capture):
+                writer.writerow([timestamp, x, y, z])
+            return
+        # Seed with the first reading rather than zeros: a row of zero gravity
+        # at the head of the file is not a measurement, and the fusion would
+        # have to recover from it.
+        i, last = 0, (accels[0][1:] if accels else (0, 0, 0))
         for timestamp, (x, y, z) in samples_with_time(capture):
-            writer.writerow([timestamp, x, y, z])
+            while i < len(accels) and delta32(accels[i][0], capture.start_us) <= timestamp:
+                last = accels[i][1:]
+                i += 1
+            # The accelerometer's axes are not the gyro's.
+            #
+            # The gcsv format carries one orientation string and Gyroflow
+            # applies it to both sensors, so a sensor that disagrees has to be
+            # rotated here instead. With the readings as the firmware hands them
+            # over, levelling the horizon needed a roll correction of about -95
+            # degrees -- ninety of axis error and five of how the camera was
+            # actually held. Rotating a quarter turn the other way puts gravity
+            # where Gyroflow expects it: verified on A001_006, 2026-08-30.
+            writer.writerow([timestamp, x, y, z, last[1], -last[0], last[2]])
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=Path)
     parser.add_argument("--gcsv", type=Path)
+    parser.add_argument("--accel", action="store_true",
+                        help="put the accelerometer in the log as well, for horizon levelling")
     args = parser.parse_args()
     capture = read_capture(args.input)
     report(capture)
     if args.gcsv:
-        write_gcsv(args.gcsv, capture)
+        write_gcsv(args.gcsv, capture, accel=args.accel)
         print(f"wrote: {args.gcsv}")
 
 

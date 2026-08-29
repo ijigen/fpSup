@@ -20,8 +20,10 @@ cd "$SHELL_DIR"
     --park-state "$PARK" --park-stub templates/park.S \
     --park-resume writer_resume "$@"
 
-# The gcsv text buffer, allocated from here rather than by the camera: the
-# writer thread calling the firmware allocator as a recording starts froze the
-# camera, and the allocator has only ever been exercised from a borrowed shell
-# command with nothing recording.
-exec python3 "$HERE/alloc_text.py"
+# The Gyroflow lens profile, as text, in the twelve kilobytes at the top of the
+# pool.  The camera copies it beside every clip whose mode matches; it is data,
+# not code, because a profile depends on the lens and the mode and on nothing
+# else, and formatting decimals in ARM to rebuild it each time would be work for
+# no gain.  Not fatal if it fails -- takes still get their .GYR and .CSV.
+python3 "$HERE/putprofile.py" || echo "  (no profile placed; clips will have no .JSON)"
+

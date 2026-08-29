@@ -8,13 +8,14 @@ needs more than that, it is doing something the camera cannot load anyway.
 import pathlib, struct, subprocess, sys, tempfile
 
 
-def _compile(src):
+def _compile(src, defines=()):
     """Assemble to an object file and return (elf_bytes,)."""
     src = pathlib.Path(src)
     with tempfile.TemporaryDirectory() as tmp:
         obj = pathlib.Path(tmp) / 'a.o'
         r = subprocess.run(
-            ['clang', '-target', 'armv7-none-eabi', '-c', str(src), '-o', str(obj)],
+            ['clang', '-target', 'armv7-none-eabi', '-c', str(src), '-o', str(obj)]
+            + [f'-D{d}' for d in defines],
             capture_output=True, text=True)
         if r.returncode:
             sys.stderr.write(r.stderr)
@@ -37,8 +38,8 @@ def _parse(elf):
     return elf, sections, {name_of(s): (i, s) for i, s in enumerate(sections)}
 
 
-def assemble(src) -> bytes:
-    elf, sections, by_name = _parse(_compile(src))
+def assemble(src, defines=()) -> bytes:
+    elf, sections, by_name = _parse(_compile(src, defines))
     text_i, text = by_name['.text']
     body = bytearray(elf[text[4]:text[4] + text[5]])
 
@@ -84,14 +85,14 @@ def words(code: bytes):
     return struct.unpack(f'<{len(code)//4}I', code)
 
 
-def symbols(src):
+def symbols(src, defines=()):
     """Map every defined .text symbol to its byte offset within the image.
 
     The loader needs this to aim a hook at an entry point by name rather than by
     assuming it sits at offset zero -- which it does not, once a source file
     grows a second entry.
     """
-    elf, sections, by_name = _parse(_compile(src))
+    elf, sections, by_name = _parse(_compile(src, defines))
     text_i, _ = by_name['.text']
     _, symtab = by_name['.symtab']
     _, strtab = by_name['.strtab']

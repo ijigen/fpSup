@@ -1,0 +1,299 @@
+# ============================================================================
+# USB shell.
+#
+# The camera keeps its own PTP gadget exactly as the firmware builds it, so the
+# firmware owns the descriptors, creates and enables the endpoints, and
+# re-creates them after a record-mode reconfiguration.  A few words are changed
+# so nothing competes for those pipes and so PTP's unused interrupt endpoint
+# becomes a second bulk IN for streaming; the rest of this file is the worker.
+#
+#   EP 0x01 OUT  commands      EP 0x82 IN  replies      EP 0x83 IN  streaming
+#
+# The worker understands one command: `shl <line>`, which runs <line> in the
+# firmware's own shell and returns what it printed.  `mem set` and `mem save`
+# come along for free, so the worker needs no memory commands of its own.
+#
+# Boot with the USB cable UNPLUGGED, then attach it.  The gadget is built on
+# attach, so the patches have to land first; and the patched words sit in code
+# that has not run yet, so no stale instruction-cache line can shadow them.
+#
+# The screen reads fpSup[........]0 through fpSup[########]100 while this runs
+# and fpSup! when it is done.  A bar that stops means the load stopped there.
+# ============================================================================
+
+# --- screen ------------------------------------------------------------------
+display monitor 0 1
+# text colour
+mem set 0xC0BB1208 0xFFFFF8B2
+# mov r5,#120 — x, clear of the battery indicator
+mem set 0xC03E46A0 0xE3A05078
+# mov r8,#16  — y
+mem set 0xC03E4698 0xE3A08010
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[........]0
+display osd 1
+display text fpSup[........]0
+display osd 1
+display text fpSup[........]0
+display osd 1
+
+# --- patches -----------------------------------------------------------------
+# PTP interface template: {bNumEndpoints, class, subclass, protocol}
+# 03/06/01/01 -> 03/ff/ff/ff.  Lengths and the endpoint set are untouched;
+# this only stops the host's PTP stack from claiming interface 0 before the
+# shell daemon can.
+mem set 0xC0CF3740 0xFFFFFF03
+# EP 0x83, SuperSpeed: interrupt -> bulk
+mem set 0xC0CF3780 0x02830507
+# EP 0x83, SuperSpeed: wMaxPacketSize 64 -> 1024, bInterval 11 -> 0
+mem set 0xC0CF3784 0x00000400
+# its SuperSpeed companion: bMaxBurst 0 -> 3
+mem set 0xC0CF3758 0x00033006
+# its SuperSpeed companion: wBytesPerInterval 64 -> 0
+mem set 0xC0CF375C 0x00000000
+# EP 0x83, full speed: interrupt -> bulk
+mem set 0xC0CF3798 0x02830507
+# EP 0x83, full speed: bInterval 100 -> 0
+mem set 0xC0CF379C 0x00000040
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[#.......]10
+display osd 1
+display text fpSup[#.......]10
+display osd 1
+display text fpSup[#.......]10
+display osd 1
+
+# --- worker state @0xC072F000, 16 words, plus the capture length ----------
+mem set 0xC072F000 0x00000000
+mem set 0xC072F004 0x00000000
+mem set 0xC072F008 0x00000000
+mem set 0xC072F00C 0x00000000
+mem set 0xC072F010 0x00000000
+mem set 0xC072F014 0x00000000
+mem set 0xC072F018 0x00000000
+mem set 0xC072F01C 0x00000000
+mem set 0xC072F020 0x00000000
+mem set 0xC072F024 0x00000000
+mem set 0xC072F028 0x00000000
+mem set 0xC072F02C 0x00000000
+mem set 0xC072F030 0x00000000
+mem set 0xC072F034 0x00000000
+mem set 0xC072F038 0x00000000
+mem set 0xC072F03C 0x00000000
+mem set 0xC072F040 0x00000000
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[##......]20
+display osd 1
+display text fpSup[##......]20
+display osd 1
+display text fpSup[##......]20
+display osd 1
+
+# --- DMA pool; its address lands in 0xC3757A7C -------------------------------
+# +0x0000 frame buffer 4 KiB   +0x2000 capture buffer 16 KiB
+# +0x6000 free for whatever is loaded alongside   +0x10000 template scratch
+# Reserve the whole span up front rather than writing past the allocation and
+# hoping the tail is free. Everything derives its address from this pointer:
+# asking for 64 KiB instead of 4 already moved the base from 0x44F6ADC0 to
+# 0x45026680, and every hard-coded address went with it.
+# Three arguments, never four. The handler parses the alignment and stores it
+# into the size slot -- `str r3, [sp, #4]` at 0xC03FA580, where the size went
+# at 0xC03FA558; the alignment slot at [sp, #0xc] is only ever written with 0.
+# So `get 0 0x20000 0x40` asked for 64 bytes and was handed the 128-byte
+# minimum, while everything past it belonged to a 256 KiB buffer owned by
+# 0xC03A4EEC that is reinitialised when recording starts. That is where the
+# shell's capture buffer and anything loaded beside it had been living, and why
+# the picture tore and the camera froze at unpredictable moments.
+# 1 MiB. The USER pool reports 18 MB free in MOVIE_REC_DNG, and 128 KiB was
+# not enough to stage a quarter-megabyte file -- which showed up as a verify
+# that never converged rather than as an error, because the overflow landed in
+# memory somebody else kept rewriting.
+memmgr bufmem get 0 1048576
+
+# --- loader @0xC072DE64..0xC072E064, 512 bytes --------------
+# Reads \VSHL.BIN and places what it says. The worker itself is in there.
+mem set 0xC072DE64 0xE92D4070
+mem set 0xC072DE68 0xE30CC6F9
+mem set 0xC072DE6C 0xE34CC01E
+mem set 0xC072DE70 0xE12FFF3C
+mem set 0xC072DE74 0xE1A04000
+mem set 0xC072DE78 0xE28F5F75
+mem set 0xC072DE7C 0xE5950000
+mem set 0xC072DE80 0xE304124C
+mem set 0xC072DE84 0xE3441E49
+mem set 0xC072DE88 0xE1500001
+mem set 0xC072DE8C 0x0A000022
+mem set 0xC072DE90 0xE5851000
+mem set 0xC072DE94 0xE3000794
+mem set 0xC072DE98 0xE34C000D
+mem set 0xC072DE9C 0xE3061FD7
+mem set 0xC072DEA0 0xE34F1A04
+mem set 0xC072DEA4 0xE5801000
+mem set 0xC072DEA8 0xE24DD020
+mem set 0xC072DEAC 0xE3A00000
+mem set 0xC072DEB0 0xE58D0000
+mem set 0xC072DEB4 0xE3A00041
+mem set 0xC072DEB8 0xE58D0004
+mem set 0xC072DEBC 0xE28F0060
+mem set 0xC072DEC0 0xE58D0008
+mem set 0xC072DEC4 0xE3A0001C
+mem set 0xC072DEC8 0xE58D000C
+mem set 0xC072DECC 0xE3020000
+mem set 0xC072DED0 0xE58D0010
+mem set 0xC072DED4 0xE305034C
+mem set 0xC072DED8 0xE3440441
+mem set 0xC072DEDC 0xE58D0014
+mem set 0xC072DEE0 0xE3000052
+mem set 0xC072DEE4 0xE58D0018
+mem set 0xC072DEE8 0xE3A00000
+mem set 0xC072DEEC 0xE58D001C
+mem set 0xC072DEF0 0xE1A0000D
+mem set 0xC072DEF4 0xE306CA58
+mem set 0xC072DEF8 0xE34CC001
+mem set 0xC072DEFC 0xE12FFF3C
+mem set 0xC072DF00 0xE28DD020
+mem set 0xC072DF04 0xE3500000
+mem set 0xC072DF08 0xDA000003
+mem set 0xC072DF0C 0xE3A01000
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[###.....]43
+display osd 1
+display text fpSup[###.....]43
+display osd 1
+display text fpSup[###.....]43
+display osd 1
+
+mem set 0xC072DF10 0xE306CBC0
+mem set 0xC072DF14 0xE34CC001
+mem set 0xC072DF18 0xE12FFF3C
+mem set 0xC072DF1C 0xE1A00004
+mem set 0xC072DF20 0xE8BD8070
+mem set 0xC072DF24 0xE92D41F0
+mem set 0xC072DF28 0xE3070A7C
+mem set 0xC072DF2C 0xE34C0375
+mem set 0xC072DF30 0xE5904000
+mem set 0xC072DF34 0xE3070000
+mem set 0xC072DF38 0xE0845000
+mem set 0xC072DF3C 0xE3080000
+mem set 0xC072DF40 0xE0846000
+mem set 0xC072DF44 0xE304C658
+mem set 0xC072DF48 0xE34CC044
+mem set 0xC072DF4C 0xE12FFF3C
+mem set 0xC072DF50 0xE3A01000
+mem set 0xC072DF54 0xE304C698
+mem set 0xC072DF58 0xE34CC044
+mem set 0xC072DF5C 0xE12FFF3C
+mem set 0xC072DF60 0xE1A01000
+mem set 0xC072DF64 0xE1A00005
+mem set 0xC072DF68 0xE305CE90
+mem set 0xC072DF6C 0xE34CC036
+mem set 0xC072DF70 0xE12FFF3C
+mem set 0xC072DF74 0xE1A00005
+mem set 0xC072DF78 0xE28F10D8
+mem set 0xC072DF7C 0xE3A02001
+mem set 0xC072DF80 0xE305CFB0
+mem set 0xC072DF84 0xE34CC036
+mem set 0xC072DF88 0xE12FFF3C
+mem set 0xC072DF8C 0xE3500000
+mem set 0xC072DF90 0x0A00000B
+mem set 0xC072DF94 0xE1A00005
+mem set 0xC072DF98 0xE1A01006
+mem set 0xC072DF9C 0xE3002000
+mem set 0xC072DFA0 0xE3402002
+mem set 0xC072DFA4 0xE3A03000
+mem set 0xC072DFA8 0xE306C060
+mem set 0xC072DFAC 0xE34CC036
+mem set 0xC072DFB0 0xE12FFF3C
+mem set 0xC072DFB4 0xE1A00005
+mem set 0xC072DFB8 0xE306C020
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[#####...]67
+display osd 1
+display text fpSup[#####...]67
+display osd 1
+display text fpSup[#####...]67
+display osd 1
+
+mem set 0xC072DFBC 0xE34CC036
+mem set 0xC072DFC0 0xE12FFF3C
+mem set 0xC072DFC4 0xE1A00005
+mem set 0xC072DFC8 0xE3A01002
+mem set 0xC072DFCC 0xE305CED0
+mem set 0xC072DFD0 0xE34CC036
+mem set 0xC072DFD4 0xE12FFF3C
+mem set 0xC072DFD8 0xE5960000
+mem set 0xC072DFDC 0xE3041256
+mem set 0xC072DFE0 0xE3441E49
+mem set 0xC072DFE4 0xE1500001
+mem set 0xC072DFE8 0x1A000018
+mem set 0xC072DFEC 0xE5967004
+mem set 0xC072DFF0 0xE2868010
+mem set 0xC072DFF4 0xE0882187
+mem set 0xC072DFF8 0xE3570000
+mem set 0xC072DFFC 0x0A00000E
+mem set 0xC072E000 0xE5980000
+mem set 0xC072E004 0xE5981004
+mem set 0xC072E008 0xE3A03000
+mem set 0xC072E00C 0xE1530001
+mem set 0xC072E010 0x2A000003
+mem set 0xC072E014 0xE7D2C003
+mem set 0xC072E018 0xE7C0C003
+mem set 0xC072E01C 0xE2833001
+mem set 0xC072E020 0xEAFFFFF9
+mem set 0xC072E024 0xE0822001
+mem set 0xC072E028 0xE2822003
+mem set 0xC072E02C 0xE3C22003
+mem set 0xC072E030 0xE2888008
+mem set 0xC072E034 0xE2477001
+mem set 0xC072E038 0xEAFFFFEE
+mem set 0xC072E03C 0xE5960008
+mem set 0xC072E040 0xE3500000
+mem set 0xC072E044 0x0A000001
+mem set 0xC072E048 0xE8BD41F0
+mem set 0xC072E04C 0xE12FFF10
+mem set 0xC072E050 0xEAFFFFFE
+mem set 0xC072E054 0x00000000
+mem set 0xC072E058 0x4853565C
+mem set 0xC072E05C 0x49422E4C
+mem set 0xC072E060 0x0000004E
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[#######.]90
+display osd 1
+display text fpSup[#######.]90
+display osd 1
+display text fpSup[#######.]90
+display osd 1
+
+# --- start the worker --------------------------------------------------------
+# A one-shot branch from the gyro callback: bootstrap calls the routine it
+# displaced, creates the task, and restores this word.
+mem set 0xC00D0794 0xEB1975B2
+
+# --- done --------------------------------------------------------------------
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup!
+display osd 1
+display text fpSup!
+display osd 1
+display text fpSup!
+display osd 1

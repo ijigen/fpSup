@@ -3,17 +3,17 @@
 
     ./gyro/fetchclip.py A001_009 -o ~/takes
 
-    A001_009.CSV     the gyro log, built by the camera itself
+    A001_009.gcsv    the gyro log, built by the camera itself
     A001_009.GYR     the raw capture it came from
     A001_009.json    the lens profile
 
-The camera writes the .CSV when a take stops, so the conversion is already done;
+The camera writes the .gcsv when a take stops, so the conversion is already done;
 this fetches it and builds the profile to go with it. The profile needs the
 sensor mode (in the .GYR), the frame size and focal length (in the frame's EXIF,
 where the camera puts them) and the lens distortion table (in RAM, if the camera
 has data for the mounted lens) -- so nothing has to be typed in or measured.
 
-The .CSV is verified against the host decoder before it is handed over. They have
+The .gcsv is verified against the host decoder before it is handed over. They have
 matched byte for byte on every take so far, and the day they do not is the day to
 find out, not to trust the camera's arithmetic silently.
 """
@@ -65,7 +65,10 @@ def fetch(remote, size, dest):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('clip', help='e.g. A001_009')
-    ap.add_argument('-o', '--out', type=Path, default=Path('.'))
+    # Somewhere that survives: the job's scratch directory does not, and a
+    # profile is only useful next to the clip it belongs to.
+    ap.add_argument('-o', '--out', type=Path,
+                    default=HERE.parent.parent / 'out' / 'gyroflow')
     ap.add_argument('--keep-frame', action='store_true',
                     help='keep the DNG frame the profile was read from')
     a = ap.parse_args()
@@ -76,7 +79,12 @@ def main():
         raise SystemExit('the camera is not answering')
 
     have = card_files(clip)
-    gyr_name, csv_name = f'{clip}.GYR', f'{clip}.CSV'
+    # The camera writes .gcsv now; older cards carry .CSV from before the
+    # rename, and there is no reason a clip shot last week should stop working.
+    gyr_name = f'{clip}.GYR'
+    csv_name = f'{clip}.gcsv'
+    if csv_name not in have and f'{clip}.CSV' in have:
+        csv_name = f'{clip}.CSV'
     if gyr_name not in have:
         raise SystemExit(f'no {gyr_name} on the card')
 
@@ -181,10 +189,21 @@ def main():
             claimed = float(claimed)
         except ValueError:
             claimed = 0.0
-        if claimed and not 0.75 < got / claimed < 1.25:
-            print(f'  *** the clip works out at {got:.1f} fps and the mode says '
-                  f'{claimed:.2f}. One of them is wrong; the rolling shutter in '
-                  f'the profile is the mode\'s. ***')
+        # The sensor may run faster than the clip and the recorder keep every
+        # nth frame -- FHD 29.97 is shot with the sensor held at MONIT1_60, so
+        # the mode reads 60 against a 30 fps clip and both are right. The
+        # rolling shutter is per sensor frame either way, which is what the
+        # profile carries. Only a ratio that is not a small whole number means
+        # something is actually wrong.
+        ratio = claimed / got if got else 0
+        if claimed and not any(abs(ratio - k) < 0.25 for k in (1, 2, 3, 4)):
+            print(f'  *** the clip works out at {got:.1f} fps against the mode\'s '
+                  f'{claimed:.2f} -- not a whole multiple, so one of them is wrong. '
+                  f'The profile carries the mode\'s rolling shutter. ***')
+        elif claimed and abs(ratio - 1) > 0.25:
+            print(f'  sensor        {claimed:.0f} fps for a {got:.0f} fps clip '
+                  f'(every {round(ratio)}{"nd" if round(ratio)==2 else "rd" if round(ratio)==3 else "th"} '
+                  f'frame kept); the readout time is per sensor frame')
     if not a.keep_frame:
         frame.unlink()
     print(f'\n  {a.out}/')

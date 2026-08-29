@@ -90,6 +90,15 @@ boot:
     LDA     r1, HOOK_ORIG               @ away: the file read below takes long
     str     r1, [r0]                    @ enough for this to fire again
 
+#ifdef NOTASK
+    /* No task. The read below happens inside the gyro callback, once, at boot,
+     * with nothing recording -- the only cost is that one drain of the sample
+     * ring arrives late, and the ring holds 240 ms. A task here would cost 26
+     * words of loader, which is 26 `mem set` commands the AutoRun has to spend
+     * before the camera is usable. */
+    bl      load
+    b       boot_done
+#else
     sub     sp, sp, #32
     mov     r0, #0
     str     r0, [sp]                    @ exinf
@@ -116,6 +125,7 @@ boot:
     mov     r1, #0
     LDA     r12, FN_STATSK
     blx     r12
+#endif
 
 boot_done:
     mov     r0, r4
@@ -196,16 +206,24 @@ place:
     b       place
 
 run:
+#ifdef NOTASK
+    pop     {r4, r5, r6, r7, r8, pc}    @ the placed hook runs from the next callback
+#else
     ldr     r0, [r6, #8]                @ entry
     cmp     r0, #0
     beq     load_stop
     pop     {r4, r5, r6, r7, r8, lr}
     bx      r0                          @ this task becomes the worker
+#endif
 
 /* Nothing was placed, or there is nowhere to go. Returning from a task entry is
  * undefined here -- tk_ext_tsk is not in the syscall table -- so sit still. */
 load_stop:
+#ifdef NOTASK
+    pop     {r4, r5, r6, r7, r8, pc}    @ nothing placed: leave the camera alone
+#else
     b       load_stop
+#endif
 
 claim:
     .word   0

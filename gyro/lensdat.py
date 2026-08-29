@@ -28,10 +28,16 @@ a zoom's focal length changes while shooting, and Gyroflow has no way to follow
 it either.
 """
 import argparse
+import json
 import struct
 import subprocess
 import sys
 from pathlib import Path
+
+# The rates the camera will record at. Without this the table is every mode the
+# sensor has, which is seventy, and the whole point is that it fits in the pool
+# beside the logger so the camera never has to be told which mode to expect.
+MOVIE_FPS = (23.976, 24, 25, 29.97, 30, 50, 59.94, 60, 100, 119.88, 120)
 
 HERE = Path(__file__).resolve().parent
 SHELL = HERE.parent / 'fp_usb_shell'
@@ -39,7 +45,7 @@ sys.path.insert(0, str(SHELL))
 
 from armasm import assemble                                    # noqa: E402
 import putfile as P                                            # noqa: E402
-from lens_profile import load_modes                            # noqa: E402
+from lens_profile import load_modes, build_profile           # noqa: E402
 
 BLOCK_FOCAL, BLOCK_NAME = 0x0D, 0x2D
 SENSOR_ACTIVE_W, SENSOR_ACTIVE_MM = 6000, 35.9
@@ -109,23 +115,58 @@ def main():
     else:
         print('  movie size    unknown; the profile cannot be checked against it')
 
-    rows = []
-    for m in load_modes():
-        cw = min(m['covered_w'], SENSOR_ACTIVE_W)
-        covered_mm = SENSOR_ACTIVE_MM * cw / SENSOR_ACTIVE_W
-        # focal_px is per output width, and the output width is not in the mode
-        # table -- it is whatever the clip is. Store the ratio instead, scaled:
-        # focal_px = out_w * (focal_mm / covered_mm), so keep focal_mm/covered_mm
-        # x 1e6 and let the camera multiply by its own width.
-        ratio = (focal_tenths / 10) / covered_mm
-        rows.append((int(m['mode_id']), round(ratio * 1e6),
-                     round(m['readout_ms'] * 1000)))
-    rows.sort()
+    if not mov_w:
+        raise SystemExit('  the movie size did not read back; without it the '
+                         'profiles would carry the wrong frame dimensions')
+    # CinemaDNG frames come out sixteen wider and ten taller than the menu says.
+    frame_w, frame_h = mov_w + 16, mov_h + 10
 
-    blob = struct.pack('<4sHH32sHHH', b'LDAT', 2, focal_tenths,
-                       name.encode('ascii', 'replace')[:32], mov_w, mov_h, len(rows))
-    blob += b''.join(struct.pack('<III', *r) for r in rows)
-    print(f'  modes         {len(rows)} rows, {len(blob)} bytes')
+    # Finished profiles, not the numbers to build them from.
+    #
+    # Version 2 stored focal_px and the readout and left the camera to assemble
+    # the JSON. That means formatting decimals in ARM, for a file whose text is
+    # the same on every take with the same lens and mode -- nothing in a profile
+    # is clip-specific. Storing the text instead moves every format decision
+    # back to the host, where it can be changed without reloading the logger,
+    # and leaves the camera a lookup and a copy.
+    #
+    # One blob per mode in the table rather than the few that look plausible:
+    # a hundred kilobytes costs nothing on a card, and a mode missing from the
+    # file is a take with no profile.
+    profiles, blobs, offsets = [], [], []
+    for m in sorted(load_modes(), key=lambda x: int(x['mode_id'])):
+        if frame_w > m['readout_w'] or frame_h > m['readout_h']:
+            continue            # that mode cannot have produced this frame
+        if not any(abs(m['fps'] - f) < 0.2 for f in MOVIE_FPS):
+            continue            # nor can it, at a rate the camera cannot record
+        prof = build_profile(m, name, frame_w, frame_h, m['fps'], focal_tenths / 10)
+        blobs.append((json.dumps(prof, indent=2, ensure_ascii=False) + '\n').encode())
+        profiles.append(int(m['mode_id']))
+
+    HEADER = 48
+    body = HEADER + 12 * len(blobs)
+    directory = b''
+    for mode_id, blob_bytes in zip(profiles, blobs):
+        directory += struct.pack('<III', mode_id, body, len(blob_bytes))
+        body += len(blob_bytes)
+
+    blob = struct.pack('<4sHHHHH32s2x', b'LDAT', 3, len(blobs), focal_tenths,
+                       mov_w, mov_h, name.encode('ascii', 'replace')[:32])
+    assert len(blob) == HEADER, len(blob)
+    blob += directory + b''.join(blobs)
+    # Padded to a fixed length, because opening with mode 7 does not truncate:
+    # a shorter table written over a longer one leaves the old tail behind, and
+    # the card then reports a size that is not the table's. The pad is zeros,
+    # which the directory never points into.
+    PADDED = 0x10000
+    if len(blob) > PADDED:
+        raise SystemExit(f'  the table is {len(blob)} bytes, past the {PADDED} '
+                         f'the pool has room for; narrow the mode list')
+    print(f'  profiles      {len(blobs)} modes for {frame_w}x{frame_h}, '
+          f'{len(blob)} bytes in {PADDED}')
+    blob += b'\0' * (PADDED - len(blob))
+    if not blobs:
+        raise SystemExit('  no mode in the table can produce that frame size')
 
     tmp = Path(a.local) if a.local else HERE / '.lens.dat'
     tmp.write_bytes(blob)

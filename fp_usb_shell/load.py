@@ -28,15 +28,22 @@ def park_resident(state, stub_src, stub_addr):
     Returns the state address if something was parked, so the caller can point
     it at the new code afterwards.  If no task is running there is nothing to do.
     """
+    # Place the stub here rather than expecting it from a card script: the shell's
+    # AutoRun carries the shell and nothing else, and what a payload needs to be
+    # swappable is the payload's business.
+    #
+    # Unconditionally, even when there is nothing to park. The payload's
+    # PARK_STUB is a compiled-in address, so on a cold boot -- when no task is
+    # resident and this used to return early -- that address held nothing, and a
+    # writer that ever saw PARK set would have branched into a field of zeros.
+    # Zero is a no-op in ARM, so it would have slid out of the cave and into
+    # whatever came next.
+    put(stub_addr, assemble(stub_src), 'park  ')
+    mem_set(stub_addr + symbols(stub_src)['park_state'], state)
     # Whether anything is resident is decided by where it runs, not by what it is
     # called.  A rename should not stop the loader recognising its own payload.
     if not cave_tasks():
         return None
-    # Place the stub here rather than expecting it from a card script: the shell's
-    # AutoRun carries the shell and nothing else, and what a payload needs to be
-    # swappable is the payload's business.
-    put(stub_addr, assemble(stub_src), 'park  ')
-    mem_set(stub_addr + symbols(stub_src)['park_state'], state)
     mem_set(state, 1)                       # PARK
     for _ in range(50):
         if (mem_get(state + 4)[0] or 0) == 1:   # PARKED
@@ -105,7 +112,10 @@ def main() -> int:
                          'PARK, PARKED and RESUME, in that order')
     ap.add_argument('--park-stub', type=pathlib.Path, default=None,
                     help='source of the stub to park in, placed by this tool')
-    ap.add_argument('--park-stub-addr', type=lambda s: int(s, 0), default=0xC072EF00)
+    # As high in the cave as the stub fits: park.S is 76 bytes and the shell's
+    # state starts at CAVE_HIGH, so 96 leaves it room to grow without eating
+    # into the payload, which is what actually runs out.
+    ap.add_argument('--park-stub-addr', type=lambda s: int(s, 0), default=0xC072EFB4)
     ap.add_argument('--park-resume', default=None,
                     help='symbol the parked task should resume at')
     ap.add_argument('--dry-run', action='store_true')

@@ -28,6 +28,20 @@ ap.add_argument('--out', type=pathlib.Path, default=None,
                 help='where to write; defaults to this tool\'s own autorun/')
 ap.add_argument('--also', action='append', default=[], metavar='ADDR:SRC',
                 help='additional source to place at a fixed address, repeatable')
+ap.add_argument('--boot-call', action='append', default=[], metavar='ADDR:SRC',
+                help='write this routine at ADDR and run it once, by borrowing the '
+                     'echo handler; for work the AutoRun cannot express, like '
+                     'reading a file into memory')
+ap.add_argument('--no-pad', action='store_true',
+                help='do not pad to a fixed length. Only safe when whatever writes '
+                     'the card removes the old file first -- putfile cannot, the '
+                     'Mac can. Saves the camera parsing five hundred lines of '
+                     'filler on every boot.')
+ap.add_argument('--no-shell', action='store_true',
+                help='leave the USB shell out: no worker, no endpoint patches, no '
+                     'state block. The loader sleeps instead of becoming it. Boots '
+                     'faster and leaves one less resident task, at the price of no '
+                     'way to look inside if something goes wrong.')
 ap.add_argument('--loader', action='store_true',
                 help='put the code in VSHL.BIN and have the AutoRun read it')
 args = ap.parse_args()
@@ -35,10 +49,13 @@ DEST = args.out or DEST_DEFAULT
 DEST.parent.mkdir(parents=True, exist_ok=True)
 
 CAVE_LOW = 0xC072DE64
+LOADER_END = CAVE_LOW + 0x200   # loader.S sits at the bottom; payloads go above
 
 LOAD   = 0xC072F050   # worker code — high, leaving 0xC072DE64..0xC072F000 free
 STATE  = 0xC072F000   # worker state, 16 words
 CAPLEN = 0xC072F040   # capture length
+ECHO_SLOT = 0xC0BAC2F8  # command table entry 17, echo's handler pointer
+ECHO_ORIG = 0xC03D99A0
 HOOK   = 0xC00D0794   # gyro callback, borrowed once to create the task
 
 from patches import PATCHES, SCREEN, BAR_WIDTH
@@ -53,12 +70,31 @@ def word_at(seq, i):
     return seq[i]
 
 
+# A measuring build only: one send per update instead of three.
+#
+# The bar keeps every step; each step just costs three commands rather than
+# nine. If the eight seconds between 0% and 20% -- where the shipping build
+# issues nine display commands and nothing else -- collapses, the display is
+# what the boot is spending its time on. If it does not, that stretch belongs to
+# the camera's own start-up and no amount of trimming here will touch it.
+THIN_BAR = __import__('os').environ.get('FPSUP_THIN_BAR') == '1'
+
+
 def progress(out, pct: int):
+    """One update, sent three times over.
+
+    Sending it once looked safe -- a dropped progress update is only a bar that
+    does not move -- and it was not: the bar stopped at 67 while the boot ran on
+    to the end, and 67 was then read as a hang. A progress bar that lies is
+    worse than no bar. The repetition was measured on this camera; the saving
+    comes from taking fewer steps, not from trusting each one.
+    """
     filled = round(pct * BAR_WIDTH / 100)
     msg = f"fpSup[{'#' * filled}{'.' * (BAR_WIDTH - filled)}]{pct}"
-    for _ in range(3):
+    reps = 1 if THIN_BAR else 3
+    for _ in range(reps):
         out.append("display osd 1 0x00000000")
-    for _ in range(3):
+    for _ in range(reps):
         out.append(f"display text {msg}")
         out.append("display osd 1")
 
@@ -108,23 +144,30 @@ for addr, value, why in SCREEN:
 w("")
 progress(out, 0)
 w("")
-w("# --- patches -----------------------------------------------------------------")
-for patch in PATCHES:
-    addr, value, *why = patch
-    for line in why:
-        w(f"# {line}")
-    w(f"mem set 0x{addr:08X} 0x{value:08X}")
-w("")
-progress(out, 10)
-w("")
-w(f"# --- worker state @0x{STATE:08X}, 16 words, plus the capture length ----------")
-for i in range(16):
-    w(f"mem set 0x{STATE + i*4:08X} 0x00000000")
-w(f"mem set 0x{CAPLEN:08X} 0x00000000")
+if args.no_shell:
+    w("# --- no shell ----------------------------------------------------------------")
+    w("# The endpoint patches and the worker's state block are the USB shell's, and")
+    w("# there is no shell here: forty-two commands that a camera nobody is going to")
+    w("# plug a debugger into does not need. The loader sleeps instead of becoming a")
+    w("# worker: the loader reads the file from the callback and returns.")
+else:
+    w("# --- patches -----------------------------------------------------------------")
+    for patch in PATCHES:
+        addr, value, *why = patch
+        for line in why:
+            w(f"# {line}")
+        w(f"mem set 0x{addr:08X} 0x{value:08X}")
+    w("")
+    progress(out, 10)
+    w("")
+    w(f"# --- worker state @0x{STATE:08X}, 16 words, plus the capture length ----------")
+    for i in range(16):
+        w(f"mem set 0x{STATE + i*4:08X} 0x00000000")
+    w(f"mem set 0x{CAPLEN:08X} 0x00000000")
 w("")
 progress(out, 20)
 w("")
-CHUNKS = 6
+CHUNKS = 3      # progress steps through the loader; each one draws
 if not args.loader:
     w(f"# --- worker code @0x{LOAD:08X}..0x{end:08X}, {len(code)} bytes ---------------")
     per = (len(words) + CHUNKS - 1) // CHUNKS
@@ -166,7 +209,12 @@ if args.loader:
     # other way, so the AutoRun cannot ask for this directly -- only spell out
     # something small that asks on its behalf.
     lsrc = HERE / 'templates' / 'loader.S'
-    lcode = assemble(lsrc)
+    # The release build has no worker to become, so the loader does not need a
+    # task: it reads the file straight from the gyro callback and returns. That
+    # is 31 fewer words to spell out, which is 31 fewer `mem set` commands --
+    # about two seconds off the boot, measured.
+    ldef = ['NOTASK=1'] if args.no_shell else []
+    lcode = assemble(lsrc, ldef)
     lwords = to_words(lcode)
     # Not at LOAD. The loader's whole job is to write to LOAD, and putting it
     # there means its copy loop overwrites the instructions it is executing --
@@ -177,7 +225,7 @@ if args.loader:
     lend = LOADER + len(lcode)
     if lend > LOAD:
         sys.exit(f'loader at 0x{LOADER:08X}..0x{lend:08X} runs into the worker')
-    lboot = LOADER + symbols(lsrc)['boot']
+    lboot = LOADER + symbols(lsrc, ldef)['boot']
     ldisp = (lboot - HOOK - 8) >> 2
     hook_bl = 0xEB000000 | (ldisp & 0xFFFFFF)
 
@@ -218,7 +266,7 @@ if args.payload and not args.loader:
     # The payload is often more than half the file, so it gets the rest of the
     # bar. Without this the readout sits at 90% through several hundred silent
     # commands and then jumps to done, which looks exactly like a stall.
-    GCHUNKS = 7
+    GCHUNKS = 3
     per = (len(gwords) + GCHUNKS - 1) // GCHUNKS
     for c in range(GCHUNKS):
         for i in range(c * per, min((c + 1) * per, len(gwords))):
@@ -240,6 +288,29 @@ if args.payload and not args.loader:
     w(f"mem set 0x{HOOK:08X} 0x{ghook:08X}")
     w("")
 
+for spec in args.boot_call:
+    addr_s, _, src_s = spec.partition(':')
+    addr, blob = int(addr_s, 0), assemble(pathlib.Path(src_s))
+    name = pathlib.Path(src_s).name
+    w("")
+    w(f"# --- {name}, run once ---------------------------------------------------")
+    w("# Spelled out here rather than placed by the loader: the loader fires from a")
+    w("# gyro callback whenever it likes, and this has to be written before it is")
+    w("# called. A hundred lines of `mem set` buys an order that is not a race.")
+    w(f"# {len(blob)} bytes at 0x{addr:08X}, then the echo handler is borrowed to")
+    w("# call it and put back. There is no `mem call`.")
+    for i, word in enumerate(to_words(blob)):
+        w(f"mem set 0x{addr + i*4:08X} 0x{word:08X}")
+    w(f"mem set 0x{ECHO_SLOT:08X} 0x{addr:08X}")
+    w("echo")
+    for _ in range(3):
+        # `mem set` drops commands, and a handler left pointing at our routine
+        # turns the next `echo` into a branch into whatever is there. Seen: the
+        # slot came out of a boot holding 0xC072F000, one nibble off the address
+        # that was written.
+        w(f"mem set 0x{ECHO_SLOT:08X} 0x{ECHO_ORIG:08X}")
+    w("")
+
 w("# --- done --------------------------------------------------------------------")
 for _ in range(3):
     w("display osd 1 0x00000000")
@@ -248,19 +319,39 @@ for _ in range(3):
     w("display osd 1")
 
 if args.loader:
+    if args.payload and not args.entry:
+        sys.exit('--payload needs --entry')
+    if args.payload and args.payload_addr < LOADER_END:
+        sys.exit(f'--payload-addr 0x{args.payload_addr:08X} is inside the loader '
+                 f'(0x{CAVE_LOW:08X}..0x{LOADER_END:08X}), which is executing from '
+                 f'there while it places sections: it would overwrite itself')
     import struct
-    secs = [(LOAD, code)]
+    # No worker in the release build, and with NOTASK no task to park in it
+    # either, so nothing goes to LOAD at all -- the sleeper is debug-only now.
+    secs = [] if args.no_shell else [(LOAD, code)]
     if args.payload:
         secs.append((args.payload_addr, assemble(pathlib.Path(args.payload))))
     for spec in args.also:
         addr_s, _, src_s = spec.partition(':')
         secs.append((int(addr_s, 0), assemble(pathlib.Path(src_s))))
+    if args.payload:
+        # Point the gyro callback at the payload -- last, so it is written only
+        # after the payload itself is in place. A `mem set` in the AutoRun could
+        # not promise that: the loader runs from a callback of its own, on its
+        # own schedule, and arming a hook that branches into memory nobody has
+        # written yet is a freeze. As a section it cannot be early. The loader
+        # puts the callback back before it places anything, so this is not
+        # overwritten either.
+        gsrc = pathlib.Path(args.payload)
+        gentry = args.payload_addr + symbols(gsrc)[args.entry]
+        gdisp = (gentry - HOOK - 8) >> 2
+        secs.append((HOOK, struct.pack('<I', 0xEB000000 | (gdisp & 0xFFFFFF))))
     table = b''
     body = b''
     for addr, blob in secs:
         table += struct.pack('<II', addr, len(blob))
         body += blob + b'\x00' * (-len(blob) % 4)
-    entry = LOAD + symbols(WORKER)['serve']
+    entry = 0 if args.no_shell else LOAD + symbols(WORKER)['serve']
     binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
     binpath = DEST.parent / 'VSHL.BIN'
     BIN_PAD = 8192
@@ -285,19 +376,29 @@ text = '\n'.join(out) + '\n'
 PAD_TO = 32768
 if len(text) > PAD_TO:
     sys.exit(f'script is {len(text)} bytes, past the {PAD_TO} everything is padded to')
-filler = '# pad -- see PAD_TO: mode 7 overwrites but does not truncate\n'
-while len(text) + len(filler) <= PAD_TO:
-    text += filler
-text += '#' * (PAD_TO - len(text) - 1) + '\n' 
+if not args.no_pad:
+    filler = '# pad -- see PAD_TO: mode 7 overwrites but does not truncate\n'
+    while len(text) + len(filler) <= PAD_TO:
+        text += filler
+    text += '#' * (PAD_TO - len(text) - 1) + '\n' 
 DEST_DEFAULT.parent.mkdir(exist_ok=True)
 DEST.write_text(text)
 
-print(f"worker : {len(code)} bytes, {len(words)} words, 0x{LOAD:08X}..0x{end:08X}")
+if args.no_shell:
+    print("worker : none -- no task either, the loader runs in the callback")
+else:
+    print(f"worker : {len(code)} bytes, {len(words)} words, 0x{LOAD:08X}..0x{end:08X}")
 print(f"start  : 0x{HOOK:08X} = 0x{hook_bl:08X} -> 0x{LOAD:08X}")
 if args.payload:
-    print(f"payload: {gsrc.name}, {len(gcode)} bytes, "
-          f"0x{args.payload_addr:08X}..0x{gend:08X}, entry 0x{gentry:08X}")
-print(f"patches: {len(PATCHES)} endpoint, {len(SCREEN)} screen")
+    # In loader mode the payload is a section of the binary, not a run of `mem
+    # set`, so the sizes come from there rather than from the emitting branch.
+    psrc = pathlib.Path(args.payload)
+    pcode = assemble(psrc)
+    pentry = args.payload_addr + symbols(psrc)[args.entry]
+    print(f"payload: {psrc.name}, {len(pcode)} bytes, 0x{args.payload_addr:08X}.."
+          f"0x{args.payload_addr + len(pcode):08X}, entry 0x{pentry:08X}"
+          + (" (armed by the binary's last section)" if args.loader else ""))
+print(f"patches: {0 if args.no_shell else len(PATCHES)} endpoint, {len(SCREEN)} screen")
 print(f"wrote  : {DEST_DEFAULT.relative_to(HERE)}  {len(out)} lines  "
       f"sha256={hashlib.sha256(text.encode()).hexdigest()[:16]}")
 commands = [l for l in out if l and not l.startswith('#')]

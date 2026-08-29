@@ -73,10 +73,31 @@
                                      recording is over by then and the pool has
                                      896 KB nobody uses, verified across a
                                      recording 224 markers out of 224.          */
-.equ TEXT_FLUSH,      0x40000     /* 256 KiB: three writes instead of forty     */
+.equ TEXT_FLUSH,      0x4000      /* 16 KiB. It was 256, to make three writes of
+                                     what had been forty -- but each of those
+                                     three held the volume for as long as it took
+                                     to put a quarter megabyte on the card, and
+                                     the camera's own file task cannot preempt a
+                                     mutex. Short holds beat few holds when
+                                     something at priority 6 is waiting.        */
 .equ O_READ,          0x5B000     /* pool+0x61000, past the text buffer         */
-.equ READ_SIZE,       0x9C000     /* 624 KiB, ending 12 KiB short of the pool   */
+.equ READ_SIZE,       0x10000     /* 64 KiB, for the same reason as TEXT_FLUSH   */
+.equ O_PROFILE,       0x9000      /* the gap between the block buffers and the
+                                   * gcsv's text: 68 KiB, which is where the
+                                   * whole \LENS.DAT goes -- one Gyroflow profile
+                                   * per sensor mode the camera can record in.
+                                   * A single profile would have to be told which
+                                   * mode to expect, and would quietly write
+                                   * nothing on any other. The table cannot.   */
+.equ PROFILE_MAX,     0x10000      /* what tableload.S reads in, so a directory
+                                   * entry past it is refused rather than read */
+.equ PROFILE_MAGIC,   0x5441444C  /* "LDAT", the same file lensdat.py leaves on
+                                   * the card: header, directory, then the text */
+.equ PROFILE_DIR,     48          /* the directory follows the header           */
 .equ O_END,           0xF000      /* the logger owns r10-0x6000 .. +0xF000 */
+.equ HOOK_SITE,       0xC00D0794  /* where the callback branches here from     */
+.equ HOOK_ORIG,       0xFA046FD7  /* the instruction it replaced               */
+.equ F_CACHE,         0xC000E91C  /* CP15 maintenance after placing code       */
 .equ PATH_MGR_SD,     0xC3438400
 .equ GYRO_DESC_PTR,   0xC31E3FCC
 
@@ -119,15 +140,47 @@
 .equ S_GEOM_W,        0x98        /* the recording geometry, read at record start */
 .equ S_GEOM_H,        0x9C
 .equ S_MODE_LATE,     0xA0        /* the mode, re-read once recording is going  */
+.equ S_MODE_N,        0xA4        /* entries used in the mode history below       */
+.equ S_DELAY,         0xF4        /* polls to wait before touching the card   */
+.equ S_POOL_TRIED,    0xFC        /* the pool code has been asked for once    */
+.equ S_GCSV_FN,       0xF8        /* the gcsv builder, in the pool            */
+.equ S_JSON_FN,       0xF0        /* the profile generator, in the pool       */
+.equ S_JSON_WANT,     0xAC        /* the profile is owed, and will be written on
+                                   * an idle poll rather than at the stop      */
+.equ S_MODE_RUN,      0xA8        /* the mode while the file was open and no stop
+                                   * pending -- the take's own mode, where the
+                                   * last sample of all lands after the stop with
+                                   * the camera already back in live view        */
+.equ S_MODE_HIST,     0xB0        /* 8 x {TickTimer, mode}; ends at 0xF0, and the
+                                   * state block has to stay under O_PATH = 0x100 */
+.equ MODE_OBJ,        0xC343B588  /* FUN_c0322e88() returns this; verified live.
+                                   * +4 is the mode now, +8 the one before it --
+                                   * the pair the firmware's own --mode_change--
+                                   * trace prints in ImagerMode.cpp. Reading the
+                                   * words directly skips the lazy-singleton
+                                   * getter, so this is two loads and safe to do
+                                   * on the writer's 5 ms poll. */
 .equ F_MODE_NOW,      0xC032C720  /* () -> the current sensor mode enum         */
 .equ GEOMETRY,        0xC37CE210  /* {width, height, frame bytes} while recording */        /* the .GYR has nothing more to give          */
 .equ S_READ_N,        0x8C        /* where read() drops its byte count          */        /* where to resume once the body is replaced    */
-.equ PARK_STUB,       0xC072EF00  /* never rewritten; see templates/park.S        */
+.equ PARK_STUB,       0xC072EFB4  /* as high as it fits: the payload grew into the
+                                   * old 0xC072EF00, and code that overwrites the
+                                   * stub while the writer is parked in it is a
+                                   * freeze. Moving it needs two loads -- one that
+                                   * still ends below the old address, then the
+                                   * real one. See templates/park.S              */
 
 .macro ldr_addr reg, value
     movw    \reg, #:lower16:\value
     movt    \reg, #:upper16:\value
 .endm
+
+
+/* Sits before the entry point rather than with the rest of the data: the hook
+ * reaches it with `adr` and the payload outgrew that instruction's range.
+ * Nothing executes into it -- the callback branches straight to gyro_hook. */
+boot_pool:
+    .word   0
 
 /* Load the state block address: the bufmem pool, plus the span the USB shell
  * owns (its frame buffer at +0, its capture buffer at +0x2000). */
@@ -146,6 +199,34 @@ gyro_hook:
     blx     ip
     mov     r11, r0
 
+    /* Stand down if this is not the boot that armed us.
+     *
+     * The shell's loader puts the firmware's own instruction back the moment it
+     * has run; this branch stays in place for the life of the session. A soft
+     * power-off that does not reload the firmware image therefore comes back up
+     * with the callback still pointing here, and the pool pointer belonging to
+     * a session that is over -- so the state block would be written over
+     * whatever now lives at that address, during the camera's own start-up.
+     *
+     * The shell alone survives ten power cycles; with the logger the next start
+     * fails until the battery comes out, and pulling the card does not help,
+     * which puts it in RAM rather than on the card. This is the one thing the
+     * logger leaves behind that the shell does not.
+     *
+     * boot_pool is part of the payload, so the loader rewrites it to zero on
+     * every boot that actually runs the AutoRun. First call: remember what the
+     * pool was. Later calls: if it moved, the AutoRun did not run, and the only
+     * safe thing to do is put the firmware's instruction back and disappear. */
+    ldr_addr r10, POOL_PTR
+    ldr      r10, [r10]
+    adr      r9, boot_pool
+    ldr      r8, [r9]
+    cmp      r8, #0
+    streq    r10, [r9]
+    beq      1f
+    cmp      r8, r10
+    bne      hook_stand_down
+1:
     pool_state r10
 
     /* Initialise the block ourselves, once, rather than trusting the host to
@@ -219,26 +300,36 @@ recording_started:
      * written to a file object that was never opened, and nothing noticed. */
     ldr_addr r8, PATH_MGR_SD
     add     r9, r10, #O_PATH
-    mov     r0, #0x5C                @ '\\'
-    strb    r0, [r9, #0]
+    /* \GYRO\A001_008.GYR -- its own folder, so the card's root stays the
+     * card's. Not the clip's folder: this one is created the instant recording
+     * starts, and at that instant the camera is still making that folder and
+     * the first frames in it. The folder has to exist; the card build makes it,
+     * and if it is missing the open fails and the take has no gyro data, which
+     * S_ERROR records and the missing file shows. */
+    movw    r0, #0x475C              @ '\\' then 'G'
+    strh    r0, [r9, #0]
+    movw    r0, #0x5259              @ 'Y' then 'R'
+    strh    r0, [r9, #2]
+    movw    r0, #0x5C4F              @ 'O' then '\\'
+    strh    r0, [r9, #4]
     mov     r0, #0x5F                @ '_'
-    strb    r0, [r9, #5]
-    mov     r0, #0x2E                @ '.'
-    strb    r0, [r9, #9]
-    mov     r0, #0x47                @ 'G'
     strb    r0, [r9, #10]
+    mov     r0, #0x2E                @ '.'
+    strb    r0, [r9, #14]
+    mov     r0, #0x47                @ 'G'
+    strb    r0, [r9, #15]
     mov     r0, #0x59                @ 'Y'
-    strb    r0, [r9, #11]
+    strb    r0, [r9, #16]
     mov     r0, #0x52                @ 'R'
-    strb    r0, [r9, #12]
+    strb    r0, [r9, #17]
     mov     r0, #0
-    strb    r0, [r9, #13]
+    strb    r0, [r9, #18]
     ldrb    r0, [r8, #8]
-    strb    r0, [r9, #1]
-    add     r0, r9, #2
+    strb    r0, [r9, #6]
+    add     r0, r9, #7
     ldr     r1, [r8, #0x0C]
     bl      put_decimal_3
-    add     r0, r9, #6
+    add     r0, r9, #11
     ldr     r1, [r8, #0x10]
     add     r1, r1, #1
     bl      put_decimal_3
@@ -724,6 +815,7 @@ writer_loop:
     movt    ip, #:upper16:PARK_STUB
     bx      ip
 15:
+    bl      mode_watch
     ldr     r0, [r10, #S_FILE]
     cmp     r0, #1
     bne     writer_check_blocks
@@ -755,6 +847,41 @@ writer_choose_b:
     b       writer_check_blocks
 
 writer_no_blocks:
+    ldr     r0, [r10, #S_POOL_TRIED]
+    cmp     r0, #0
+    bne     17f
+    mov     r0, #1
+    str     r0, [r10, #S_POOL_TRIED]
+    bl      pool_load
+17:
+    ldr     r0, [r10, #S_JSON_WANT]
+    cmp     r0, #0
+    beq     16f
+    ldr     r0, [r10, #S_FILE]       @ only with nothing open: the path buffer is
+    cmp     r0, #0                   @ the gcsv's, and the next take rewrites it
+    bne     16f
+    /* Try, and if the camera will not let us on the card yet, try again in a
+     * second. Not a timed wait -- we do not know how long the camera needs and
+     * guessing cost either a freeze (too soon) or a whole take's work (a fixed
+     * three seconds, cancelled when the next take started inside it). This asks
+     * and takes no for an answer, and the answer changes.
+     *
+     * A second between attempts, because each one reads the .GYR back and
+     * rewrites the gcsv: hammering the volume every five milliseconds while
+     * SRecFile is trying to finish is the very thing being avoided. */
+    ldr     r0, [r10, #S_DELAY]
+    subs    r0, r0, #1
+    strge   r0, [r10, #S_DELAY]
+    bge     16f
+    bl      gcsv_build
+    bl      json_build
+    cmp     r0, #0
+    movne   r0, #0                   @ written: the debt is paid
+    moveq   r0, #1                   @ refused: keep it, and wait a second
+    str     r0, [r10, #S_JSON_WANT]
+    movw    r0, #200
+    str     r0, [r10, #S_DELAY]
+16:
     ldr     r0, [r10, #S_STOP]
     cmp     r0, #1
     bne     writer_sleep
@@ -763,6 +890,48 @@ writer_no_blocks:
     bne     writer_sleep
     bl      writer_close
     b       writer_sleep
+
+/* Every distinct sensor mode the take passes through, with the tick it changed.
+ *
+ * Two takes shot back to back on the same settings -- A001_016 and A001_017,
+ * both FHD 29.97 -- recorded modes 8 and 106 in their headers. The header is
+ * sampled the instant ACTIVE goes high, which races the mode change itself, so
+ * a single sample cannot say which mode the recording ran in and two samples
+ * that disagree cannot either. A history can: it shows when the switch lands
+ * and whether anything moves afterwards. Eight slots is more than a take needs;
+ * once they are full the watcher stops, so a mode that oscillates cannot push
+ * the interesting first entries out.
+ *
+ * Called from the writer's poll, not the gyro callback -- 5 ms of resolution on
+ * a change that takes tens of milliseconds, and nothing added to the 2500 Hz
+ * path. */
+mode_watch:
+    push    {r4, r5, r6, lr}
+    movw    r5, #:lower16:MODE_OBJ
+    movt    r5, #:upper16:MODE_OBJ
+    ldr     r6, [r5, #4]
+    ldr     r4, [r10, #S_MODE_N]
+    cmp     r4, #8
+    bge     9f
+    cmp     r4, #0
+    beq     1f
+    add     r5, r10, #S_MODE_HIST
+    add     r5, r5, r4, lsl #3
+    ldr     r5, [r5, #-4]            @ the mode in the last slot used
+    cmp     r5, r6
+    beq     9f
+1:
+    movw    ip, #0xB6E0
+    movt    ip, #0xC002
+    blx     ip
+    add     r5, r10, #S_MODE_HIST
+    add     r5, r5, r4, lsl #3
+    str     r0, [r5]
+    str     r6, [r5, #4]
+    add     r4, r4, #1
+    str     r4, [r10, #S_MODE_N]
+9:
+    pop     {r4, r5, r6, pc}
 
 /* A subroutine rather than a jump target, so it can be called on its own during
  * bring-up instead of only from the thread's loop. */
@@ -830,7 +999,21 @@ writer_write_block:
     movt    ip, #0xC036
     blx     ip
 
-    /* Re-read the sensor mode, once recording is under way.
+    /* The take's own mode, sampled once, at the first block.
+     *
+     * Both ends of a take give the live-view mode. A001_022's history is 8 at
+     * the first poll, 106 at +36 ms, and 8 again seventy milliseconds before the
+     * capture ends -- the camera goes home before the logger sees the stop, so
+     * "the last sample while recording" is 8 as surely as "the sample at record
+     * start" is. A block is 766 ms of samples, which is clear of the switch at
+     * one end and of the return at the other, and once set it is not touched
+     * again: the final partial block is flushed after the camera has already
+     * gone back to live view.
+     *
+     * Read straight from the mode object rather than through FUN_c032c720,
+     * which is that load with a lazy-singleton check in front of it.
+     *
+     * (What follows was the old re-read, kept for the reasoning:
      *
      * The header's copy is taken the instant ACTIVE goes high, which is the
      * least settled moment there is. This one is taken 766 ms in at the earliest
@@ -843,11 +1026,15 @@ writer_write_block:
      * MONIT1_30_HD_LOWP3 and 123 is MONIT1_25_HD_LOWP -- so the name says
      * nothing about recording, and the re-read returns 8 for the whole take
      * rather than disagreeing with the header. The later sample is still the
-     * more defensible one; it just does not fix what it was meant to. */
-    movw    ip, #:lower16:F_MODE_NOW
-    movt    ip, #:upper16:F_MODE_NOW
-    blx     ip
-    str     r0, [r10, #S_MODE_LATE]
+     * more defensible one; it just does not fix what it was meant to.) */
+    ldr     r0, [r10, #S_MODE_RUN]
+    cmp     r0, #0
+    bne     44f
+    movw    r0, #:lower16:MODE_OBJ
+    movt    r0, #:upper16:MODE_OBJ
+    ldr     r0, [r0, #4]
+    str     r0, [r10, #S_MODE_RUN]
+44:
 
     mov     r0, #0
     str     r0, [r5, #0x18]
@@ -867,26 +1054,91 @@ writer_sleep:
  * first blx destroyed it and `bx lr` returned into the middle of the media API.
  * An even number of registers keeps the stack eight byte aligned for the
  * callees, which handle doublewords. */
-writer_open:
+/* ==========================================================================
+ * json_build — hand off to the generator in the pool.
+ *
+ * The profile is built by gyro/profilegen.S, which lives in the bufmem pool
+ * rather than here: it reads the lens off the mount, looks the mode up in the
+ * firmware's own timing and geometry tables, works out the rolling shutter and
+ * the focal length, and formats the text. That is two and a half kilobytes of
+ * code and this cave has room for none of it.
+ *
+ * S_JSON_FN is where the loader left the entry point. Zero means the generator
+ * was never placed, and then no profile is written -- which is visible, where
+ * branching through a zero would be a freeze.
+ * ========================================================================== */
+json_build:
+    ldr     ip, [r10, #S_JSON_FN]
+    cmp     ip, #0
+    bxeq    lr
+    bx      ip                          @ it returns to our caller
+
+/* Close a file and destroy its object: r0 = the object's offset from r10.
+ * The other half of open_file, and copied just as often. */
+close_file:
     push    {r4, lr}
-    movw    ip, #0x4658
-    movt    ip, #0xC044
+    mov     r4, r0
+    add     r0, r10, r4
+    ldr_addr     ip, F_CLOSE
+    blx     ip
+    add     r0, r10, r4
+    mov     r1, #2
+    ldr_addr     ip, F_DTOR
+    blx     ip
+    pop     {r4, pc}
+
+/* Open a file: r0 = the file object's offset from r10, r1 = the path, r2 = the
+ * mode.  Returns what F_OPEN returned -- zero means it did not open.
+ *
+ * Three copies of the same six calls, and a fourth wanted for the profile.  The
+ * cave is a fixed nine hundred and fifty words and the copies were most of what
+ * was left of it; the sequence has never varied, so there was nothing to lose
+ * by naming it. */
+open_file:
+    push    {r4, r5, r6, lr}
+    mov     r4, r0
+    mov     r5, r1
+    mov     r6, r2
+    ldr_addr     ip, F_MGR
     blx     ip
     mov     r1, #0
-    movw    ip, #0x4698
-    movt    ip, #0xC044
+    ldr_addr     ip, F_VOL
     blx     ip
     mov     r1, r0
-    add     r0, r10, #O_FOBJ
-    movw    ip, #0x5E90
-    movt    ip, #0xC036
+    add     r0, r10, r4
+    ldr_addr     ip, F_CTOR
     blx     ip
-    add     r0, r10, #O_FOBJ
+    add     r0, r10, r4
+    mov     r1, r5
+    mov     r2, r6
+    ldr_addr     ip, F_OPEN
+    blx     ip
+    cmp     r0, #0
+    popne   {r4, r5, r6, pc}
+    /* It did not open -- but F_CTOR above built the object, and every caller
+     * used to branch away and leave it built. A file object that is never
+     * destroyed wedges the file system: that is what happened to \LENS.DAT,
+     * which could not be opened again by anything until the camera was power
+     * cycled, with the card light on. Opens rarely fail, and the damage does
+     * not heal, which is exactly the shape of a freeze that only sometimes
+     * happens. Destroying it here fixes all four callers at once. */
+    add     r0, r10, r4
+    mov     r1, #2
+    ldr_addr     ip, F_DTOR
+    blx     ip
+    mov     r0, #0
+    pop     {r4, r5, r6, pc}
+
+writer_open:
+    push    {r4, lr}
+    mov     r0, #0                   @ the history belongs to this take alone
+    str     r0, [r10, #S_MODE_N]
+    str     r0, [r10, #S_MODE_RUN]
+    str     r0, [r10, #S_JSON_WANT]  @ and an unpaid debt belongs to the last one
+    mov     r0, #O_FOBJ
     add     r1, r10, #O_PATH
     mov     r2, #7                   /* 7 可覆寫;0x0402 檔案已存在就失敗 */
-    movw    ip, #0x5FB0
-    movt    ip, #0xC036
-    blx     ip
+    bl      open_file
     /* Zero means it did not open.  Unchecked, the writes that follow go to a
      * file object with nothing behind it and every one of them succeeds. */
     cmp     r0, #0
@@ -907,6 +1159,27 @@ writer_open:
 
 writer_close:
     push    {r4, lr}
+    /* The mode history first, as its own record, so the fixed 32-byte footer
+     * keeps its shape and an older decoder fails loudly on the magic rather
+     * than reading the history as a footer. */
+    add     r1, r10, #O_HEADER
+    movw    r0, #0x4647
+    movt    r0, #0x364D              /* GFM6 */
+    str     r0, [r1, #0]
+    ldr     r0, [r10, #S_MODE_N]
+    str     r0, [r1, #4]
+    add     r0, r10, #O_FOBJ
+    mov     r2, #8
+    movw    ip, #0x60E8
+    movt    ip, #0xC036
+    blx     ip
+    add     r0, r10, #O_FOBJ         @ and the history straight out of the state
+    add     r1, r10, #S_MODE_HIST    @ block: copying it into the header buffer
+    mov     r2, #64                  @ first bought nothing but a loop
+    movw    ip, #0x60E8
+    movt    ip, #0xC036
+    blx     ip
+
     /* Append GFE6 footer before closing, preserving loss/error diagnostics. */
     movw    ip, #0xB6E0
     movt    ip, #0xC002
@@ -923,8 +1196,8 @@ writer_close:
     ldr     r0, [r10, #S_ERROR]
     str     r0, [r1, #12]
     str     r3, [r1, #16]
-    ldr     r0, [r10, #S_MODE_LATE]     @ the mode as it was mid-take, not at the
-    str     r0, [r1, #20]               @ instant the flag went up
+    ldr     r0, [r10, #S_MODE_RUN]      @ sampled at the first block, not at either
+    str     r0, [r1, #20]               @ end of the take
     mov     r0, #0
     str     r0, [r1, #24]
     str     r0, [r1, #28]
@@ -933,21 +1206,34 @@ writer_close:
     movw    ip, #0x60E8
     movt    ip, #0xC036
     blx     ip
-    add     r0, r10, #O_FOBJ
-    movw    ip, #0x6020
-    movt    ip, #0xC036
-    blx     ip
-    add     r0, r10, #O_FOBJ
-    mov     r1, #2
-    movw    ip, #0x5ED0
-    movt    ip, #0xC036
-    blx     ip
+    mov     r0, #O_FOBJ
+    bl      close_file
     /* The .GYR is closed and both halves are free: turn it into a .CSV.
      * Here rather than on the callback, and after the close rather than
      * alongside it, so the file on the card is complete before anything reads
      * it back. Takes a few hundred milliseconds on a long take -- which costs
      * nothing, because the card is busy anyway and the callback is not waiting. */
-    bl      gcsv_build
+    /* The gcsv and the profile are owed, not written.
+     *
+     * This thread is priority 28. The camera's own file task, SRecFile, is
+     * priority 6, and CinemaDngFile.cpp reaches the card through the same file
+     * manager and the same volume object this does. Holding that volume down
+     * here while SRecFile wants it means SRecFile waits for a task that only
+     * runs when everything from priority 9 to 25 is idle -- and at the end of a
+     * take, none of them are. That is the freeze: the camera stopped with its
+     * SPP_metadata.xmp created and empty, the card light on, while this thread
+     * reported a clean finish in 0.29 seconds.
+     *
+     * So the work moves off the stop and onto an idle poll, and every call
+     * that touches the volume was made small -- 16 KiB a write instead of 256,
+     * 64 KiB a read instead of 624 -- so the lock is never held for long and
+     * SRecFile can get in between our chunks. No timed wait: a delay is a guess
+     * about someone else's schedule, and it cancels the previous take's work
+     * whenever the next one starts inside it. */
+    mov     r0, #1
+    str     r0, [r10, #S_JSON_WANT]
+    mov     r0, #0
+    str     r0, [r10, #S_DELAY]      @ the first attempt is immediate
 
     movw    ip, #0xB6E0
     movt    ip, #0xC002
@@ -958,6 +1244,16 @@ writer_close:
     str     r0, [r10, #S_FILE]
     str     r0, [r10, #S_STOP]
     pop     {r4, pc}
+
+
+/* Put the firmware's own instruction back and return what it returned.  After
+ * this the logger is inert until an AutoRun arms it again. */
+hook_stand_down:
+    ldr_addr r0, HOOK_SITE
+    ldr_addr r1, HOOK_ORIG
+    str     r1, [r0]
+    mov     r0, r11
+    pop     {r3-r11, pc}
 
 /* Standard reflected CRC-32 over r1 bytes at r0. */
 crc32:
@@ -1009,329 +1305,101 @@ put_decimal_3:
     strb    r1, [r0]
     bx      lr
 
+
 /* ==========================================================================
- * put_int — r0 signed value, r1 destination.  Returns the destination advanced.
+ * pool_load — read \PGEN.BIN into the pool and note where the routines landed.
  *
- * No hardware divide on this core, and repeated subtraction on a fifteen-million
- * microsecond timestamp is not a plan, so the divide by ten is the usual
- * reciprocal multiply: n/10 = (n * 0xCCCCCCCD) >> 35.
+ * "PGEN" | u32 profile entry | u32 gcsv entry | u32 length | the code
+ *
+ * The AutoRun used to spell this out as ninety-one commands and call it through
+ * the borrowed echo handler. It is done here instead: the writer thread runs it
+ * on its first idle poll, milliseconds after boot and long before a take, in a
+ * normal task context. Ninety-one commands off the boot, and one fewer thing
+ * borrowing the shell's command table -- the handler came back from one boot
+ * still pointing at our routine, because the single `mem set` that put it back
+ * had been dropped.
+ *
+ * Once, whether or not it works. A missing or unreadable PGEN.BIN leaves both
+ * pointers at zero, and then no gcsv and no profile are written, which is
+ * visible; retrying every five milliseconds against a card that does not have
+ * the file would not be.
  * ========================================================================== */
-put_int:
-    push    {r4, r5, r6, r7, r8, lr}
-    mov     r4, r1
-    mov     r5, r0
-    cmp     r5, #0
-    bge     30f
-    mov     r6, #'-'
-    strb    r6, [r4], #1
-    rsb     r5, r5, #0
-30:
-    sub     sp, sp, #16
-    mov     r8, sp
-    mov     r6, #0
-31:
-    movw    r0, #0xCCCD
-    movt    r0, #0xCCCC
-    umull   r1, r0, r5, r0
-    lsr     r0, r0, #3                  @ r0 = r5 / 10
-    add     r1, r0, r0, lsl #2
-    sub     r1, r5, r1, lsl #1          @ r5 - 10*(r5/10)
-    add     r1, r1, #'0'
-    strb    r1, [r8, r6]
-    add     r6, r6, #1
-    mov     r5, r0
-    cmp     r5, #0
-    bne     31b
-32:
-    subs    r6, r6, #1
-    blt     33f
-    ldrb    r1, [r8, r6]
-    strb    r1, [r4], #1
-    b       32b
-33:
-    add     sp, sp, #16
-    mov     r0, r4
-    pop     {r4, r5, r6, r7, r8, pc}
+.equ PGEN_MAGIC,      0x4E454750  /* "PGEN" */
+.equ PGEN_HEADER,     16
+.equ PG_CODE,         0xF7000     /* from r10; the pool's own code region */
+.equ PG_MAX,          0x1800
 
-/* r0 = source (NUL-terminated), r1 = destination.  Returns it advanced. */
-put_str:
-    push    {r4, lr}
-34: ldrb    r4, [r0], #1
-    cmp     r4, #0
-    beq     35f
-    strb    r4, [r1], #1
-    b       34b
-35: mov     r0, r1
-    pop     {r4, pc}
+pool_load:
+    push    {r4, r5, r6, lr}
+    mov     r0, #0
+    str     r0, [r10, #S_JSON_FN]       @ never branch through half-placed code
+    str     r0, [r10, #S_GCSV_FN]
+
+    mov     r0, #O_FOBJ2
+    adr     r1, pgen_path
+    mov     r2, #1
+    bl      open_file
+    cmp     r0, #0
+    beq     19f
+
+    movw    r4, #:lower16:PG_CODE
+    movt    r4, #:upper16:PG_CODE
+    add     r4, r10, r4
+    mov     r0, #0
+    str     r0, [r10, #S_READ_N]
+    add     r0, r10, #O_FOBJ2
+    mov     r1, r4
+    movw    r2, #:lower16:PG_MAX
+    movt    r2, #:upper16:PG_MAX
+    add     r3, r10, #S_READ_N
+    ldr_addr     ip, F_READ
+    blx     ip
+    ldr     r5, [r10, #S_READ_N]
+    mov     r0, #O_FOBJ2
+    bl      close_file
+
+    ldr     r0, [r4]
+    ldr_addr r1, PGEN_MAGIC
+    cmp     r0, r1
+    bne     19f
+    ldr     r2, [r4, #12]               @ how much code there should be
+    add     r2, r2, #PGEN_HEADER
+    cmp     r5, r2
+    blo     19f                         @ short read: do not run half of it
+
+    ldr_addr ip, F_CACHE                @ or the CPU fetches what the write has
+    blx     ip                          @ not put in memory yet
+
+    ldr     r0, [r4, #4]
+    add     r0, r0, #PGEN_HEADER
+    add     r0, r4, r0
+    str     r0, [r10, #S_JSON_FN]
+    ldr     r0, [r4, #8]
+    add     r0, r0, #PGEN_HEADER
+    add     r0, r4, r0
+    str     r0, [r10, #S_GCSV_FN]
+19:
+    pop     {r4, r5, r6, pc}
+
+pgen_path:
+    .byte   0x5C                        /* spelled out, so no escaping
+                                         * convention can quietly change it */
+    .asciz  "PGEN.BIN"
+    .align  2
 
 /* ==========================================================================
- * gcsv_build — turn the .GYR just written into a Gyroflow .GCSV beside it.
+ * gcsv_build — hand off to the builder in the pool.
  *
- * Runs in the writer thread, after the .GYR is closed, with both halves free.
- * The samples are long gone from memory by then -- that is what streaming means
- * -- so the file is read back a block at a time rather than held.
+ * gyro/gcsvgen.S: the .GYR that was just closed becomes a Gyroflow log. Twelve
+ * hundred bytes of reading, formatting and writing, none of it while a take is
+ * running, all of it in a cave that had four bytes left.
  *
- * This is deliberately not on the gyro callback. The earlier logger built its
- * text there and blocked it for the better part of a second, which is how it
- * missed the next take's start: the callback cannot see ACTIVE go 0 to 1 while
- * it is inside itself. Here the callback sets a flag and returns in microseconds.
- *
- * gscale and the orientation are literals rather than formatted: they are
- * compile-time constants, and formatting a float in ARM to match what the host
- * decoder writes is a lot of code for a string that never changes.
+ * S_GCSV_FN is where the loader left the entry point. Zero means it was never
+ * placed and no gcsv is written -- visible, where branching through a zero
+ * would be a freeze.
  * ========================================================================== */
 gcsv_build:
-    push    {r3, r4, r5, r6, r7, r8, r9, r10, r11, lr}
-
-    /* \A001_018.GYR -> \A001_018.CSV, beside it. */
-    add     r0, r10, #O_PATH
-    add     r1, r10, #O_GCSV_PATH
-    mov     r2, #0
-40: ldrb    r3, [r0, r2]
-    strb    r3, [r1, r2]
-    add     r2, r2, #1
-    cmp     r2, #16
-    blo     40b
-    mov     r3, #'C'
-    strb    r3, [r1, #10]
-    mov     r3, #'S'
-    strb    r3, [r1, #11]
-    mov     r3, #'V'
-    strb    r3, [r1, #12]
-
-    /* The .GYR, for reading. */
-    ldr_addr     ip, F_MGR
-    blx     ip
-    mov     r1, #0
-    ldr_addr     ip, F_VOL
-    blx     ip
-    mov     r1, r0
-    add     r0, r10, #O_FOBJ
-    ldr_addr     ip, F_CTOR
-    blx     ip
-    add     r0, r10, #O_FOBJ
-    add     r1, r10, #O_PATH
-    mov     r2, #1
-    ldr_addr     ip, F_OPEN
-    blx     ip
-    cmp     r0, #0
-    beq     gcsv_out
-
-    /* The .CSV, for writing. */
-    ldr_addr     ip, F_MGR
-    blx     ip
-    mov     r1, #0
-    ldr_addr     ip, F_VOL
-    blx     ip
-    mov     r1, r0
-    add     r0, r10, #O_FOBJ2
-    ldr_addr     ip, F_CTOR
-    blx     ip
-    add     r0, r10, #O_FOBJ2
-    add     r1, r10, #O_GCSV_PATH
-    mov     r2, #7
-    ldr_addr     ip, F_OPEN
-    blx     ip
-    cmp     r0, #0
-    beq     gcsv_close_gyr
-
-    /* Header, with the clip name lifted out of the path. */
-    movw    r6, #:lower16:O_TEXT
-    movt    r6, #:upper16:O_TEXT
-    add     r6, r10, r6
-    mov     r5, r6
-    adr     r0, gcsv_head1
-    mov     r1, r5
-    bl      put_str
-    mov     r5, r0
-    add     r0, r10, #O_PATH
-    add     r0, r0, #1                  @ past the backslash
-    mov     r1, r5
-41: ldrb    r2, [r0], #1
-    cmp     r2, #'.'
-    beq     42f
-    cmp     r2, #0
-    beq     42f
-    strb    r2, [r1], #1
-    b       41b
-42: mov     r5, r1
-    adr     r0, gcsv_head2
-    mov     r1, r5
-    bl      put_str
-    mov     r5, r0
-
-    /* Skip the file header. */
-    add     r0, r10, #O_FOBJ
-    add     r1, r10, #O_BUF_A
-    mov     r2, #160
-    add     r3, r10, #S_READ_N
-    ldr_addr     ip, F_READ
-    blx     ip
-
-    ldr     r11, [r10, #S_START_US]     @ not the header: writer_close put the
-                                        @ GFE6 footer there before this ran, and
-                                        @ every timestamp came out negative
-
-    add     r0, r10, #O_READ
-    mov     r4, r0
-    str     r0, [r10, #S_RD_END]        @ nothing buffered yet
-    mov     r0, #0
-    str     r0, [r10, #S_RD_EOF]
-    b       gcsv_refill
-
-/* --- slide the partial block to the front, top the buffer up -------------- */
-gcsv_refill:
-    /* The old path read a 32-byte header and then the payload, per block: two
-     * card operations for every 766 ms of take. Measured at 29 ms each -- one
-     * second of stop path for a 26 s clip, and twenty-three seconds for ten
-     * minutes. The card is not the reason: the camera loads a 31 MB DNG into
-     * memory in 0.17 s, at 183 MB/s. It was being asked for sixteen kilobytes
-     * at a time.
-     *
-     * 624 KiB a go instead. A block can straddle the end of a read, so whatever
-     * is left over slides to the front and the next read lands behind it --
-     * which is how this avoids needing seek, whose semantics here are unknown. */
-    add     r7, r10, #O_READ
-    ldr     r8, [r10, #S_RD_END]
-    subs    r8, r8, r4                  @ leftover bytes
-    movlo   r8, #0
-    cmp     r4, r7
-    beq     41f                         @ already at the front
-    mov     r9, #0
-40: cmp     r9, r8
-    bhs     41f
-    ldrb    r0, [r4, r9]
-    strb    r0, [r7, r9]
-    add     r9, r9, #1
-    b       40b
-41:
-    ldr     r0, [r10, #S_RD_EOF]
-    cmp     r0, #0
-    bne     42f
-    mov     r0, #0                      @ a failed read may leave this stale, and
-    str     r0, [r10, #S_READ_N]        @ a stale count is a buffer of old bytes
-    add     r0, r10, #O_FOBJ
-    add     r1, r7, r8
-    movw    r2, #:lower16:READ_SIZE
-    movt    r2, #:upper16:READ_SIZE
-    sub     r2, r2, r8                  @ room behind the leftover
-    add     r3, r10, #S_READ_N
-    ldr_addr     ip, F_READ
-    blx     ip
-    ldr     r0, [r10, #S_READ_N]
-    cmp     r0, #0
-    moveq   r1, #1
-    streq   r1, [r10, #S_RD_EOF]        @ short read: that was the last of it
-    add     r8, r8, r0
-42:
-    mov     r4, r7
-    add     r0, r7, r8
-    str     r0, [r10, #S_RD_END]
-
-gcsv_block:
-    ldr     r0, [r10, #S_RD_END]
-    sub     r0, r0, r4                  @ bytes available at r4
-    cmp     r0, #BLOCK_HEADER
-    blo     43f
-    ldr     r1, [r4]
-    movw    r2, #0x4647
-    movt    r2, #0x3642                 @ GFB6
-    cmp     r1, r2
-    bne     gcsv_flush_last             @ not a block: stop here
-    ldr     r2, [r4, #24]               @ payload bytes
-    add     r2, r2, #BLOCK_HEADER
-    cmp     r0, r2
-    bhs     44f                         @ the whole block is in the buffer
-43: ldr     r0, [r10, #S_RD_EOF]
-    cmp     r0, #0
-    bne     gcsv_flush_last             @ a truncated tail, and no more file
-    b       gcsv_refill
-44:
-    ldr     r8, [r4, #16]               @ gyro samples
-    ldr     r9, [r4, #8]                @ first timestamp
-    sub     r9, r9, r11                 @ relative to record start
-    add     r7, r4, #BLOCK_HEADER       @ the samples themselves
-    add     r4, r4, r2                  @ and the next block
-
-gcsv_sample:
-    cmp     r8, #0
-    beq     gcsv_block
-
-    mov     r0, r9
-    mov     r1, r5
-    bl      put_int
-    mov     r5, r0
-    mov     r0, #','
-    strb    r0, [r5], #1
-    ldrsh   r0, [r7]
-    mov     r1, r5
-    bl      put_int
-    mov     r5, r0
-    mov     r0, #','
-    strb    r0, [r5], #1
-    ldrsh   r0, [r7, #2]
-    mov     r1, r5
-    bl      put_int
-    mov     r5, r0
-    mov     r0, #','
-    strb    r0, [r5], #1
-    ldrsh   r0, [r7, #6]                @ z sits past the pad
-    mov     r1, r5
-    bl      put_int
-    mov     r5, r0
-    mov     r0, #10
-    strb    r0, [r5], #1
-
-    add     r7, r7, #8
-    sub     r8, r8, #1
-    movw    r0, #400
-    add     r9, r9, r0
-
-    /* Flush well before the end: one line is at most about forty bytes. */
-    sub     r0, r5, r6
-    movw    r1, #:lower16:TEXT_FLUSH
-    movt    r1, #:upper16:TEXT_FLUSH
-    cmp     r0, r1
-    blo     gcsv_sample
-    bl      gcsv_flush
-    b       gcsv_sample
-
-gcsv_flush_last:
-    bl      gcsv_flush
-    add     r0, r10, #O_FOBJ2
-    ldr_addr     ip, F_CLOSE
-    blx     ip
-    add     r0, r10, #O_FOBJ2
-    mov     r1, #2
-    ldr_addr     ip, F_DTOR
-    blx     ip
-gcsv_close_gyr:
-    add     r0, r10, #O_FOBJ
-    ldr_addr     ip, F_CLOSE
-    blx     ip
-    add     r0, r10, #O_FOBJ
-    mov     r1, #2
-    ldr_addr     ip, F_DTOR
-    blx     ip
-gcsv_out:
-    pop     {r3, r4, r5, r6, r7, r8, r9, r10, r11, pc}
-
-/* Write out whatever is in the text buffer and rewind it. */
-gcsv_flush:
-    push    {r0, r1, r2, lr}
-    sub     r2, r5, r6
-    cmp     r2, #0
-    beq     43f
-    add     r0, r10, #O_FOBJ2
-    mov     r1, r6
-    ldr_addr     ip, F_WRITE
-    blx     ip
-    mov     r5, r6
-43: pop     {r0, r1, r2, pc}
-
-gcsv_head1:
-    .asciz  "GYROFLOW IMU LOG\nversion,1.3\nid,sigma_fp_v502_internal_icm20321\norientation,xyz\nfwversion,SIGMA fp 5.02\nvideofilename,"
-    .align  2
-gcsv_head2:
-    .asciz  "\ntscale,0.000001\ngscale,0.000137923\nt,gx,gy,gz\n"
-    .align  2
+    ldr     ip, [r10, #S_GCSV_FN]
+    cmp     ip, #0
+    bxeq    lr
+    bx      ip                          @ it returns to our caller

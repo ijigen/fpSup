@@ -3,9 +3,9 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Gyro, six-axis logging and the Gyroflow workflow.
-**Status: core verified on hardware, integration in progress**
+**Status: released — [fpGyroSup v1](../gyro/release/)**
 
-Gyro、六軸記錄與 Gyroflow 工作流。**狀態:核心已實機驗證,整合中**
+Gyro、六軸記錄與 Gyroflow 工作流。**狀態:已發布 —— [fpGyroSup v1](../gyro/release/)**
 
 ---
 

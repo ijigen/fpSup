@@ -187,6 +187,50 @@ def fit_distortion(table, w, h, focal_px, terms):
     return coeffs, rms, max(res), safe
 
 
+def build_profile(mode, lens_name, w, h, fps, focal_mm, dist=None):
+    """The Gyroflow lens profile for one sensor mode, as a dict.
+
+    Split out of main so the camera can be given finished profiles: lensdat.py
+    builds one of these per mode and leaves them on the card, and the logger
+    picks the one matching the mode the take ran in.  Nothing here depends on
+    the clip -- same lens, same mode, same profile -- which is what makes
+    precomputing them possible at all.
+    """
+    dist = list(dist) if dist else [0.0, 0.0, 0.0, 0.0]
+    covered_mm = SENSOR_ACTIVE_MM * min(mode["covered_w"], SENSOR_ACTIVE_W) / SENSOR_ACTIVE_W
+    focal_px = w * focal_mm / covered_mm
+    full_width = mode["covered_w"] >= SENSOR_TOTAL_W - 64
+    return {
+        "name": f"SIGMA fp - {lens_name} - {w}x{h} @{fps:.2f} (mode {mode['mode_id']})",
+        # Short on purpose: the camera carries one of these per sensor mode in
+        # the pool, and the prose was a third of the file.
+        "note": (f"From the firmware's IMX410 tables. Mode {mode['mode_id']}: readout "
+                 f"{mode['readout_w']}x{mode['readout_h']} bin {mode['bin_h']}x{mode['bin_v']}, "
+                 f"{mode['covered_w']} sensor columns"
+                 f"{'' if full_width else f' ({covered_mm:.1f} mm crop)'}. "
+                 f"Distortion unmeasured, left at zero."),
+        "calibrated_by": "firmware IMX410 mode tables (SIGMAfp_re)",
+        "camera_brand": "SIGMA", "camera_model": "fp", "lens_model": lens_name,
+        "camera_setting": f"{w}x{h} @{fps:.2f} CinemaDNG",
+        "calib_dimension": {"w": w, "h": h},
+        "orig_dimension": {"w": w, "h": h},
+        "output_dimension": {"w": w, "h": h},
+        "identifier": f"sigma_fp_mode{mode['mode_id']}_{w}x{h}",
+        "calibrator_version": "1.5.0",
+        "compatible_settings": [],
+        "frame_readout_time": round(mode["readout_ms"], 3),
+        "frame_readout_direction": "TopToBottom",
+        "input_horizontal_stretch": 1.0, "input_vertical_stretch": 1.0,
+        "num_images": 0,
+        "fisheye_params": {
+            "RMS_error": 0.0,
+            "camera_matrix": [[focal_px, 0.0, w / 2], [0.0, focal_px, h / 2], [0.0, 0.0, 1.0]],
+            "distortion_coeffs": dist,
+        },
+        "sync_settings": {}, "official": False,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("clip", nargs="?", help="a .DNG, or a CINEMA clip folder")
@@ -242,15 +286,21 @@ def main():
         raise SystemExit("give --fps, or --gyr so the mode can come from the clip")
 
     if a.gyr:
-        # The clip knows. `FUN_c032c720()` returns the sensor mode enum and the
-        # logger calls it at record start, so there is nothing left to infer --
-        # 1080p29.97 12-bit matches four modes whose readouts run from 5.4 to
-        # 10.6 ms, and the output geometry scales evenly from either geometry
-        # family, so it cannot be worked out from the footage alone.
-        head = a.gyr.read_bytes()[:64]
-        if head[:4] != b"GFS6":
-            raise SystemExit(f"{a.gyr} is not a GFS6 capture")
-        recorded = struct.unpack_from("<I", head, 48)[0]
+        # The clip knows -- 1080p29.97 12-bit matches four modes whose readouts
+        # run from 5.4 to 10.6 ms and whose output geometry scales evenly, so it
+        # cannot be worked out from the footage alone.
+        #
+        # Through decode, not by reading offset 48 here: the header's copy of
+        # the mode is taken the instant the record flag goes up and does not
+        # always beat the switch, so takes on identical settings recorded 8 and
+        # 106 alternately. decode picks the mode that held longest across the
+        # take, which on every take carrying a history is 106 from the first
+        # poll until eighty milliseconds before the end, then 8 as the camera
+        # returns to live view. Older captures have no history and fall back to
+        # the header, which is why this still goes through decode rather than
+        # requiring one.
+        import decode as _decode
+        recorded = _decode.read_capture(a.gyr).sensor_mode
         by_id = {m["mode_id"]: m for m in modes}
         if str(recorded) not in by_id:
             raise SystemExit(f"{a.gyr} records mode {recorded}, which is not in the "
@@ -321,35 +371,7 @@ def main():
             print(f"  Resolution and frame rate cannot tell them apart -- the camera would have "
                   f"to\n  record which mode it was in. Readout mostly matters on fast pans.")
 
-    profile = {
-        "name": f"SIGMA fp - {lens_name} - {w}x{h} @{fps:.2f} (mode {mode['mode_id']})",
-        "note": (f"Generated from the firmware's IMX410 mode tables. Mode {mode['mode_id']}: "
-                 f"readout {mode['readout_w']}x{mode['readout_h']}, binning "
-                 f"{mode['bin_h']}x{mode['bin_v']}, so it covers {mode['covered_w']} sensor "
-                 f"columns -- {'the full width' if full_width else f'a crop spanning {covered_mm:.1f} mm'}. "
-                 f"Focal {focal_mm} mm therefore lands at {focal_px:.0f} px. Readout "
-                 f"{mode['readout_ms']:.3f} ms is that mode's active readout. Distortion is left "
-                 f"at zero: it was not measured, which is not the same as being zero."),
-        "calibrated_by": "firmware IMX410 mode tables (SIGMAfp_re)",
-        "camera_brand": "SIGMA", "camera_model": "fp", "lens_model": lens_name,
-        "camera_setting": f"{w}x{h} @{fps:.2f} CinemaDNG",
-        "calib_dimension": {"w": w, "h": h},
-        "orig_dimension": {"w": w, "h": h},
-        "output_dimension": {"w": w, "h": h},
-        "identifier": f"sigma_fp_mode{mode['mode_id']}_{w}x{h}",
-        "calibrator_version": "1.5.0",
-        "compatible_settings": [],
-        "frame_readout_time": round(mode["readout_ms"], 3),
-        "frame_readout_direction": "TopToBottom",
-        "input_horizontal_stretch": 1.0, "input_vertical_stretch": 1.0,
-        "num_images": 0,
-        "fisheye_params": {
-            "RMS_error": 0.0,
-            "camera_matrix": [[focal_px, 0.0, w / 2], [0.0, focal_px, h / 2], [0.0, 0.0, 1.0]],
-            "distortion_coeffs": dist,
-        },
-        "sync_settings": {}, "official": False,
-    }
+    profile = build_profile(mode, lens_name, w, h, fps, focal_mm, dist)
     out = a.out or Path(f"SIGMA_fp_mode{mode['mode_id']}_{w}x{h}.json")
     out.write_text(json.dumps(profile, indent=2, ensure_ascii=False) + "\n")
     print(f"\nwrote {out}")
