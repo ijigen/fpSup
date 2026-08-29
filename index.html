@@ -969,6 +969,12 @@ html&gt;body{padding:0}&lt;/style&gt;
     #imx410-explainer .chip{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
     #imx410-explainer .unknown{background:repeating-linear-gradient(135deg,var(--viz-series-4),var(--viz-series-4) 3px,transparent 3px,transparent 6px)}
     #imx410-explainer .sources{font-size:10px;color:var(--muted-foreground);margin-top:12px}
+    #imx410-explainer .evidence-note{margin-top:10px;padding:10px 12px;border:1px solid var(--viz-series-4);border-radius:9px;background:color-mix(in srgb,var(--viz-series-4) 9%,transparent);font-size:11px;color:var(--muted-foreground)}
+    #imx410-explainer .evidence-note strong{color:var(--foreground)}
+    #imx410-explainer details{margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:11px}
+    #imx410-explainer summary{cursor:pointer;font-weight:750}
+    #imx410-explainer .reg-table{width:100%;border-collapse:collapse;margin-top:9px;font-variant-numeric:tabular-nums}
+    #imx410-explainer .reg-table th,#imx410-explainer .reg-table td{padding:6px;border-bottom:1px solid var(--border);text-align:left}
     @media(max-width:760px){#imx410-explainer .hero{align-items:flex-start;flex-direction:column}#imx410-explainer .mode-summary{grid-template-columns:1fr}#imx410-explainer .mode-metrics{grid-template-columns:1fr 1fr}#imx410-explainer .pipeline{grid-template-columns:1fr;gap:7px}#imx410-explainer .arrow{transform:rotate(90deg);height:20px}#imx410-explainer .stage{min-height:126px}#imx410-explainer .decision{grid-template-columns:1fr}#imx410-explainer .matrix{grid-template-columns:105px repeat(3,1fr)}}
     @media(max-width:480px){#imx410-explainer .controls{grid-template-columns:1fr}#imx410-explainer .matrix{font-size:10px;grid-template-columns:86px repeat(3,1fr)}#imx410-explainer .cell{padding:7px 3px}}
   &lt;/style&gt;
@@ -983,7 +989,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;div&gt;&lt;label for=&quot;imx-preset&quot;&gt;② 實際 Sensor mode&lt;/label&gt;&lt;select id=&quot;imx-preset&quot;&gt;&lt;optgroup label=&quot;照片 readout&quot;&gt;&lt;option value=&quot;8&quot;&gt;RAW14 mode 0 · 6064×4042 · 19.127p 上限&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;對應 fp 原廠影片輸出&quot;&gt;&lt;option value=&quot;0&quot; selected&gt;3840×2160 29.970p ← 4176×2174 RAW12&lt;/option&gt;&lt;option value=&quot;1&quot;&gt;3840×2160 25.000p ← 4176×2174 RAW12&lt;/option&gt;&lt;option value=&quot;2&quot;&gt;3840×2160 23.976p ← 4176×2174 RAW12&lt;/option&gt;&lt;option value=&quot;3&quot;&gt;1920×1080 59.940p ← 2088×1174 RAW12&lt;/option&gt;&lt;option value=&quot;4&quot;&gt;1920×1080 29.970p ← 2088×1174 RAW12&lt;/option&gt;&lt;option value=&quot;18&quot;&gt;1920×1080 23.976p ← 2088×1174 RAW12&lt;/option&gt;&lt;option value=&quot;5&quot;&gt;1920×1080 119.880p ← 2016×1136 RAW12&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;全部 RAW14 韌體模式&quot;&gt;&lt;option value=&quot;6&quot;&gt;RAW14 mode 6 · 4176×2174 · 29.970p&lt;/option&gt;&lt;option value=&quot;19&quot;&gt;RAW14 mode 122 · 4176×2174 · 25.000p&lt;/option&gt;&lt;option value=&quot;20&quot;&gt;RAW14 mode 100 · 4176×2174 → 3032×2174 · 23.976p&lt;/option&gt;&lt;option value=&quot;7&quot;&gt;RAW14 mode 95 · 5712×3216 · 23.976p&lt;/option&gt;&lt;option value=&quot;21&quot;&gt;RAW14 mode 129 · 3968×2640 · 19.202p&lt;/option&gt;&lt;option value=&quot;22&quot;&gt;RAW14 mode 141 · 6064×4042 · 18.003p&lt;/option&gt;&lt;option value=&quot;23&quot;&gt;RAW14 mode 144 · 3968×2640 · 18.003p&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;其他 RAW12 隱藏模式&quot;&gt;&lt;option value=&quot;9&quot;&gt;6064×4042 RAW12 · 39.157p&lt;/option&gt;&lt;option value=&quot;10&quot;&gt;6064×4042 RAW12 · 29.974p&lt;/option&gt;&lt;option value=&quot;11&quot;&gt;6064×3412 RAW12 · 29.970p&lt;/option&gt;&lt;option value=&quot;12&quot;&gt;6064×2022 RAW12 · 59.925p&lt;/option&gt;&lt;option value=&quot;13&quot;&gt;3968×2640 RAW12 · 39.309p&lt;/option&gt;&lt;option value=&quot;14&quot;&gt;3032×2012 RAW12 · 105.402p&lt;/option&gt;&lt;option value=&quot;15&quot;&gt;3032×1708 RAW12 · 119.880p&lt;/option&gt;&lt;option value=&quot;16&quot;&gt;2016×1344 RAW12 · 119.880p&lt;/option&gt;&lt;option value=&quot;17&quot;&gt;2016×672 RAW12 · 239.760p&lt;/option&gt;&lt;/optgroup&gt;&lt;/select&gt;&lt;/div&gt;
     &lt;div&gt;&lt;label for=&quot;imx-mode&quot;&gt;拍攝路徑&lt;/label&gt;&lt;select id=&quot;imx-mode&quot;&gt;&lt;option value=&quot;movie&quot;&gt;靜態／一般影片／RAW 8·10-bit&lt;/option&gt;&lt;option value=&quot;raw12&quot;&gt;CinemaDNG RAW12&lt;/option&gt;&lt;option value=&quot;live&quot;&gt;Live View&lt;/option&gt;&lt;option value=&quot;generic&quot;&gt;Generic movie RAW&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
     &lt;div&gt;&lt;label for=&quot;imx-iso&quot;&gt;ISO：&lt;span class=&quot;readout&quot; id=&quot;imx-iso-value&quot;&gt;640&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;imx-iso&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;14&quot; step=&quot;1&quot; value=&quot;5&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;100&lt;/span&gt;&lt;span&gt;640&lt;/span&gt;&lt;span&gt;3200&lt;/span&gt;&lt;span&gt;12800&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
-    &lt;div&gt;&lt;label for=&quot;imx-code&quot;&gt;實際 Analog code：&lt;span class=&quot;readout&quot; id=&quot;imx-code-value&quot;&gt;3000&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;imx-code&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;4094&quot; step=&quot;1&quot; value=&quot;3000&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;0 · 1×&lt;/span&gt;&lt;span&gt;0xDFD · AR 門檻&lt;/span&gt;&lt;span&gt;4094&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;div&gt;&lt;label for=&quot;imx-code&quot;&gt;手動模擬 Analog code：&lt;span class=&quot;readout&quot; id=&quot;imx-code-value&quot;&gt;3000&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;imx-code&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;4094&quot; step=&quot;1&quot; value=&quot;3000&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;0 · 1×&lt;/span&gt;&lt;span&gt;0xDFD · AR 門檻&lt;/span&gt;&lt;span&gt;4094&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;注意：&lt;/strong&gt;這是研究用假設值，不是由 ISO 自動算出的實機值。真正 code 還依賴 LCG/HCG offset、sensor OTP、analog cap 與 gain-state；請勿把畫面組合視為該 ISO 的實際 register 狀態。&lt;/div&gt;&lt;/div&gt;
   &lt;/div&gt;
 
   &lt;div class=&quot;mode-summary&quot;&gt;&lt;div class=&quot;raster-box&quot;&gt;&lt;div class=&quot;raster&quot; id=&quot;raster&quot;&gt;4176×2174&lt;/div&gt;&lt;div class=&quot;mini&quot; id=&quot;mode-status&quot;&gt;韌體隱藏模式 · 尚未驗證整條錄影管線&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;mode-metrics&quot;&gt;&lt;div class=&quot;metric&quot;&gt;&lt;strong id=&quot;metric-pixels&quot;&gt;9.08 MP&lt;/strong&gt;sensor raster&lt;/div&gt;&lt;div class=&quot;metric&quot;&gt;&lt;strong id=&quot;metric-adc&quot;&gt;14-bit&lt;/strong&gt;ADC／RAW&lt;/div&gt;&lt;div class=&quot;metric&quot;&gt;&lt;strong id=&quot;metric-rate&quot;&gt;476.2 MB/s&lt;/strong&gt;純 pixel bitstream&lt;/div&gt;&lt;div class=&quot;metric&quot;&gt;&lt;strong id=&quot;metric-cap&quot;&gt;571 GB&lt;/strong&gt;20 分鐘／未壓縮&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;
@@ -995,9 +1001,9 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;div class=&quot;arrow&quot;&gt;→&lt;/div&gt;
     &lt;div class=&quot;stage&quot; id=&quot;stage-ar&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;③ 變速箱 · Analog Readout&lt;/div&gt;&lt;div class=&quot;gear&quot; id=&quot;gear&quot;&gt;N&lt;/div&gt;&lt;div class=&quot;mini&quot; id=&quot;ar-caption&quot;&gt;Normal：低／中增益工作點&lt;/div&gt;&lt;/div&gt;
     &lt;div class=&quot;arrow&quot;&gt;→&lt;/div&gt;
-    &lt;div class=&quot;stage&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;④ 量尺 · 可切換 ADC&lt;/div&gt;&lt;div class=&quot;adc&quot; id=&quot;adc&quot;&gt;&lt;/div&gt;&lt;div class=&quot;mini&quot; id=&quot;adc-caption&quot;&gt;Sony：11／12／14-bit ADC&lt;br&gt;目前模式：RAW12&lt;/div&gt;&lt;/div&gt;
+    &lt;div class=&quot;stage&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;④ 量尺 · ADC／RAW mode&lt;/div&gt;&lt;div class=&quot;adc&quot; id=&quot;adc&quot;&gt;&lt;/div&gt;&lt;div class=&quot;mini&quot; id=&quot;adc-caption&quot;&gt;Sensor 規格：11／12／14-bit&lt;br&gt;fp V5.02 表內：RAW12／RAW14&lt;/div&gt;&lt;/div&gt;
     &lt;div class=&quot;arrow&quot;&gt;→&lt;/div&gt;
-    &lt;div class=&quot;stage&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;⑤ 數位放大鏡 · ISP&lt;/div&gt;&lt;div class=&quot;digital&quot;&gt;×&lt;/div&gt;&lt;div class=&quot;mini&quot;&gt;只放大既有數值&lt;br&gt;不新增感光資訊&lt;/div&gt;&lt;/div&gt;
+    &lt;div class=&quot;stage&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;⑤ 數位放大鏡 · ISP&lt;/div&gt;&lt;div class=&quot;digital&quot;&gt;OTP&lt;/div&gt;&lt;div class=&quot;mini&quot;&gt;analog cap 以上才承接餘量&lt;br&gt;精確倍率需 runtime／OTP&lt;br&gt;不新增感光資訊&lt;/div&gt;&lt;/div&gt;
   &lt;/div&gt;
 
   &lt;div class=&quot;decision&quot;&gt;
@@ -1012,6 +1018,17 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;div class=&quot;cell l&quot;&gt;3200+&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip hcg&quot;&gt;&lt;/i&gt;HCG&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip hcg&quot;&gt;&lt;/i&gt;HCG&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip hcg&quot;&gt;&lt;/i&gt;HCG&lt;/div&gt;
     &lt;div class=&quot;cell l&quot;&gt;每個 ISO 的 AR&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;需 OTP／實機 code&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;需 OTP／實機 code&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;需 OTP／實機 code&lt;/div&gt;
   &lt;/div&gt;
+  &lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;Expanded ISO：&lt;/strong&gt;ISO 6／12／25／50 在 V5.02 全部 clamp 成 ISO 100 sensor gain；ISO 51200／102400 超過 analog cap 的部分由 ISP digital gain 完成。兩者都不增加 sensor full-well 或捕捉到的光資訊。&lt;/div&gt;
+  &lt;details&gt;&lt;summary&gt;Register tuples 與控制鏈（V5.02 韌體確認）&lt;/summary&gt;
+    &lt;table class=&quot;reg-table&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;組合&lt;/th&gt;&lt;th&gt;05E1&lt;/th&gt;&lt;th&gt;05E2&lt;/th&gt;&lt;th&gt;041F&lt;/th&gt;&lt;th&gt;05A6&lt;/th&gt;&lt;th&gt;05A8&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;
+      &lt;tr&gt;&lt;td&gt;LCG + Normal&lt;/td&gt;&lt;td&gt;00&lt;/td&gt;&lt;td&gt;00&lt;/td&gt;&lt;td&gt;00&lt;/td&gt;&lt;td&gt;29&lt;/td&gt;&lt;td&gt;27&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;LCG + High&lt;/td&gt;&lt;td&gt;00&lt;/td&gt;&lt;td&gt;01&lt;/td&gt;&lt;td&gt;0E&lt;/td&gt;&lt;td&gt;29&lt;/td&gt;&lt;td&gt;27&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;HCG + Normal&lt;/td&gt;&lt;td&gt;01&lt;/td&gt;&lt;td&gt;00&lt;/td&gt;&lt;td&gt;00&lt;/td&gt;&lt;td&gt;2A&lt;/td&gt;&lt;td&gt;29&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;HCG + High&lt;/td&gt;&lt;td&gt;01&lt;/td&gt;&lt;td&gt;01&lt;/td&gt;&lt;td&gt;1D&lt;/td&gt;&lt;td&gt;2A&lt;/td&gt;&lt;td&gt;29&lt;/td&gt;&lt;/tr&gt;
+    &lt;/tbody&gt;&lt;/table&gt;
+    &lt;p&gt;12-bit analog code：003D/003E = low/high nibble；003F/0040 為第二組相同 code。正常原廠路徑在 code ≥ 0x0DFD 時切 High AR。AR 的 Sony 官方電路名稱與獨立 ADC input-range register 尚未確認。&lt;/p&gt;
+    &lt;p&gt;ISO LUT C00B8860/C00B8A38 → request C030C878 → split/dispatch C0312F18/C03131E0 → compose C0323580 → HCG C03239C8 → gain-state reshape C0323A78 → register writer C0323818。&lt;/p&gt;
+  &lt;/details&gt;
   &lt;div class=&quot;sources&quot;&gt;已確認位址：gain compose 0xC0323580 · register writer 0xC0323818 · HCG selector 0xC03239C8 · AR threshold analog code 0x0DFD · OTP blob offset 0xC00 / 510 bytes&lt;/div&gt;
 
   &lt;script&gt;
@@ -1024,7 +1041,8 @@ html&gt;body{padding:0}&lt;/style&gt;
         &#x27;SIGMA fp Ver.5.02 · Sony IMX410 · ROM 規則與 sensor OTP 分層&#x27;:&#x27;SIGMA fp Ver.5.02 · Sony IMX410 · ROM rules and sensor OTP layers&#x27;,
         &#x27;韌體已確認&#x27;:&#x27;Firmware-confirmed&#x27;,&#x27;OTP／實機值&#x27;:&#x27;OTP / measured value&#x27;,
         &#x27;① fp 相機設定&#x27;:&#x27;① fp camera setting&#x27;,&#x27;② 實際 Sensor mode&#x27;:&#x27;② Actual sensor mode&#x27;,
-        &#x27;拍攝路徑&#x27;:&#x27;Capture path&#x27;,&#x27;實際 Analog code：&#x27;:&#x27;Actual analog code: &#x27;,
+        &#x27;拍攝路徑&#x27;:&#x27;Capture path&#x27;,&#x27;手動模擬 Analog code：&#x27;:&#x27;Manual simulated analog code: &#x27;,
+        &#x27;注意：&#x27;:&#x27;Important: &#x27;,&#x27;這是研究用假設值，不是由 ISO 自動算出的實機值。真正 code 還依賴 LCG/HCG offset、sensor OTP、analog cap 與 gain-state；請勿把畫面組合視為該 ISO 的實際 register 狀態。&#x27;:&#x27;This is a research hypothesis, not a camera value calculated from ISO. The real code also depends on the LCG/HCG offset, sensor OTP, analog cap and gain state; do not treat the displayed combination as the camera’s actual register state at that ISO.&#x27;,
         &#x27;ISO：&#x27;:&#x27;ISO: &#x27;,&#x27;0xDFD · AR 門檻&#x27;:&#x27;0xDFD · AR threshold&#x27;,
         &#x27;照片&#x27;:&#x27;Photo&#x27;,&#x27;一般影片&#x27;:&#x27;Standard video&#x27;,&#x27;一般影片 · 已驗證 sensor mapping&#x27;:&#x27;Standard video · verified sensor mapping&#x27;,&#x27;CinemaDNG · 已驗證 sensor mapping&#x27;:&#x27;CinemaDNG · verified sensor mapping&#x27;,&#x27;原廠可選 · sensor mapping 待確認&#x27;:&#x27;Stock settings · sensor mapping pending&#x27;,&#x27;CinemaDNG RAW8／10／12 · 其他解析度與幀率組合&#x27;:&#x27;CinemaDNG RAW8 / 10 / 12 · other resolution and frame-rate combinations&#x27;,&#x27;照片 readout&#x27;:&#x27;Photo readout&#x27;,
         &#x27;對應 fp 原廠影片輸出&#x27;:&#x27;Matching stock fp video output&#x27;,&#x27;全部 RAW14 韌體模式&#x27;:&#x27;All RAW14 firmware modes&#x27;,
@@ -1036,7 +1054,8 @@ html&gt;body{padding:0}&lt;/style&gt;
         &#x27;① 水桶大小 · Conversion Gain&#x27;:&#x27;① Bucket capacity · Conversion Gain&#x27;,
         &#x27;② 類比放大器 · Analog Gain&#x27;:&#x27;② Analog amplifier · Analog Gain&#x27;,
         &#x27;③ 變速箱 · Analog Readout&#x27;:&#x27;③ Gearbox · Analog Readout&#x27;,
-        &#x27;④ 量尺 · 可切換 ADC&#x27;:&#x27;④ Ruler · Switchable ADC&#x27;,&#x27;⑤ 數位放大鏡 · ISP&#x27;:&#x27;⑤ Digital magnifier · ISP&#x27;,
+        &#x27;④ 量尺 · ADC／RAW mode&#x27;:&#x27;④ Ruler · ADC / RAW mode&#x27;,&#x27;⑤ 數位放大鏡 · ISP&#x27;:&#x27;⑤ Digital magnifier · ISP&#x27;,
+        &#x27;analog cap 以上才承接餘量&#x27;:&#x27;Takes only the remainder above the analog cap&#x27;,&#x27;精確倍率需 runtime／OTP&#x27;:&#x27;Exact multiplier requires runtime / OTP data&#x27;,
         &#x27;只放大既有數值&#x27;:&#x27;Only magnifies existing values&#x27;,&#x27;不新增感光資訊&#x27;:&#x27;Adds no captured-light information&#x27;,
         &#x27;LCG／HCG：依拍攝路徑與 ISO 決定&#x27;:&#x27;LCG / HCG: selected by capture path and ISO&#x27;,
         &#x27;Normal／High AR：只看最終 Analog code&#x27;:&#x27;Normal / High AR: determined only by final analog code&#x27;,
@@ -1112,7 +1131,7 @@ html&gt;body{padding:0}&lt;/style&gt;
         $(&#x27;gear&#x27;).style.transform=high?&#x27;rotate(30deg)&#x27;:&#x27;rotate(0deg)&#x27;;
         $(&#x27;ar-caption&#x27;).textContent=high?(en?&#x27;High: companion mode for high analog gain&#x27;:&#x27;High：高 analog gain 配套&#x27;):(en?&#x27;Normal: low / medium gain operating point&#x27;:&#x27;Normal：低／中增益工作點&#x27;);
         $(&#x27;stage-ar&#x27;).classList.toggle(&#x27;active&#x27;,high);
-        $(&#x27;adc-caption&#x27;).innerHTML=en?&#x27;Sony: 11 / 12 / 14-bit ADC&lt;br&gt;Current mode: RAW&#x27;+p.b:&#x27;Sony：11／12／14-bit ADC&lt;br&gt;目前模式：RAW&#x27;+p.b;
+        $(&#x27;adc-caption&#x27;).innerHTML=en?&#x27;Sensor specification: 11 / 12 / 14-bit&lt;br&gt;fp V5.02 table: RAW12 / RAW14&lt;br&gt;Current mode: RAW&#x27;+p.b:&#x27;Sensor 規格：11／12／14-bit&lt;br&gt;fp V5.02 表內：RAW12／RAW14&lt;br&gt;目前模式：RAW&#x27;+p.b;
         const bytes=p.w*p.h*p.b/8, rate=bytes*p.f/1e6, cap=bytes*p.f*1200/1e9;
         $(&#x27;raster&#x27;).innerHTML=p.w+&#x27;×&#x27;+p.h+(p.ow?&#x27;&lt;br&gt;→ &#x27;+p.ow+&#x27;×&#x27;+p.oh:&#x27;&#x27;);
         $(&#x27;raster&#x27;).style.width=(70+90*p.w/6064)+&#x27;px&#x27;;
