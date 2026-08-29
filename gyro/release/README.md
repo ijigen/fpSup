@@ -2,6 +2,11 @@
 
 [English](#english) | [繁體中文](#繁體中文)
 
+### ⬇ [Download fpGyroSup-v1.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fpGyroSup-v1.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fpGyroSup-v1.zip)
+
+Unzip, copy everything inside to the root of an SD card, power the camera on.
+解開後把裡面的東西整批複製到 SD 卡根目錄,相機開機即可。
+
 Card in, camera on, shoot. Every clip leaves everything Gyroflow needs on the
 card. **No computer is involved at any point** — the camera reads its own lens,
 looks up its own sensor tables, and writes the files itself.

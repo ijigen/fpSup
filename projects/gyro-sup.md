@@ -3,9 +3,9 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Gyro, six-axis logging and the Gyroflow workflow.
-**Status: released — [fpGyroSup v1](../gyro/release/)**
+**Status: released — [fpGyroSup v1](https://github.com/ijigen/fpSup/raw/main/gyro/release/fpGyroSup-v1.zip)** · [release notes](../gyro/release/)
 
-Gyro、六軸記錄與 Gyroflow 工作流。**狀態:已發布 —— [fpGyroSup v1](../gyro/release/)**
+Gyro、六軸記錄與 Gyroflow 工作流。**狀態:已發布 —— [fpGyroSup v1 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fpGyroSup-v1.zip)** · [說明](../gyro/release/)
 
 ---
 
