@@ -20,6 +20,14 @@ looks up its own sensor tables, and writes the files itself.
 \CINEMA\A001_017\A001_017.json     lens profile
 ```
 
+**CinemaDNG only.** A MOV take still gets its `.GYR` — the gyro data is captured
+either way — but no `.gcsv` and no `.json`, because both are named from the
+CinemaDNG clip folder that a MOV does not have. See [Limitations](#limitations).
+
+**目前只支援 CinemaDNG。** 錄 MOV 一樣會有 `.GYR`(陀螺資料照收),但不會有
+`.gcsv` 和 `.json` —— 這兩個檔的路徑是從 CinemaDNG 的片段資料夾組出來的,MOV
+沒有那個資料夾。見[目前的限制](#目前的限制)。
+
 SIGMA fp, firmware **Ver.5.02** only. RAM injection only — nothing is flashed,
 and a power cycle restores the camera completely.
 
@@ -103,6 +111,15 @@ loader's task removed, one boot each on a stopwatch. Display is not the
 bottleneck — cutting 42 of those commands saved 1.5 s. The 1 MiB pool cannot
 shrink; it is where the gcsv and profile builders run.
 
+### Limitations
+
+**MOV is not covered.** Recording MOV produces `\GYRO\<clip>.GYR` as usual, so
+nothing is lost, but the `.gcsv` and `.json` are not written. Both take their
+path from `\CINEMA\<clip>\`, which a MOV recording has no equivalent of; the
+open fails, the writer returns, and the recording is unaffected — no freeze, and
+the take is clean. Until this is fixed, a MOV's `.GYR` can be converted on a
+computer with `gyro/decode.py --accel`.
+
 ### Known issues
 
 1. **Boot can fail after a soft power-off**, needing a battery pull. Not seen in
@@ -182,6 +199,13 @@ memmgr 配 1 MiB   4 秒
 用 A/B 量的:同一張卡只改進度條粗細、或只改 loader 建不建任務,各開機一次按碼表。
 **顯示不是瓶頸** —— 砍掉 42 條只省 1.5 秒。那 1 MiB 的池不能縮,gcsv 與 profile
 生成器就在裡面跑。
+
+### 目前的限制
+
+**不支援 MOV。** 錄 MOV 一樣會產生 `\GYRO\<clip>.GYR`,資料沒有丟,但不會寫
+`.gcsv` 和 `.json`。這兩個檔的路徑都是從 `\CINEMA\<clip>\` 組出來的,而 MOV
+沒有對應的片段資料夾 —— 開檔失敗就返回,不影響錄影,不會凍結,那一段是乾淨的。
+在修好之前,MOV 的 `.GYR` 可以在電腦上用 `gyro/decode.py --accel` 轉出來。
 
 ### 已知問題
 

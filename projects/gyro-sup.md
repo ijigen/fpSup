@@ -71,6 +71,11 @@ The camera reported success on all of these. The file did not.
   which makes the archived answer of 111 wrong by 35%
 - A heavy stop-recording path can miss the next take's start event. A header guard
   is in place, but the root cause is not removed
+- **MOV writes no gcsv and no json.** The `.GYR` is written as usual, so the gyro
+  data is there, but both other files take their path from `\CINEMA\<clip>\`,
+  which a MOV recording has no equivalent of. The open fails and the writer
+  returns, so recording is unaffected. Confirmed on hardware 2026-08-30. The fix
+  needs to know where a MOV's clip identity lives, or to fall back to `\GYRO\`
 
 ---
 
@@ -121,6 +126,10 @@ The camera reported success on all of these. The file did not.
 - **IMX410 模式歧義** —— 1080p29.97 對應 106 與 111 兩個模式,捲簾讀出時間分別是
   10.556 ms 與 7.828 ms,還沒辦法分辨。焦距不受影響。模式索引欄位也還沒找到
 - 停止錄影的路徑太重會漏掉下一段的開始事件(已加檔頭防護,但根因未除)
+- **錄 MOV 不會產生 gcsv 與 json。** `.GYR` 照常寫,陀螺資料沒有丟,但另外兩個檔
+  的路徑都是從 `\CINEMA\<clip>\` 組出來的,MOV 沒有對應的片段資料夾;開檔失敗
+  就返回,不影響錄影。2026-08-30 實機確認。要修得先知道 MOV 的片段身分放在哪,
+  或者退一步全部寫進 `\GYRO\`
 
 ---
 
