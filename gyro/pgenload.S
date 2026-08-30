@@ -25,8 +25,8 @@
 
 .equ POOL_PTR,   0xC3757A7C   /* where the AutoRun left `memmgr bufmem get`   */
 .equ O_STATE,    0x6000       /* the logger's r10, from the pool base         */
-.equ PG_CODE,    0xF7000      /* from r10; must match putprofile.py           */
-.equ PG_MAX,     0x1800       /* up to PG_TEXT at 0xF8800                     */
+.equ PG_CODE,    0x71000      /* from r10; must match logger.S/putprofile.py  */
+.equ PG_MAX,     0x10000      /* bounded code window, clear of O_READ/text    */
 .equ S_JSON_FN,  0x00F0       /* from r10; must match logger.S                */
 .equ S_GCSV_FN,  0x00F8
 .equ HEADER,     16           /* "PGEN", two entry offsets, length            */
@@ -62,12 +62,10 @@ pgen_load:
     movw    r5, #:lower16:S_GCSV_FN
     str     r0, [r4, r5]
 
-    ldr_addr ip, F_MGR
-    blx     ip
-    mov     r1, #0
-    ldr_addr ip, F_VOL
-    blx     ip
-    mov     r1, r0
+    /* PGEN.BIN lives beside AutoRun.txt on SD.  Data files may follow the
+     * selected recording volume, but the code which makes that possible must
+     * always be bootstrapped from volume 1. */
+    mov     r1, #1
     movw    r5, #:lower16:O_FOBJ
     movt    r5, #:upper16:O_FOBJ
     add     r5, r4, r5

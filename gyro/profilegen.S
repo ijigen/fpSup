@@ -270,11 +270,69 @@ pg_em:
  * geometry and timing out of the firmware's own tables, and the numbers are
  * formatted here.
  * ========================================================================= */
-.equ S_MODE_RUN,   0xA8
+.equ S_POST_BUSY,  0xA0
+.equ S_ACTIVE,     0x04
+.equ S_FILE,       0x08
+.equ S_STOP,       0x60
+.equ S_START_US,   0x88
+.equ S_POST_COUNT, 0xAC
+.equ S_GCSV_FN,    0xF8
+.equ S_POOL_TRIED, 0xFC
+.equ S_READ_N,     0x8C
+.equ O_PATH,       0x100
+.equ O_POST_PATH,  0x120
+.equ O_POST_START, 0x140
+.equ O_POST_MODE,  0x144
+.equ O_POST_W,     0x148
+.equ O_POST_H,     0x14C
+.equ O_POST_VOLUME, 0x150
+.equ O_LC_STATE,   0x154      /* PGEN-owned: 0 idle, 1 pending, 3 final,
+                                 4 established, 6 publishing                  */
+.equ O_LC_VOLUME,  0x158
+.equ O_LC_KIND,    0x15C      /* 1 CDNG, 2 MOV */
+.equ O_LC_FLAGS,   0x160
+.equ O_LC_TOKEN,   0x164
+.equ O_LC_TOP_HASH, 0x168
+.equ O_LC_OPEN_TICKS, 0x16C
+.equ O_LC_GEN,     0x170      /* PGEN-owned publication generation           */
+.equ O_LC_TAKE,    0x174
+.equ O_LC_COMMIT_POLLS, 0x178
+.equ O_LC_ATTACH,  0x17C      /* callback-owned attached generation          */
+/* Default-build aliases keep the previously field-tested geometry watcher
+ * buildable until the native adapter is explicitly enabled. */
+.equ O_BOUNDARY_COUNT, O_LC_STATE
+.equ O_BOUNDARY_START, O_LC_VOLUME
 .equ O_GCSV_PATH,  0x180
+.equ O_FOBJ,       0x400
 .equ O_FOBJ2,      0x800
-.equ PG_TEXT,      0xF8800      /* from r10: the profile text            */
-.equ PG_LENS,      0xF9800      /* from r10: what the lens hands back    */
+.equ O_WORK,       0x1A000
+.equ O_READ,       0x5B000
+.equ O_TOP7,       0x6B000
+.equ O_REC_SCRATCH, O_TOP7+0x90
+.equ R_START,      0x00
+.equ R_MODE,       0x04
+.equ R_W,          0x08
+.equ R_H,          0x0C
+.equ R_VER,        0x10
+.equ R_SIZE_H,     0x14
+.equ R_RECOVERED,  0x18
+.equ R_KIND,       0x1C
+.equ O_POST_QUEUE, 0x2A0
+.equ Q_HEAD,       0x00
+.equ Q_DROPPED,    0x04
+.equ Q_JOBS,       0x10
+.equ Q_CAP,        7
+.equ J_FLAGS,      0x00
+.equ J_ATTEMPTS,   0x04
+.equ J_CLOSE_TICK, 0x08
+.equ J_START_US,   0x0C
+.equ J_MODE,       0x10
+.equ J_W,          0x14
+.equ J_H,          0x18
+.equ J_PATH,       0x1C
+.equ POST_RETRIES, 12
+.equ PG_TEXT,      0xF8800      /* from r12: the profile text            */
+.equ PG_LENS,      0xF9800      /* from r12: what the lens hands back    */
 .equ GEOMETRY,     0xC37CE210   /* {frame width, height, bytes} */
 
 .equ F_LENS_CTX,   0xC03554A0
@@ -282,13 +340,467 @@ pg_em:
 .equ B_FOCAL,      0x0D
 .equ B_NAME,       0x2D
 
+/* Native system-status manager.  Category 0x80 is a 68-byte object at
+ * snapshot +0x7c.  Its byte 2 is MovieSaving: the core recording manager
+ * rejects CinemaDNG start while it is nonzero, and the power-off waiter also
+ * waits for it to clear.  Always publish through F_SYS_STATUS_UPDATE80 so
+ * every native observer is notified; never write the snapshot directly. */
+.equ F_SYS_STATUS_MGR,      0xC00178D8
+.equ F_SYS_STATUS_SNAPSHOT, 0xC0017AC8
+.equ F_SYS_STATUS_UPDATE80, 0xC0017CA0
+.equ SYS_STATUS_80_OFF,     0x7C
+.equ SYS80_STILL_EXPOSING,  0
+.equ SYS80_STILL_SAVING,    1
+.equ SYS80_MOVIE_SAVING,    2
+.equ SYS80_STILL_PROCESSING, 3
+.equ SYS80_CAPTURE_AUX,     4
+.equ SYS80_MOVIE_RECORDING, 8
+.equ SYS80_WORDS,           17
+
 .equ F_MGR,        0xC0444658
 .equ F_VOL,        0xC0444698
 .equ F_CTOR,       0xC0365E90
 .equ F_OPEN,       0xC0365FB0
+.equ F_READ,       0xC0366060
 .equ F_WRITE,      0xC03660E8
 .equ F_CLOSE,      0xC0366020
 .equ F_DTOR,       0xC0365ED0
+.equ F_OPEN_SIZE,  0xC0366680
+.equ F_PATH_SIZE,  0xC03665F8
+.equ F_SEEK,       0xC03661E0
+.equ F_DIR_CTOR,   0xC0366918
+.equ F_DIR_DTOR,   0xC0366940
+.equ F_DIR_OPEN,   0xC0366990
+.equ F_DIR_MKDIR,  0xC03669C0
+.equ F_DIR_NEXT,   0xC03669F8
+.equ LENS_REGION,  0xC2F2D876
+.equ RECOVERED,    0x80000000
+
+.equ XMP_FOBJ_PTR, 0xC358E140
+.equ TOP_FILE,     0xC358E148
+.equ MOV_ACTIVE_PTR, 0xC35A952C
+.equ MOV_PATHINFO_PTR, 0xC358DB8C
+.equ MOV_BUSY_PTR, 0xC38D2DE8
+.equ PATH_MGR_SD,  0xC3438400
+.equ PATH_MGR_SSD, 0xC3438398
+.equ SETTINGS_PTR, 0xC3075230
+
+.macro rec_ptr reg
+    movw    \reg, #:lower16:O_REC_SCRATCH
+    movt    \reg, #:upper16:O_REC_SCRATCH
+    add     \reg, r10, \reg
+.endm
+
+#ifdef FPGYRO_NATIVE_LIFECYCLE
+/* r0 = 1 acquire, 0 release -> r0 = one only when this call changed byte 2.
+ *
+ * The firmware's native writers use this same read-copy-modify-publish
+ * sequence.  Acquire is deliberately conservative: it refuses to overwrite
+ * any live capture/save state.  MovieSaving is the recording manager's own
+ * start gate, unlike the UI-only WaitEncoding experiment in r10/r11, and the
+ * normal power-off waiter also observes it.  The scheduler's local ownership
+ * flag makes release possible only after a successful zero-to-one acquire.
+ *
+ * The 72-byte frame keeps the public ABI's eight-byte stack alignment while
+ * holding the native 68-byte category object. */
+pg_native_movie_saving_set:
+    push    {r4, r5, r6, r7, r8, lr}
+    mov     r8, r0
+    sub     sp, sp, #72
+    ldr_addr ip, F_SYS_STATUS_MGR
+    blx     ip
+    mov     r5, r0
+    ldr_addr ip, F_SYS_STATUS_SNAPSHOT
+    blx     ip
+    add     r1, r0, #SYS_STATUS_80_OFF
+    mov     r2, sp
+    mov     r3, #SYS80_WORDS
+pg_native_movie_saving_copy:
+    ldr     r4, [r1], #4
+    str     r4, [r2], #4
+    subs    r3, r3, #1
+    bne     pg_native_movie_saving_copy
+
+    ldrb    r0, [sp, #SYS80_MOVIE_SAVING]
+    cmp     r8, #0
+    beq     pg_native_movie_saving_release
+
+    /* Acquiring while any native capture/save owner is live could publish a
+     * stale copy over a just-starting recording.  The logger already waits on
+     * these fields; repeat the check inside the copied transaction. */
+    cmp     r0, #0
+    bne     pg_native_movie_saving_unchanged
+    ldrb    r1, [sp, #SYS80_STILL_EXPOSING]
+    ldrb    r2, [sp, #SYS80_STILL_SAVING]
+    orr     r1, r1, r2
+    ldrb    r2, [sp, #SYS80_STILL_PROCESSING]
+    orr     r1, r1, r2
+    ldr     r2, [sp, #SYS80_CAPTURE_AUX]
+    orr     r1, r1, r2
+    ldrb    r2, [sp, #SYS80_MOVIE_RECORDING]
+    orrs    r1, r1, r2
+    bne     pg_native_movie_saving_unchanged
+
+    /* Take a second native snapshot immediately before publication.  This
+     * closes the long copy/check portion of the hand-off window without ever
+     * reading or writing the manager's backing storage directly. */
+    mov     r0, r5
+    ldr_addr ip, F_SYS_STATUS_SNAPSHOT
+    blx     ip
+    add     r0, r0, #SYS_STATUS_80_OFF
+    ldrb    r1, [r0, #SYS80_STILL_EXPOSING]
+    ldrb    r2, [r0, #SYS80_STILL_SAVING]
+    orr     r1, r1, r2
+    ldrb    r2, [r0, #SYS80_MOVIE_SAVING]
+    orr     r1, r1, r2
+    ldrb    r2, [r0, #SYS80_STILL_PROCESSING]
+    orr     r1, r1, r2
+    ldr     r2, [r0, #SYS80_CAPTURE_AUX]
+    orr     r1, r1, r2
+    ldrb    r2, [r0, #SYS80_MOVIE_RECORDING]
+    orrs    r1, r1, r2
+    bne     pg_native_movie_saving_unchanged
+
+    mov     r0, #1
+    strb    r0, [sp, #SYS80_MOVIE_SAVING]
+    b       pg_native_movie_saving_publish
+
+pg_native_movie_saving_release:
+    cmp     r0, #1
+    bne     pg_native_movie_saving_unchanged
+    mov     r0, #0
+    strb    r0, [sp, #SYS80_MOVIE_SAVING]
+
+pg_native_movie_saving_publish:
+    mov     r0, r5
+    mov     r1, sp
+    ldr_addr ip, F_SYS_STATUS_UPDATE80
+    blx     ip
+    mov     r0, #1
+    b       pg_native_movie_saving_done
+
+pg_native_movie_saving_unchanged:
+    mov     r0, #0
+pg_native_movie_saving_done:
+    add     sp, sp, #72
+    pop     {r4, r5, r6, r7, r8, pc}
+#endif
+
+/* Queue scheduler entry used by logger.S.  It lives here because the injection
+ * cave is fixed-size, while the separately loaded PGEN region has ample room. */
+    .global pg_post_process
+pg_post_process:
+    cmp     r0, #1
+    beq     pg_boundary_watch
+    push    {r4, r5, r6, r7, r8, lr}
+    mov     r7, #0                      @ owns native processing state
+#ifdef FPGYRO_RECOVERY
+    /* Run the bounded recovery scan once after PGEN loads, before normal RAM
+     * jobs.  It creates \GYRO on the selected SD/SSD when needed. */
+    ldr     r0, [r10, #S_POOL_TRIED]
+    cmp     r0, #1
+    bne     pg_post_next
+    ldr     r0, [r10, #S_POST_COUNT]
+    cmp     r0, #0
+    bne     pg_post_next
+    bl      pg_recovery_scan
+#elif defined(FPGYRO_NATIVE_LIFECYCLE)
+    /* Native lifecycle without boot recovery is the first on-camera test
+     * configuration.  Mark the one-shot as complete so the idle writer does
+     * not call this empty scheduler on every 5 ms poll. */
+    ldr     r0, [r10, #S_POOL_TRIED]
+    cmp     r0, #1
+    moveq   r0, #2
+    streq   r0, [r10, #S_POOL_TRIED]
+#endif
+pg_post_next:
+    /* Once the native-XMP gate has admitted us, keep S_POST_BUSY asserted and
+     * finish each take as one transaction: GYR is already closed, then this
+     * same writer task makes that take's GCSV and JSON before advancing the
+     * queue. */
+    dmb     ish
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_post_out
+    ldr     r0, [r10, #S_FILE]
+    cmp     r0, #0
+    bne     pg_post_out
+    ldr     r6, [r10, #S_POST_COUNT]
+    cmp     r6, #0
+    beq     pg_post_out
+#ifdef FPGYRO_NATIVE_LIFECYCLE
+    /* Take the camera's real capture/power inhibitor before any generator can
+     * yield.  It stays owned across every 5 ms GCSV yield, every retry, JSON,
+     * and every queued take. */
+    cmp     r7, #0
+    bne     pg_post_locked
+    mov     r0, #1
+    bl      pg_native_movie_saving_set
+    cmp     r0, #0
+    beq     pg_post_out
+    mov     r7, #1
+
+    /* A callback may have published cancellation in the few instructions
+     * before the native update.  Recheck under the inhibitor and use the one
+     * common release path if it won. */
+    dmb     ish
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_post_out
+    ldr     r0, [r10, #S_FILE]
+    cmp     r0, #0
+    bne     pg_post_out
+    ldr     r6, [r10, #S_POST_COUNT]
+    cmp     r6, #0
+    beq     pg_post_out
+pg_post_locked:
+#endif
+    add     r4, r10, #O_POST_QUEUE
+    ldr     r2, [r4, #Q_HEAD]
+    add     r5, r2, r2, lsl #1
+    add     r5, r4, r5, lsl #4
+    add     r5, r5, #Q_JOBS
+    ldr     r0, [r5, #J_FLAGS]
+    ubfx    r1, r0, #16, #8
+    cmp     r1, #2                       @ MOV target resolver is not defined yet
+    orreq   r0, r0, #3                   @ keep GYR; never guess a CDNG sidecar path
+    streq   r0, [r5, #J_FLAGS]
+    tst     r0, #1
+    beq     pg_post_gcsv
+
+pg_post_json_head:
+    bl      pg_post_snapshot
+    ldr     r4, [r5, #J_FLAGS]
+    tst     r4, #2
+    bne     pg_post_json_done
+    bl      pg_build
+    cmp     r0, #0
+#ifdef FPGYRO_RECOVERY
+    beq     pg_post_json_done
+    mov     r0, #'J'
+    bl      pg_marker_write
+    cmp     r0, #0
+#endif
+    orrne   r4, r4, #2
+    strne   r4, [r5, #J_FLAGS]
+pg_post_json_done:
+    and     r0, r4, #3
+    cmp     r0, #3
+    beq     pg_post_dequeue
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_post_out
+    ldr     r0, [r5, #J_ATTEMPTS]
+    add     r0, r0, #1
+    str     r0, [r5, #J_ATTEMPTS]
+    cmp     r0, #POST_RETRIES
+    blo     pg_post_next              @ retry inside the same protected run
+    add     r4, r10, #O_POST_QUEUE
+    ldr     r0, [r4, #Q_DROPPED]
+    add     r0, r0, #1
+    str     r0, [r4, #Q_DROPPED]
+    b       pg_post_dequeue
+
+pg_post_gcsv:
+    bl      pg_post_snapshot
+    ldr     r4, [r5, #J_FLAGS]
+    ldr     ip, [r10, #S_GCSV_FN]
+    cmp     ip, #0
+    moveq   r0, #0
+    blxne   ip
+    cmp     r0, #0
+    beq     pg_post_gcsv_failed
+#ifdef FPGYRO_RECOVERY
+    mov     r0, #'G'
+    bl      pg_marker_write
+    cmp     r0, #0
+    beq     pg_post_gcsv_failed
+#endif
+    orr     r4, r4, #1
+    str     r4, [r5, #J_FLAGS]
+    mov     r0, #0                     @ JSON gets its own full retry budget
+    str     r0, [r5, #J_ATTEMPTS]
+    b       pg_post_next               @ next file, without the outer 1 s gap
+pg_post_gcsv_failed:
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_post_out                 @ cancellation is not a failed attempt
+    ldr     r0, [r5, #J_ATTEMPTS]
+    add     r0, r0, #1
+    str     r0, [r5, #J_ATTEMPTS]
+    cmp     r0, #POST_RETRIES
+    blo     pg_post_next              @ retry inside the same protected run
+    orr     r4, r4, #1                  @ exhausted: let later GCSVs proceed
+    str     r4, [r5, #J_FLAGS]
+    add     r4, r10, #O_POST_QUEUE
+    ldr     r0, [r4, #Q_DROPPED]
+    add     r0, r0, #1
+    str     r0, [r4, #Q_DROPPED]
+    b       pg_post_next               @ do not strand later valid jobs
+
+pg_post_dequeue:
+    add     r4, r10, #O_POST_QUEUE
+    ldr     r0, [r4, #Q_HEAD]
+    add     r0, r0, #1
+    cmp     r0, #Q_CAP
+    moveq   r0, #0
+    str     r0, [r4, #Q_HEAD]
+    ldr     r0, [r10, #S_POST_COUNT]
+    sub     r0, r0, #1
+    dmb     ish
+    str     r0, [r10, #S_POST_COUNT]
+    b       pg_post_next
+pg_post_out:
+#ifdef FPGYRO_NATIVE_LIFECYCLE
+    cmp     r7, #0
+    beq     pg_post_pop
+    mov     r0, #0
+    bl      pg_native_movie_saving_set
+    mov     r7, #0
+pg_post_pop:
+#endif
+    pop     {r4, r5, r6, r7, r8, pc}
+
+#ifndef FPGYRO_NATIVE_LIFECYCLE
+/* Previous field build, retained as the default until the native adapters are
+ * explicitly approved for the camera image. */
+/* A RAM-only boundary detector for the writer task.  MovieRecording can remain
+ * asserted between two clips, but the DNG geometry stays zero throughout that
+ * gap.  Twenty consecutive 5 ms polls reject a transient zero.  The callback
+ * never reads a manager or opens a file; it only consumes ACTIVE 3. */
+pg_boundary_watch:
+    ldr     r0, [r10, #S_ACTIVE]
+    cmp     r0, #2
+    beq     pg_boundary_wait_live
+    cmp     r0, #1
+    bxne    lr
+
+    ldr     r1, [r10, #S_START_US]
+    ldr     r2, [r10, #O_BOUNDARY_START]
+    cmp     r1, r2
+    beq     pg_boundary_same_take
+    str     r1, [r10, #O_BOUNDARY_START]
+    mov     r2, #0
+    str     r2, [r10, #O_BOUNDARY_COUNT]
+pg_boundary_same_take:
+    ldr_addr r1, GEOMETRY
+    ldr     r1, [r1]
+    cmp     r1, #0
+    beq     pg_boundary_zero
+    mov     r1, #1                   @ armed only after real DNG geometry appeared
+    str     r1, [r10, #O_BOUNDARY_COUNT]
+    bx      lr
+pg_boundary_zero:
+    ldr     r0, [r10, #S_FILE]
+    cmp     r0, #2
+    bxne    lr
+    ldr     r0, [r10, #S_STOP]
+    cmp     r0, #0
+    bxne    lr
+    ldr     r1, [r10, #O_BOUNDARY_COUNT]
+    cmp     r1, #0                   @ geometry has not come alive yet
+    bxeq    lr
+    add     r1, r1, #1
+    str     r1, [r10, #O_BOUNDARY_COUNT]
+    cmp     r1, #21                  @ 20 zero polls = 100 ms
+    bxlo    lr
+    add     r2, r10, #S_ACTIVE
+    dmb     ish
+    ldrex   r0, [r2]
+    cmp     r0, #1
+    bne     pg_boundary_clrex
+    mov     r0, #3
+    strex   r1, r0, [r2]
+    cmp     r1, #0
+    bne     pg_boundary_out
+    dmb     ish
+    b       pg_boundary_out
+pg_boundary_clrex:
+    clrex
+pg_boundary_out:
+    bx      lr
+
+/* ACTIVE 2 means the old GYR is sealing.  Do not let the callback start the
+ * replacement until the next clip's geometry is genuinely live. */
+pg_boundary_wait_live:
+    ldr_addr r1, GEOMETRY
+    ldr     r1, [r1]
+    cmp     r1, #0
+    bxeq    lr
+    mov     r0, #0
+    dmb     ish
+    str     r0, [r10, #S_ACTIVE]
+    bx      lr
+#else
+#include "lifecycle.inc.S"
+#ifdef FPGYRO_RECOVERY
+#include "recovery.inc.S"
+#endif
+#endif
+
+/* r5 = queue job.  Copy every field generators use out of the ring before
+ * calling either of them; the callback is then free to prepare the next take. */
+pg_post_snapshot:
+    add     r1, r5, #J_PATH
+    add     r2, r10, #O_POST_PATH
+    mov     r3, #20
+1:  ldrb    r0, [r1], #1
+    strb    r0, [r2], #1
+    subs    r3, r3, #1
+    bne     1b
+    ldr     r0, [r5, #J_START_US]
+    str     r0, [r10, #O_POST_START]
+    ldr     r0, [r5, #J_MODE]
+    str     r0, [r10, #O_POST_MODE]
+    ldr     r0, [r5, #J_W]
+    str     r0, [r10, #O_POST_W]
+    ldr     r0, [r5, #J_H]
+    str     r0, [r10, #O_POST_H]
+    ldr     r0, [r5, #J_FLAGS]
+    ubfx    r1, r0, #8, #8
+    str     r1, [r10, #O_POST_VOLUME]
+    lsr     r0, r0, #31
+    rec_ptr ip
+    str     r0, [ip, #R_RECOVERED]
+
+    /* Rebuild this job's JSON path as well.  GCSV-first scheduling may process
+     * a later queue entry before returning to the head's profile, so the shared
+     * O_GCSV_PATH can belong to a different clip by then. */
+    ldr_addr r0, 0x6E6F736A              @ "json"
+    b       pg_cinema_path
+
+/* r0 = four extension bytes in little endian. */
+pg_cinema_path:
+    push    {r4, lr}
+    mov     r4, r0
+    add     r0, r10, #O_GCSV_PATH
+    movw    r1, #0x435C
+    movt    r1, #0x4E49                 @ "\\CIN"
+    str     r1, [r0]
+    movw    r1, #0x4D45
+    movt    r1, #0x5C41                 @ "EMA\\"
+    str     r1, [r0, #4]
+    add     r1, r10, #O_POST_PATH
+    add     r1, r1, #6                  @ clip name after "\\GYRO\\"
+    add     r2, r0, #8
+    add     r3, r0, #17
+    mov     ip, #0
+2:  ldrb    r0, [r1, ip]
+    strb    r0, [r2, ip]
+    strb    r0, [r3, ip]
+    add     ip, ip, #1
+    cmp     ip, #8
+    blo     2b
+    add     r0, r10, #O_GCSV_PATH
+    mov     r1, #92
+    strb    r1, [r0, #16]
+    mov     r1, #'.'
+    strb    r1, [r0, #25]
+    str     r4, [r0, #26]
+    mov     r1, #0
+    strb    r1, [r0, #30]
+    dmb     ish
+    pop     {r4, pc}
 
 .macro S text
     bl      pg_es
@@ -331,16 +843,31 @@ pg_esb:
     .global pg_build
 pg_build:
     push    {r4, r5, r6, r7, r8, r9, r11, lr}
-    ldr     r4, [r10, #S_MODE_RUN]
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_fail
+    ldr     r4, [r10, #O_POST_MODE]
     cmp     r4, #0
     beq     pg_fail
-    ldr_addr r0, GEOMETRY
-    ldr     r5, [r0]                    /* frame width  */
-    ldr     r6, [r0, #4]                /* frame height */
+    ldr     r5, [r10, #O_POST_W]        /* take's immutable frame width  */
+    ldr     r6, [r10, #O_POST_H]        /* take's immutable frame height */
     cmp     r5, #0
     beq     pg_fail
     cmp     r6, #0
     beq     pg_fail
+
+#ifdef FPGYRO_RECOVERY
+    /* A reboot may change the mounted lens.  Recovered JSON is allowed only
+     * when the live correction region still matches the one in this GYR. */
+    rec_ptr ip
+    ldr     r0, [ip, #R_RECOVERED]
+    cmp     r0, #0
+    beq     pg_lens_ready
+    bl      pg_lens_region_matches
+    cmp     r0, #0
+    beq     pg_fail
+pg_lens_ready:
+#endif
 
     /* The lens.  Seven hundred milliseconds each and they take the mount's
      * mutex, which is why none of this happens while a take is running. */
@@ -357,6 +884,9 @@ pg_build:
     blx     ip
     cmp     r0, #0
     beq     pg_fail
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_fail
     ldrb    r7, [r11]                   /* big-endian: the mount protocol is */
     ldrb    r0, [r11, #1]
     orr     r7, r0, r7, lsl #8          /* focal length, tenths of a mm */
@@ -369,6 +899,9 @@ pg_build:
     blx     ip
     cmp     r0, #0
     beq     pg_fail
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_fail
 
     movw    r9, #:lower16:PG_TEXT
     movt    r9, #:upper16:PG_TEXT
@@ -453,6 +986,9 @@ pg_build:
     S "  \"sync_settings\": {},\n  \"official\": false\n}\n"
 
     sub     r8, r9, r11                 /* how much text there is */
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_fail
     bl      pg_write
     pop     {r4, r5, r6, r7, r8, r9, r11, pc}
 pg_fail:
@@ -494,12 +1030,24 @@ pg_write:
     mov     r0, #0
     strb    r0, [r4, #30]
 
+#ifdef FPGYRO_NATIVE_LIFECYCLE
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     pg_write_no_volume
+    ldr     r1, [r10, #O_POST_VOLUME]
+    cmp     r1, #1
+    beq     pg_write_volume_ok
+    cmp     r1, #5
+    bne     pg_write_no_volume
+pg_write_volume_ok:
+#else
     ldr_addr ip, F_MGR
     blx     ip
     mov     r1, #0
     ldr_addr ip, F_VOL
     blx     ip
     mov     r1, r0
+#endif
     add     r0, r10, #O_FOBJ2
     ldr_addr ip, F_CTOR
     blx     ip
@@ -518,11 +1066,17 @@ pg_write:
     blx     ip
     mov     r0, #0
     pop     {r4, r5, r6, pc}
+#ifdef FPGYRO_NATIVE_LIFECYCLE
+pg_write_no_volume:
+    mov     r0, #0
+    pop     {r4, r5, r6, pc}
+#endif
 8:  add     r0, r10, #O_FOBJ2
     mov     r1, r11
     mov     r2, r8
     ldr_addr ip, F_WRITE
     blx     ip
+    mov     r6, r0
     add     r0, r10, #O_FOBJ2
     ldr_addr ip, F_CLOSE
     blx     ip
@@ -530,5 +1084,8 @@ pg_write:
     mov     r1, #2
     ldr_addr ip, F_DTOR
     blx     ip
-    mov     r0, #1
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    moveq   r0, r6
+    movne   r0, #0
     pop     {r4, r5, r6, pc}

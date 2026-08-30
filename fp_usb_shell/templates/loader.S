@@ -53,6 +53,7 @@
 .equ F_READ,      0xC0366060
 .equ F_CLOSE,     0xC0366020
 .equ F_DTOR,      0xC0365ED0
+.equ F_CACHE,     0xC000E91C
 
 .equ FN_CRETSK,   0xC0016A58
 .equ FN_STATSK,   0xC0016BC0
@@ -142,6 +143,10 @@ load:
     movw    r0, #O_BUF
     add     r6, r4, r0                  @ where the file lands
 
+    /* Keep the firmware's normal media-manager initialisation in the boot
+     * path.  Direct volume 1 is valid for F_CTOR, but skipping these calls was
+     * the only loader-side change in the first native test that froze at 90%.
+     * SSD boot routing will be reintroduced only after this known path passes. */
     LDA     r12, F_MGR
     blx     r12
     mov     r1, #0
@@ -206,6 +211,11 @@ place:
     b       place
 
 run:
+    /* Some VSHL sections patch firmware code rather than filling a previously
+     * unused cave.  Invalidate once after every section is present and before
+     * any patched entry can run. */
+    LDA     r12, F_CACHE
+    blx     r12
 #ifdef NOTASK
     pop     {r4, r5, r6, r7, r8, pc}    @ the placed hook runs from the next callback
 #else

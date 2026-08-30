@@ -3,7 +3,7 @@
 
     ./gyro/build_pgen.py            -> writes it to the card over USB
 
-    "PGEN" | u32 entry offset | u32 length | the code
+    "PGEN" | u32 post-process entry | u32 gcsv entry | u32 length | the code
 
 The generator lives in the pool, whose address is only known at run time, so it
 cannot be a section of VSHL.BIN like the logger is.  It goes on the card as a
@@ -23,30 +23,45 @@ sys.path.insert(0, str(SHELL))
 from armasm import assemble, symbols                           # noqa: E402
 
 
-def build():
+def build(native_lifecycle=False, recovery=False):
     """Both pool routines in one file, with the entry points in the header.
 
-        "PGEN" | u32 profile entry | u32 gcsv entry | u32 length | the code
+        "PGEN" | u32 post-process entry | u32 gcsv entry | u32 length | the code
 
     They are laid end to end and neither calls the other, so concatenating two
     position-independent blobs is all it takes. The loader never has to know
     anything about either of them.
     """
-    prof = assemble(HERE / 'profilegen.S')
+    if recovery and not native_lifecycle:
+        raise ValueError('recovery requires native_lifecycle')
+    defines = []
+    if native_lifecycle:
+        defines.append('FPGYRO_NATIVE_LIFECYCLE')
+    if recovery:
+        defines.append('FPGYRO_RECOVERY')
+    defines = tuple(defines)
+    prof = assemble(HERE / 'profilegen.S', defines)
     prof += b'\0' * (-len(prof) % 4)
-    gcsv = assemble(HERE / 'gcsvgen.S')
-    a = symbols(HERE / 'profilegen.S')['pg_build']
-    b = len(prof) + symbols(HERE / 'gcsvgen.S')['gcsv_build']
+    gcsv = assemble(HERE / 'gcsvgen.S', defines)
+    # The first entry owns the post-process queue and calls pg_build itself.
+    # Keeping the scheduler in PGEN leaves the fixed injection cave to the
+    # recording and close path, where every instruction has to fit below the
+    # shell's state/parking stub.
+    a = symbols(HERE / 'profilegen.S', defines)['pg_post_process']
+    b = len(prof) + symbols(HERE / 'gcsvgen.S', defines)['gcsv_build']
     code = prof + gcsv
     return struct.pack('<4sIII', b'PGEN', a, b, len(code)) + code, (a, b), len(code)
 
 
 if __name__ == '__main__':
-    blob, (a, b), n = build()
+    native = '--native-lifecycle' in sys.argv
+    recovery = '--recovery' in sys.argv
+    blob, (a, b), n = build(native_lifecycle=native, recovery=recovery)
     local = HERE / '.pgen.bin'
     local.write_bytes(blob)
-    print(f'  pool code     {n} bytes: profile +0x{a:X}, gcsv +0x{b:X}, '
-          f'{len(blob)} on the card')
+    print(f'  pool code     {n} bytes: post +0x{a:X}, gcsv +0x{b:X}, '
+          f'{len(blob)} on the card' + (' [native lifecycle]' if native else '')
+          + (' [recovery]' if recovery else ' [no recovery]' if native else ''))
     if '--local' not in sys.argv:
         r = subprocess.run([sys.executable, str(SHELL / 'putfile.py'),
                             str(local), r'\PGEN.BIN'], capture_output=True, text=True)

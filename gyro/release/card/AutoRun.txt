@@ -77,14 +77,14 @@ display osd 1
 # memory somebody else kept rewriting.
 memmgr bufmem get 0 1048576
 
-# --- loader @0xC072DE64..0xC072DFE8, 388 bytes --------------
+# --- loader @0xC072DE64..0xC072DFF4, 400 bytes --------------
 # Reads \VSHL.BIN and places what it says. The worker itself is in there.
 mem set 0xC072DE64 0xE92D4070
 mem set 0xC072DE68 0xE30CC6F9
 mem set 0xC072DE6C 0xE34CC01E
 mem set 0xC072DE70 0xE12FFF3C
 mem set 0xC072DE74 0xE1A04000
-mem set 0xC072DE78 0xE28F5F56
+mem set 0xC072DE78 0xE28F5F59
 mem set 0xC072DE7C 0xE5950000
 mem set 0xC072DE80 0xE304124C
 mem set 0xC072DE84 0xE3441E49
@@ -112,18 +112,18 @@ mem set 0xC072DED8 0xE304C658
 mem set 0xC072DEDC 0xE34CC044
 mem set 0xC072DEE0 0xE12FFF3C
 mem set 0xC072DEE4 0xE3A01000
-
-display osd 1 0x00000000
-display osd 1 0x00000000
-display osd 1 0x00000000
-display text fpSup[###.....]43
-display osd 1
-display text fpSup[###.....]43
-display osd 1
-display text fpSup[###.....]43
-display osd 1
-
 mem set 0xC072DEE8 0xE304C698
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[###.....]43
+display osd 1
+display text fpSup[###.....]43
+display osd 1
+display text fpSup[###.....]43
+display osd 1
+
 mem set 0xC072DEEC 0xE34CC044
 mem set 0xC072DEF0 0xE12FFF3C
 mem set 0xC072DEF4 0xE1A01000
@@ -132,7 +132,7 @@ mem set 0xC072DEFC 0xE305CE90
 mem set 0xC072DF00 0xE34CC036
 mem set 0xC072DF04 0xE12FFF3C
 mem set 0xC072DF08 0xE1A00005
-mem set 0xC072DF0C 0xE28F10C8
+mem set 0xC072DF0C 0xE28F10D4
 mem set 0xC072DF10 0xE3A02001
 mem set 0xC072DF14 0xE305CFB0
 mem set 0xC072DF18 0xE34CC036
@@ -156,22 +156,22 @@ mem set 0xC072DF5C 0xE3A01002
 mem set 0xC072DF60 0xE305CED0
 mem set 0xC072DF64 0xE34CC036
 mem set 0xC072DF68 0xE12FFF3C
-
-display osd 1 0x00000000
-display osd 1 0x00000000
-display osd 1 0x00000000
-display text fpSup[#####...]67
-display osd 1
-display text fpSup[#####...]67
-display osd 1
-display text fpSup[#####...]67
-display osd 1
-
 mem set 0xC072DF6C 0xE5960000
 mem set 0xC072DF70 0xE3041256
+
+display osd 1 0x00000000
+display osd 1 0x00000000
+display osd 1 0x00000000
+display text fpSup[#####...]67
+display osd 1
+display text fpSup[#####...]67
+display osd 1
+display text fpSup[#####...]67
+display osd 1
+
 mem set 0xC072DF74 0xE3441E49
 mem set 0xC072DF78 0xE1500001
-mem set 0xC072DF7C 0x1A000014
+mem set 0xC072DF7C 0x1A000017
 mem set 0xC072DF80 0xE5967004
 mem set 0xC072DF84 0xE2868010
 mem set 0xC072DF88 0xE0882187
@@ -192,12 +192,15 @@ mem set 0xC072DFC0 0xE3C22003
 mem set 0xC072DFC4 0xE2888008
 mem set 0xC072DFC8 0xE2477001
 mem set 0xC072DFCC 0xEAFFFFEE
-mem set 0xC072DFD0 0xE8BD81F0
-mem set 0xC072DFD4 0xE8BD81F0
-mem set 0xC072DFD8 0x00000000
-mem set 0xC072DFDC 0x4853565C
-mem set 0xC072DFE0 0x49422E4C
-mem set 0xC072DFE4 0x0000004E
+mem set 0xC072DFD0 0xE30EC91C
+mem set 0xC072DFD4 0xE34CC000
+mem set 0xC072DFD8 0xE12FFF3C
+mem set 0xC072DFDC 0xE8BD81F0
+mem set 0xC072DFE0 0xE8BD81F0
+mem set 0xC072DFE4 0x00000000
+mem set 0xC072DFE8 0x4853565C
+mem set 0xC072DFEC 0x49422E4C
+mem set 0xC072DFF0 0x0000004E
 
 display osd 1 0x00000000
 display osd 1 0x00000000

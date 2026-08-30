@@ -55,7 +55,15 @@ def main():
     ap.add_argument('build', choices=('release', 'debug'))
     ap.add_argument('--to', help='the card, if it is not the only volume mounted')
     ap.add_argument('--keep-mounted', action='store_true')
+    ap.add_argument('--recovery', action='store_true',
+                    help='also enable the experimental boot recovery scan')
+    ap.add_argument('--phase-probe', action='store_true',
+                    help='release-only RAM trace of CDNG/GYR write phase')
     a = ap.parse_args()
+
+    if a.phase_probe and a.build != 'release':
+        raise SystemExit('--phase-probe is release-only (the debug shell owns '
+                         'the probe address)')
 
     card = find_card(a.to)
     print(f'  card          {card}')
@@ -63,6 +71,8 @@ def main():
     cmd = [sys.executable, str(HERE / 'build_card.py'), '--no-pad']
     if a.build == 'release':
         cmd.append('--no-shell')
+    if a.phase_probe:
+        cmd.append('--phase-probe')
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode:
         sys.stderr.write(r.stdout + r.stderr)
@@ -71,7 +81,14 @@ def main():
         if line.startswith(('worker', 'payload', 'clean')):
             print('  ' + line)
 
-    r = subprocess.run([sys.executable, str(HERE / 'build_pgen.py'), '--local'],
+    # Native lifecycle is the shipping v1.1 contract.  The logger consumes its
+    # clip identity, volume and finalize publication, so there is no meaningful
+    # legacy card combination to expose here.
+    pgen_cmd = [sys.executable, str(HERE / 'build_pgen.py'), '--local',
+                '--native-lifecycle']
+    if a.recovery:
+        pgen_cmd.append('--recovery')
+    r = subprocess.run(pgen_cmd,
                        capture_output=True, text=True)
     if r.returncode:
         sys.stderr.write(r.stdout + r.stderr)

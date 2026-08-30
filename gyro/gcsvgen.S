@@ -25,6 +25,9 @@
 .equ POOL_PTR,        0xC3757A7C
 .equ O_STATE,         0x6000      /* r10 points here                        */
 .equ O_PATH,          0x0100      /* from r10                               */
+.equ O_POST_PATH,     0x0120
+.equ O_POST_START,    0x0140
+.equ O_POST_VOLUME,   0x0150      /* snapshotted from J_FLAGS[15:8] */
 .equ O_HEADER,        0x0200
 .equ O_FOBJ,          0x0400
 .equ O_FOBJ2,         0x0800      /* the gcsv, open while the .GYR is read back */
@@ -34,6 +37,8 @@
 .equ BUF_SIZE,        0x00004000
 .equ BLOCK_HEADER,    32
 .equ PAYLOAD_CAP,     0x00003FE0
+.equ GYRO_SAMPLE_CAP, 0x0000077C
+.equ ACCEL_REC_CAP,   85
 .equ F_MGR,           0xC0444658
 .equ F_VOL,           0xC0444698
 .equ F_CTOR,          0xC0365E90
@@ -42,6 +47,7 @@
 .equ F_WRITE,         0xC03660E8
 .equ F_CLOSE,         0xC0366020
 .equ F_DTOR,          0xC0365ED0
+.equ F_SEEK,          0xC03661E0
 .equ ACCEL_CACHE,     0xC377790C  /* i16 X, Y, Z, axis-remapped by the firmware */
 .equ ACCEL_REC,       12          /* u32 us, i16 x, i16 y, i16 z, i16 pad       */
 .equ ACCEL_ZONE,      0x0400      /* the accel records grow in their own end of  */
@@ -130,7 +136,7 @@
 .equ S_RD_EOF,        0x94
 .equ S_GEOM_W,        0x98        /* the recording geometry, read at record start */
 .equ S_GEOM_H,        0x9C
-.equ S_MODE_LATE,     0xA0        /* the mode, re-read once recording is going  */
+.equ S_POST_BUSY,     0xA0        /* 1 running, 2 cancelled by a new take       */
 .equ S_MODE_N,        0xA4        /* entries used in the mode history below       */
 .equ S_DELAY,         0xF4        /* polls to wait before touching the card   */
 .equ S_JSON_FN,       0xF0        /* the profile generator, in the pool       */
@@ -186,12 +192,24 @@ open_file:
     mov     r4, r0
     mov     r5, r1
     mov     r6, r2
+#ifdef FPGYRO_NATIVE_LIFECYCLE
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     gcsv_open_no_volume
+    ldr     r1, [r10, #O_POST_VOLUME]
+    cmp     r1, #1
+    beq     gcsv_open_volume_ok
+    cmp     r1, #5
+    bne     gcsv_open_no_volume
+gcsv_open_volume_ok:
+#else
     ldr_addr     ip, F_MGR
     blx     ip
     mov     r1, #0
     ldr_addr     ip, F_VOL
     blx     ip
     mov     r1, r0
+#endif
     add     r0, r10, r4
     ldr_addr     ip, F_CTOR
     blx     ip
@@ -215,6 +233,11 @@ open_file:
     blx     ip
     mov     r0, #0
     pop     {r4, r5, r6, pc}
+#ifdef FPGYRO_NATIVE_LIFECYCLE
+gcsv_open_no_volume:
+    mov     r0, #0
+    pop     {r4, r5, r6, pc}
+#endif
 
 
 
@@ -299,6 +322,9 @@ gcsv_dir:
  * ========================================================================== */
 gcsv_build:
     push    {r3, r4, r5, r6, r7, r8, r9, r10, r11, lr}
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     gcsv_fail_return
 
     /* \A001_018.GYR -> \CINEMA\A001_018\A001_018.gcsv.
      *
@@ -320,7 +346,7 @@ gcsv_build:
     adr     r0, gcsv_dir
     ldm     r0, {r2, r3}
     stm     r1, {r2, r3}
-    add     r0, r10, #O_PATH
+    add     r0, r10, #O_POST_PATH
     add     r0, r0, #6                  @ past "\\GYRO\\"
     add     r2, r1, #8
     add     r3, r1, #17
@@ -343,11 +369,11 @@ gcsv_build:
 
     /* The .GYR, for reading. */
     mov     r0, #O_FOBJ
-    add     r1, r10, #O_PATH
+    add     r1, r10, #O_POST_PATH
     mov     r2, #1
     bl      open_file
     cmp     r0, #0
-    beq     gcsv_out
+    beq     gcsv_fail_return
 
     /* The .CSV, for writing. */
     mov     r0, #O_FOBJ2
@@ -355,18 +381,18 @@ gcsv_build:
     mov     r2, #7
     bl      open_file
     cmp     r0, #0
-    beq     gcsv_close_gyr
+    beq     gcsv_close_gyr_fail
 
     /* Header, with the clip name lifted out of the path. */
     movw    r6, #:lower16:O_TEXT
     movt    r6, #:upper16:O_TEXT
     add     r6, r10, r6
     mov     r5, r6
-    adr     r0, gcsv_head1
+    bl      gcsv_get_head1
     mov     r1, r5
     bl      put_str
     mov     r5, r0
-    add     r0, r10, #O_PATH
+    add     r0, r10, #O_POST_PATH
     add     r0, r0, #6                  @ past "\\GYRO\\"
     mov     r1, r5
 41: ldrb    r2, [r0], #1
@@ -377,22 +403,65 @@ gcsv_build:
     strb    r2, [r1], #1
     b       41b
 42: mov     r5, r1
-    adr     r0, gcsv_head2
+    bl      gcsv_get_head2
     mov     r1, r5
     bl      put_str
     mov     r5, r0
 
     /* Skip the file header. */
+    mov     r0, #0
+    str     r0, [r10, #S_READ_N]
     add     r0, r10, #O_FOBJ
-    add     r1, r10, #O_BUF_A
+    movw    r1, #:lower16:O_READ
+    movt    r1, #:upper16:O_READ
+    add     r1, r10, r1
     mov     r2, #160
     add     r3, r10, #S_READ_N
     ldr_addr     ip, F_READ
     blx     ip
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    bne     gcsv_fail_both
+    ldr     r0, [r10, #S_READ_N]
+    cmp     r0, #160
+    bne     gcsv_fail_both
+    movw    r1, #:lower16:O_READ
+    movt    r1, #:upper16:O_READ
+    add     r1, r10, r1
+    ldr     r0, [r1]
+    movw    r2, #0x4647
+    movt    r2, #0x3653                 @ GFS6
+    cmp     r0, r2
+    bne     gcsv_fail_both
+    ldr     r11, [r1, #16]              @ source header owns the time origin
+    ldr     r0, [r1, #4]
+    cmp     r0, #3
+    beq     gcsv_v3_seek
+    cmp     r0, #4
+    beq     gcsv_header_ready
+    cmp     r0, #5
+    bne     gcsv_fail_both
+#ifdef FPGYRO_NATIVE_LIFECYCLE
+    ldrb    r0, [r1, #28]
+    ldr     r2, [r10, #O_POST_VOLUME]
+    cmp     r0, r2
+    bne     gcsv_fail_both
+    ldrb    r0, [r1, #29]
+    cmp     r0, #1                      @ MOV sidecars are intentionally skipped
+    bne     gcsv_fail_both
+#endif
+    b       gcsv_header_ready
 
-    ldr     r11, [r10, #S_START_US]     @ not the header: writer_close put the
-                                        @ GFE6 footer there before this ran, and
-                                        @ every timestamp came out negative
+gcsv_v3_seek:
+    /* v3 has no 96-byte persisted lens region; the first GFB starts at 64. */
+    add     r0, r10, #O_FOBJ
+    mov     r1, #64
+    mov     r2, #0
+    ldr_addr ip, F_SEEK
+    blx     ip
+    cmp     r0, #0
+    beq     gcsv_fail_both
+gcsv_header_ready:
 
     add     r0, r10, #O_READ
     mov     r4, r0
@@ -440,6 +509,9 @@ gcsv_refill:
     add     r3, r10, #S_READ_N
     ldr_addr     ip, F_READ
     blx     ip
+    ldr     r1, [r10, #S_POST_BUSY]
+    cmp     r1, #1
+    bne     gcsv_fail_both
     mov     r0, #5                      @ and give the card back between reads,
     movw    ip, #0x05D8                 @ for the same reason as the writes
     movt    ip, #0xC037
@@ -463,8 +535,23 @@ gcsv_block:
     movw    r2, #0x4647
     movt    r2, #0x3642                 @ GFB6
     cmp     r1, r2
-    bne     gcsv_flush_last             @ not a block: stop here
+    beq     45f
+    movw    r2, #0x4647
+    movt    r2, #0x364D                 @ GFM6: normal end-of-blocks record
+    cmp     r1, r2
+    beq     gcsv_flush_last
+    movt    r2, #0x3654                 @ GFT6: phase-probe end-of-blocks record
+    cmp     r1, r2
+    beq     gcsv_flush_last
+    movt    r2, #0x3645                 @ GFE6 (accept old captures without GFM6)
+    cmp     r1, r2
+    beq     gcsv_flush_last
+    b       gcsv_fail_both              @ damaged magic is not a successful tail
+45:
     ldr     r2, [r4, #24]               @ payload bytes
+    movw    r1, #:lower16:PAYLOAD_CAP
+    cmp     r2, r1
+    bhi     gcsv_fail_both
     add     r2, r2, #BLOCK_HEADER
     cmp     r0, r2
     bhs     44f                         @ the whole block is in the buffer
@@ -474,6 +561,9 @@ gcsv_block:
     b       gcsv_refill
 44:
     ldr     r8, [r4, #16]               @ gyro samples
+    movw    r0, #:lower16:GYRO_SAMPLE_CAP
+    cmp     r8, r0
+    bhi     gcsv_fail_both
     ldr     r9, [r4, #8]                @ first timestamp
     sub     r9, r9, r11                 @ relative to record start
 
@@ -486,6 +576,17 @@ gcsv_block:
      * x, y, z as halfwords with one of padding. */
     ldr     r1, [r4, #20]
     lsr     r1, r1, #16
+    cmp     r1, #ACCEL_REC_CAP
+    bhi     gcsv_fail_both
+    /* Header counts must describe the payload exactly.  Without this check a
+     * torn block can turn one damaged word into billions of formatter loops or
+     * a read beyond O_READ. */
+    mov     ip, r8, lsl #3
+    add     r0, r1, r1, lsl #1
+    add     ip, ip, r0, lsl #2
+    ldr     r0, [r4, #24]
+    cmp     ip, r0
+    bne     gcsv_fail_both
     str     r1, [r3, #4]
     add     r0, r4, #BLOCK_HEADER
     add     r0, r0, r8, lsl #3
@@ -612,6 +713,8 @@ gcsv_sample:
     cmp     r0, r1
     blo     gcsv_sample
     bl      gcsv_flush
+    cmp     r0, #0
+    beq     gcsv_fail_both
     b       gcsv_sample
 
     /* This block's samples are done. Anything still in its accelerometer array
@@ -643,24 +746,37 @@ gcsv_sample:
 
 gcsv_flush_last:
     bl      gcsv_flush
+    cmp     r0, #0
+    beq     gcsv_fail_both
     mov     r0, #O_FOBJ2
     bl      close_file
-gcsv_close_gyr:
     mov     r0, #O_FOBJ
     bl      close_file
-gcsv_out:
+    mov     r0, #1
+    pop     {r3, r4, r5, r6, r7, r8, r9, r10, r11, pc}
+
+gcsv_fail_both:
+    mov     r0, #O_FOBJ2
+    bl      close_file
+gcsv_close_gyr_fail:
+    mov     r0, #O_FOBJ
+    bl      close_file
+gcsv_fail_return:
+    mov     r0, #0
     pop     {r3, r4, r5, r6, r7, r8, r9, r10, r11, pc}
 
 /* Write out whatever is in the text buffer and rewind it. */
 gcsv_flush:
-    push    {r0, r1, r2, lr}
+    push    {r1, r2, r3, lr}
     sub     r2, r5, r6
     cmp     r2, #0
+    moveq   r0, #1
     beq     43f
     add     r0, r10, #O_FOBJ2
     mov     r1, r6
     ldr_addr     ip, F_WRITE
     blx     ip
+    mov     r3, r0
     mov     r5, r6
     /* Yield between chunks.
      *
@@ -679,13 +795,22 @@ gcsv_flush:
     movw    ip, #0x05D8
     movt    ip, #0xC037
     blx     ip
-43: pop     {r0, r1, r2, pc}
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #1
+    moveq   r0, r3
+    movne   r0, #0
+43: pop     {r1, r2, r3, pc}
 
 
+gcsv_get_head1:
+    adr     r0, gcsv_head1
+    bx      lr
+gcsv_get_head2:
+    adr     r0, gcsv_head2
+    bx      lr
 gcsv_head1:
     .asciz  "GYROFLOW IMU LOG\nversion,1.3\nid,sigma_fp_v502_internal_icm20321\norientation,xyz\nfwversion,SIGMA fp 5.02\nvideofilename,"
     .align  2
 gcsv_head2:
     .asciz  "\ntscale,0.000001\ngscale,0.000137923\nascale,0.0009765625\nt,gx,gy,gz,ax,ay,az\n"
     .align  2
-

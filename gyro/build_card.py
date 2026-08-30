@@ -14,13 +14,23 @@ import pathlib, subprocess, sys
 HERE = pathlib.Path(__file__).resolve().parent
 SHELL = HERE.parent / 'fp_usb_shell' / 'build_autorun.py'
 PARK_AT = 0xC072EFB4        # above the logger, below the shell's worker state
+PHASE_AT = 0xC072F000       # release-only: debug shell state/worker begin here
+F_WRITE_AT = 0xC03660E8
 TABLE_LOAD_AT = 0xC072F800  # the shell's template slot: nothing uses it at boot,
                             # and the worker sits below it at 0xC072F050
 
 if __name__ == '__main__':
-    sys.exit(subprocess.call([
+    forwarded = sys.argv[1:]
+    phase_probe = '--phase-probe' in forwarded
+    if phase_probe:
+        forwarded = [arg for arg in forwarded if arg != '--phase-probe']
+        if '--no-shell' not in forwarded:
+            raise SystemExit('--phase-probe is release-only: C072F000 is the '
+                             'debug shell state/worker region')
+    payload = HERE / ('logger_phase.S' if phase_probe else 'logger.S')
+    command = [
         sys.executable, str(SHELL),
-        '--payload', str(HERE / 'logger.S'),
+        '--payload', str(payload),
         '--entry', 'gyro_hook',
         '--also', f'0x{PARK_AT:08X}:{SHELL.parent / "templates" / "park.S"}',
         # The logger is nearly four kilobytes; spelled out as `mem set` it is a
@@ -35,4 +45,21 @@ if __name__ == '__main__':
         # thread's first idle poll. That is ninety-one commands off the boot and
         # one fewer thing borrowing the shell's command table at start-up.
         '--out', str(HERE / 'autorun' / 'AutoRun.txt'),
-    ] + sys.argv[1:]))
+    ]
+    if phase_probe:
+        # Place the trampoline before the four-byte firmware patch.  The VSHL
+        # loader preserves section order and invalidates the instruction cache
+        # after all of them are present, so F_WRITE can never branch into a
+        # half-copied probe.
+        command += [
+            '--also', f'0x{PHASE_AT:08X}:{HERE / "phase_probe.S"}',
+            '--also', f'0x{F_WRITE_AT:08X}:{HERE / "phase_fwrite_patch.S"}',
+        ]
+    else:
+        # A soft power cycle may preserve a previous diagnostic patch.  Every
+        # ordinary image restores the firmware prologue before it can reuse
+        # C072F000 for the USB-shell state or another payload.
+        command += [
+            '--also', f'0x{F_WRITE_AT:08X}:{HERE / "phase_fwrite_restore.S"}',
+        ]
+    sys.exit(subprocess.call(command + forwarded))

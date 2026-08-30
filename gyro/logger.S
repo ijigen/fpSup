@@ -43,6 +43,18 @@
 .equ POOL_PTR,        0xC3757A7C
 .equ O_STATE,         0x6000      /* r10 points here                        */
 .equ O_PATH,          0x0100      /* from r10                               */
+.equ O_POST_PATH,     0x0120      /* immutable path of the queued job       */
+.equ O_POST_START,    0x0140
+.equ O_POST_MODE,     0x0144
+.equ O_POST_W,        0x0148
+.equ O_POST_H,        0x014C
+.equ O_POST_VOLUME,   0x0150      /* immutable volume of the queued job       */
+.equ O_LC_STATE,      0x0154      /* PGEN-owned: 0 idle, 1 pending, 3 final,
+                                     4 established, 6 publishing              */
+.equ O_LC_VOLUME,     0x0158      /* explicit volume: 1 SD, 5 USB SSD         */
+.equ O_LC_KIND,       0x015C      /* lifecycle adapter: 1 CDNG, 2 MOV         */
+.equ O_LC_GEN,        0x0170      /* PGEN-owned publication generation        */
+.equ O_LC_ATTACH,     0x017C      /* callback-owned attached generation       */
 .equ O_HEADER,        0x0200
 .equ O_FOBJ,          0x0400
 .equ O_FOBJ2,         0x0800      /* the gcsv, open while the .GYR is read back */
@@ -98,13 +110,38 @@
 .equ HOOK_SITE,       0xC00D0794  /* where the callback branches here from     */
 .equ HOOK_ORIG,       0xFA046FD7  /* the instruction it replaced               */
 .equ F_CACHE,         0xC000E91C  /* CP15 maintenance after placing code       */
-.equ PATH_MGR_SD,     0xC3438400
 .equ GYRO_DESC_PTR,   0xC31E3FCC
+.equ XMP_FOBJ_PTR,    0xC358E140  /* native SPP_metadata.xmp file object    */
+.equ MOV_ACTIVE_PTR,  0xC35A952C  /* MOV path valid through ImageSave       */
+.equ MOV_BUSY_PTR,    0xC38D2DE8  /* native MOV writer, cleared after commit */
+
+/* The unused tail of the 512-byte header area is a seven-entry post-process
+ * queue.  The producer of this queue is the writer itself, after close_file;
+ * the callback never touches it.  A new take may therefore replace O_PATH and
+ * the live geometry without losing the files still owed to earlier takes. */
+.equ O_POST_QUEUE,    0x02A0
+.equ Q_HEAD,          0x00
+.equ Q_DROPPED,       0x04
+.equ Q_OPEN_TRIES,    0x08
+.equ Q_OPEN_DELAY,    0x0C
+.equ Q_JOBS,          0x10
+.equ Q_CAP,           7
+.equ Q_JOB_SIZE,      0x30
+.equ J_FLAGS,         0x00       /* bit 0 gcsv done, bit 1 json done */
+.equ J_ATTEMPTS,      0x04
+.equ J_CLOSE_TICK,    0x08
+.equ J_START_US,      0x0C
+.equ J_MODE,          0x10
+.equ J_W,             0x14
+.equ J_H,             0x18
+.equ J_PATH,          0x1C       /* 20 bytes, including NUL */
+.equ POST_RETRIES,    12
 
 /* STATE word offsets. */
 .equ S_THREAD,        0x00
 .equ S_ACTIVE,        0x04
-.equ S_FILE,          0x08  /* 0 closed, 1 open request, 2 open, 3 close request */
+.equ S_FILE,          0x08  /* 0 closed, 1 open request, 2 open, 3 abort/closing,
+                              4 callback is preparing a new take              */
 .equ S_INDEX,         0x0C
 .equ S_HEAD,          0x10
 .equ S_DROPPED,       0x14
@@ -139,14 +176,13 @@
 .equ S_RD_EOF,        0x94
 .equ S_GEOM_W,        0x98        /* the recording geometry, read at record start */
 .equ S_GEOM_H,        0x9C
-.equ S_MODE_LATE,     0xA0        /* the mode, re-read once recording is going  */
+.equ S_POST_BUSY,     0xA0        /* 0 idle, 1 generator running, 2 cancel it   */
 .equ S_MODE_N,        0xA4        /* entries used in the mode history below       */
 .equ S_DELAY,         0xF4        /* polls to wait before touching the card   */
 .equ S_POOL_TRIED,    0xFC        /* the pool code has been asked for once    */
 .equ S_GCSV_FN,       0xF8        /* the gcsv builder, in the pool            */
 .equ S_JSON_FN,       0xF0        /* the profile generator, in the pool       */
-.equ S_JSON_WANT,     0xAC        /* the profile is owed, and will be written on
-                                   * an idle poll rather than at the stop      */
+.equ S_POST_COUNT,    0xAC        /* queued .gcsv/.json jobs                    */
 .equ S_MODE_RUN,      0xA8        /* the mode while the file was open and no stop
                                    * pending -- the take's own mode, where the
                                    * last sample of all lands after the stop with
@@ -238,16 +274,22 @@ gyro_hook:
      * task` offers chgpri and nothing else. */
     ldr     r0, [r10, #S_MAGIC]
     movw    r1, #0x4736
-    movt    r1, #0x3653              /* 'S6G6' */
+    movt    r1, #0x4153              /* 'SAG6': single-writer lifecycle revision */
     cmp     r0, r1
     beq     block_ready
     mov     r0, #0
     mov     r2, #0
 14: str     r0, [r10, r2]
     add     r2, r2, #4
-    cmp     r2, #0x100
+    cmp     r2, #0x200               @ includes path and lifecycle adapter state
     blo     14b
     str     r1, [r10, #S_MAGIC]
+    add     r2, r10, #O_POST_QUEUE
+    mov     r0, #0
+    str     r0, [r2, #Q_HEAD]
+    str     r0, [r2, #Q_DROPPED]
+    str     r0, [r2, #Q_OPEN_TRIES]
+    str     r0, [r2, #Q_OPEN_DELAY]
 block_ready:
 
     ldr     r0, [r10, #S_THREAD]
@@ -255,22 +297,104 @@ block_ready:
     bne     thread_ready
     bl      start_writer_thread
 thread_ready:
-    /* Real MovieRecording state. */
+    /* A native file-open event must be able to cancel a slow lens/profile call
+     * immediately.  These are RAM-only adapter signals; neither one decides a
+     * gyro boundary here.  The low-priority lifecycle watcher publishes that
+     * boundary only after it has a stable clip id and explicit volume. */
+    ldr_addr r0, XMP_FOBJ_PTR
+    ldr     r0, [r0]
+    cmp     r0, #0
+    bne     native_clip_busy
+    ldr_addr r0, MOV_ACTIVE_PTR
+    ldrb    r0, [r0]
+    cmp     r0, #0
+    beq     native_clip_checked
+native_clip_busy:
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #0
+    movne   r0, #2
+    strne   r0, [r10, #S_POST_BUSY]
+native_clip_checked:
+    /* Native lifecycle owns identity, volume and finalize, but XMP allocation
+     * is earlier than actual recording. r5 attached there and moved every GYR
+     * media operation into CinemaDNG's most sensitive start-up window. Keep the
+     * proven MovieRecording flag as the start gate; once attached, native phase
+     * 3 still owns stop so the GYR never closes during native finalization. */
     movw    ip, #0xB2D0
     movt    ip, #0xC035
     blx     ip
     ldrb    r5, [r0, #0x157]
     ldr     r7, [r10, #S_ACTIVE]
-    cmp     r5, #0
+    cmp     r7, #1
+    bne     recording_not_active
+    ldr     r0, [r10, #O_LC_STATE]
+    cmp     r0, #3                  @ adapter says native finalize completed
     beq     recording_stopped
-    cmp     r7, #0
-    bne     drain_ring
+    b       drain_ring
 
-recording_started:
+recording_not_active:
+    /* ACTIVE 2 waits for the old object to close.  A fresh READY generation may
+     * then start directly; the core does not care whether it came from the DNG
+     * or MOV adapter. */
+    /* CDNG/MOV may already have published a descriptor while the camera is
+     * still preparing. Do not claim it until recording itself is live. */
+    cmp     r5, #0
+    beq     return_original
     /* Do not start a new take until the previous writer has closed. */
     ldr     r0, [r10, #S_FILE]
     cmp     r0, #0
     bne     return_original
+    /* O_LC_STATE is written only by PGEN.  Claim S_FILE first, then validate
+     * the published phase and latch its generation in a callback-owned word.
+     * PGEN uses state 6 while publishing and rechecks S_FILE after doing so;
+     * the two intent words therefore close the cross-core window without an
+     * LDREX/STREX against DMA-backed bufmem (which faults on this camera). */
+    ldr     r7, [r10, #O_LC_STATE]
+    cmp     r7, #1
+    beq     recording_attach_claim
+    cmp     r7, #4
+    bne     return_original
+recording_attach_claim:
+    mov     r0, #4                  @ PREPARING: block a new PGEN publication
+    str     r0, [r10, #S_FILE]
+    dmb     ish
+    ldr     r6, [r10, #O_LC_GEN]
+    ldr     r0, [r10, #O_LC_STATE]
+    cmp     r0, #1                  @ CDNG opening: buffer in RAM only
+    beq     recording_attach_valid
+    cmp     r0, #4                  @ CDNG established, or native MOV open
+    bne     recording_attach_cancel
+recording_attach_valid:
+    dmb     ish                     @ acquire GEN/path published before phase
+    ldr     r0, [r10, #O_LC_GEN]
+    cmp     r0, r6                  @ reject a publication completed mid-claim
+    bne     recording_attach_cancel
+    str     r6, [r10, #O_LC_ATTACH]
+    b       recording_started
+recording_attach_cancel:
+    mov     r0, #0
+    str     r0, [r10, #S_FILE]
+    b       return_original
+
+recording_started:
+    /* Cancel an idle post-process job before it can reuse either file object.
+     * FILE=PREPARING closes the check/set window in the writer: after this
+     * publication it may finish the current media call, but it cannot begin a
+     * new one for the old take. */
+    ldr     r0, [r10, #S_POST_BUSY]
+    cmp     r0, #0
+    movne   r0, #2
+    strne   r0, [r10, #S_POST_BUSY]
+#ifdef FPGYRO_PHASE_PROBE
+    /* Initialise every probe word before ACTIVE makes the take visible to the
+     * separate CinemaDNG writer task.  Clearing these after ACTIVE would leave
+     * a small window in which its first edge could be recorded and erased. */
+    mov     r0, #0
+    str     r0, [r10, #S_MODE_N]
+    str     r0, [r10, #S_STOP_T0]
+    str     r0, [r10, #S_STOP_T1]
+    str     r0, [r10, #S_STOP_BLOCKS]
+#endif
     mov     r0, #1
     str     r0, [r10, #S_ACTIVE]
     mov     r0, #0
@@ -278,9 +402,20 @@ recording_started:
     str     r0, [r10, #S_DROPPED]
     str     r0, [r10, #S_NEXTSEQ]
     str     r0, [r10, #S_ERROR]
+#ifndef FPGYRO_PHASE_PROBE
+    str     r0, [r10, #S_MODE_N]
+#endif
+    str     r0, [r10, #S_MODE_RUN]
     str     r0, [r10, #S_STOP]
     str     r0, [r10, #S_A_GYRO]
+    str     r0, [r10, #S_A_ACC]
+    str     r0, [r10, #S_A_FLAGS]
     str     r0, [r10, #S_B_GYRO]
+    str     r0, [r10, #S_B_ACC]
+    str     r0, [r10, #S_B_FLAGS]
+    add     r2, r10, #O_POST_QUEUE
+    str     r0, [r2, #Q_OPEN_TRIES]
+    str     r0, [r2, #Q_OPEN_DELAY]
     mov     r1, #1
     str     r1, [r10, #S_A_STATE]
     str     r0, [r10, #S_B_STATE]
@@ -291,55 +426,15 @@ recording_started:
     blx     ip
     mov     r6, r0
 
-    /* Build \A001_003.GYR; manager contains previous clip number.
-     *
-     * Seed the template first.  the earlier logger kept FILE_PATH inside its own image, so
-     * the backslash, the underscore and the extension arrived with the code and
-     * only the digits were ever written.  Moving the path into the pool left
-     * those bytes zero, and the first recording opened "" -- sixteen blocks
-     * written to a file object that was never opened, and nothing noticed. */
-    ldr_addr r8, PATH_MGR_SD
-    add     r9, r10, #O_PATH
-    /* \GYRO\A001_008.GYR -- its own folder, so the card's root stays the
-     * card's. Not the clip's folder: this one is created the instant recording
-     * starts, and at that instant the camera is still making that folder and
-     * the first frames in it. The folder has to exist; the card build makes it,
-     * and if it is missing the open fails and the take has no gyro data, which
-     * S_ERROR records and the missing file shows. */
-    movw    r0, #0x475C              @ '\\' then 'G'
-    strh    r0, [r9, #0]
-    movw    r0, #0x5259              @ 'Y' then 'R'
-    strh    r0, [r9, #2]
-    movw    r0, #0x5C4F              @ 'O' then '\\'
-    strh    r0, [r9, #4]
-    mov     r0, #0x5F                @ '_'
-    strb    r0, [r9, #10]
-    mov     r0, #0x2E                @ '.'
-    strb    r0, [r9, #14]
-    mov     r0, #0x47                @ 'G'
-    strb    r0, [r9, #15]
-    mov     r0, #0x59                @ 'Y'
-    strb    r0, [r9, #16]
-    mov     r0, #0x52                @ 'R'
-    strb    r0, [r9, #17]
-    mov     r0, #0
-    strb    r0, [r9, #18]
-    ldrb    r0, [r8, #8]
-    strb    r0, [r9, #6]
-    add     r0, r9, #7
-    ldr     r1, [r8, #0x0C]
-    bl      put_decimal_3
-    add     r0, r9, #11
-    ldr     r1, [r8, #0x10]
-    add     r1, r1, #1
-    bl      put_decimal_3
+    /* O_PATH, adapter kind and volume were assembled and published together by
+     * the writer task.  The 2500 Hz callback does not touch a media manager. */
 
     /* GFS6 64-byte file header. */
     add     r9, r10, #O_HEADER
     movw    r0, #0x4647
     movt    r0, #0x3653              /* GFS6 */
     str     r0, [r9, #0]
-    mov     r0, #4                   /* v4: header carries the lens region */
+    mov     r0, #5                   /* v5: explicit clip id, volume, adapter */
     str     r0, [r9, #4]
     movw    r0, #2500
     str     r0, [r9, #8]             /* sample_rate_hz */
@@ -361,13 +456,18 @@ recording_started:
     str     r1, [r10, #S_GEOM_W]
     ldr     r1, [r0, #4]
     str     r1, [r10, #S_GEOM_H]
-    ldrb    r0, [r8, #8]
-    str     r0, [r9, #20]
-    ldr     r0, [r8, #0x0C]
-    str     r0, [r9, #24]
-    ldr     r0, [r8, #0x10]
-    add     r0, r0, #1
-    str     r0, [r9, #28]
+    add     r0, r10, #O_PATH
+    add     r0, r0, #6               @ "A001_037" from "\\GYRO\\..."
+    ldr     r1, [r0]
+    str     r1, [r9, #20]
+    ldr     r1, [r0, #4]
+    str     r1, [r9, #24]
+    ldr     r0, [r10, #O_LC_VOLUME]
+    strb    r0, [r9, #28]
+    ldr     r0, [r10, #O_LC_KIND]
+    strb    r0, [r9, #29]
+    mov     r0, #0
+    strh    r0, [r9, #30]
     /* "xyz", all three axes negated -- the chip is mounted 180 degrees to the
      * camera. Verified one column at a time on three single-axis takes; the
      * archived "YxZ" came from absolute correlation coefficients, which fix the
@@ -467,6 +567,7 @@ recording_started:
     str     r1, [r9, #44]            /* initial_head */
     /* Publish OPEN request only after path/header/state are complete. */
     mov     r0, #1
+    dmb     ish
     str     r0, [r10, #S_FILE]
     b       return_original
 
@@ -508,22 +609,24 @@ select_buffer:
     addeq   r1, r10, #S_A_STATE
     addne   r7, r10, #O_BUF_B
     addne   r1, r10, #S_B_STATE
+    /* S_INDEX is only a hint.  The producer may append exclusively to a
+     * FILLING buffer; READY and WRITING belong to the writer even if a failed
+     * swap left the index pointing at them. */
+    ldr     ip, [r1]
+    cmp     ip, #1
+    bne     try_other_buffer
     ldr     r0, [r1, #0x18]          /* gyro bytes so far */
     add     r2, r0, r3
     ldr_addr r12, GYRO_CAP
     cmp     r2, r12
     bls     buffer_has_room
 
-    /* Publish full current buffer, then swap only if the other is EMPTY.
-     * Publish only from a state the writer does not own. A buffer can be READY
-     * with S_INDEX still pointing at it -- that is what happens when the other
-     * half was busy and the batch was dropped -- and by the next batch the writer
-     * may have taken it to WRITING. Storing 2 unconditionally put it back to
-     * READY underneath the writer, advertising a buffer that was mid-write. */
-    ldr     ip, [r1, #0]
-    cmp     ip, #3
-    movne   ip, #2
-    strne   ip, [r1, #0]
+    /* Publish FILLING -> READY only after every byte and metadata word is
+     * visible.  The writer pairs this with an acquire barrier. */
+    dmb     ish
+    mov     ip, #2
+    str     ip, [r1]
+try_other_buffer:
     ldr     ip, [r10, #S_INDEX]
     eor     ip, ip, #1
     cmp     ip, #0
@@ -532,6 +635,7 @@ select_buffer:
     ldr     r0, [r1]
     cmp     r0, #0
     bne     drop_batch
+    dmb     ish
     str     ip, [r10, #S_INDEX]
     mov     r0, #1
     str     r0, [r1]
@@ -671,7 +775,7 @@ drop_batch:
 recording_stopped:
     cmp     r7, #0
     beq     return_original
-    mov     r0, #0
+    mov     r0, #2                  @ seal old take; wait for next READY generation
     str     r0, [r10, #S_ACTIVE]
     ldr     r0, [r10, #S_INDEX]
     cmp     r0, #0
@@ -681,10 +785,19 @@ recording_stopped:
      * when the accel records moved to a zone of their own, so this read zero
      * every time and the last buffer of every take was silently dropped -- the
      * footer said seventeen blocks where the file held sixteen. */
+    /* Only the producer may publish FILLING -> READY.  In particular, never
+     * turn WRITING back into READY if the writer claimed the last half between
+     * the active-state load and this callback. */
+    ldr     ip, [r1]
+    cmp     ip, #1
+    bne     stop_buffer_published
     ldr     r0, [r1, #0x18]
     cmp     r0, #0
-    movne   r0, #2
-    strne   r0, [r1]
+    beq     stop_buffer_published
+    dmb     ish
+    mov     r0, #2
+    str     r0, [r1]
+stop_buffer_published:
     /* Stamp the stop, so "it seemed to hang" becomes a number. The camera
      * finishes its own CinemaDNG the moment recording ends, so anything holding
      * the card after that is ours, and the two stamps say how long for. */
@@ -702,6 +815,7 @@ recording_stopped:
     str     r0, [r10, #S_STOP_BLOCKS]
 
     mov     r0, #1
+    dmb     ish
     str     r0, [r10, #S_STOP]
     b       return_original
 
@@ -816,11 +930,34 @@ writer_loop:
     bx      ip
 15:
     bl      mode_watch
+    mov     r0, #1                  @ PGEN RAM-only boundary watcher selector
+    bl      post_process            @ writer task context, never gyro callback
     ldr     r0, [r10, #S_FILE]
     cmp     r0, #1
     bne     writer_check_blocks
+    ldr     r0, [r10, #O_LC_STATE]
+    cmp     r0, #4                  @ never create .GYR before native media exists
+    bne     writer_check_blocks
+    ldr     r0, [r10, #O_LC_GEN]
+    ldr     r1, [r10, #O_LC_ATTACH]
+    cmp     r0, r1                  @ path/volume belong to the attached generation
+    bne     writer_check_blocks
+    dmb     ish                     @ acquire path/header published before state 4
+    add     r1, r10, #O_POST_QUEUE
+    ldr     r0, [r1, #Q_OPEN_DELAY]
+    cmp     r0, #0
+    subne   r0, r0, #1
+    strne   r0, [r1, #Q_OPEN_DELAY]
+    bne     writer_check_blocks
     bl      writer_open
 writer_check_blocks:
+    /* READY buffers are meaningful only while a real file is open.  Without
+     * this gate an open failure, or a late stop publication, writes through a
+     * constructed-but-unopened object and wedges the media subsystem. */
+    ldr     r0, [r10, #S_FILE]
+    cmp     r0, #2
+    bne     writer_no_blocks
+    dmb     ish
     ldr     r0, [r10, #S_A_STATE]
     cmp     r0, #2
     bne     writer_check_b
@@ -847,6 +984,41 @@ writer_choose_b:
     b       writer_check_blocks
 
 writer_no_blocks:
+    /* STOP is published after the callback's final READY publication.  Check
+     * it before optional card work, acquire it, and rescan both halves.  This
+     * closes the old scan/stop TOCTOU window that could close O_FOBJ and then
+     * write the final block through that closed object on the next poll. */
+    ldr     r0, [r10, #S_STOP]
+    cmp     r0, #1
+    bne     writer_idle
+    dmb     ish
+    ldr     r0, [r10, #S_FILE]
+    cmp     r0, #2
+    bne     writer_stop_not_open
+    ldr     r0, [r10, #S_A_STATE]
+    cmp     r0, #2
+    beq     writer_check_blocks
+    ldr     r0, [r10, #S_B_STATE]
+    cmp     r0, #2
+    beq     writer_check_blocks
+    mov     r0, #3
+    dmb     ish
+    str     r0, [r10, #S_FILE]
+    bl      writer_close
+    /* The recording transaction is not complete at GYR close.  Go straight
+     * into the same writer task's GCSV->JSON drain: the old 5 ms sleep exposed
+     * a window in which record or power-off could arrive between artifacts. */
+    b       writer_idle
+writer_stop_not_open:
+    cmp     r0, #1                  @ pending CDNG ended before first DNG existed
+    beq     writer_stop_abort
+    cmp     r0, #3
+    bne     writer_sleep
+writer_stop_abort:
+    bl      writer_abort
+    b       writer_sleep
+
+writer_idle:
     ldr     r0, [r10, #S_POOL_TRIED]
     cmp     r0, #0
     bne     17f
@@ -854,41 +1026,49 @@ writer_no_blocks:
     str     r0, [r10, #S_POOL_TRIED]
     bl      pool_load
 17:
-    ldr     r0, [r10, #S_JSON_WANT]
+    ldr     r0, [r10, #S_POST_COUNT]
     cmp     r0, #0
-    beq     16f
-    ldr     r0, [r10, #S_FILE]       @ only with nothing open: the path buffer is
-    cmp     r0, #0                   @ the gcsv's, and the next take rewrites it
-    bne     16f
-    /* Try, and if the camera will not let us on the card yet, try again in a
-     * second. Not a timed wait -- we do not know how long the camera needs and
-     * guessing cost either a freeze (too soon) or a whole take's work (a fixed
-     * three seconds, cancelled when the next take started inside it). This asks
-     * and takes no for an answer, and the answer changes.
-     *
-     * A second between attempts, because each one reads the .GYR back and
-     * rewrites the gcsv: hammering the volume every five milliseconds while
-     * SRecFile is trying to finish is the very thing being avoided. */
-    ldr     r0, [r10, #S_DELAY]
-    subs    r0, r0, #1
-    strge   r0, [r10, #S_DELAY]
-    bge     16f
-    bl      gcsv_build
-    bl      json_build
-    cmp     r0, #0
-    movne   r0, #0                   @ written: the debt is paid
-    moveq   r0, #1                   @ refused: keep it, and wait a second
-    str     r0, [r10, #S_JSON_WANT]
-    movw    r0, #200
-    str     r0, [r10, #S_DELAY]
-16:
-    ldr     r0, [r10, #S_STOP]
+    bne     18f
+    /* S_POOL_TRIED=1 means PGEN loaded but has not run its one-shot recovery
+     * scan.  Let the same guarded post-process entry do that even with an empty
+     * RAM queue; it changes the state to 2 when the scan is complete. */
+    ldr     r0, [r10, #S_POOL_TRIED]
     cmp     r0, #1
     bne     writer_sleep
+18:
     ldr     r0, [r10, #S_FILE]
-    cmp     r0, #2
+    cmp     r0, #0
     bne     writer_sleep
-    bl      writer_close
+
+    /* Start immediately after the native adapter's real finalize.  Fixed quiet
+     * gaps left the camera briefly unprotected between writes; the native XMP,
+     * MOV catalog and lower writer flags give us an exact RAM-only gate. */
+    ldr_addr r1, XMP_FOBJ_PTR
+    ldr     r1, [r1]
+    cmp     r1, #0
+    bne     writer_post_busy_native
+    ldr_addr r1, MOV_ACTIVE_PTR
+    ldrb    r1, [r1]
+    cmp     r1, #0
+    bne     writer_post_busy_native
+    ldr_addr r1, MOV_BUSY_PTR
+    ldrb    r1, [r1]
+    cmp     r1, #0
+    bne     writer_post_busy_native
+
+    mov     r0, #1
+    str     r0, [r10, #S_POST_BUSY]
+    dmb     ish
+    ldr     r0, [r10, #S_FILE]
+    cmp     r0, #0
+    bne     writer_post_release
+    bl      post_process
+writer_post_release:
+    mov     r0, #0
+    dmb     ish
+    str     r0, [r10, #S_POST_BUSY]
+    b       writer_sleep
+writer_post_busy_native:
     b       writer_sleep
 
 /* Every distinct sensor mode the take passes through, with the tick it changed.
@@ -907,6 +1087,7 @@ writer_no_blocks:
  * path. */
 mode_watch:
     push    {r4, r5, r6, lr}
+#ifndef FPGYRO_PHASE_PROBE
     movw    r5, #:lower16:MODE_OBJ
     movt    r5, #:upper16:MODE_OBJ
     ldr     r6, [r5, #4]
@@ -931,12 +1112,34 @@ mode_watch:
     add     r4, r4, #1
     str     r4, [r10, #S_MODE_N]
 9:
+#endif
+    /* GEOMETRY is often still zero in the callback that first observes record
+     * start.  Latch the first valid dimensions while ACTIVE remains true, and
+     * never sample it after stop (when it returns to zero).  The queued profile
+     * then carries the take's dimensions rather than a start/stop race. */
+    ldr     r0, [r10, #S_ACTIVE]
+    cmp     r0, #1
+    bne     10f
+    ldr_addr r0, GEOMETRY
+    ldr     r1, [r0]
+    ldr     r2, [r0, #4]
+    cmp     r1, #0
+    beq     10f
+    cmp     r2, #0
+    beq     10f
+    str     r1, [r10, #S_GEOM_W]
+    str     r2, [r10, #S_GEOM_H]
+10:
     pop     {r4, r5, r6, pc}
 
 /* A subroutine rather than a jump target, so it can be called on its own during
  * bring-up instead of only from the thread's loop. */
 writer_write_block:
     push    {r4, r5, r6, r7, r8, lr}
+    ldr     r0, [r5]
+    cmp     r0, #2
+    bne     writer_block_out
+    dmb     ish
     mov     r0, #3
     str     r0, [r5]
 
@@ -998,6 +1201,19 @@ writer_write_block:
     movw    ip, #0x60E8
     movt    ip, #0xC036
     blx     ip
+    cmp     r0, #0
+    bne     writer_block_written
+    /* Stop all further writes through this object.  The callback may continue
+     * collecting (and eventually dropping) until recording stops, but it can no
+     * longer turn a media error into an invalid-object assertion. */
+    mov     r0, #1
+    str     r0, [r10, #S_ERROR]
+    mov     r0, #3
+    dmb     ish
+    str     r0, [r10, #S_FILE]
+    mov     r0, #O_FOBJ
+    bl      close_file
+writer_block_written:
 
     /* The take's own mode, sampled once, at the first block.
      *
@@ -1040,7 +1256,9 @@ writer_write_block:
     str     r0, [r5, #0x18]
     str     r0, [r5, #0x1C]
     str     r0, [r5, #20]
+    dmb     ish
     str     r0, [r5]
+writer_block_out:
     pop     {r4, r5, r6, r7, r8, pc}
 
 writer_sleep:
@@ -1055,7 +1273,7 @@ writer_sleep:
  * An even number of registers keeps the stack eight byte aligned for the
  * callees, which handle doublewords. */
 /* ==========================================================================
- * json_build — hand off to the generator in the pool.
+ * post_process — hand the queue head to the generator in the pool.
  *
  * The profile is built by gyro/profilegen.S, which lives in the bufmem pool
  * rather than here: it reads the lens off the mount, looks the mode up in the
@@ -1067,9 +1285,10 @@ writer_sleep:
  * was never placed, and then no profile is written -- which is visible, where
  * branching through a zero would be a freeze.
  * ========================================================================== */
-json_build:
+post_process:
     ldr     ip, [r10, #S_JSON_FN]
     cmp     ip, #0
+    moveq   r0, #0
     bxeq    lr
     bx      ip                          @ it returns to our caller
 
@@ -1087,25 +1306,23 @@ close_file:
     blx     ip
     pop     {r4, pc}
 
-/* Open a file: r0 = the file object's offset from r10, r1 = the path, r2 = the
- * mode.  Returns what F_OPEN returned -- zero means it did not open.
+/* Open a file: r0 = object offset, r1 = path, r2 = mode, r3 = explicit volume.
+ * Returns what F_OPEN returned -- zero means it did not open.  A take keeps the
+ * volume selected at native file-open; an unplugged SSD must fail/retry on 5,
+ * never silently spill the matching sidecars onto SD.
  *
  * Three copies of the same six calls, and a fourth wanted for the profile.  The
  * cave is a fixed nine hundred and fifty words and the copies were most of what
  * was left of it; the sequence has never varied, so there was nothing to lose
  * by naming it. */
 open_file:
-    push    {r4, r5, r6, lr}
+    push    {r4, r5, r6, r7, r8, lr}
     mov     r4, r0
     mov     r5, r1
     mov     r6, r2
-    ldr_addr     ip, F_MGR
-    blx     ip
-    mov     r1, #0
-    ldr_addr     ip, F_VOL
-    blx     ip
-    mov     r1, r0
+    mov     r7, r3
     add     r0, r10, r4
+    mov     r1, r7
     ldr_addr     ip, F_CTOR
     blx     ip
     add     r0, r10, r4
@@ -1114,7 +1331,7 @@ open_file:
     ldr_addr     ip, F_OPEN
     blx     ip
     cmp     r0, #0
-    popne   {r4, r5, r6, pc}
+    popne   {r4, r5, r6, r7, r8, pc}
     /* It did not open -- but F_CTOR above built the object, and every caller
      * used to branch away and leave it built. A file object that is never
      * destroyed wedges the file system: that is what happened to \LENS.DAT,
@@ -1127,24 +1344,47 @@ open_file:
     ldr_addr     ip, F_DTOR
     blx     ip
     mov     r0, #0
-    pop     {r4, r5, r6, pc}
+    pop     {r4, r5, r6, r7, r8, pc}
 
 writer_open:
     push    {r4, lr}
-    mov     r0, #0                   @ the history belongs to this take alone
-    str     r0, [r10, #S_MODE_N]
-    str     r0, [r10, #S_MODE_RUN]
-    str     r0, [r10, #S_JSON_WANT]  @ and an unpaid debt belongs to the last one
     mov     r0, #O_FOBJ
     add     r1, r10, #O_PATH
     mov     r2, #7                   /* 7 可覆寫;0x0402 檔案已存在就失敗 */
+    ldr     r3, [r10, #O_LC_VOLUME]
     bl      open_file
     /* Zero means it did not open.  Unchecked, the writes that follow go to a
      * file object with nothing behind it and every one of them succeeds. */
     cmp     r0, #0
     bne     13f
+writer_open_failed:
     mov     r0, #1
     str     r0, [r10, #S_ERROR]
+    add     r4, r10, #O_POST_QUEUE
+    ldr     r0, [r4, #Q_OPEN_TRIES]
+    add     r0, r0, #1
+    str     r0, [r4, #Q_OPEN_TRIES]
+    cmp     r0, #5
+    blo     16f
+    mov     r0, #3                  @ bounded failure: never hammer the volume
+    dmb     ish
+    str     r0, [r10, #S_FILE]
+    ldr     r0, [r10, #S_STOP]
+    cmp     r0, #1
+    bne     14f
+    bl      writer_abort
+    b       14f
+16:
+    mov     r0, #40                  @ retry after 200 ms, never every poll
+    str     r0, [r4, #Q_OPEN_DELAY]
+    ldr     r0, [r10, #S_STOP]
+    cmp     r0, #1
+    bne     14f
+    mov     r0, #3
+    dmb     ish
+    str     r0, [r10, #S_FILE]
+    bl      writer_abort
+14:
     pop     {r4, pc}
 13:
     add     r0, r10, #O_FOBJ
@@ -1153,18 +1393,34 @@ writer_open:
     movw    ip, #0x60E8
     movt    ip, #0xC036
     blx     ip
+    cmp     r0, #0
+    bne     15f
+    mov     r0, #O_FOBJ
+    bl      close_file
+    b       writer_open_failed
+15:
+    add     r4, r10, #O_POST_QUEUE
+    mov     r0, #0
+    str     r0, [r4, #Q_OPEN_TRIES]
+    str     r0, [r4, #Q_OPEN_DELAY]
     mov     r0, #2
+    dmb     ish
     str     r0, [r10, #S_FILE]
     pop     {r4, pc}
 
 writer_close:
     push    {r4, lr}
+    mov     r4, #1                   @ all three final writes must succeed
     /* The mode history first, as its own record, so the fixed 32-byte footer
      * keeps its shape and an older decoder fails loudly on the magic rather
      * than reading the history as a footer. */
     add     r1, r10, #O_HEADER
     movw    r0, #0x4647
+#ifdef FPGYRO_PHASE_PROBE
+    movt    r0, #0x3654              /* GFT6: media phase trace */
+#else
     movt    r0, #0x364D              /* GFM6 */
+#endif
     str     r0, [r1, #0]
     ldr     r0, [r10, #S_MODE_N]
     str     r0, [r1, #4]
@@ -1173,12 +1429,16 @@ writer_close:
     movw    ip, #0x60E8
     movt    ip, #0xC036
     blx     ip
+    cmp     r0, #0
+    moveq   r4, #0
     add     r0, r10, #O_FOBJ         @ and the history straight out of the state
     add     r1, r10, #S_MODE_HIST    @ block: copying it into the header buffer
     mov     r2, #64                  @ first bought nothing but a loop
     movw    ip, #0x60E8
     movt    ip, #0xC036
     blx     ip
+    cmp     r0, #0
+    moveq   r4, #0
 
     /* Append GFE6 footer before closing, preserving loss/error diagnostics. */
     movw    ip, #0xB6E0
@@ -1198,53 +1458,113 @@ writer_close:
     str     r3, [r1, #16]
     ldr     r0, [r10, #S_MODE_RUN]      @ sampled at the first block, not at either
     str     r0, [r1, #20]               @ end of the take
-    mov     r0, #0
+    ldr     r0, [r10, #S_GEOM_W]        @ persisted for post-boot recovery
     str     r0, [r1, #24]
+    ldr     r0, [r10, #S_GEOM_H]
     str     r0, [r1, #28]
     add     r0, r10, #O_FOBJ
     mov     r2, #32
     movw    ip, #0x60E8
     movt    ip, #0xC036
     blx     ip
+    cmp     r0, #0
+    moveq   r4, #0
     mov     r0, #O_FOBJ
     bl      close_file
-    /* The .GYR is closed and both halves are free: turn it into a .CSV.
-     * Here rather than on the callback, and after the close rather than
-     * alongside it, so the file on the card is complete before anything reads
-     * it back. Takes a few hundred milliseconds on a long take -- which costs
-     * nothing, because the card is busy anyway and the callback is not waiting. */
-    /* The gcsv and the profile are owed, not written.
-     *
-     * This thread is priority 28. The camera's own file task, SRecFile, is
-     * priority 6, and CinemaDngFile.cpp reaches the card through the same file
-     * manager and the same volume object this does. Holding that volume down
-     * here while SRecFile wants it means SRecFile waits for a task that only
-     * runs when everything from priority 9 to 25 is idle -- and at the end of a
-     * take, none of them are. That is the freeze: the camera stopped with its
-     * SPP_metadata.xmp created and empty, the card light on, while this thread
-     * reported a clean finish in 0.29 seconds.
-     *
-     * So the work moves off the stop and onto an idle poll, and every call
-     * that touches the volume was made small -- 16 KiB a write instead of 256,
-     * 64 KiB a read instead of 624 -- so the lock is never held for long and
-     * SRecFile can get in between our chunks. No timed wait: a delay is a guess
-     * about someone else's schedule, and it cancels the previous take's work
-     * whenever the next one starts inside it. */
-    mov     r0, #1
-    str     r0, [r10, #S_JSON_WANT]
-    mov     r0, #0
-    str     r0, [r10, #S_DELAY]      @ the first attempt is immediate
-
     movw    ip, #0xB6E0
     movt    ip, #0xC002
     blx     ip
     str     r0, [r10, #S_STOP_T1]
+    cmp     r4, #0
+    beq     writer_close_bad
+    bl      post_enqueue
+    b       writer_close_queued
+writer_close_bad:
+    mov     r0, #1
+    str     r0, [r10, #S_ERROR]
+writer_close_queued:
 
     mov     r0, #0
-    str     r0, [r10, #S_FILE]
     str     r0, [r10, #S_STOP]
+    dmb     ish
+    str     r0, [r10, #S_FILE]       @ publish CLOSED last
     pop     {r4, pc}
 
+/* A stopped take whose object never opened, or whose block write failed.  No
+ * footer can be made trustworthy; release both halves and let the camera keep
+ * running instead of calling any more media methods on that object. */
+writer_abort:
+    push    {r4, lr}
+    mov     r0, #0
+    str     r0, [r10, #S_A_GYRO]
+    str     r0, [r10, #S_A_ACC]
+    str     r0, [r10, #S_A_FLAGS]
+    str     r0, [r10, #S_B_GYRO]
+    str     r0, [r10, #S_B_ACC]
+    str     r0, [r10, #S_B_FLAGS]
+    dmb     ish
+    str     r0, [r10, #S_A_STATE]
+    str     r0, [r10, #S_B_STATE]
+    str     r0, [r10, #S_STOP]
+    movw    ip, #0xB6E0
+    movt    ip, #0xC002
+    blx     ip
+    str     r0, [r10, #S_STOP_T1]
+    mov     r0, #0
+    dmb     ish
+    str     r0, [r10, #S_FILE]
+    pop     {r4, pc}
+
+/* Snapshot the take after its .GYR object is closed.  Seven jobs fit exactly in
+ * the otherwise unused 0x2A0..0x3FF header tail. */
+post_enqueue:
+    push    {r4, r5, r6, lr}
+    ldr     r6, [r10, #S_POST_COUNT]
+    cmp     r6, #Q_CAP
+    blo     1f
+    add     r4, r10, #O_POST_QUEUE
+    ldr     r0, [r4, #Q_DROPPED]
+    add     r0, r0, #1
+    str     r0, [r4, #Q_DROPPED]
+    b       4f
+1:
+    add     r4, r10, #O_POST_QUEUE
+    ldr     r5, [r4, #Q_HEAD]
+    add     r5, r5, r6
+    cmp     r5, #Q_CAP
+    subhs   r5, r5, #Q_CAP
+    add     r5, r5, r5, lsl #1      @ index * 3
+    add     r5, r4, r5, lsl #4      @ queue + index * 48
+    add     r5, r5, #Q_JOBS
+    ldr     r0, [r10, #O_LC_VOLUME]
+    lsl     r0, r0, #8
+    ldr     r1, [r10, #O_LC_KIND]
+    orr     r0, r0, r1, lsl #16     @ completion bits remain J_FLAGS[1:0]
+    str     r0, [r5, #J_FLAGS]
+    mov     r0, #0
+    str     r0, [r5, #J_ATTEMPTS]
+    ldr     r0, [r10, #S_STOP_T1]
+    str     r0, [r5, #J_CLOSE_TICK]
+    ldr     r0, [r10, #S_START_US]
+    str     r0, [r5, #J_START_US]
+    ldr     r0, [r10, #S_MODE_RUN]
+    str     r0, [r5, #J_MODE]
+    ldr     r0, [r10, #S_GEOM_W]
+    str     r0, [r5, #J_W]
+    ldr     r0, [r10, #S_GEOM_H]
+    str     r0, [r5, #J_H]
+    add     r1, r10, #O_PATH
+    add     r2, r5, #J_PATH
+    mov     r3, #20
+2:  ldrb    r0, [r1], #1
+    strb    r0, [r2], #1
+    subs    r3, r3, #1
+    bne     2b
+    add     r6, r6, #1
+    dmb     ish
+    str     r6, [r10, #S_POST_COUNT] @ publish the complete job last
+4:
+    pop     {r4, r5, r6, pc}
 
 /* Put the firmware's own instruction back and return what it returned.  After
  * this the logger is inert until an AutoRun arms it again. */
@@ -1252,6 +1572,15 @@ hook_stand_down:
     ldr_addr r0, HOOK_SITE
     ldr_addr r1, HOOK_ORIG
     str     r1, [r0]
+#ifdef FPGYRO_PHASE_PROBE
+    /* A soft restart that did not run AutoRun must not leave the global media
+     * writer branching into this session's diagnostic cave. */
+    ldr_addr r0, F_WRITE
+    ldr_addr r1, 0xE92D40F0          @ original push {r4-r7, lr}
+    str     r1, [r0]
+    ldr_addr ip, F_CACHE
+    blx     ip
+#endif
     mov     r0, r11
     pop     {r3-r11, pc}
 
@@ -1282,30 +1611,6 @@ crc32:
     mvn     r0, r2
     pop     {r4-r6, pc}
 
-put_decimal_3:
-    mov     r2, #'0'
-8:
-    cmp     r1, #100
-    blo     9f
-    sub     r1, r1, #100
-    add     r2, r2, #1
-    b       8b
-9:
-    strb    r2, [r0], #1
-    mov     r2, #'0'
-10:
-    cmp     r1, #10
-    blo     11f
-    sub     r1, r1, #10
-    add     r2, r2, #1
-    b       10b
-11:
-    strb    r2, [r0], #1
-    add     r1, r1, #'0'
-    strb    r1, [r0]
-    bx      lr
-
-
 /* ==========================================================================
  * pool_load — read \PGEN.BIN into the pool and note where the routines landed.
  *
@@ -1326,8 +1631,8 @@ put_decimal_3:
  * ========================================================================== */
 .equ PGEN_MAGIC,      0x4E454750  /* "PGEN" */
 .equ PGEN_HEADER,     16
-.equ PG_CODE,         0xF7000     /* from r10; the pool's own code region */
-.equ PG_MAX,          0x1800
+.equ PG_CODE,         0x71000     /* from r10; 24 KiB past O_READ's end */
+.equ PG_MAX,          0x10000     /* bounded 64 KiB code window */
 
 pool_load:
     push    {r4, r5, r6, lr}
@@ -1338,6 +1643,7 @@ pool_load:
     mov     r0, #O_FOBJ2
     adr     r1, pgen_path
     mov     r2, #1
+    mov     r3, #1                   @ boot asset always lives on AutoRun SD
     bl      open_file
     cmp     r0, #0
     beq     19f
@@ -1401,5 +1707,6 @@ pgen_path:
 gcsv_build:
     ldr     ip, [r10, #S_GCSV_FN]
     cmp     ip, #0
+    moveq   r0, #0
     bxeq    lr
     bx      ip                          @ it returns to our caller

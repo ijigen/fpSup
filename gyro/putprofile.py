@@ -51,10 +51,14 @@ def main():
     code = assemble(HERE / 'profilegen.S')
     sym = symbols(HERE / 'profilegen.S')
 
-    # The generator, its text buffer and the lens scratch all live in the twelve
-    # kilobytes past O_READ. Checking here costs nothing; a collision would show
-    # up as a profile with the lens name written over the middle of it.
-    PG_CODE = 0xF7000
+    # Keep code in the audited unused middle of the one-megabyte pool.  O_READ
+    # ends at r10+0x6B000; this leaves a 24 KiB guard before the code and ample
+    # space before PG_TEXT near the top of the pool.
+    PG_CODE = 0x71000
+    PG_MAX = 0x10000
+    if len(code) > PG_MAX:
+        raise SystemExit(f'the generator is {len(code)} bytes; limit is '
+                         f'{PG_MAX} bytes')
     if PG_CODE + len(code) > gen['PG_TEXT']:
         raise SystemExit(f'the generator is {len(code)} bytes and would run into '
                          f'its own text buffer at {gen["PG_TEXT"]:#x}')

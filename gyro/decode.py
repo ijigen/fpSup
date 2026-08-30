@@ -7,6 +7,7 @@ import argparse
 import binascii
 import csv
 import math
+import re
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,7 @@ BLOCK_HEADER = struct.Struct("<4s7I")
 FOOTER = struct.Struct("<4s7I")
 SAMPLE = struct.Struct("<hhhh")
 ACCEL = struct.Struct("<Ihhhh")   # us, x, y, z, pad
+V5_CLIP_ID = re.compile(r"^[A-Za-z][0-9]{3}_[0-9]{3}$")
 
 
 @dataclass
@@ -27,6 +29,14 @@ class Block:
     flags: int
     samples: list[tuple[int, int, int]]
     accel: list[tuple[int, int, int, int]]
+
+
+@dataclass(frozen=True)
+class PhaseSample:
+    write_number: int
+    dng_busy: bool
+    phase_us: int
+    duration_us: int
 
 
 @dataclass
@@ -50,10 +60,16 @@ class Capture:
     error_flags: int
     end_us: int
     mode_history: tuple = ()
+    format_version: int = 3
+    explicit_clip_id: str = ""
+    recording_volume: int = 0
+    lifecycle_adapter: int = 0
+    phase_trace: tuple[PhaseSample, ...] = ()
+    phase_write_count: int = 0
 
     @property
     def clip_name(self) -> str:
-        return f"{chr(self.camera_id)}{self.reel:03d}_{self.clip:03d}"
+        return self.explicit_clip_id or f"{chr(self.camera_id)}{self.reel:03d}_{self.clip:03d}"
 
 
 def delta32(value: int, origin: int) -> int:
@@ -92,8 +108,27 @@ def read_capture(path: Path) -> Capture:
     magic, version, rate, period, start, camera, reel, clip, orient_word, gscale_word = fields[:10]
     initial_head = fields[11]
     sensor_mode, sensor_mode2, exposure_us = fields[12], fields[13], fields[14]
-    if magic != b"GFS6" or version not in (3, 4) or not rate or not period:
+    if magic != b"GFS6" or version not in (3, 4, 5) or not rate or not period:
         raise ValueError(f"unsupported header: {magic!r}, version={version}")
+    explicit_clip_id = ""
+    recording_volume = 0
+    lifecycle_adapter = 0
+    if version >= 5:
+        try:
+            explicit_clip_id = data[20:28].decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise ValueError("v5 header has a non-ASCII clip id") from exc
+        if not V5_CLIP_ID.fullmatch(explicit_clip_id):
+            raise ValueError(f"v5 header has an invalid clip id: {explicit_clip_id!r}")
+        camera = ord(explicit_clip_id[0])
+        reel = int(explicit_clip_id[1:4])
+        clip = int(explicit_clip_id[5:8])
+        recording_volume = data[28]
+        lifecycle_adapter = data[29]
+        if recording_volume not in (1, 5):
+            raise ValueError(f"v5 header has an invalid recording volume: {recording_volume}")
+        if lifecycle_adapter not in (1, 2):
+            raise ValueError(f"v5 header has an invalid lifecycle adapter: {lifecycle_adapter}")
     orientation = struct.pack("<I", orient_word).split(b"\0", 1)[0].decode("ascii")
     gscale = struct.unpack("<f", struct.pack("<I", gscale_word))[0]
     lens = None
@@ -104,6 +139,8 @@ def read_capture(path: Path) -> Capture:
     blocks = []
     footer_values = None
     mode_history = []
+    phase_trace = []
+    phase_write_count = 0
     wrap_excess = 0
     while offset < len(data):
         if offset + 4 > len(data):
@@ -133,6 +170,29 @@ def read_capture(path: Path) -> Capture:
             n = struct.unpack_from("<I", data, offset + 4)[0]
             mode_history = [struct.unpack_from("<II", data, offset + 8 + 8 * i)
                             for i in range(min(n, 8))]
+            offset += 72
+            continue
+        if magic == b"GFT6":
+            # Phase-probe build: slots 0..3 retain the first four full GYR
+            # writes and slots 4..7 are a ring containing the last four.  Each
+            # pair is {phase/busy, total F_WRITE duration}; bit 31 says the GYR
+            # call arrived while a CinemaDNG write held the shared media path.
+            if offset + 72 > len(data):
+                raise ValueError("truncated GFT6 phase record")
+            phase_write_count = struct.unpack_from("<I", data, offset + 4)[0]
+            raw = [struct.unpack_from("<II", data, offset + 8 + 8 * i)
+                   for i in range(8)]
+            selected = [(i + 1, raw[i])
+                        for i in range(min(phase_write_count, 4))]
+            if phase_write_count > 4:
+                tail_n = min(phase_write_count - 4, 4)
+                for zero_based in range(phase_write_count - tail_n,
+                                        phase_write_count):
+                    slot = 4 + ((zero_based - 4) & 3)
+                    selected.append((zero_based + 1, raw[slot]))
+            phase_trace = [PhaseSample(number, bool(word & 0x80000000),
+                                       word & 0x7FFFFFFF, duration)
+                           for number, (word, duration) in selected]
             offset += 72
             continue
         if magic != b"GFB6" or offset + BLOCK_HEADER.size > len(data):
@@ -227,7 +287,9 @@ def read_capture(path: Path) -> Capture:
     return Capture(rate, period, start, camera, reel, clip, orientation, gscale,
                    initial_head, sensor_mode, sensor_mode2, exposure_us, lens,
                    blocks, footer_blocks, dropped, errors, end_us,
-                   tuple(mode_history))
+                   tuple(mode_history), version, explicit_clip_id,
+                   recording_volume, lifecycle_adapter,
+                   tuple(phase_trace), phase_write_count)
 
 
 def samples_with_time(capture: Capture):
@@ -244,6 +306,11 @@ def samples_with_time(capture: Capture):
 def report(capture: Capture) -> None:
     count = sum(len(block.samples) for block in capture.blocks)
     print(f"clip: {capture.clip_name}")
+    if capture.format_version >= 5:
+        medium = {1: "SD", 5: "USB SSD"}[capture.recording_volume]
+        adapter = {1: "CDNG", 2: "MOV"}[capture.lifecycle_adapter]
+        print(f"recording_volume: {capture.recording_volume} ({medium})")
+        print(f"lifecycle_adapter: {capture.lifecycle_adapter} ({adapter})")
     print(f"rate_hz: {capture.rate_hz}")
     print(f"period_us: {capture.period_us}")
     print(f"orientation: {capture.orientation}")
@@ -258,6 +325,12 @@ def report(capture: Capture) -> None:
         first = capture.mode_history[0][0]
         print("mode_history: " + "  ".join(
             f"{delta32(us, first) / 1000:+.1f}ms->{mode}" for us, mode in capture.mode_history))
+    if capture.phase_trace:
+        print(f"phase_probe_writes: {capture.phase_write_count}")
+        for sample in capture.phase_trace:
+            edge = "DNG call active" if sample.dng_busy else "between DNG calls"
+            print(f"  GYR#{sample.write_number}: phase_us={sample.phase_us} "
+                  f"since previous DNG return; {edge}; write_us={sample.duration_us}")
     if capture.sensor_mode:
         # 1080p29.97 matches enum 0106 and enum 0111, both 3032x1708 full width,
         # whose rolling-shutter readouts are 10557 us and 7828 us. `imager
