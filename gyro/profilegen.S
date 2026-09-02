@@ -24,6 +24,7 @@
     movt    \reg, #:upper16:\value
 .endm
 
+
 .equ MODE_OBJ,   0xC343B588   /* FUN_c0322e88(); the accessors take it       */
 .equ F_TIMING,   0xC0320FC8   /* (obj, mode) -> the timing row               */
 .equ F_GEOM,     0xC0321028   /* (obj, mode) -> the geometry row             */
@@ -272,7 +273,10 @@ pg_em:
  * ========================================================================= */
 .equ S_POST_BUSY,  0xA0
 .equ S_ACTIVE,     0x04
+.equ S_NEXTSEQ,    0x18        /* blocks sealed so far in this take        */
+.equ S_MODE_RUN,   0xA8        /* the mode sampled at the first block      */
 .equ S_FILE,       0x08
+.equ S_DROPPED,    0x14
 .equ S_STOP,       0x60
 .equ S_START_US,   0x88
 .equ S_POST_COUNT, 0xAC
@@ -306,6 +310,14 @@ pg_em:
 .equ O_FOBJ,       0x400
 .equ O_FOBJ2,      0x800
 .equ O_WORK,       0x1A000
+.equ O_BP_DIAG,    0x40000
+.equ BP_FLUSH_TOTAL, 0x08
+.equ BP_BLOCKS,      0x0C
+.equ BP_BLOCKS_3,    0x10
+.equ BP_DROP_FORMAT, 0x14
+.equ BP_DROP_WRITE,  0x18
+.equ BP_DROP_SLEEP,  0x1C
+.equ BP_DROP_OTHER,  0x20
 .equ O_READ,       0x5B000
 .equ O_TOP7,       0x6B000
 .equ O_REC_SCRATCH, O_TOP7+0x90
@@ -333,6 +345,20 @@ pg_em:
 .equ POST_RETRIES, 12
 .equ PG_TEXT,      0xF8800      /* from r12: the profile text            */
 .equ PG_LENS,      0xF9800      /* from r12: what the lens hands back    */
+/* Early-JSON bookkeeping (r39b/r39d), past the 4 KiB the bus name block can
+ * occupy.  LC_MAGIC guards against whatever the pool held. */
+.equ PG_LCACHE,    0xFA800      /* PG_LENS + 0x1000: offsets below stay 12-bit  */
+.equ F_LENS_INFO,  0xC03341C8   /* firmware lens-info singleton getter (-> 0xC3464980) */
+.equ LI_NAME,      0x24         /* space-padded model name                       */
+.equ LI_NAME_LEN,  60
+.equ LI_FOCAL,     0x68         /* focal length, tenths of a mm (400 = 40.0 mm)  */
+.equ LC_JSON_GEN,  0x150        /* O_LC_ATTACH generation whose JSON was written early */
+.equ LC_EARLY,     0x154        /* 1 while pg_build runs inside a take           */
+.equ LC_JSON_RES,  0x158        /* last early pg_build result                    */
+.equ LC_JSON_SEQ,  0x15C        /* S_NEXTSEQ when the early JSON was written     */
+.equ LC_MAGIC,     0x160
+.equ LC_JSON_SKIP, 0x164        /* stop-time JSON jobs skipped because of an early write */
+.equ LC_MAGIC_V,   0x3148434C   /* "LCH1" */
 .equ GEOMETRY,     0xC37CE210   /* {frame width, height, bytes} */
 
 .equ F_LENS_CTX,   0xC03554A0
@@ -572,6 +598,14 @@ pg_post_json_head:
     bl      pg_post_snapshot
     ldr     r4, [r5, #J_FLAGS]
     tst     r4, #2
+    bne     pg_post_json_done
+    /* r39b: a take whose JSON was already written during recording (same
+     * clip as O_PATH, early write reported success) needs nothing here. */
+    mov     r0, r5
+    bl      pg_json_early_done
+    cmp     r0, #0
+    orrne   r4, r4, #2
+    strne   r4, [r5, #J_FLAGS]
     bne     pg_post_json_done
     bl      pg_build
     cmp     r0, #0
@@ -840,18 +874,59 @@ pg_esb:
     beq     6b
 7:  pop     {r4, pc}
 
+
+/* Frame geometry for the JSON, the way the camera itself derives it: the movie
+ * image-size setting in the live CameraMgrSetting block (the shell's `setting
+ * readcam` copies this same block to 0xC3758B98, which is why that mirror read
+ * 1920x1080 on the shell card and 0 on a release card) plus the CinemaDNG
+ * border of 16 columns and 10 rows (1936x1090, 3856x2170).  No media access,
+ * no lens bus.  Returns r0 = width, r1 = height,
+ * both zero if the setting is not a plausible size. */
+.equ F_CAMSETTING,   0xC0206E98   /* CameraMgrSetting singleton; the live block is at +0x40 */
+pg_setting_dims:
+    push    {r4, lr}
+    ldr_addr ip, F_CAMSETTING
+    blx     ip
+    cmp     r0, #0
+    beq     79f
+    add     r2, r0, #0x40               /* FUN_c0207088: the parameter block; .h at +0, .v at +4 */
+    ldr     r0, [r2]
+    ldr     r1, [r2, #4]
+    cmp     r0, #640
+    blo     79f
+    cmp     r1, #360
+    blo     79f
+    cmp     r0, #0x2000
+    bhi     79f
+    cmp     r1, #0x2000
+    bhi     79f
+    add     r0, r0, #16
+    add     r1, r1, #10
+    pop     {r4, pc}
+79: mov     r0, #0
+    mov     r1, #0
+    pop     {r4, pc}
+
     .global pg_build
 pg_build:
     push    {r4, r5, r6, r7, r8, r9, r11, lr}
-    ldr     r0, [r10, #S_POST_BUSY]
-    cmp     r0, #1
-    bne     pg_fail
+    bl      pg_post_owner
+    cmp     r0, #0
+    beq     pg_fail
     ldr     r4, [r10, #O_POST_MODE]
     cmp     r4, #0
     beq     pg_fail
     ldr     r5, [r10, #O_POST_W]        /* take's immutable frame width  */
     ldr     r6, [r10, #O_POST_H]        /* take's immutable frame height */
     cmp     r5, #0
+    cmpne   r6, #0
+    bne     41f
+    /* The latched GEOMETRY global is unreliable in stream mode (0x0 across
+     * whole takes).  Derive the frame the way the camera does: setting + border. */
+    bl      pg_setting_dims
+    mov     r5, r0
+    mov     r6, r1
+41: cmp     r5, #0
     beq     pg_fail
     cmp     r6, #0
     beq     pg_fail
@@ -870,10 +945,46 @@ pg_lens_ready:
 #endif
 
     /* The lens.  Seven hundred milliseconds each and they take the mount's
-     * mutex, which is why none of this happens while a take is running. */
+     * mutex, which is why none of this happens while a take is running.
+     * r39b: the idle poll keeps focal + name cached in PG_LENS with a
+     * LENS_REGION fingerprint; when it still matches the mounted lens the bus
+     * is not touched at all, which is what lets a take write its JSON early. */
     movw    r11, #:lower16:PG_LENS
     movt    r11, #:upper16:PG_LENS
     add     r11, r10, r11
+    add     r8, r11, #0x1000            /* the LC_* block, PG_LCACHE */
+    /* r39d: the firmware keeps the mounted lens's name and focal length in
+     * its own lens-info singleton (FUN_c03341c8 -> 0xC3464980: name at +0x24,
+     * space padded; focal length at +0x68 in tenths of a mm).  Same bytes the
+     * bus blocks give, without the bus. */
+    ldr_addr ip, F_LENS_INFO
+    blx     ip
+    cmp     r0, #0
+    beq     45f
+    mov     r9, r0
+    ldrb    r0, [r9, #LI_NAME]
+    cmp     r0, #0x20
+    blo     45f                         /* nothing mounted or not yet read */
+    cmp     r0, #0x7E
+    bhi     45f
+    add     r1, r9, #LI_NAME
+    add     r2, r11, #0x80
+    mov     r3, #LI_NAME_LEN
+47: ldrb    r0, [r1], #1
+    strb    r0, [r2], #1
+    subs    r3, r3, #1
+    bne     47b
+    mov     r0, #0
+    strb    r0, [r2]
+    ldr     r7, [r9, #LI_FOCAL]         /* focal length, tenths of a mm */
+    cmp     r7, #10
+    blo     45f
+    cmp     r7, #0x10000
+    bhs     45f
+    b       46f
+45: ldr     r0, [r8, #LC_EARLY]
+    cmp     r0, #0
+    bne     pg_fail                     /* inside a take: never touch the bus */
     ldr_addr ip, F_LENS_CTX
     blx     ip
     mov     r8, r0
@@ -902,7 +1013,7 @@ pg_lens_ready:
     ldr     r0, [r10, #S_POST_BUSY]
     cmp     r0, #1
     bne     pg_fail
-
+46:
     movw    r9, #:lower16:PG_TEXT
     movt    r9, #:upper16:PG_TEXT
     add     r9, r10, r9
@@ -983,12 +1094,42 @@ pg_lens_ready:
     bl      pg_em
     S "], [0.0, 0.0, 1.0]],\n"
     S "    \"distortion_coeffs\": [0.0, 0.0, 0.0, 0.0]\n  },\n"
+#ifdef FPGYRO_BACKPRESSURE_PROBE
+    movw    r3, #:lower16:O_BP_DIAG
+    movt    r3, #:upper16:O_BP_DIAG
+    add     r3, r10, r3
+    S "  \"fpgyrosup_backpressure\": {\"slots\": 3, \"blocks\": "
+    ldr     r0, [r3, #BP_BLOCKS]
+    bl      pg_ei
+    S ", \"flushes\": "
+    ldr     r0, [r3, #BP_FLUSH_TOTAL]
+    bl      pg_ei
+    S ", \"blocks_3plus\": "
+    ldr     r0, [r3, #BP_BLOCKS_3]
+    bl      pg_ei
+    S ", \"dropped_total\": "
+    ldr     r0, [r10, #S_DROPPED]
+    bl      pg_ei
+    S ", \"drop_format\": "
+    ldr     r0, [r3, #BP_DROP_FORMAT]
+    bl      pg_ei
+    S ", \"drop_write\": "
+    ldr     r0, [r3, #BP_DROP_WRITE]
+    bl      pg_ei
+    S ", \"drop_sleep\": "
+    ldr     r0, [r3, #BP_DROP_SLEEP]
+    bl      pg_ei
+    S ", \"drop_other\": "
+    ldr     r0, [r3, #BP_DROP_OTHER]
+    bl      pg_ei
+    S "},\n"
+#endif
     S "  \"sync_settings\": {},\n  \"official\": false\n}\n"
 
     sub     r8, r9, r11                 /* how much text there is */
-    ldr     r0, [r10, #S_POST_BUSY]
-    cmp     r0, #1
-    bne     pg_fail
+    bl      pg_post_owner
+    cmp     r0, #0
+    beq     pg_fail
     bl      pg_write
     pop     {r4, r5, r6, r7, r8, r9, r11, pc}
 pg_fail:
@@ -1031,9 +1172,9 @@ pg_write:
     strb    r0, [r4, #30]
 
 #ifdef FPGYRO_NATIVE_LIFECYCLE
-    ldr     r0, [r10, #S_POST_BUSY]
-    cmp     r0, #1
-    bne     pg_write_no_volume
+    bl      pg_post_owner
+    cmp     r0, #0
+    beq     pg_write_no_volume
     ldr     r1, [r10, #O_POST_VOLUME]
     cmp     r1, #1
     beq     pg_write_volume_ok
@@ -1084,8 +1225,10 @@ pg_write_no_volume:
     mov     r1, #2
     ldr_addr ip, F_DTOR
     blx     ip
-    ldr     r0, [r10, #S_POST_BUSY]
-    cmp     r0, #1
-    moveq   r0, r6
-    movne   r0, #0
+    bl      pg_post_owner
+    cmp     r0, #0
+    movne   r0, r6
     pop     {r4, r5, r6, pc}
+
+/* Idle lens cache + early JSON: helpers used by pg_build in every build. */
+#include "lenscache.inc.S"

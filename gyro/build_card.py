@@ -22,12 +22,25 @@ TABLE_LOAD_AT = 0xC072F800  # the shell's template slot: nothing uses it at boot
 if __name__ == '__main__':
     forwarded = sys.argv[1:]
     phase_probe = '--phase-probe' in forwarded
+    gcsv_stream = '--gcsv-stream' in forwarded
+    backpressure_probe = '--backpressure-probe' in forwarded
     if phase_probe:
         forwarded = [arg for arg in forwarded if arg != '--phase-probe']
         if '--no-shell' not in forwarded:
             raise SystemExit('--phase-probe is release-only: C072F000 is the '
                              'debug shell state/worker region')
-    payload = HERE / ('logger_phase.S' if phase_probe else 'logger.S')
+    if gcsv_stream:
+        forwarded = [arg for arg in forwarded if arg != '--gcsv-stream']
+    if backpressure_probe:
+        forwarded = [arg for arg in forwarded
+                     if arg != '--backpressure-probe']
+        if not gcsv_stream:
+            raise SystemExit('--backpressure-probe requires --gcsv-stream')
+    if phase_probe and gcsv_stream:
+        raise SystemExit('--phase-probe and --gcsv-stream are separate A/B builds')
+    payload = HERE / ('logger_phase.S' if phase_probe else
+                      'logger_stream_probe.S' if backpressure_probe else
+                      'logger_stream.S' if gcsv_stream else 'logger.S')
     command = [
         sys.executable, str(SHELL),
         '--payload', str(payload),

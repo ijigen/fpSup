@@ -17,8 +17,66 @@
  * one; neither needs an exclusive access against the DMA-backed pool.
  */
 
+/* Diagnostic observer (r38d): while a take is published (phase 1/4) but the
+ * callback has not attached, sample every 5 ms what its start gate sees.
+ * Dormant C-slot words; pure counts, no behaviour change. */
+.equ O_DIAG_POLLS,    0x1E4       /* polls spent published-but-unattached     */
+.equ O_DIAG_FLAG0,    0x1E8       /* ...of which the MovieRecording byte was 0 */
+.equ O_DIAG_FILEBUSY, 0x1EC       /* ...of which S_FILE was nonzero            */
+.equ O_DIAG_LAST,     0x1F0       /* last sample; packing documented at the store  */
+.equ F_MOVIE_FLAG_A,  0xC347E08F  /* MovieRecording, engine selector != 0x21   */
+.equ F_MOVIE_FLAG_B,  0xC3476609  /* MovieRecording, engine selector == 0x21   */
+.equ F_MOVIE_SELECTOR, 0xC347D1D4 /* the selector word the publisher tests     */
+.equ O_DIAG_ALT1,     0x1F4       /* polls where the alternate flag was 1      */
+
 pg_boundary_watch:
     push    {r4, r5, r6, r7, r8, r9, r11, lr}
+    bl      pg_json_early
+    ldr     r0, [r10, #O_LC_STATE]
+    cmp     r0, #1
+    cmpne   r0, #4
+    bne     pg_diag_done
+    ldr     r1, [r10, #O_LC_GEN]
+    ldr     r2, [r10, #O_LC_ATTACH]
+    cmp     r1, r2
+    beq     pg_diag_done
+    mov     r4, r0                       @ phase
+    ldr     r0, [r10, #O_DIAG_POLLS]
+    add     r0, r0, #1
+    str     r0, [r10, #O_DIAG_POLLS]
+    ldr_addr r0, F_MOVIE_FLAG_A
+    ldrb    r5, [r0]                     @ 0xC347DF38 + 0x157
+    ldr_addr r0, F_MOVIE_FLAG_B
+    ldrb    r6, [r0]                     @ 0xC34765CC + 0x3D
+    cmp     r6, #0
+    ldrne   r0, [r10, #O_DIAG_ALT1]
+    addne   r0, r0, #1
+    strne   r0, [r10, #O_DIAG_ALT1]
+    orrs    r7, r5, r6
+    ldreq   r0, [r10, #O_DIAG_FLAG0]     @ neither flag set
+    addeq   r0, r0, #1
+    streq   r0, [r10, #O_DIAG_FLAG0]
+    ldr     r7, [r10, #S_FILE]
+    cmp     r7, #0
+    ldrne   r0, [r10, #O_DIAG_FILEBUSY]
+    addne   r0, r0, #1
+    strne   r0, [r10, #O_DIAG_FILEBUSY]
+    /* LAST = flagA | flagB<<1 | S_FILE<<4 | selector<<8 | ACTIVE<<16 | phase<<24 */
+    and     r0, r5, #1
+    and     r6, r6, #1
+    orr     r0, r0, r6, lsl #1
+    and     r7, r7, #0xF
+    orr     r0, r0, r7, lsl #4
+    ldr_addr r1, F_MOVIE_SELECTOR
+    ldr     r1, [r1]                     @ 0xC347D1C0 + 0x14 (0x11 / 0x21)
+    and     r1, r1, #0xFF
+    orr     r0, r0, r1, lsl #8
+    ldr     r1, [r10, #S_ACTIVE]
+    and     r1, r1, #0xFF
+    orr     r0, r0, r1, lsl #16
+    orr     r0, r0, r4, lsl #24
+    str     r0, [r10, #O_DIAG_LAST]
+pg_diag_done:
     ldr     r11, [r10, #O_LC_FLAGS]
 
     ldr_addr r0, XMP_FOBJ_PTR

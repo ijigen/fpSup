@@ -59,11 +59,21 @@ def main():
                     help='also enable the experimental boot recovery scan')
     ap.add_argument('--phase-probe', action='store_true',
                     help='release-only RAM trace of CDNG/GYR write phase')
+    ap.add_argument('--gcsv-stream', action='store_true',
+                    help='experimental GCSV-only writer; never creates a GYR')
+    ap.add_argument('--backpressure-probe', action='store_true',
+                    help='GCSV stream RAM phase/drop counters persisted in JSON')
     a = ap.parse_args()
 
     if a.phase_probe and a.build != 'release':
         raise SystemExit('--phase-probe is release-only (the debug shell owns '
                          'the probe address)')
+    if a.phase_probe and a.gcsv_stream:
+        raise SystemExit('--phase-probe and --gcsv-stream are separate A/B builds')
+    if a.recovery and a.gcsv_stream:
+        raise SystemExit('--recovery needs GYR and cannot accompany --gcsv-stream')
+    if a.backpressure_probe and not a.gcsv_stream:
+        raise SystemExit('--backpressure-probe requires --gcsv-stream')
 
     card = find_card(a.to)
     print(f'  card          {card}')
@@ -73,6 +83,10 @@ def main():
         cmd.append('--no-shell')
     if a.phase_probe:
         cmd.append('--phase-probe')
+    if a.gcsv_stream:
+        cmd.append('--gcsv-stream')
+    if a.backpressure_probe:
+        cmd.append('--backpressure-probe')
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode:
         sys.stderr.write(r.stdout + r.stderr)
@@ -88,6 +102,10 @@ def main():
                 '--native-lifecycle']
     if a.recovery:
         pgen_cmd.append('--recovery')
+    if a.gcsv_stream:
+        pgen_cmd.append('--gcsv-stream')
+    if a.backpressure_probe:
+        pgen_cmd.append('--backpressure-probe')
     r = subprocess.run(pgen_cmd,
                        capture_output=True, text=True)
     if r.returncode:

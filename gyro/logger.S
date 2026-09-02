@@ -5,16 +5,21 @@
 
 /* SIGMA fp Ver.5.02 Streaming gyro logger.
  * Hook: 0xC00D0794, load: 0xC072DE64.
- * Buffer A/B are 256 KiB each inside the validated 8 MiB USER allocation.
+ * The shipping GYR build keeps two 16 KiB halves.  GCSV-only uses three fixed
+ * 32 KiB slots inside the validated 8 MiB USER allocation.
  * The gyro thread only copies. A dedicated firmware thread writes READY blocks.
  */
 
 /* Buffers are sized to the write latency they have to cover, not to the length
  * of the take. A single SD write during recording was measured at 692 ms worst
- * case (notes/SD_WRITE_LATENCY_MEASURED.md); covering that needs about 14 KB at
- * 20 KB/s, so each half is 16 KiB -- 0.82 s of gyro at 2500 Hz x 8 B. The writer
- * thread drains a READY half while the hook fills the other, so the length of a
- * take stops being a memory question at all.
+ * case (notes/SD_WRITE_LATENCY_MEASURED.md); the shipping GYR path therefore
+ * uses 16 KiB halves.  The text-producing stream has longer critical sections,
+ * and r23 tied its residual losses to a third synchronous 64 KiB write, so its
+ * conditional layout uses three 32 KiB slots -- 3.07 s of spare queue time.
+ * r27 showed that halving these slots did not move the camera's stop point and
+ * reduced active-take completeness, so r28 restores the deeper queue and tests
+ * media-call length instead.  The writer drains READY slots while the hook
+ * fills another, so take length is not a memory question in either build.
  *
  * That is also what makes the log survive an unexpected power cut. The previous
  * design held the whole take in RAM and wrote at record stop, so a flat battery
@@ -29,7 +34,8 @@
  *
  *   +0x6000  state, 256 B      +0x6100  path, 256 B
  *   +0x6200  header, 512 B     +0x6400  file object, 3 KiB
- *   +0x7000  BUF_A, 16 KiB     +0xB000  BUF_B, 16 KiB      +0xF000  end
+ * Shipping: +0x7000 BUF_A, 16 KiB; +0xB000 BUF_B, 16 KiB.  Streaming:
+ * +0x7000 BUF_A, 32 KiB; two more slots occupy a later free pool window.
  *
  * The state block and the path used to overlap: S_STOP is at +0x60 and FILE_PATH
  * was STATE+0x60, so writing the path cleared the stop flag and writer_close's
@@ -59,11 +65,24 @@
 .equ O_FOBJ,          0x0400
 .equ O_FOBJ2,         0x0800      /* the gcsv, open while the .GYR is read back */
 .equ O_GCSV_PATH,     0x0180      /* its path, beside the .GYR's                */
+#ifdef FPGYRO_GCSV_STREAM
+/* A grows through the old B slot and ends exactly where O_PROFILE starts.  B
+ * sits beyond the live text window.  C adds queue depth; r28 keeps all three
+ * raw slots unchanged while shortening only the formatter's media calls. */
+.equ O_BUF_A,         0x1000
+.equ O_BUF_B,         0x30000
+.equ O_BUF_C,         0x38000
+.equ BUF_SIZE,        0x00008000
+.equ PAYLOAD_CAP,     0x00007FE0
+.equ SLOT_COUNT,      2   /* r23 two-slot */
+#else
 .equ O_BUF_A,         0x1000
 .equ O_BUF_B,         0x5000
 .equ BUF_SIZE,        0x00004000
-.equ BLOCK_HEADER,    32
 .equ PAYLOAD_CAP,     0x00003FE0
+.equ SLOT_COUNT,      2
+#endif
+.equ BLOCK_HEADER,    32
 .equ F_MGR,           0xC0444658
 .equ F_VOL,           0xC0444698
 .equ F_CTOR,          0xC0365E90
@@ -74,9 +93,15 @@
 .equ F_DTOR,          0xC0365ED0
 .equ ACCEL_CACHE,     0xC377790C  /* i16 X, Y, Z, axis-remapped by the firmware */
 .equ ACCEL_REC,       12          /* u32 us, i16 x, i16 y, i16 z, i16 pad       */
-.equ ACCEL_ZONE,      0x0400      /* the accel records grow in their own end of  */
-.equ ACCEL_BASE,      0x3C00      /* the buffer: BUF_SIZE - ACCEL_ZONE           */
+#ifdef FPGYRO_GCSV_STREAM
+.equ ACCEL_ZONE,      0x0800      /* twice the duration needs twice the records */
+.equ ACCEL_BASE,      0x7800      /* 32 KiB buffer - ACCEL_ZONE                  */
+.equ GYRO_CAP,        0x77E0      /* ACCEL_BASE - BLOCK_HEADER                   */
+#else
+.equ ACCEL_ZONE,      0x0400      /* the accel records grow in their own end of */
+.equ ACCEL_BASE,      0x3C00      /* 16 KiB buffer - ACCEL_ZONE                  */
 .equ GYRO_CAP,        0x3BE0      /* ACCEL_BASE - BLOCK_HEADER                   */
+#endif
 .equ O_TEXT,          0x1A000     /* pool+0x20000: the gcsv's text, at the stop.
                                      It used to borrow O_BUF_B, which is sixteen
                                      kilobytes, so the text went to the card every
@@ -93,8 +118,9 @@
                                      mutex. Short holds beat few holds when
                                      something at priority 6 is waiting.        */
 .equ O_READ,          0x5B000     /* pool+0x61000, past the text buffer         */
+.equ O_BP_DIAG,       0x40000     /* r24 RAM-only back-pressure counters       */
 .equ READ_SIZE,       0x10000     /* 64 KiB, for the same reason as TEXT_FLUSH   */
-.equ O_PROFILE,       0x9000      /* the gap between the block buffers and the
+.equ O_PROFILE,       0x9000      /* after the shipping blocks / streaming A;
                                    * gcsv's text: 68 KiB, which is where the
                                    * whole \LENS.DAT goes -- one Gyroflow profile
                                    * per sensor mode the camera can record in.
@@ -106,7 +132,7 @@
 .equ PROFILE_MAGIC,   0x5441444C  /* "LDAT", the same file lensdat.py leaves on
                                    * the card: header, directory, then the text */
 .equ PROFILE_DIR,     48          /* the directory follows the header           */
-.equ O_END,           0xF000      /* the logger owns r10-0x6000 .. +0xF000 */
+.equ O_END,           0xF000      /* end of the injection-adjacent legacy region */
 .equ HOOK_SITE,       0xC00D0794  /* where the callback branches here from     */
 .equ HOOK_ORIG,       0xFA046FD7  /* the instruction it replaced               */
 .equ F_CACHE,         0xC000E91C  /* CP15 maintenance after placing code       */
@@ -161,6 +187,13 @@
 .equ S_B_FLAGS,       0x54
 .equ S_B_GYRO,        0x58
 .equ S_B_ACC,         0x5C
+.equ S_C_STATE,       0x1D8       /* third 32-byte metadata record, before header */
+.equ S_C_FIRST,       0x1E0
+.equ S_C_LAST,        0x1E4
+.equ S_C_SEQ,         0x1E8
+.equ S_C_FLAGS,       0x1EC
+.equ S_C_GYRO,        0x1F0
+.equ S_C_ACC,         0x1F4
 .equ S_STOP,          0x60
 .equ S_MAGIC,         0x64        /* 'S6G6' once the block has been initialised */
 .equ S_LIMIT,         0x68        /* one past the end of the buffer being filled */
@@ -189,6 +222,16 @@
                                    * the camera already back in live view        */
 .equ S_MODE_HIST,     0xB0        /* 8 x {TickTimer, mode}; ends at 0xF0, and the
                                    * state block has to stay under O_PATH = 0x100 */
+.equ BP_PHASE,        0x00        /* 0 other, 1 format, 2 F_WRITE, 3 post-write sleep */
+.equ BP_FLUSH_CUR,    0x04
+.equ BP_FLUSH_TOTAL,  0x08
+.equ BP_BLOCKS,       0x0C
+.equ BP_BLOCKS_3,     0x10
+.equ BP_DROP_FORMAT,  0x14        /* counters are samples, not callback batches */
+.equ BP_DROP_WRITE,   0x18
+.equ BP_DROP_SLEEP,   0x1C
+.equ BP_DROP_OTHER,   0x20
+.equ BP_DIAG_SIZE,    0x24
 .equ MODE_OBJ,        0xC343B588  /* FUN_c0322e88() returns this; verified live.
                                    * +4 is the mode now, +8 the one before it --
                                    * the pair the firmware's own --mode_change--
@@ -320,10 +363,18 @@ native_clip_checked:
      * media operation into CinemaDNG's most sensitive start-up window. Keep the
      * proven MovieRecording flag as the start gate; once attached, native phase
      * 3 still owns stop so the GYR never closes during native finalization. */
-    movw    ip, #0xB2D0
-    movt    ip, #0xC035
-    blx     ip
-    ldrb    r5, [r0, #0x157]
+    /* Mirror the firmware's own publisher (FUN_c0332480): MovieRecording is
+     * written to the 0xC347DF38 object at +0x157, unless the movie engine
+     * selector (0xC347D1C0 + 0x14, synced from the "LDAFR" status packet)
+     * reads 0x21, in which case it goes to the 0xC34765CC object at +0x3D.
+     * All three live in the same 64 KiB, so one movt serves every address. */
+    movw    r0, #0xD1D4
+    movt    r0, #0xC347              @ selector: 0xC347D1C0 + 0x14
+    ldr     r1, [r0]
+    cmp     r1, #0x21
+    movwne  r0, #0xE08F              @ 0xC347DF38 + 0x157
+    movweq  r0, #0x6609              @ 0xC34765CC + 0x3D
+    ldrb    r5, [r0]
     ldr     r7, [r10, #S_ACTIVE]
     cmp     r7, #1
     bne     recording_not_active
@@ -351,8 +402,7 @@ recording_not_active:
      * LDREX/STREX against DMA-backed bufmem (which faults on this camera). */
     ldr     r7, [r10, #O_LC_STATE]
     cmp     r7, #1
-    beq     recording_attach_claim
-    cmp     r7, #4
+    cmpne   r7, #4
     bne     return_original
 recording_attach_claim:
     mov     r0, #4                  @ PREPARING: block a new PGEN publication
@@ -361,8 +411,7 @@ recording_attach_claim:
     ldr     r6, [r10, #O_LC_GEN]
     ldr     r0, [r10, #O_LC_STATE]
     cmp     r0, #1                  @ CDNG opening: buffer in RAM only
-    beq     recording_attach_valid
-    cmp     r0, #4                  @ CDNG established, or native MOV open
+    cmpne   r0, #4                  @ CDNG established, or native MOV open
     bne     recording_attach_cancel
 recording_attach_valid:
     dmb     ish                     @ acquire GEN/path published before phase
@@ -413,12 +462,26 @@ recording_started:
     str     r0, [r10, #S_B_GYRO]
     str     r0, [r10, #S_B_ACC]
     str     r0, [r10, #S_B_FLAGS]
+#ifdef FPGYRO_BACKPRESSURE_PROBE
+    movw    r2, #:lower16:O_BP_DIAG
+    movt    r2, #:upper16:O_BP_DIAG
+    add     r2, r10, r2
+    mov     r1, #0
+recording_bp_clear:
+    str     r0, [r2, r1]
+    add     r1, r1, #4
+    cmp     r1, #BP_DIAG_SIZE
+    blo     recording_bp_clear
+#endif
     add     r2, r10, #O_POST_QUEUE
     str     r0, [r2, #Q_OPEN_TRIES]
     str     r0, [r2, #Q_OPEN_DELAY]
     mov     r1, #1
     str     r1, [r10, #S_A_STATE]
     str     r0, [r10, #S_B_STATE]
+#ifdef FPGYRO_GCSV_STREAM
+    str     r0, [r10, #S_C_STATE]
+#endif
 
     /* Record-start monotonic timestamp. */
     movw    ip, #0xB6E0
@@ -571,6 +634,11 @@ recording_started:
     str     r0, [r10, #S_FILE]
     b       return_original
 
+#ifdef FPGYRO_BACKPRESSURE_PROBE
+bp_drop_offsets:
+    .word   BP_DROP_OTHER, BP_DROP_FORMAT, BP_DROP_WRITE, BP_DROP_SLEEP
+#endif
+
 drain_ring:
     ldr_addr r0, GYRO_DESC_PTR
     ldr     r0, [r0]
@@ -604,11 +672,20 @@ have_count:
     /* Select current buffer and metadata. */
 select_buffer:
     ldr     r0, [r10, #S_INDEX]
+#ifdef FPGYRO_GCSV_STREAM
+    adr     ip, producer_slot_buffer_offsets
+    ldr     r7, [ip, r0, lsl #2]
+    add     r7, r10, r7
+    adr     ip, producer_slot_state_offsets
+    ldr     r1, [ip, r0, lsl #2]
+    add     r1, r10, r1
+#else
     cmp     r0, #0
     addeq   r7, r10, #O_BUF_A
     addeq   r1, r10, #S_A_STATE
     addne   r7, r10, #O_BUF_B
     addne   r1, r10, #S_B_STATE
+#endif
     /* S_INDEX is only a hint.  The producer may append exclusively to a
      * FILLING buffer; READY and WRITING belong to the writer even if a failed
      * swap left the index pointing at them. */
@@ -623,10 +700,34 @@ select_buffer:
 
     /* Publish FILLING -> READY only after every byte and metadata word is
      * visible.  The writer pairs this with an acquire barrier. */
+    ldr     ip, [r10, #S_DROPPED]
+    str     ip, [r1, #4]             @ drops counted as of this seal (record +4 is spare)
     dmb     ish
     mov     ip, #2
     str     ip, [r1]
 try_other_buffer:
+#ifdef FPGYRO_GCSV_STREAM
+    /* Walk the other two slots in ring order.  A slot is claimed only from
+     * EMPTY; READY and WRITING remain exclusively writer-owned. */
+    ldr     r2, [r10, #S_INDEX]
+    add     ip, r2, #1
+    cmp     ip, #SLOT_COUNT
+    moveq   ip, #0
+try_next_slot:
+    adr     r0, producer_slot_state_offsets
+    ldr     r1, [r0, ip, lsl #2]
+    add     r1, r10, r1
+    ldr     r0, [r1]
+    cmp     r0, #0
+    beq     claim_next_slot
+    add     ip, ip, #1
+    cmp     ip, #SLOT_COUNT
+    moveq   ip, #0
+    cmp     ip, r2                    @ both other slots have now been checked
+    bne     try_next_slot
+    b       drop_batch
+claim_next_slot:
+#else
     ldr     ip, [r10, #S_INDEX]
     eor     ip, ip, #1
     cmp     ip, #0
@@ -635,6 +736,7 @@ try_other_buffer:
     ldr     r0, [r1]
     cmp     r0, #0
     bne     drop_batch
+#endif
     dmb     ish
     str     ip, [r10, #S_INDEX]
     mov     r0, #1
@@ -717,17 +819,29 @@ copy_done:
      * refreshes at about 47 Hz however the sensor is configured -- the firmware
      * polls it -- so one per batch is as often as there is anything new. */
     ldr     r0, [r10, #S_INDEX]
+#ifdef FPGYRO_GCSV_STREAM
+    adr     ip, producer_slot_state_offsets
+    ldr     r2, [ip, r0, lsl #2]
+    add     r2, r10, r2
+#else
     cmp     r0, #0
     addeq   r2, r10, #S_A_STATE
     addne   r2, r10, #S_B_STATE
+#endif
     ldr     r0, [r2, #0x1C]          /* accel records so far */
     cmp     r0, #(ACCEL_ZONE / ACCEL_REC) - 1
     bhi     16f                      /* zone full: drop this one, keep the gyro */
 
     ldr     r7, [r10, #S_INDEX]
+#ifdef FPGYRO_GCSV_STREAM
+    adr     ip, producer_slot_buffer_offsets
+    ldr     r7, [ip, r7, lsl #2]
+    add     r7, r10, r7
+#else
     cmp     r7, #0
     addeq   r7, r10, #O_BUF_A
     addne   r7, r10, #O_BUF_B
+#endif
     movw    r12, #ACCEL_BASE
     add     r7, r7, r12
     add     r12, r0, r0, lsl #1      /* count * 3 */
@@ -751,13 +865,15 @@ copy_done:
 
     /* Re-select metadata and add raw byte count. */
     ldr     r0, [r10, #S_INDEX]
+#ifdef FPGYRO_GCSV_STREAM
+    adr     ip, producer_slot_state_offsets
+    ldr     r1, [ip, r0, lsl #2]
+    add     r1, r10, r1
+#else
     cmp     r0, #0
     addeq   r1, r10, #S_A_STATE
     addne   r1, r10, #S_B_STATE
-    ldr     r0, [r10, #S_INDEX]
-    cmp     r0, #0
-    addeq   r1, r10, #S_A_STATE
-    addne   r1, r10, #S_B_STATE
+#endif
     ldr     r0, [r1, #0x18]
     add     r0, r0, r3
     str     r0, [r1, #0x18]
@@ -766,6 +882,21 @@ copy_done:
 
 drop_batch:
     mov     r2, r3, lsr #3
+#ifdef FPGYRO_BACKPRESSURE_PROBE
+    movw    r1, #:lower16:O_BP_DIAG
+    movt    r1, #:upper16:O_BP_DIAG
+    add     r1, r10, r1
+    dmb     ish
+    ldr     r0, [r1, #BP_PHASE]
+    cmp     r0, #3
+    movhi   r0, #0
+    adr     ip, bp_drop_offsets
+    ldr     ip, [ip, r0, lsl #2]
+    add     r1, r1, ip
+    ldr     r0, [r1]
+    add     r0, r0, r2
+    str     r0, [r1]
+#endif
     ldr     r0, [r10, #S_DROPPED]
     add     r0, r0, r2
     str     r0, [r10, #S_DROPPED]
@@ -778,15 +909,21 @@ recording_stopped:
     mov     r0, #2                  @ seal old take; wait for next READY generation
     str     r0, [r10, #S_ACTIVE]
     ldr     r0, [r10, #S_INDEX]
+#ifdef FPGYRO_GCSV_STREAM
+    adr     ip, producer_slot_state_offsets
+    ldr     r1, [ip, r0, lsl #2]
+    add     r1, r10, r1
+#else
     cmp     r0, #0
     addeq   r1, r10, #S_A_STATE
     addne   r1, r10, #S_B_STATE
+#endif
     /* Gyro bytes, not the old payload count.  That field stopped being updated
      * when the accel records moved to a zone of their own, so this read zero
      * every time and the last buffer of every take was silently dropped -- the
      * footer said seventeen blocks where the file held sixteen. */
     /* Only the producer may publish FILLING -> READY.  In particular, never
-     * turn WRITING back into READY if the writer claimed the last half between
+     * turn WRITING back into READY if the writer claimed the last slot between
      * the active-state load and this callback. */
     ldr     ip, [r1]
     cmp     ip, #1
@@ -794,6 +931,8 @@ recording_stopped:
     ldr     r0, [r1, #0x18]
     cmp     r0, #0
     beq     stop_buffer_published
+    ldr     r0, [r10, #S_DROPPED]
+    str     r0, [r1, #4]             @ same snapshot for the final partial block
     dmb     ish
     mov     r0, #2
     str     r0, [r1]
@@ -812,6 +951,11 @@ stop_buffer_published:
     ldr     ip, [r10, #S_B_STATE]
     cmp     ip, #0
     addne   r0, r0, #1
+#ifdef FPGYRO_GCSV_STREAM
+    ldr     ip, [r10, #S_C_STATE]
+    cmp     ip, #0
+    addne   r0, r0, #1
+#endif
     str     r0, [r10, #S_STOP_BLOCKS]
 
     mov     r0, #1
@@ -822,6 +966,18 @@ stop_buffer_published:
 return_original:
     mov     r0, r11
     pop     {r3-r11, pc}
+
+#ifdef FPGYRO_GCSV_STREAM
+/* One shared table in the middle of the payload.  Both the callback and writer
+ * can reach it with a single ARM `adr`; keeping a second copy near the writer
+ * pushed the otherwise identical r25 image across 0xC072EF00. */
+producer_slot_buffer_offsets:
+writer_slot_buffer_offsets:
+    .word   O_BUF_A, O_BUF_B, O_BUF_C
+producer_slot_state_offsets:
+writer_slot_state_offsets:
+    .word   S_A_STATE, S_B_STATE, S_C_STATE
+#endif
 
 /* r0=src begin, r1=src end, r7=destination. */
 /* Copy [r0,r1) to r7, stopping at S_LIMIT.  Fails closed: what does not fit is
@@ -958,6 +1114,37 @@ writer_check_blocks:
     cmp     r0, #2
     bne     writer_no_blocks
     dmb     ish
+#ifdef FPGYRO_GCSV_STREAM
+    /* Scan all three slots and consume the lowest published sequence.  Physical
+     * ring position is not an ordering contract once a third slot exists. */
+    mov     r6, #0                     @ scan index
+    mvn     r7, #0                     @ every practical sequence is lower
+    adr     r9, writer_slot_state_offsets
+writer_ready_scan:
+    ldr     r5, [r9, r6, lsl #2]
+    add     r5, r10, r5
+    ldr     r0, [r5]
+    cmp     r0, #2
+    bne     writer_ready_next
+    ldr     r0, [r5, #16]              @ sequence
+    cmp     r0, r7
+    bhs     writer_ready_next
+    mov     r7, r0
+    mov     r8, r6
+writer_ready_next:
+    add     r6, r6, #1
+    cmp     r6, #SLOT_COUNT
+    blo     writer_ready_scan
+    cmn     r7, #1                     @ unchanged max means no READY candidate
+    beq     writer_no_blocks
+    sub     ip, r9, #12                @ buffer table immediately precedes state
+    ldr     r4, [ip, r8, lsl #2]
+    add     r4, r10, r4
+    ldr     r5, [r9, r8, lsl #2]
+    add     r5, r10, r5
+    bl      writer_write_block
+    b       writer_check_blocks
+#else
     ldr     r0, [r10, #S_A_STATE]
     cmp     r0, #2
     bne     writer_check_b
@@ -982,10 +1169,11 @@ writer_choose_b:
     add     r5, r10, #S_B_STATE
     bl      writer_write_block
     b       writer_check_blocks
+#endif
 
 writer_no_blocks:
     /* STOP is published after the callback's final READY publication.  Check
-     * it before optional card work, acquire it, and rescan both halves.  This
+     * it before optional card work, acquire it, and rescan all three slots. This
      * closes the old scan/stop TOCTOU window that could close O_FOBJ and then
      * write the final block through that closed object on the next poll. */
     ldr     r0, [r10, #S_STOP]
@@ -1001,6 +1189,11 @@ writer_no_blocks:
     ldr     r0, [r10, #S_B_STATE]
     cmp     r0, #2
     beq     writer_check_blocks
+#ifdef FPGYRO_GCSV_STREAM
+    ldr     r0, [r10, #S_C_STATE]
+    cmp     r0, #2
+    beq     writer_check_blocks
+#endif
     mov     r0, #3
     dmb     ish
     str     r0, [r10, #S_FILE]
@@ -1154,6 +1347,7 @@ writer_write_block:
     beq     20f
     add     r8, r8, r8, lsl #1
     mov     r8, r8, lsl #2           /* records * 12 = bytes */
+#ifndef FPGYRO_GCSV_STREAM
     add     r0, r4, #BLOCK_HEADER
     add     r0, r0, r6               /* destination */
     movw    r1, #ACCEL_BASE
@@ -1164,13 +1358,22 @@ writer_write_block:
     add     r2, r2, #1
     cmp     r2, r8
     blo     19b
+#endif
 20:
     add     r6, r6, r8               /* payload = gyro + accel bytes */
 
+#ifdef FPGYRO_GCSV_STREAM
+    /* The RAM contract keeps the count and extent checks, but no GYR persists
+     * this block, so its bit-at-a-time CRC would be pure recording-time work.
+     * The CRC word carries the drop count the callback latched when it sealed
+     * this block, so the formatter can tell a real hole from anchor latency. */
+    ldr     r7, [r5, #4]
+#else
     add     r0, r4, #BLOCK_HEADER
     mov     r1, r6
     bl      crc32
     mov     r7, r0
+#endif
     movw    r0, #0x4647
     movt    r0, #0x3642              /* GFB6 */
     str     r0, [r4, #0]
@@ -1195,12 +1398,20 @@ writer_write_block:
     str     r6, [r4, #24]
     str     r7, [r4, #28]
 
+#ifdef FPGYRO_GCSV_STREAM
+    /* GCSV-only build: this sealed RAM block goes through the same formatter
+     * used by post-processing, but no GYR object exists on the card. */
+    mov     r0, #2                  @ stream command: format one block
+    mov     r1, r4
+    bl      gcsv_build
+#else
     add     r0, r10, #O_FOBJ
     mov     r1, r4
     add     r2, r6, #BLOCK_HEADER
     movw    ip, #0x60E8
     movt    ip, #0xC036
     blx     ip
+#endif
     cmp     r0, #0
     bne     writer_block_written
     /* Stop all further writes through this object.  The callback may continue
@@ -1211,8 +1422,13 @@ writer_write_block:
     mov     r0, #3
     dmb     ish
     str     r0, [r10, #S_FILE]
+#ifdef FPGYRO_GCSV_STREAM
+    mov     r0, #4                  @ stream command: close failed output
+    bl      gcsv_build
+#else
     mov     r0, #O_FOBJ
     bl      close_file
+#endif
 writer_block_written:
 
     /* The take's own mode, sampled once, at the first block.
@@ -1348,15 +1564,20 @@ open_file:
 
 writer_open:
     push    {r4, lr}
+#ifdef FPGYRO_GCSV_STREAM
+    mov     r0, #1                  @ stream command: open/stage GCSV header
+    bl      gcsv_build
+#else
     mov     r0, #O_FOBJ
     add     r1, r10, #O_PATH
     mov     r2, #7                   /* 7 可覆寫;0x0402 檔案已存在就失敗 */
     ldr     r3, [r10, #O_LC_VOLUME]
     bl      open_file
+#endif
     /* Zero means it did not open.  Unchecked, the writes that follow go to a
      * file object with nothing behind it and every one of them succeeds. */
     cmp     r0, #0
-    bne     13f
+    bne     writer_open_succeeded
 writer_open_failed:
     mov     r0, #1
     str     r0, [r10, #S_ERROR]
@@ -1386,7 +1607,8 @@ writer_open_failed:
     bl      writer_abort
 14:
     pop     {r4, pc}
-13:
+writer_open_succeeded:
+#ifndef FPGYRO_GCSV_STREAM
     add     r0, r10, #O_FOBJ
     add     r1, r10, #O_HEADER
     mov     r2, #160                 /* 64 of header, then 96 of lens region */
@@ -1394,11 +1616,12 @@ writer_open_failed:
     movt    ip, #0xC036
     blx     ip
     cmp     r0, #0
-    bne     15f
+    bne     writer_header_written
     mov     r0, #O_FOBJ
     bl      close_file
     b       writer_open_failed
-15:
+writer_header_written:
+#endif
     add     r4, r10, #O_POST_QUEUE
     mov     r0, #0
     str     r0, [r4, #Q_OPEN_TRIES]
@@ -1409,6 +1632,31 @@ writer_open_failed:
     pop     {r4, pc}
 
 writer_close:
+#ifdef FPGYRO_GCSV_STREAM
+    push    {r4, lr}
+    mov     r0, #3                  @ stream command: flush and close GCSV
+    bl      gcsv_build
+    mov     r4, r0
+    movw    ip, #0xB6E0
+    movt    ip, #0xC002
+    blx     ip
+    str     r0, [r10, #S_STOP_T1]
+    cmp     r4, #0
+    bne     writer_stream_close_queued
+    mov     r0, #4                  @ destroy a still-built object after failure
+    bl      gcsv_build
+    mov     r0, #1
+    str     r0, [r10, #S_ERROR]
+    b       writer_stream_close_done
+writer_stream_close_queued:
+    bl      post_enqueue            @ queue only the matching JSON
+writer_stream_close_done:
+    mov     r0, #0
+    str     r0, [r10, #S_STOP]
+    dmb     ish
+    str     r0, [r10, #S_FILE]
+    pop     {r4, pc}
+#else
     push    {r4, lr}
     mov     r4, #1                   @ all three final writes must succeed
     /* The mode history first, as its own record, so the fixed 32-byte footer
@@ -1489,12 +1737,17 @@ writer_close_queued:
     dmb     ish
     str     r0, [r10, #S_FILE]       @ publish CLOSED last
     pop     {r4, pc}
+#endif
 
 /* A stopped take whose object never opened, or whose block write failed.  No
- * footer can be made trustworthy; release both halves and let the camera keep
+ * footer can be made trustworthy; release every slot and let the camera keep
  * running instead of calling any more media methods on that object. */
 writer_abort:
     push    {r4, lr}
+#ifdef FPGYRO_GCSV_STREAM
+    mov     r0, #4                  @ close any streaming GCSV object first
+    bl      gcsv_build
+#endif
     mov     r0, #0
     str     r0, [r10, #S_A_GYRO]
     str     r0, [r10, #S_A_ACC]
@@ -1505,6 +1758,9 @@ writer_abort:
     dmb     ish
     str     r0, [r10, #S_A_STATE]
     str     r0, [r10, #S_B_STATE]
+#ifdef FPGYRO_GCSV_STREAM
+    str     r0, [r10, #S_C_STATE]
+#endif
     str     r0, [r10, #S_STOP]
     movw    ip, #0xB6E0
     movt    ip, #0xC002
@@ -1540,6 +1796,9 @@ post_enqueue:
     lsl     r0, r0, #8
     ldr     r1, [r10, #O_LC_KIND]
     orr     r0, r0, r1, lsl #16     @ completion bits remain J_FLAGS[1:0]
+#ifdef FPGYRO_GCSV_STREAM
+    orr     r0, r0, #1               @ GCSV was closed before this job existed
+#endif
     str     r0, [r5, #J_FLAGS]
     mov     r0, #0
     str     r0, [r5, #J_ATTEMPTS]
