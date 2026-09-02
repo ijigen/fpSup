@@ -23,7 +23,7 @@ Ordered by how far along each one is.
 |---|---|---|---|
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — [v2.0.0](fp_usb_shell/), verified on hardware |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/) published; one open item |
-| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — [fpGyroSup v1.1](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.1.zip) · [notes](gyro/release/), native recording/power-off lock, no computer (CinemaDNG) |
+| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — [fpGyroSup v1.2](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.2.zip) · [notes](gyro/release/), GCSV and JSON written during the take, no computer (CinemaDNG) |
 | 4 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
 | 5 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, packaging | researched; lossless UHD to card hinges on one unmeasured number |
 | 6 | [**ui sup**](projects/ui-sup.md) | On-screen display, boot animation | text on screen works; colour encoding unsolved |
@@ -53,10 +53,10 @@ Kept because what they established still holds and the rest of the work leans on
   the daemon attached and commands already exchanged — the exact condition that broke v1.
 - **The IMX410 ISO and gain chain is fully decompiled**, with an interactive explainer that separates
   firmware-confirmed behaviour from OTP values that still need measurement.
-- **The camera writes its own Gyroflow `.gcsv` and lens profile** when recording
-  stops. fpGyroSup v1.1 keeps the firmware's native saving state active until
-  both complete, so the next recording and normal power-off cannot cut through
-  the transaction. The release output was verified row by row.
+- **The camera writes its own Gyroflow `.gcsv` and lens profile while it
+  records.** fpGyroSup v1.2 streams the GCSV during the take and writes the JSON
+  a few seconds in; stop is just stop. Zero dropped samples over a 15-minute
+  take, timestamps verified row by row.
 
 Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 
@@ -90,7 +90,7 @@ Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 |---|---|---|---|
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸工具 | **已釋出** — [v2.0.0](fp_usb_shell/),實機驗證過 |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、gain 與 sensor 控制 | **研究完成** — [互動說明頁](https://ijigen.github.io/fpSup/)已發布;一項未解 |
-| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro、六軸記錄與 Gyroflow 工作流 | **已發布** — [fpGyroSup v1.1 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.1.zip) · [說明](gyro/release/),原生錄影／關機鎖,全程不接電腦(CinemaDNG) |
+| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro、六軸記錄與 Gyroflow 工作流 | **已發布** — [fpGyroSup v1.2 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.2.zip) · [說明](gyro/release/),錄影中就寫好 GCSV 與 JSON,全程不接電腦(CinemaDNG) |
 | 4 | [**focus sup**](projects/focus-sup.md) | DFD、焦點模型、鏡頭控制與追焦 | AF 已深度反編譯;收集器未建 |
 | 5 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮與封裝 | 研究完成;無損 UHD 寫卡壓在一個沒量過的數字上 |
 | 6 | [**ui sup**](projects/ui-sup.md) | 螢幕 OSD 與開機動畫 | 已能在螢幕上寫字;顏色編碼未解 |
@@ -119,9 +119,9 @@ Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
   錄影模式重設後由韌體重建。已在 daemon 連著、指令往返過的條件下驗證 —— 那正是 v1 必壞的情境。
 - **IMX410 的 ISO 與增益鏈完整反編譯**,並做成互動說明頁,明確區分「韌體已確認」
   與「仍需實機量測的 OTP 值」。
-- **相機會自己寫出 Gyroflow 的 `.gcsv` 與鏡頭 profile**。fpGyroSup v1.1 會維持
-  韌體原生保存狀態直到兩者完成，避免下一段錄影或正常關機插進交易；正式版輸出已
-  逐列驗證。
+- **相機在錄影中就自己寫出 Gyroflow 的 `.gcsv` 與鏡頭 profile**。fpGyroSup v1.2
+  在錄影期間串流 GCSV、開錄幾秒後寫好 JSON，停止就是停止。15 分鐘長錄掉樣 0，
+  時間戳逐列驗證。
 
 全部靠 SD 卡上的 `AutoRun.txt` 在 RAM 裡執行,**沒有任何東西需要重刷韌體**。
 

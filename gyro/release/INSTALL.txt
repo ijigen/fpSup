@@ -1,27 +1,24 @@
-fpGyroSup v1.1 — SIGMA fp firmware Ver.5.02 only
+fpGyroSup v1.2 — SIGMA fp firmware Ver.5.02 only
 
-Copy AutoRun.txt, VSHL.BIN, PGEN.BIN and the GYRO folder together to the ROOT
-of an SD card. Do not mix them with files from v1, debug builds or test builds.
+Copy AutoRun.txt, VSHL.BIN and PGEN.BIN together to the ROOT of an SD card.
+Do not mix them with files from v1, v1.1, debug builds or test builds.
 Put the card in the camera, power on, and wait for the display to reach fpSup!
 before recording.
 
-Each completed CinemaDNG take produces:
+Each CinemaDNG take produces, while it is being recorded:
 
-    \GYRO\A001_017.GYR                 raw six-axis capture
-    \CINEMA\A001_017\A001_017.gcsv     Gyroflow IMU log
+    \CINEMA\A001_017\A001_017.gcsv     Gyroflow IMU log (1250 Hz gyro, 50 Hz accel)
     \CINEMA\A001_017\A001_017.json     Gyroflow lens profile
 
-After recording, fpGyroSup keeps the camera's native saving state active while
-it closes GYR and writes GCSV then JSON. A new recording is locked, and normal
-power-off waits, until the work completes. This took about 9–11 seconds for the
-42–51 second validation clips. Do not pull the battery during this period.
+There is no .GYR any more and nothing happens after you press stop: the GCSV
+streams to the card during the take and the JSON is written a few seconds
+after the take starts. Stop, power off, or start the next take at will.
 
-CinemaDNG on SD is verified. MOV receives a GYR but no GCSV/JSON in v1.1.
-External SSD recording has not yet been tested.
+Verified with CinemaDNG 1920x1080 29.97p on SD with a prime lens. MOV takes get
+no sidecars in v1.2. External SSD, UHD and zoom lenses have not been tested.
 
 Nothing is flashed. This is RAM injection. Remove the three root files or pull
-the battery to restore the camera. Forced interruption of a sidecar is not
-repaired on the next boot.
+the battery to restore the camera.
 
 Full notes: https://github.com/ijigen/fpSup/tree/main/gyro/release
 Discord:    https://discord.gg/XeFK5zNZpT
@@ -29,24 +26,22 @@ Support:    https://ko-fi.com/fpsup
 
 ---
 
-fpGyroSup v1.1 —— 僅適用 SIGMA fp 韌體 Ver.5.02
+fpGyroSup v1.2 —— 僅適用 SIGMA fp 韌體 Ver.5.02
 
-請把 AutoRun.txt、VSHL.BIN、PGEN.BIN 與 GYRO 資料夾當成同一組，整批複製到
-SD 卡根目錄。不要混用 v1、debug 版或測試版檔案。卡片放進相機開機，等畫面顯示
-fpSup! 後再開始錄影。
+請把 AutoRun.txt、VSHL.BIN、PGEN.BIN 當成同一組,整批複製到 SD 卡根目錄。
+不要混用 v1、v1.1、debug 版或測試版檔案。卡片放進相機開機,等畫面顯示 fpSup!
+後再開始錄影。
 
-每段完成的 CinemaDNG 都會產生上列三個檔案。
+每段 CinemaDNG 在錄影中就會直接產生上列兩個檔案。
 
-停止錄影後，fpGyroSup 會維持相機原生保存狀態，依序完成 GYR 關檔、GCSV 與
-JSON。在此期間下一段錄影會被鎖住，正常關機也會等待。正式驗證的 42～51 秒素材
-約需 9～11 秒完成；請勿在這段期間拔電池。
+v1.2 沒有 .GYR,按下停止後也沒有任何後續工作:GCSV 在錄影期間持續串流寫卡,
+JSON 在開錄幾秒後就寫好。要停、要關機、要接著錄下一段都可以。
 
-目前已驗證 SD 卡的 CinemaDNG。MOV 在 v1.1 只有 GYR，沒有 GCSV／JSON；外接
-SSD 尚未測試。
+已驗證 SD 卡 CinemaDNG 1920x1080 29.97p 搭配定焦鏡。MOV 在 v1.2 不會產生
+sidecar;外接 SSD、UHD、變焦鏡尚未測試。
 
-本程式只做 RAM 注入，不會刷寫韌體。移除根目錄的三個檔或拔電池即可復原。
-若強制中斷 sidecar 寫入，下次開機不會自動補寫。
+本程式只做 RAM 注入,不會刷寫韌體。移除根目錄的三個檔或拔電池即可復原。
 
-完整說明：https://github.com/ijigen/fpSup/tree/main/gyro/release
-Discord：  https://discord.gg/XeFK5zNZpT
-贊助：     https://ko-fi.com/fpsup
+完整說明:https://github.com/ijigen/fpSup/tree/main/gyro/release
+Discord:  https://discord.gg/XeFK5zNZpT
+贊助:     https://ko-fi.com/fpsup

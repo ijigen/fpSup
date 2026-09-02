@@ -1,16 +1,16 @@
-# fpGyroSup v1.1
+# fpGyroSup v1.2
 
 [![Support fpSup on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/fpsup)
 [![Join the fpSup Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/XeFK5zNZpT)
 
 [English](#english) | [繁體中文](#繁體中文)
 
-### ⬇ [Download fp-gyro-sup-v1.1.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.1.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.1.zip)
+### ⬇ [Download fp-gyro-sup-v1.2.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.2.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.2.zip)
 
-Unzip it, copy everything inside the folder to the root of an SD card, and
+Unzip it, copy the three files inside the folder to the root of an SD card, and
 power the camera on.
 
-解壓縮後，把資料夾裡的東西整批複製到 SD 卡根目錄，再開啟相機。
+解壓縮後，把資料夾裡的三個檔案複製到 SD 卡根目錄，再開啟相機。
 
 SIGMA fp, firmware **Ver.5.02** only. This is RAM injection: nothing is flashed,
 and removing the card files or pulling the battery restores the camera.
@@ -18,105 +18,93 @@ and removing the card files or pulling the battery restores the camera.
 僅適用 SIGMA fp 韌體 **Ver.5.02**。這是 RAM 注入，不會刷寫韌體；移除卡上的
 啟動檔或拔電池即可完全復原。
 
+Previous release: [fpGyroSup v1.1](fp-gyro-sup-v1.1.zip) (GYR + post-processing
+transaction; still the one to use for MOV).
+
 ---
 
 ## English
 
 ### What it does
 
-Card in, camera on, shoot CinemaDNG. Every completed take leaves everything
-Gyroflow needs on the card without a computer:
+Card in, camera on, shoot CinemaDNG. While the take is being recorded, the
+camera writes both files Gyroflow needs next to it:
 
 ```text
-\GYRO\A001_017.GYR                 raw six-axis capture
 \CINEMA\A001_017\A001_017.gcsv     Gyroflow IMU log
 \CINEMA\A001_017\A001_017.json     Gyroflow lens profile
 ```
 
-The `.GYR` is streamed throughout the recording, not accumulated for the whole
-take in RAM. The camera converts it to GCSV in 16 KiB chunks after recording and
-then writes the JSON profile.
+There is no `.GYR` any more. The GCSV streams to the card during the take and
+the JSON is written a few seconds after the take starts. Pressing stop ends the
+take and nothing else: no lock, no wait, no post-processing.
 
-### What changed in v1.1
-
-v1.1 makes recording finalisation one native transaction:
+### What changed in v1.2
 
 ```text
-CinemaDNG finalise -> GYR close -> GCSV -> JSON -> unlock
+recording -> GCSV streamed during the take -> JSON written during the take -> stop
 ```
 
-- The GYR closes only after the camera's native recording finaliser completes.
-  This removes the intermittent record-stop freeze caused by overlapping media
-  operations.
-- The same writer task continues directly from GYR close into GCSV and JSON;
-  there is no unprotected idle gap between the three files.
-- fpGyroSup extends the firmware's own `MovieSaving` state through that work.
-  The native recording manager refuses a new take, and normal power-off waits,
-  until both sidecars are complete.
-- GCSV remains bounded-memory streaming: 16 KiB writes with 5 ms cooperative
-  yields. Long recordings do not have to fit in RAM.
-- There is no boot-time recovery scan or automatic rewrite of old clips.
+- **GCSV-only stream.** The gyro is captured at 2500 Hz and written as 1250 Hz
+  two-tap averages, the accelerometer at 50 Hz on its own rows. Every block goes
+  to the card within seconds of being filled; a one-hour take does not have to
+  fit in RAM and a flat battery loses at most the last block.
+- **Zero dropped samples under heavy motion.** v1.1's converter and the first
+  stream builds lost samples when a block needed several SD writes behind the
+  video stream. The stream now keeps every block under one write.
+- **Seamless timestamps.** Block boundaries carry the sample count recorded at
+  seal time, so the 2500 Hz grid continues across blocks exactly; a real gap is
+  still reported as a gap.
+- **JSON during the take.** Frame size comes from the camera's live image-size
+  setting, the lens name and focal length from the firmware's own lens-info
+  object, so the profile needs no DNG read and no lens-bus access and is written
+  a few seconds into the take. Stop, power off or start the next take at will.
+- **Attach fixed.** The firmware publishes its recording flag to one of two
+  objects depending on an internal selector; v1.1 read only one of them and
+  could miss whole takes. v1.2 reads the same one the firmware wrote.
 
-Hardware verification on the release image covered two consecutive CinemaDNG
-takes of 41.56 s and 51.48 s: 232,576 six-axis rows in total, zero dropped
-samples, zero logger errors, both GCSV files byte-identical to host conversion,
-and both JSON files valid. The second take was not admitted until the first
-take's JSON had completed.
+### Verified on hardware
+
+SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
+
+- a 15.4-minute take: 27,706 DNG frames, 0 dropped samples, timestamps with no
+  gaps;
+- cold boot, a take started the moment the screen came up, then two more takes
+  6 s apart: all three logged, all three JSON files written during the take;
+- every JSON byte-identical to the profile the v1.1 converter produced for the
+  same lens and mode.
 
 ### Install
 
 Copy these as one matching set to the root of the card. Do not mix files from
-v1, a debug build, or an earlier test build.
+v1, v1.1, a debug build, or an earlier test build.
 
 ```text
 /AutoRun.txt
 /VSHL.BIN
 /PGEN.BIN
-/GYRO/            required before the first recording
 ```
 
 Power the camera on and wait until the progress display reaches `fpSup!` before
-recording.
+recording. A `GYRO/` folder is no longer needed.
 
-### Expected behaviour after stop
+### Not covered by v1.2
 
-GCSV conversion is intentionally incremental. In the release validation, a
-42-second take took about 9 seconds to finish both sidecars and a 51-second take
-took about 11 seconds. During this period:
-
-- starting another recording is locked;
-- normal power-off waits for completion;
-- forced power loss can still leave the current GCSV or JSON incomplete.
-
-Wait for the camera to finish or use normal power-off. v1.1 deliberately does
-not repair an interrupted sidecar on the next boot.
-
-### CinemaDNG and MOV
-
-CinemaDNG gets `.GYR`, `.gcsv`, and `.json`.
-
-MOV still gets a `.GYR`, so its sensor data is captured, but v1.1 does not make
-MOV sidecars because MOV has no `\CINEMA\<clip>\` folder for their current path.
-Convert the MOV take on a computer with:
-
-```sh
-gyro/decode.py A001_017.GYR --gcsv A001_017.gcsv --accel
-```
-
-The release has been verified with CinemaDNG on SD. External SSD recording has
-not yet been tested.
+- **MOV:** no sidecars. MOV has no `\CINEMA\<clip>\` folder for the stream to
+  write into. Use v1.1 if you need a `.GYR` from MOV.
+- **External SSD, UHD, zoom lenses:** untested. UHD frame size follows the same
+  rule as FHD (setting + CinemaDNG border) but has not been recorded; the focal
+  length is read from the firmware's lens object and has only been checked
+  against a prime lens.
 
 ### Build from source
 
-The release command builds the native lifecycle image, copies it to a mounted
-card, verifies every byte, creates `GYRO/`, and ejects the card:
-
 ```sh
-gyro/makecard.py release
+gyro/makecard.py release --gcsv-stream
 ```
 
-For development, `gyro/makecard.py debug` builds the same logger and pool code
-with the USB shell included. The downloadable package is the no-shell release.
+`gyro/makecard.py debug --gcsv-stream` builds the same logger and pool code with
+the USB shell included. The downloadable package is the no-shell release.
 
 ---
 
@@ -124,83 +112,70 @@ with the USB shell included. The downloadable package is the no-shell release.
 
 ### 功能
 
-插卡、開機、錄 CinemaDNG。每段完成後，卡上會直接留下 Gyroflow 所需的三個檔，
-全程不需要電腦：
+插卡、開機、錄 CinemaDNG。錄影進行中，相機就把 Gyroflow 需要的兩個檔案寫在片段
+旁邊：
 
 ```text
-\GYRO\A001_017.GYR                 原始六軸資料
 \CINEMA\A001_017\A001_017.gcsv     Gyroflow IMU 記錄
 \CINEMA\A001_017\A001_017.json     Gyroflow 鏡頭 profile
 ```
 
-`.GYR` 在錄影期間持續串流寫卡，不會把整段資料全部囤在記憶體。停止錄影後，相機以
-16 KiB 為單位轉成 GCSV，最後寫入 JSON。
+沒有 `.GYR` 了。GCSV 在錄影期間持續串流寫卡，JSON 在開錄幾秒後就寫好。按下停止
+只是結束錄影，沒有鎖、沒有等待、沒有後處理。
 
-### v1.1 更新
-
-v1.1 把錄影收尾變成一個原生交易：
+### v1.2 更新
 
 ```text
-CinemaDNG 收尾 -> GYR 關檔 -> GCSV -> JSON -> 解鎖
+錄影 -> GCSV 錄影中串流 -> JSON 錄影中寫入 -> 停止
 ```
 
-- 等相機原生錄影收尾完成後才關閉 GYR，解決媒體操作重疊造成的偶發停止錄影凍結。
-- 同一個 writer 從 GYR 關檔直接繼續 GCSV 與 JSON，中間沒有失去保護的閒置空窗。
-- 整段工作期間延長韌體原生的 `MovieSaving` 狀態。相機自己的錄影管理器會拒絕下一段
-  錄影，正常關機也會等待，直到兩個 sidecar 完成。
-- GCSV 維持有限記憶體的串流處理：每次寫 16 KiB、協作讓步 5 ms。長時間錄影不需要
-  全部塞進 RAM。
-- 不做開機掃描，也不在下次開機自動補寫舊片段。
+- **只有 GCSV 串流。** 陀螺以 2500 Hz 取樣、以 1250 Hz 兩點平均寫出，加速度計
+  50 Hz 獨立成列。每個區塊填滿後幾秒內就落到卡上；錄一小時不需要塞進 RAM，
+  斷電最多只丟最後一塊。
+- **劇烈晃動也零掉樣。** v1.1 的轉換器和最初幾版串流，在一個區塊需要好幾次 SD
+  寫入、又排在影像串流後面時會掉樣。現在每個區塊都控制在一次寫入內。
+- **時間戳無縫。** 區塊邊界帶著封緘當下的取樣計數，2500 Hz 的格線可以跨區塊精確
+  延續；真正的缺口仍然照實記錄。
+- **JSON 在錄影中產生。** 畫格尺寸取自相機即時的影像尺寸設定，鏡頭名稱與焦距取自
+  韌體自己的鏡頭資訊物件，不讀 DNG、不碰鏡頭匯流排，開錄幾秒後就寫好。要停、要
+  關機、要接著錄都可以。
+- **修正掛載問題。** 韌體的錄影旗標會依內部選擇器寫到兩個物件之一；v1.1 只讀其中
+  一個，可能整段沒錄到。v1.2 讀韌體實際寫入的那一個。
 
-正式 release image 已用兩段連續 CinemaDNG 實機驗證：41.56 秒與 51.48 秒，合計
-232,576 列六軸資料，掉樣 0、logger 錯誤 0；兩份 GCSV 與主機轉檔逐位元相同，兩份
-JSON 都完整有效，而且第一段 JSON 完成前，相機沒有接受第二段錄影。
+### 實機驗證
+
+SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1920x1080 29.97p、LUMIX S 40/F2：
+
+- 15.4 分鐘的長錄：27,706 張 DNG，掉樣 0，時間戳無缺口；
+- 冷開機、畫面一出來就錄一段，再隔 6 秒錄兩段：三段都有記錄，三份 JSON 都在
+  錄影中寫入；
+- 每份 JSON 都與 v1.1 轉換器對同一顆鏡頭、同一模式產出的 profile 逐位元組相同。
 
 ### 安裝
 
-把以下內容當成同一組複製到 SD 卡根目錄。不要混用 v1、debug 版或先前測試版的檔案。
+把以下三個檔案當成同一組複製到 SD 卡根目錄。不要混用 v1、v1.1、debug 版或先前
+測試版的檔案。
 
 ```text
 /AutoRun.txt
 /VSHL.BIN
 /PGEN.BIN
-/GYRO/            第一段錄影前必須存在
 ```
 
-開機後等進度顯示到 `fpSup!` 再開始錄影。
+開機後等進度顯示到 `fpSup!` 再開始錄影。不再需要 `GYRO/` 資料夾。
 
-### 停止錄影後的正常現象
+### v1.2 未涵蓋
 
-GCSV 轉換刻意採漸進式處理。正式版驗證時，42 秒素材約 9 秒完成兩個 sidecar，
-51 秒素材約 11 秒完成。這段期間：
-
-- 下一段錄影會被鎖住；
-- 正常關機會等待完成；
-- 強制斷電仍可能留下不完整的 GCSV 或 JSON。
-
-請讓相機完成，或使用正常關機。v1.1 刻意不在下次開機修復被中斷的 sidecar。
-
-### CinemaDNG 與 MOV
-
-CinemaDNG 會得到 `.GYR`、`.gcsv`、`.json`。
-
-MOV 仍會得到 `.GYR`，六軸資料不會遺失；但 v1.1 尚未替 MOV 產生 sidecar，因為
-MOV 沒有目前路徑所需的 `\CINEMA\<clip>\` 資料夾。可在電腦上使用：
-
-```sh
-gyro/decode.py A001_017.GYR --gcsv A001_017.gcsv --accel
-```
-
-正式版已驗證 SD 卡的 CinemaDNG；外接 SSD 錄影尚未測試。
+- **MOV：** 沒有 sidecar。MOV 沒有可供串流寫入的 `\CINEMA\<clip>\` 資料夾；需要
+  MOV 的 `.GYR` 請用 v1.1。
+- **外接 SSD、UHD、變焦鏡：** 尚未測試。UHD 的畫格尺寸沿用 FHD 的規則（設定值加
+  CinemaDNG 邊界）但沒有實錄過；焦距讀自韌體鏡頭物件，只用定焦鏡核對過。
 
 ### 從原始碼建置
 
-正式版指令會建立 native lifecycle image、寫入已掛載的卡、逐位元組驗證、建立
-`GYRO/`，最後退出卡片：
-
 ```sh
-gyro/makecard.py release
+gyro/makecard.py release --gcsv-stream
 ```
 
-開發用的 `gyro/makecard.py debug` 使用同一份 logger 與 pool 程式碼，但會包含 USB
-shell。下載包是無 USB shell 的 release 版。
+`gyro/makecard.py debug --gcsv-stream` 使用同一份 logger 與 pool 程式碼，但會包含
+USB shell。下載包是無 USB shell 的 release 版。
