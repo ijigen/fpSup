@@ -3,9 +3,9 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Gyro, six-axis logging and the Gyroflow workflow.
-**Status: released — [fpGyroSup v1.3](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.3.zip)** · [release notes](../gyro/release/)
+**Status: released — [fpGyroSup v1.4](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip)** · [release notes](../gyro/release/)
 
-Gyro、六軸記錄與 Gyroflow 工作流。**狀態：已發布 —— [fpGyroSup v1.3 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.3.zip)** · [說明](../gyro/release/)
+Gyro、六軸記錄與 Gyroflow 工作流。**狀態：已發布 —— [fpGyroSup v1.4 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip)** · [說明](../gyro/release/)
 
 ---
 
@@ -17,7 +17,7 @@ Record six-axis data inside the camera and leave a Gyroflow-ready GCSV plus lens
 profile beside every CinemaDNG take, with no computer conversion step and
 nothing left to do after the take.
 
-### Released path (v1.3)
+### Released path (v1.4)
 
 ```text
 recording -> GCSV streamed during the take -> JSON written during the take -> stop
@@ -78,7 +78,7 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 
 ### Remaining scope
 
-- **MOV:** no sidecars in v1.3 (no `\CINEMA\<clip>\` folder to stream into).
+- **MOV:** no sidecars in v1.4 (no `\CINEMA\<clip>\` folder to stream into).
   v1.1 still writes a `.GYR` for MOV.
 - **External SSD, UHD, zoom lenses:** untested.
 - **Horizon lock on a portrait take:** it turns the picture itself, from the
@@ -97,7 +97,7 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 在相機內記錄六軸資料，讓每段 CinemaDNG 旁邊直接留下 Gyroflow 可用的 GCSV 與
 鏡頭 profile，不需要電腦轉檔，停止錄影後也沒有任何事要等。
 
-### 已發布流程（v1.3）
+### 已發布流程（v1.4）
 
 ```text
 錄影 -> GCSV 錄影中串流 -> JSON 錄影中寫入 -> 停止
@@ -148,7 +148,7 @@ SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1920x1080 29.97p、LUMIX S 40/F2：
 
 ### 後續範圍
 
-- **MOV：** v1.3 沒有 sidecar（沒有可串流寫入的 `\CINEMA\<clip>\`）。v1.1 仍會替
+- **MOV：** v1.4 沒有 sidecar（沒有可串流寫入的 `\CINEMA\<clip>\`）。v1.1 仍會替
   MOV 寫 `.GYR`。
 - **外接 SSD、UHD、變焦鏡：** 尚未測試。
 - **直拿時的鎖定水平：** 它會依重力自己轉畫面,而那是側躺相機的重力,會跟剪輯時的旋轉打架。

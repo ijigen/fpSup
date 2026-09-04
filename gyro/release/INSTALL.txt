@@ -1,9 +1,13 @@
-fpGyroSup v1.3 — SIGMA fp firmware Ver.5.02 only
+fpGyroSup v1.4 — SIGMA fp firmware Ver.5.02 only
 
 Copy AutoRun.txt, VSHL.BIN and PGEN.BIN together to the ROOT of an SD card.
-Do not mix them with files from v1, v1.1, v1.2, debug builds or test builds.
+Do not mix them with files from earlier versions, debug builds or test builds.
 Put the card in the camera, power on, and wait for the display to reach fpSup!
-before recording. That takes about nine seconds.
+before recording. That takes about ten seconds.
+
+The lens profile now carries the distortion the camera has for the mounted
+lens, read at the focus distance a few seconds into the take. A lens the camera
+has no data for gets zeros, as before.
 
 Each CinemaDNG take produces, while it is being recorded:
 
@@ -31,11 +35,14 @@ Support:    https://ko-fi.com/fpsup
 
 ---
 
-fpGyroSup v1.3 —— 僅適用 SIGMA fp 韌體 Ver.5.02
+fpGyroSup v1.4 —— 僅適用 SIGMA fp 韌體 Ver.5.02
 
 請把 AutoRun.txt、VSHL.BIN、PGEN.BIN 當成同一組,整批複製到 SD 卡根目錄。
-不要混用 v1、v1.1、v1.2、debug 版或測試版檔案。卡片放進相機開機,等畫面顯示
-fpSup! 後再開始錄影,大約九秒。
+不要混用舊版本、debug 版或測試版檔案。卡片放進相機開機,等畫面顯示
+fpSup! 後再開始錄影,大約十秒。
+
+鏡頭 profile 現在帶著相機為這顆鏡頭保存的畸變資料,取的是開錄幾秒後的對焦距離。
+相機沒有資料的鏡頭則和以前一樣輸出全零。
 
 每段 CinemaDNG 在錄影中就會直接產生上列兩個檔案。沒有 .GYR,按下停止後也沒有
 任何後續工作。

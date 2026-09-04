@@ -1,11 +1,11 @@
-# fpGyroSup v1.3
+# fpGyroSup v1.4
 
 [![Support fpSup on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/fpsup)
 [![Join the fpSup Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/XeFK5zNZpT)
 
 [English](#english) | [繁體中文](#繁體中文)
 
-### ⬇ [Download fp-gyro-sup-v1.3.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.3.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.3.zip)
+### ⬇ [Download fp-gyro-sup-v1.4.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip)
 
 Unzip it, copy the three files inside the folder to the root of an SD card, and
 power the camera on.
@@ -18,8 +18,9 @@ and removing the card files or pulling the battery restores the camera.
 僅適用 SIGMA fp 韌體 **Ver.5.02**。這是 RAM 注入，不會刷寫韌體；移除卡上的
 啟動檔或拔電池即可完全復原。
 
-Previous releases: [v1.2](fp-gyro-sup-v1.2.zip) (the same stream, but portrait
-takes need Gyroflow talked round by hand) and [v1.1](fp-gyro-sup-v1.1.zip) (GYR +
+Previous releases: [v1.3](fp-gyro-sup-v1.3.zip) (the same stream, but the lens
+profile carries no distortion), [v1.2](fp-gyro-sup-v1.2.zip) (portrait takes need
+Gyroflow talked round by hand) and [v1.1](fp-gyro-sup-v1.1.zip) (GYR +
 post-processing transaction; still the one to use for MOV).
 
 ---
@@ -40,7 +41,42 @@ There is no `.GYR` any more. The GCSV streams to the card during the take and
 the JSON is written a few seconds after the take starts. Pressing stop ends the
 take and nothing else: no lock, no wait, no post-processing.
 
-### What changed in v1.3
+### What changed in v1.4
+
+- **The lens profile carries real distortion.** Until now `distortion_coeffs`
+  was `[0, 0, 0, 0]`, which is not "no correction": Gyroflow's fisheye model
+  reads all-zero as an *equidistant fisheye*, and a rectilinear 40 mm is 78 px
+  away from that at the corner of the frame. The numbers now come off the lens.
+
+  The camera already holds, for whatever is mounted, the coefficients it writes
+  into a DNG's `WarpRectilinear` opcode — five focus support points of four
+  values per colour plane. Interpolating them reproduces a real DNG's opcode to
+  the eighth decimal, so nothing here is fitted to a picture, and nothing is
+  read back out of the footage. The camera does the whole conversion itself.
+
+- **The focal length is the measured one.** The mount reports the name on the
+  barrel; the calibration data reports what the optics actually are. A SIGMA
+  40 mm F1.4 Art says 40.0 and calibrates at 39.4, and that 1.5% is 1.5% of
+  over-correction on every rotation. Focus breathing rides on it too — 1.2% on
+  the LUMIX S 40/F2 between infinity and its near limit.
+
+- **`fps`, `focal_length`, `crop_factor`, `global_shutter` and `asymmetrical`**
+  are in the JSON now.
+
+- **Boots in about ten seconds**, one more than v1.3. The progress bar is back
+  to nine steps from five, and no longer blinks out halfway: the OSD runs three
+  buffers, so a step sent twice leaves one of them holding the old frame.
+  Zero-padding the percentage means each frame paints over the last completely
+  and the wipes are gone, so three sends cost what two used to.
+
+One profile per take, which is what the format allows: the distortion is read
+at the focus the lens is at when the JSON is written, a few seconds in. A large
+focus pull is not tracked — Gyroflow's lens profile has no way to express one.
+Verified on two primes; a zoom held at one focal length should be fine, changing
+focal length during a take is not. A lens the camera has no calibration data for
+falls back to zeros, as before.
+
+### What v1.3 changed, and still holds
 
 - **Portrait takes work without being talked round.** See below.
 - **Boots in about nine seconds**, from about eleven. The AutoRun is 113 commands
@@ -154,7 +190,32 @@ the USB shell included. The downloadable package is the no-shell release.
 沒有 `.GYR` 了。GCSV 在錄影期間持續串流寫卡，JSON 在開錄幾秒後就寫好。按下停止
 只是結束錄影，沒有鎖、沒有等待、沒有後處理。
 
-### v1.3 更新
+### v1.4 更新
+
+- **鏡頭 profile 有真正的畸變資料了。** 以前 `distortion_coeffs` 是 `[0, 0, 0, 0]`,
+  那不是「不校正」—— Gyroflow 的 fisheye 模型把全零當成**等距魚眼**,而 40 mm 這種
+  直線鏡頭在畫面角落跟等距魚眼差 78 像素。現在這組數字是從鏡頭來的。
+
+  相機本來就握著它寫進 DNG `WarpRectilinear` 的那組係數:五個對焦支撐點,每點每個
+  色平面四個值。把它內插出來,可以逐位重現真實 DNG 的數值到小數第八位 —— 所以這不是
+  對著畫面擬合,也沒有回頭去讀素材。整個換算都在相機上完成。
+
+- **焦距改用量測值。** 接環回報的是鏡身上印的名字,校正資料記的才是光學上的實際值。
+  SIGMA 40mm F1.4 Art 回報 40.0、校正在 39.4,這 1.5% 就是每一次旋轉多補的 1.5%。
+  對焦呼吸也在這條路上 —— LUMIX S 40/F2 從無限遠到近攝差 1.2%。
+
+- **JSON 補上** `fps`、`focal_length`、`crop_factor`、`global_shutter`、`asymmetrical`。
+
+- **開機約十秒**,比 v1.3 多一秒。進度條從五格回到九格,而且不會再中途消失:
+  OSD 有三個緩衝區,一步只送兩次就會有一個緩衝區留著舊畫面。改成把百分比補零成
+  三位數之後,每一格都能完全蓋掉上一格,清除命令就省下來了,送三次的成本等於以前送兩次。
+
+一段影片只有一組 profile,這是格式本身的限制:畸變取的是寫 JSON 當下(開錄幾秒後)
+的對焦距離。大幅度的拉焦不會被追蹤 —— Gyroflow 的鏡頭 profile 沒有辦法表達這件事。
+已在兩顆定焦鏡上驗證;變焦鏡固定在一個焦段應該沒問題,拍攝中變焦則不行。
+相機沒有校正資料的鏡頭,和以前一樣輸出全零。
+
+### v1.3 帶來、現在仍然成立的
 
 - **直拿片段不必再跟 Gyroflow 周旋**,見下方說明。
 - **開機約九秒**(原約十一秒)。AutoRun 從 160 條命令降到 113 條:載入器的後半段
