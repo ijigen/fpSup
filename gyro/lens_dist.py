@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Read the lens distortion support points out of the camera.
 
+    Superseded by lens_dist_table.py.  This scrapes the 17-point Q15 table the
+    correction engine leaves in RAM, already interpolated for the current focus
+    and focal length.  The real thing -- five focus support points of four f64
+    coefficients per plane, the same numbers the DNG's WarpRectilinear opcode
+    carries -- sits at 0xC307D270 and is what the camera now reads for itself.
+    Kept because it needs nothing but a memory read, so it still works as a
+    cross-check.
+
     ./gyro/lens_dist.py                 -> 17 raw values, ready for lens_profile.py
 
 The firmware carries only the interpolation engine; the coefficients live in the

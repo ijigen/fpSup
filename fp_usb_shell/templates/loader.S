@@ -67,8 +67,25 @@
     movt    \reg, #:upper16:\value
 .endm
 
+/* A call to a firmware routine, in one word instead of three.
+ *
+ * `bl` reaches anything within 32 MB and every entry point here is about seven
+ * away, but the assembler lays this file out at zero and has no idea where it
+ * will be copied, so the offset is worked out here from LOADER_BASE (passed in
+ * by build_autorun) and the distance from the file's first byte.  A label
+ * minus a label is a constant the assembler can fold; the dot on its own is
+ * not, which is why the position comes from `9b - _lstart` rather than from
+ * `.`.  Sixteen words saved is a second off every boot, because each word the
+ * AutoRun has to spell out costs a `mem set` and about sixty milliseconds.
+ *
+ * ARM targets only: the displaced callback is Thumb and still needs BLX. */
+.macro CALL target
+9:  .word 0xEB000000 + ((((\target) - (LOADER_BASE + (9b - _lstart)) - 8) >> 2) & 0xFFFFFF)
+.endm
+
 /* --- the hook site: run once, make a task, put the callback back ----------- */
 .global boot
+_lstart:
 boot:
     push    {r4, r5, r6, lr}
     LDA     r12, HOOK_TARGET
@@ -118,14 +135,12 @@ boot:
     mov     r0, #0
     str     r0, [sp, #28]
     mov     r0, sp
-    LDA     r12, FN_CRETSK
-    blx     r12
+    CALL    FN_CRETSK
     add     sp, sp, #32
     cmp     r0, #0
     ble     boot_done
     mov     r1, #0
-    LDA     r12, FN_STATSK
-    blx     r12
+    CALL    FN_STATSK
 #endif
 
 boot_done:
@@ -147,21 +162,17 @@ load:
      * path.  Direct volume 1 is valid for F_CTOR, but skipping these calls was
      * the only loader-side change in the first native test that froze at 90%.
      * SSD boot routing will be reintroduced only after this known path passes. */
-    LDA     r12, F_MGR
-    blx     r12
+    CALL    F_MGR
     mov     r1, #0
-    LDA     r12, F_VOL
-    blx     r12
+    CALL    F_VOL
     mov     r1, r0
     mov     r0, r5
-    LDA     r12, F_CTOR
-    blx     r12
+    CALL    F_CTOR
 
     mov     r0, r5
     adr     r1, path
     mov     r2, #1
-    LDA     r12, F_OPEN
-    blx     r12
+    CALL    F_OPEN
     cmp     r0, #0
     beq     load_shut
 
@@ -169,68 +180,41 @@ load:
     mov     r1, r6
     LDA     r2, MAXLEN
     mov     r3, #0
-    LDA     r12, F_READ
-    blx     r12
+    CALL    F_READ
 
     mov     r0, r5
-    LDA     r12, F_CLOSE
-    blx     r12
+    CALL    F_CLOSE
 
 load_shut:
     mov     r0, r5
     mov     r1, #2
-    LDA     r12, F_DTOR
-    blx     r12
+    CALL    F_DTOR
 
-    ldr     r0, [r6]                    @ nothing is copied until the file says
-    LDA     r1, MAGIC                   @ it is the right file
+    ldr     r0, [r6]                    @ nothing runs until the file says it is
+    LDA     r1, MAGIC                   @ the right file
     cmp     r0, r1
     bne     load_stop
 
-    ldr     r7, [r6, #4]                @ section count
-    add     r8, r6, #16                 @ the table
-    add     r2, r8, r7, lsl #3          @ the data begins past it
+    /* The rest of the loading travels in the file, as its first section, and is
+     * therefore free: every word spelled out here costs the AutoRun one
+     * `mem set` and about sixty milliseconds of boot.  Clean the cache first --
+     * the buffer holds instructions now -- then hand it the buffer.  It places
+     * every section, cleans the cache again, and comes back, unless the file
+     * names an entry, which is how the debug build's worker takes the task. */
+    CALL    F_CACHE
+    ldr     r1, [r6, #4]                @ section count
+    add     r1, r6, r1, lsl #3
+    add     r1, r1, #16                 @ past the table: the first section's data
+    mov     r0, r6
+    blx     r1
 
-place:
-    cmp     r7, #0
-    beq     run
-    ldr     r0, [r8]                    @ destination
-    ldr     r1, [r8, #4]                @ length
-    mov     r3, #0
-1:  cmp     r3, r1
-    bhs     2f
-    ldrb    r12, [r2, r3]
-    strb    r12, [r0, r3]
-    add     r3, r3, #1
-    b       1b
-2:  add     r2, r2, r1
-    add     r2, r2, #3                  @ each section starts on a word
-    bic     r2, r2, #3
-    add     r8, r8, #8
-    sub     r7, r7, #1
-    b       place
-
-run:
-    /* Some VSHL sections patch firmware code rather than filling a previously
-     * unused cave.  Invalidate once after every section is present and before
-     * any patched entry can run. */
-    LDA     r12, F_CACHE
-    blx     r12
-#ifdef NOTASK
-    pop     {r4, r5, r6, r7, r8, pc}    @ the placed hook runs from the next callback
-#else
-    ldr     r0, [r6, #8]                @ entry
-    cmp     r0, #0
-    beq     load_stop
-    pop     {r4, r5, r6, r7, r8, lr}
-    bx      r0                          @ this task becomes the worker
-#endif
-
-/* Nothing was placed, or there is nowhere to go. Returning from a task entry is
- * undefined here -- tk_ext_tsk is not in the syscall table -- so sit still. */
+/* Nothing was placed: leave the camera exactly as it was, minus the shell.
+ * The debug build reaches this from its own task, and returning from a task
+ * entry is undefined here -- tk_ext_tsk is not in the syscall table -- so it
+ * sits still instead. */
 load_stop:
 #ifdef NOTASK
-    pop     {r4, r5, r6, r7, r8, pc}    @ nothing placed: leave the camera alone
+    pop     {r4, r5, r6, r7, r8, pc}
 #else
     b       load_stop
 #endif

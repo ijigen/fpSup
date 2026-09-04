@@ -1,11 +1,11 @@
-# fpGyroSup v1.2
+# fpGyroSup v1.3
 
 [![Support fpSup on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/fpsup)
 [![Join the fpSup Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/XeFK5zNZpT)
 
 [English](#english) | [繁體中文](#繁體中文)
 
-### ⬇ [Download fp-gyro-sup-v1.2.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.2.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.2.zip)
+### ⬇ [Download fp-gyro-sup-v1.3.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.3.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.3.zip)
 
 Unzip it, copy the three files inside the folder to the root of an SD card, and
 power the camera on.
@@ -18,8 +18,9 @@ and removing the card files or pulling the battery restores the camera.
 僅適用 SIGMA fp 韌體 **Ver.5.02**。這是 RAM 注入，不會刷寫韌體；移除卡上的
 啟動檔或拔電池即可完全復原。
 
-Previous release: [fpGyroSup v1.1](fp-gyro-sup-v1.1.zip) (GYR + post-processing
-transaction; still the one to use for MOV).
+Previous releases: [v1.2](fp-gyro-sup-v1.2.zip) (the same stream, but portrait
+takes need Gyroflow talked round by hand) and [v1.1](fp-gyro-sup-v1.1.zip) (GYR +
+post-processing transaction; still the one to use for MOV).
 
 ---
 
@@ -39,7 +40,16 @@ There is no `.GYR` any more. The GCSV streams to the card during the take and
 the JSON is written a few seconds after the take starts. Pressing stop ends the
 take and nothing else: no lock, no wait, no post-processing.
 
-### What changed in v1.2
+### What changed in v1.3
+
+- **Portrait takes work without being talked round.** See below.
+- **Boots in about nine seconds**, from about eleven. The AutoRun is 113 commands
+  instead of 160: the loader's second half now travels in `VSHL.BIN` and runs
+  where it lands, firmware calls are one word instead of three, and the progress
+  bar is sent twice rather than three times. Measured on the camera: 38 ms per
+  command and 4.7 s of fixed cost, so the count is the whole story.
+
+### What v1.2 changed, and still holds
 
 ```text
 recording -> GCSV streamed during the take -> JSON written during the take -> stop
@@ -88,7 +98,28 @@ v1, v1.1, a debug build, or an earlier test build.
 Power the camera on and wait until the progress display reaches `fpSup!` before
 recording. A `GYRO/` folder is no longer needed.
 
-### Not covered by v1.2
+### Portrait takes
+
+Hold the camera upright and it just works. While a clip is being written the
+camera stores its CinemaDNG frames without the rotation tag, so Gyroflow reads
+a portrait take exactly as it reads a landscape one: load the sequence and both
+sidecars, sync, stabilise, and turn the picture ninety degrees at the end of
+the edit. Leave horizon lock off -- it would turn the picture itself, using the
+gravity of a camera that was on its side. Photographs are untouched: they still
+record their orientation and still rotate by themselves.
+
+The tag has to go because of how Gyroflow reads a DNG sequence. It takes the
+size from the frames, which are stored landscape, and then rotates the picture
+by the tag, so the preview is portrait while the dimensions, the lens model and
+the stabilisation maths stay landscape. Autosync then returns nonsense offsets
+-- +2283 ms and +3997 ms measured on a take whose true offset is -260 ms -- and
+no sidecar can reconcile the two, because the frame size comes from the image
+files rather than from the `.gcsv` or the `.json`. Gyroflow tracks this as
+issue #1117, one of a family of rotation bugs that also affect ordinary video
+(#1115, plugins #38, ofx #48), all still open. Leaving the tag out sidesteps
+all of it.
+
+### Not covered by v1.3
 
 - **MOV:** no sidecars. MOV has no `\CINEMA\<clip>\` folder for the stream to
   write into. Use v1.1 if you need a `.GYR` from MOV.
@@ -123,7 +154,14 @@ the USB shell included. The downloadable package is the no-shell release.
 沒有 `.GYR` 了。GCSV 在錄影期間持續串流寫卡，JSON 在開錄幾秒後就寫好。按下停止
 只是結束錄影，沒有鎖、沒有等待、沒有後處理。
 
-### v1.2 更新
+### v1.3 更新
+
+- **直拿片段不必再跟 Gyroflow 周旋**,見下方說明。
+- **開機約九秒**(原約十一秒)。AutoRun 從 160 條命令降到 113 條:載入器的後半段
+  改成隨 `VSHL.BIN` 走、就地執行,韌體呼叫從三個字變一個字,進度條送兩次而非三次。
+  實測每條命令 38 ms、固定開銷 4.7 秒,所以命令數就是全部。
+
+### v1.2 帶來、現在仍然成立的
 
 ```text
 錄影 -> GCSV 錄影中串流 -> JSON 錄影中寫入 -> 停止
@@ -153,8 +191,7 @@ SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1920x1080 29.97p、LUMIX S 40/F2：
 
 ### 安裝
 
-把以下三個檔案當成同一組複製到 SD 卡根目錄。不要混用 v1、v1.1、debug 版或先前
-測試版的檔案。
+把以下三個檔案當成同一組複製到 SD 卡根目錄。不要混用 v1、v1.1、v1.2、debug 版或先前測試版的檔案。
 
 ```text
 /AutoRun.txt
@@ -164,7 +201,21 @@ SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1920x1080 29.97p、LUMIX S 40/F2：
 
 開機後等進度顯示到 `fpSup!` 再開始錄影。不再需要 `GYRO/` 資料夾。
 
-### v1.2 未涵蓋
+### 直拿的片段
+
+直拿就直接可用。相機在寫入片段期間,讓 CinemaDNG 不帶旋轉標籤,所以 Gyroflow 讀直拿
+片段就跟讀橫拿一樣:載入序列與兩個 sidecar、同步、穩定,最後在剪輯時把畫面轉九十度。
+鎖定水平請保持關閉 —— 它會依重力自己轉畫面,而那是一台側躺的相機的重力。照片完全
+不受影響,方向照常記錄、自動旋轉照常。
+
+之所以要拿掉標籤,是因為 Gyroflow 讀 DNG 序列的方式:尺寸取自影像檔(儲存方向是橫的),
+卻又照旋轉標籤把畫面轉成直的,於是預覽是直的、尺寸與鏡頭模型和穩定運算卻還是橫的。
+自動同步因此給出離譜的偏移(實測 +2283 ms 與 +3997 ms,真值是 −260 ms),而且沒有任何
+sidecar 救得了 —— 畫格尺寸的來源是影像檔,不是 `.gcsv` 或 `.json`。Gyroflow 把它記在
+issue #1117,同族的旋轉問題也出現在一般影片上(#1115、plugins #38、ofx #48),全都還開著。
+不寫那個標籤就完全繞開了。
+
+### v1.3 未涵蓋
 
 - **MOV：** 沒有 sidecar。MOV 沒有可供串流寫入的 `\CINEMA\<clip>\` 資料夾；需要
   MOV 的 `.GYR` 請用 v1.1。

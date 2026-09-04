@@ -3,9 +3,9 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Gyro, six-axis logging and the Gyroflow workflow.
-**Status: released — [fpGyroSup v1.2](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.2.zip)** · [release notes](../gyro/release/)
+**Status: released — [fpGyroSup v1.3](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.3.zip)** · [release notes](../gyro/release/)
 
-Gyro、六軸記錄與 Gyroflow 工作流。**狀態：已發布 —— [fpGyroSup v1.2 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.2.zip)** · [說明](../gyro/release/)
+Gyro、六軸記錄與 Gyroflow 工作流。**狀態：已發布 —— [fpGyroSup v1.3 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.3.zip)** · [說明](../gyro/release/)
 
 ---
 
@@ -17,7 +17,7 @@ Record six-axis data inside the camera and leave a Gyroflow-ready GCSV plus lens
 profile beside every CinemaDNG take, with no computer conversion step and
 nothing left to do after the take.
 
-### Released path (v1.2)
+### Released path (v1.3)
 
 ```text
 recording -> GCSV streamed during the take -> JSON written during the take -> stop
@@ -39,6 +39,15 @@ recording -> GCSV streamed during the take -> JSON written during the take -> st
   rate from the IMX410 mode tables. No DNG read, no lens-bus access.
 - Stop is just stop. There is no post-processing, no `MovieSaving` lock and no
   `.GYR`.
+- A portrait take's frames are stored without the EXIF Orientation tag, and only
+  while a clip is being written, so Gyroflow reads them as it reads a landscape
+  take while photographs keep the camera's own auto-rotation. Without that,
+  Gyroflow takes the sequence's size from the frames but rotates the picture by
+  the tag, and autosync returns nonsense offsets (gyroflow#1117, with siblings
+  #1115 and plugins#38 on ordinary video, all open).
+- The AutoRun is 113 commands and the camera reaches `fpSup!` in about nine
+  seconds. Timed on the camera against the debug card: 38 ms per command and
+  4.7 s of fixed cost, so the command count is the whole story.
 
 ### Verified on hardware
 
@@ -69,9 +78,12 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 
 ### Remaining scope
 
-- **MOV:** no sidecars in v1.2 (no `\CINEMA\<clip>\` folder to stream into).
+- **MOV:** no sidecars in v1.3 (no `\CINEMA\<clip>\` folder to stream into).
   v1.1 still writes a `.GYR` for MOV.
 - **External SSD, UHD, zoom lenses:** untested.
+- **Horizon lock on a portrait take:** it turns the picture itself, from the
+  gravity of a camera on its side, so it fights the rotation done in the edit.
+  Leave it off.
 - **Selector `0x21`:** the missed-take cause was found by observation and the
   fix mirrors the firmware, but the `0x21` state has not recurred since, so that
   path has not been exercised live.
@@ -85,7 +97,7 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 在相機內記錄六軸資料，讓每段 CinemaDNG 旁邊直接留下 Gyroflow 可用的 GCSV 與
 鏡頭 profile，不需要電腦轉檔，停止錄影後也沒有任何事要等。
 
-### 已發布流程（v1.2）
+### 已發布流程（v1.3）
 
 ```text
 錄影 -> GCSV 錄影中串流 -> JSON 錄影中寫入 -> 停止
@@ -102,6 +114,12 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
   邊界，鏡頭名稱與焦距取自韌體鏡頭資訊物件，捲簾與幀率取自 IMX410 模式表。不讀
   DNG，不碰鏡頭匯流排。
 - 停止就是停止。沒有後處理、沒有 `MovieSaving` 鎖、沒有 `.GYR`。
+- 直拿片段的畫格不寫入 EXIF 旋轉標籤,而且只在寫入片段期間如此,所以 Gyroflow 讀它就跟讀
+  橫拿一樣,照片仍保留相機自己的自動旋轉。不這麼做的話,Gyroflow 會從影像檔取尺寸卻照標籤
+  轉畫面,自動同步就給出離譜的偏移(gyroflow#1117,同族還有一般影片的 #1115 與 plugins#38,
+  全都還開著)。
+- AutoRun 共 113 條命令,相機約九秒到達 `fpSup!`。與 debug 卡對照實測:每條命令 38 ms、
+  固定開銷 4.7 秒,所以命令數就是全部。
 
 ### 實機驗證
 
@@ -130,9 +148,11 @@ SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1920x1080 29.97p、LUMIX S 40/F2：
 
 ### 後續範圍
 
-- **MOV：** v1.2 沒有 sidecar（沒有可串流寫入的 `\CINEMA\<clip>\`）。v1.1 仍會替
+- **MOV：** v1.3 沒有 sidecar（沒有可串流寫入的 `\CINEMA\<clip>\`）。v1.1 仍會替
   MOV 寫 `.GYR`。
 - **外接 SSD、UHD、變焦鏡：** 尚未測試。
+- **直拿時的鎖定水平：** 它會依重力自己轉畫面,而那是側躺相機的重力,會跟剪輯時的旋轉打架。
+  請保持關閉。
 - **選擇器 `0x21`：** 整段沒錄到的原因是靠觀察找到、修法照韌體鏡像，但之後
   `0x21` 沒再出現，那條路徑還沒實機跑過。
 

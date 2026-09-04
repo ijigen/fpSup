@@ -199,6 +199,33 @@ pg_focal_milli:
 
 /* Emit the NUL-terminated string written inline after the call, so the profile
  * reads in the source in the order it lands on the card. */
+/* r0 = mode -> the crop factor x 1000.  A full-width readout images the whole
+ * active area and comes out at 1.000; a cropped mode is proportionally more.
+ * Informational only: Gyroflow's stabilisation never reads it. */
+pg_crop_milli:
+    push    {r4, lr}
+    mov     r1, r0
+    ldr_addr r0, MODE_OBJ
+    ldr_addr ip, F_GEOM
+    blx     ip
+    ldr     r1, [r0, #4]                /* readout width      */
+    ldr     r2, [r0, #0x44]             /* horizontal binning */
+    cmp     r2, #0
+    moveq   r2, #1
+    mul     r1, r1, r2                  /* sensor columns covered */
+    movw    r0, #:lower16:SENSOR_ACTIVE_W
+    cmp     r1, r0
+    movhi   r1, r0                      /* a mode reading past the active area
+                                         * still only images the active area */
+    cmp     r1, #0
+    moveq   r0, #1000                   /* no geometry: say 1.000 rather than
+                                         * divide by zero */
+    beq     1f
+    movw    r0, #:lower16:6000000
+    movt    r0, #:upper16:6000000       /* SENSOR_ACTIVE_W * 1000 */
+    bl      udiv32
+1:  pop     {r4, pc}
+
     .global pg_es
 pg_es:
 4:  ldrb    r0, [lr], #1
@@ -347,6 +374,10 @@ pg_em:
 .equ PG_LENS,      0xF9800      /* from r12: what the lens hands back    */
 /* Early-JSON bookkeeping (r39b/r39d), past the 4 KiB the bus name block can
  * occupy.  LC_MAGIC guards against whatever the pool held. */
+.equ PG_DIST,      0xF9C00      /* PG_LENS + 0x400: four kr doubles at +0,   */
+                                /* three coefficients at +32, a flag at +56, */
+                                /* and 96 bytes of solver room at +64.  Well */
+                                /* past the focal at +0 and the name at +0x80 */
 .equ PG_LCACHE,    0xFA800      /* PG_LENS + 0x1000: offsets below stay 12-bit  */
 .equ F_LENS_INFO,  0xC03341C8   /* firmware lens-info singleton getter (-> 0xC3464980) */
 .equ LI_NAME,      0x24         /* space-padded model name                       */
@@ -1069,13 +1100,39 @@ pg_lens_ready:
     bl      pg_em
     S ",\n  \"frame_readout_direction\": \"TopToBottom\",\n"
     S "  \"input_horizontal_stretch\": 1.0,\n  \"input_vertical_stretch\": 1.0,\n"
-    S "  \"num_images\": 0,\n  \"fisheye_params\": {\n    \"RMS_error\": 0.0,\n"
+    S "  \"num_images\": 0,\n  \"fps\": "
+    mov     r0, r4
+    bl      pg_fps_milli
+    bl      pg_em
+    S ",\n  \"focal_length\": "
+    mov     r0, r7
+    bl      pg_dist_focal               /* the measured one, same as the matrix */
+    mov     r1, #100                    /* tenths of a mm -> pg_em's thousandths */
+    mul     r0, r0, r1
+    bl      pg_em
+    S ",\n  \"crop_factor\": "
+    mov     r0, r4
+    bl      pg_crop_milli
+    bl      pg_em
+    S ",\n  \"global_shutter\": false,\n  \"asymmetrical\": false,\n"
+    /* radial_distortion_limit is deliberately absent: LensProfile::init()
+     * recomputes it from the coefficients on every load, so anything written
+     * here is discarded. */
+    S "  \"fisheye_params\": {\n    \"RMS_error\": 0.0,\n"
     S "    \"camera_matrix\": [["
+    mov     r0, r7
+    bl      pg_dist_focal               /* what the optics measured, not the
+                                         * name on the barrel */
+    mov     r2, r0
     mov     r0, r4
     mov     r1, r5
-    mov     r2, r7
     bl      pg_focal_milli
     mov     r8, r0                      /* keep it for the second row */
+    bl      pg_dist_prepare             /* folds the breathing term into r8 */
+    mov     r0, r8                      /* and r8 is what both rows want: it
+                                         * restores r0, so reading r0 here put
+                                         * the unscaled focal in the first row
+                                         * and the scaled one in the second */
     bl      pg_em
     S ", 0.0, "
     mov     r0, r5
@@ -1093,7 +1150,9 @@ pg_lens_ready:
     lsr     r0, r0, #1
     bl      pg_em
     S "], [0.0, 0.0, 1.0]],\n"
-    S "    \"distortion_coeffs\": [0.0, 0.0, 0.0, 0.0]\n  },\n"
+    S "    \"distortion_coeffs\": ["
+    bl      pg_dist_emit
+    S "]\n  },\n"
 #ifdef FPGYRO_BACKPRESSURE_PROBE
     movw    r3, #:lower16:O_BP_DIAG
     movt    r3, #:upper16:O_BP_DIAG
@@ -1229,6 +1288,149 @@ pg_write_no_volume:
     cmp     r0, #0
     movne   r0, r6
     pop     {r4, r5, r6, pc}
+
+/* r0 = value < 1e9 -> exactly nine digits, leading zeros kept.  pg_ei drops
+ * them, which would turn 0.012716836 into 0.12716836. */
+pg_e9:
+    push    {r4, r5, r6, lr}
+    mov     r4, r0
+    movw    r6, #:lower16:100000000
+    movt    r6, #:upper16:100000000
+    mov     r5, #9
+1:  mov     r0, r4
+    mov     r1, r6
+    bl      udiv32
+    add     r0, r0, #'0'
+    strb    r0, [r9], #1
+    mov     r4, r1
+    mov     r0, r6
+    mov     r1, #10
+    bl      udiv32
+    mov     r6, r0
+    subs    r5, r5, #1
+    bne     1b
+    pop     {r4, r5, r6, pc}
+
+/* d0 -> a signed decimal with nine places.  Gyroflow reads these as doubles,
+ * and the ninth place is a thousandth of the smallest coefficient we emit. */
+    .global pg_ed
+pg_ed:
+    push    {r4, lr}
+    vldr    d1, pg_dzero
+    vcmp.f64 d0, d1
+    vmrs    APSR_nzcv, fpscr
+    bpl     1f
+    mov     r0, #'-'
+    strb    r0, [r9], #1
+    vneg.f64 d0, d0
+1:  vcvt.u32.f64 s2, d0                 /* truncates: the whole part */
+    vmov    r4, s2
+    vcvt.f64.u32 d1, s2
+    vsub.f64 d2, d0, d1
+    mov     r0, r4
+    bl      pg_ei
+    mov     r0, #'.'
+    strb    r0, [r9], #1
+    vldr    d3, pg_d1e9
+    vmul.f64 d2, d2, d3
+    vldr    d3, pg_dhalf
+    vadd.f64 d2, d2, d3
+    vcvt.u32.f64 s4, d2
+    vmov    r0, s4
+    movw    r1, #:lower16:999999999     /* a carry would print a tenth digit; */
+    movt    r1, #:upper16:999999999     /* losing 1e-9 is cheaper than that   */
+    cmp     r0, r1
+    movhi   r0, r1
+    bl      pg_e9
+    pop     {r4, pc}
+
+/* pg_dist_prepare -- r5 = width, r6 = height, r8 = focal_px x 1000.
+ *
+ * Fills PG_DIST with the lens's interpolated radial coefficients and the three
+ * Gyroflow ones fitted to them, and folds the breathing term into r8, which is
+ * what the camera matrix is built from.  Silent about failure: a lens with no
+ * correction data leaves the flag clear and the profile keeps its zeros.
+ */
+    .global pg_dist_prepare
+pg_dist_prepare:
+    push    {r0, r1, r2, r3, r4, lr}
+    movw    r4, #:lower16:PG_DIST
+    movt    r4, #:upper16:PG_DIST
+    add     r4, r10, r4
+    mov     r0, #0
+    str     r0, [r4, #56]
+    mov     r0, r4
+    bl      pg_dist_kr
+    cmp     r0, #0
+    beq     9f
+
+    /* s = hypot(w, h) / 2 / focal_px -- the corner radius in focal lengths */
+    mul     r0, r5, r5
+    mla     r0, r6, r6, r0
+    vmov    s0, r0
+    vcvt.f64.u32 d0, s0
+    vsqrt.f64 d0, d0
+    vldr    d1, pg_dtwo
+    vdiv.f64 d0, d0, d1
+    vmov    s2, r8
+    vcvt.f64.u32 d1, s2
+    vldr    d2, pg_dthou
+    vdiv.f64 d1, d1, d2
+    vdiv.f64 d7, d0, d1
+
+    mov     r0, r4
+    add     r1, r4, #32
+    add     r2, r4, #64                 /* 96 bytes of working room */
+    bl      pg_dist_fit
+    cmp     r0, #0
+    beq     9f
+    mov     r0, #1
+    str     r0, [r4, #56]
+
+    /* kr0 is magnification, not distortion: it belongs on the focal length. */
+    vldr    d0, [r4]
+    vmov    s2, r8
+    vcvt.f64.u32 d1, s2
+    vmul.f64 d0, d0, d1
+    vldr    d1, pg_dhalf
+    vadd.f64 d0, d0, d1
+    vcvt.u32.f64 s0, d0
+    vmov    r8, s0
+9:  pop     {r0, r1, r2, r3, r4, pc}
+
+/* The four numbers inside distortion_coeffs, comma separated. */
+    .global pg_dist_emit
+pg_dist_emit:
+    push    {r4, r5, r6, lr}
+    movw    r4, #:lower16:PG_DIST
+    movt    r4, #:upper16:PG_DIST
+    add     r4, r10, r4
+    ldr     r0, [r4, #56]
+    cmp     r0, #0
+    beq     8f
+    add     r4, r4, #32
+    mov     r5, #0
+7:  add     r0, r4, r5, lsl #3
+    vldr    d0, [r0]
+    bl      pg_ed
+    S ", "
+    add     r5, r5, #1
+    cmp     r5, #3
+    blt     7b
+    S "0.0"
+    pop     {r4, r5, r6, pc}
+8:  S "0.0, 0.0, 0.0, 0.0"
+    pop     {r4, r5, r6, pc}
+
+    .align  3
+pg_dzero: .double 0.0
+pg_dhalf: .double 0.5
+pg_dtwo:  .double 2.0
+pg_dthou: .double 1000.0
+pg_d1e9:  .double 1000000000.0
+
+/* The lens's own distortion, and the arithmetic to turn it into Gyroflow's. */
+#include "distfit.inc.S"
 
 /* Idle lens cache + early JSON: helpers used by pg_build in every build. */
 #include "lenscache.inc.S"

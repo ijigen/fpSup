@@ -72,28 +72,40 @@ def word_at(seq, i):
 
 # A measuring build only: one send per update instead of three.
 #
-# The bar keeps every step; each step just costs three commands rather than
-# nine. If the eight seconds between 0% and 20% -- where the shipping build
-# issues nine display commands and nothing else -- collapses, the display is
-# what the boot is spending its time on. If it does not, that stretch belongs to
-# the camera's own start-up and no amount of trimming here will touch it.
+# The bar keeps every step; each step just costs two commands rather than six.
+# If the eight seconds between 0% and 20% -- where the shipping build issues six
+# display commands and nothing else -- collapses, the display is what the boot
+# is spending its time on. If it does not, that stretch belongs to the camera's
+# own start-up and no amount of trimming here will touch it.
 THIN_BAR = __import__('os').environ.get('FPSUP_THIN_BAR') == '1'
+
+BAR_WIPED = []      # the surface is cleared once, before the first bar frame
 
 
 def progress(out, pct: int):
-    """One update, sent three times over.
+    """One update, drawn into all three OSD buffers.
 
-    Sending it once looked safe -- a dropped progress update is only a bar that
-    does not move -- and it was not: the bar stopped at 67 while the boot ran on
-    to the end, and 67 was then read as a hang. A progress bar that lies is
-    worse than no bar. The repetition was measured on this camera; the saving
-    comes from taking fewer steps, not from trusting each one.
+    The layer runs three buffers and composites whichever is current, so a step
+    sent fewer than three times leaves one buffer holding the previous frame and
+    the bar flickers between them. Two sends shipped for a while and read as the
+    bar vanishing and coming back.
+
+    Three sends used to mean nine commands, because each frame was a wipe as
+    well: `display text` does not clear what it draws over, and a blank in the
+    new string leaves the old glyph standing. Zero-padding the percentage --
+    007 rather than "  7" -- puts a glyph in every cell, so each frame paints
+    over the last one completely and the wipes go away. Six commands a step,
+    what two sends used to cost, without the flicker.
+
+    Set FPSUP_THIN_BAR=1 to send once and take the risk.
     """
+    if not BAR_WIPED:
+        for _ in range(3):
+            out.append("display osd 1 0x00000000")
+        BAR_WIPED.append(True)
     filled = round(pct * BAR_WIDTH / 100)
-    msg = f"fpSup[{'#' * filled}{'.' * (BAR_WIDTH - filled)}]{pct}"
+    msg = f"fpSup[{'#' * filled}{'.' * (BAR_WIDTH - filled)}]{pct:03d}"
     reps = 1 if THIN_BAR else 3
-    for _ in range(reps):
-        out.append("display osd 1 0x00000000")
     for _ in range(reps):
         out.append(f"display text {msg}")
         out.append("display osd 1")
@@ -167,7 +179,7 @@ else:
 w("")
 progress(out, 20)
 w("")
-CHUNKS = 3      # progress steps through the loader; each one draws
+CHUNKS = 6      # progress steps through the loader; each one draws
 if not args.loader:
     w(f"# --- worker code @0x{LOAD:08X}..0x{end:08X}, {len(code)} bytes ---------------")
     per = (len(words) + CHUNKS - 1) // CHUNKS
@@ -175,7 +187,7 @@ if not args.loader:
         for i in range(c * per, min((c + 1) * per, len(words))):
             w(f"mem set 0x{LOAD + i*4:08X} 0x{words[i]:08X}")
         w("")
-        progress(out, 20 + round((c + 1) * 40 / CHUNKS))
+        progress(out, 30 + round((c + 1) * 30 / CHUNKS))
     w("")
 w("# --- DMA pool; its address lands in 0xC3757A7C -------------------------------")
 w("# +0x0000 frame buffer 4 KiB   +0x2000 capture buffer 16 KiB")
@@ -198,6 +210,8 @@ w("# that never converged rather than as an error, because the overflow landed i
 w("# memory somebody else kept rewriting.")
 w("memmgr bufmem get 0 1048576")
 w("")
+progress(out, 30)   # the allocation is seconds; say so rather than look stalled
+w("")
 if args.loader:
     # Everything the AutoRun used to spell out goes in a file, and what it
     # spells out instead is the thing that reads the file. Four hundred `mem
@@ -213,7 +227,9 @@ if args.loader:
     # task: it reads the file straight from the gyro callback and returns. That
     # is 31 fewer words to spell out, which is 31 fewer `mem set` commands --
     # about two seconds off the boot, measured.
-    ldef = ['NOTASK=1'] if args.no_shell else []
+    # CALL in the loader needs to know where the loader will be copied to,
+    # because the assembler lays it out at zero.
+    ldef = [f'LOADER_BASE={CAVE_LOW}'] + (['NOTASK=1'] if args.no_shell else [])
     lcode = assemble(lsrc, ldef)
     lwords = to_words(lcode)
     # Not at LOAD. The loader's whole job is to write to LOAD, and putting it
@@ -236,7 +252,7 @@ if args.loader:
         for i in range(c * per, min((c + 1) * per, len(lwords))):
             w(f"mem set 0x{LOADER + i*4:08X} 0x{word_at(lwords, i):08X}")
         w("")
-        progress(out, 20 + round((c + 1) * 70 / CHUNKS))
+        progress(out, 30 + round((c + 1) * 60 / CHUNKS))
         w("")
 
 w("# --- start the worker --------------------------------------------------------")
@@ -328,7 +344,12 @@ if args.loader:
     import struct
     # No worker in the release build, and with NOTASK no task to park in it
     # either, so nothing goes to LOAD at all -- the sleeper is debug-only now.
-    secs = [] if args.no_shell else [(LOAD, code)]
+    # The loader's second half rides in the file as the first section, marked
+    # with destination zero so it is run where it lands instead of copied. Every
+    # word it saves the AutoRun is a `mem set` and about sixty milliseconds.
+    secs = [(0, assemble(HERE / 'templates' / 'stage2.S'))]
+    if not args.no_shell:
+        secs.append((LOAD, code))
     if args.payload:
         secs.append((args.payload_addr, assemble(pathlib.Path(args.payload))))
     for spec in args.also:
@@ -349,6 +370,9 @@ if args.loader:
     table = b''
     body = b''
     for addr, blob in secs:
+        if len(blob) % 4:
+            sys.exit(f'section for 0x{addr:08X} is {len(blob)} bytes; the loader '
+                     f'copies whole words, so every section must be a multiple of four')
         table += struct.pack('<II', addr, len(blob))
         body += blob + b'\x00' * (-len(blob) % 4)
     entry = 0 if args.no_shell else LOAD + symbols(WORKER)['serve']
