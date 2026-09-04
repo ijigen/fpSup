@@ -36,6 +36,34 @@ def build():
             'PGEN.BIN':    HERE / '.pgen.bin'}
 
 
+EXPECT_SECTIONS = {
+    0xC072E064: 'the logger',
+    0xC072EFB4: 'the park stub',
+    0xC03660E8: 'the fwrite prologue restore',
+    0xC072EF00: 'orient_stub.S (portrait takes)',
+    0xC00C32C8: 'orient_patch.S (portrait takes)',
+}
+
+
+def check_sections(path):
+    """Every section the shipping card is supposed to carry is in the binary.
+
+    v1.4 was packaged once without the two orientation sections: v1.3 had been
+    given them as --also arguments by hand, and rebuilding from build_card.py
+    silently dropped portrait support. Nothing about the build failed, and the
+    only visible sign was a VSHL.BIN that hashed differently.
+    """
+    import struct
+    d = pathlib.Path(path).read_bytes()
+    magic, n = struct.unpack_from('<II', d, 0)
+    dests = {struct.unpack_from('<II', d, 8 + i * 8)[0] for i in range(n)}
+    missing = [f'0x{a:08X} ({w})' for a, w in EXPECT_SECTIONS.items()
+               if a not in dests]
+    if missing:
+        raise SystemExit('VSHL.BIN is missing:\n  ' + '\n  '.join(missing))
+    print(f'  sections      {n}, all of the expected destinations present')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('version', help='e.g. 1.4')
@@ -43,6 +71,7 @@ def main():
     name = f'fp-gyro-sup-v{a.version}'
 
     src = build()
+    check_sections(src['VSHL.BIN'])
     CARD.mkdir(parents=True, exist_ok=True)
     for f in FILES:
         shutil.copyfile(src[f], CARD / f)

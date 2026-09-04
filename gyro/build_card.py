@@ -16,6 +16,12 @@ SHELL = HERE.parent / 'fp_usb_shell' / 'build_autorun.py'
 PARK_AT = 0xC072EFB4        # above the logger, below the shell's worker state
 PHASE_AT = 0xC072F000       # release-only: debug shell state/worker begin here
 F_WRITE_AT = 0xC03660E8
+ORIENT_AT = 0xC072EF00      # the call-through that suppresses the DNG rotation
+                            # tag while a clip is being written.  It only fits
+                            # above logger_stream.S, which ends at 0xC072EEF8;
+                            # the GYR logger runs to the park stub with nothing
+                            # to spare, so this rides with --gcsv-stream only.
+ORIENT_PATCH_AT = 0xC00C32C8
 TABLE_LOAD_AT = 0xC072F800  # the shell's template slot: nothing uses it at boot,
                             # and the worker sits below it at 0xC072F050
 
@@ -74,5 +80,18 @@ if __name__ == '__main__':
         # C072F000 for the USB-shell state or another payload.
         command += [
             '--also', f'0x{F_WRITE_AT:08X}:{HERE / "phase_fwrite_restore.S"}',
+        ]
+    if gcsv_stream:
+        # Portrait takes.  The stub goes in before the four-byte patch that
+        # calls it, the same ordering the phase probe needs: the loader keeps
+        # section order and only invalidates the instruction cache once every
+        # section is in place.
+        #
+        # Spelled out here rather than passed on the command line, which is how
+        # v1.4 shipped without it: the release was rebuilt from build_card.py
+        # and the two --also arguments v1.3 had been given by hand were gone.
+        command += [
+            '--also', f'0x{ORIENT_AT:08X}:{HERE / "orient_stub.S"}',
+            '--also', f'0x{ORIENT_PATCH_AT:08X}:{HERE / "orient_patch.S"}',
         ]
     sys.exit(subprocess.call(command + forwarded))
