@@ -69,6 +69,7 @@ vd_hook:
     str     r0, [ip, #O_VSUM]
     str     r0, [ip, #O_VNF]
     str     r0, [ip, #O_VSHORT]
+    str     r0, [ip, #O_VOMAX]
     b       4f
 
 3:  /* Gyro samples since the previous exposure -- the frame period, measured
@@ -82,17 +83,23 @@ vd_hook:
     addlt   r1, r1, #GYRO_RING_SPAN     @ it wraps every 240 ms
     lsr     r1, r1, #3
     str     r3, [ip, #O_VPREV]
+
+    /* Only gaps long enough to be a frame go into the mean.  A doubled
+     * interrupt shows up as a near-zero gap next to a full one; averaging both
+     * halves in would report a frame period that never happened.
+     *
+     * min and max describe the long gaps ONLY.  A min taken over everything is
+     * whatever the doubled interrupt left, which is no use; over the long gaps
+     * it says what the shortest real frame was, and that is what makes the set
+     * checkable. */
+    cmp     r1, #VD_GAP_FLOOR
+    blo     5f
     ldr     r0, [ip, #O_VMIN]
     cmp     r1, r0
     strlo   r1, [ip, #O_VMIN]
     ldr     r0, [ip, #O_VMAX]
     cmp     r1, r0
     strhi   r1, [ip, #O_VMAX]
-    /* Only gaps long enough to be a frame go into the mean.  A doubled
-     * interrupt shows up as a near-zero gap next to a full one; averaging both
-     * halves in would report a frame period that never happened. */
-    cmp     r1, #VD_GAP_FLOOR
-    blo     5f
     ldr     r0, [ip, #O_VSUM]
     add     r0, r0, r1
     str     r0, [ip, #O_VSUM]
@@ -103,6 +110,9 @@ vd_hook:
 5:  ldr     r0, [ip, #O_VSHORT]
     add     r0, r0, #1
     str     r0, [ip, #O_VSHORT]
+    ldr     r0, [ip, #O_VOMAX]
+    cmp     r1, r0
+    strhi   r1, [ip, #O_VOMAX]
 
 4:  movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX

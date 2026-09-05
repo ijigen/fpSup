@@ -83,6 +83,22 @@
                                      * so dropping the short half keeps the
                                      * real period intact rather than averaging
                                      * a fiction.                             */
+.equ STREAM_VOMAX,   0xC072E1BC     /* u32, the LONGEST of the gaps that were
+                                     * too short to be a frame.  If it is
+                                     * zero, every excluded gap was exactly
+                                     * zero and the 64-sample threshold made no
+                                     * judgement at all -- which is the one
+                                     * soft spot in the measurement, so it is
+                                     * worth a word to close it.
+                                     *
+                                     * VMIN is now the minimum over the LONG
+                                     * gaps only.  With VMAX that pins the set:
+                                     * if min is 83 and max is 84 then every
+                                     * long gap was one or the other, and how
+                                     * many of each follows from the sum with
+                                     * no assumption left --
+                                     *     n84 = VSUM - 83*VNF
+                                     *     n83 = VNF - n84                   */
 .equ STREAM_V0_GC,   0xC072E1C0     /* u32, STREAM_GCOUNT at the first sensor
                                      * Vd after recording began.  THE anchor:
                                      * the gyro sample the take's first frame
@@ -143,7 +159,10 @@
 .equ STREAM_INDEX,   0xC072E1F8     /* u32, monotonic; both producers claim it */
 .equ STREAM_GCOUNT,  0xC072E1FC     /* u32, gyro records only -- the rate ruler */
 .equ STREAM_BASE,    0xC072E200
-.equ STREAM_COUNT,   256            /* 2 KiB, about 100 ms of gyro             */
+.equ STREAM_COUNT,   128            /* 1 KiB, about 50 ms of gyro.  Halved to
+                                     * make room for the writer task; this ring
+                                     * is only the bench one, and the real
+                                     * buffer comes out of the pool.          */
 .equ STREAM_MASK,    (STREAM_COUNT - 1)
 
 .equ TAG_GYRO,       0
@@ -185,6 +204,7 @@
 .equ O_VSUM,        -0x10
 .equ O_VNF,         -0x0C
 .equ O_VSHORT,      -0x08
+.equ O_VOMAX,       -0x04
 .equ O_V0_GC,        0x00
 .equ O_VCOUNT,       0x04
 .equ O_V1_N,         0x08
@@ -205,6 +225,9 @@
 .endif
 .if (STREAM_STATE + O_VSHORT) != STREAM_VSHORT
 .error "O_VSHORT does not point at STREAM_VSHORT"
+.endif
+.if (STREAM_STATE + O_VOMAX)  != STREAM_VOMAX
+.error "O_VOMAX does not point at STREAM_VOMAX"
 .endif
 .if (STREAM_STATE + O_V0_GC)  != STREAM_V0_GC
 .error "O_V0_GC does not point at STREAM_V0_GC"

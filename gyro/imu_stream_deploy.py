@@ -47,10 +47,10 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 # name -> (code address, source, defines, hook site, firmware's word, thumb?)
 PRODUCERS = {
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
-    'gyro':  (0xC072EA00, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
-    'start': (0xC072EB40, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
-    'stop':  (0xC072EC20, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
-    'vd':    (0xC072ECE0, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
+    'gyro':  (0xC072E600, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
+    'start': (0xC072E740, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
+    'stop':  (0xC072E820, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
+    'vd':    (0xC072E8E0, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
 
 
@@ -84,6 +84,7 @@ STATE_WORDS   = 20
 STREAM_VSUM   = 0xC072E1B0
 STREAM_VNF    = 0xC072E1B4
 STREAM_VSHORT = 0xC072E1B8
+STREAM_VOMAX  = 0xC072E1BC
 STREAM_V0_GC  = 0xC072E1C0
 STREAM_VCOUNT = 0xC072E1C4
 STREAM_V1_N   = 0xC072E1C8
@@ -102,7 +103,7 @@ STREAM_PADBAD = 0xC072E1F4
 STREAM_INDEX  = 0xC072E1F8
 STREAM_GCOUNT = 0xC072E1FC
 STREAM_BASE   = 0xC072E200
-STREAM_COUNT  = 256
+STREAM_COUNT  = 128
 STREAM_SPAN   = STREAM_COUNT * 8
 
 # GHEAD unarmed, everything else zero.
@@ -116,7 +117,7 @@ def _check_header():
     src = (HERE / 'imu_stream.inc.S').read_text()
     want = {
         'STREAM_VSUM': STREAM_VSUM, 'STREAM_VNF': STREAM_VNF,
-        'STREAM_VSHORT': STREAM_VSHORT, 'STREAM_V0_GC': STREAM_V0_GC, 'STREAM_VCOUNT': STREAM_VCOUNT,
+        'STREAM_VSHORT': STREAM_VSHORT, 'STREAM_VOMAX': STREAM_VOMAX, 'STREAM_V0_GC': STREAM_V0_GC, 'STREAM_VCOUNT': STREAM_VCOUNT,
         'STREAM_V1_N': STREAM_V1_N, 'STREAM_VPREV': STREAM_VPREV,
         'STREAM_VMIN': STREAM_VMIN, 'STREAM_VMAX': STREAM_VMAX,
         'STREAM_R0_HEAD': STREAM_R0_HEAD, 'STREAM_V0_HEAD': STREAM_V0_HEAD,
@@ -242,7 +243,7 @@ def take():
     w = P.mem_get(STATE_AT, STATE_WORDS)
     if any(x is None for x in w):
         raise SystemExit('the state words did not read back whole')
-    vsum, vnf, vshort = w[0], w[1], w[2]
+    vsum, vnf, vshort, vomax = w[0], w[1], w[2], w[3]
     v0_gc, vcount, v1_n = w[4], w[5], w[6]
     vmin, vmax = w[10], w[11]
     r1_gc, r1_n = w[8], w[9]
@@ -284,8 +285,35 @@ def take():
             print(f'  mean {mean:.4f} gyro samples per frame  '
                   f'({vsum} samples over {vnf} gaps)')
             if vshort:
-                print(f'  the {vshort} short ones are doubled interrupts: a real gap '
-                      f'split into a near-zero and a full one')
+                print(f'  the {vshort} short ones are doubled interrupts, longest {vomax}')
+                if vomax:
+                    print(f'    the longest was {vomax}, so a doubled interrupt does '
+                          f'not always land')
+                    print('    exactly on top of the previous one.  That costs nothing:'
+                          ' a gap split')
+                    print('    into two short halves drops out of both the sum and the'
+                          ' count, so')
+                    print('    the mean of what remains is untouched.  The threshold'
+                          ' could only')
+                    print('    bias anything by letting a HALF gap in as if it were a'
+                          ' whole one --')
+                    print('    which the minimum below rules out.')
+            # If every long gap was one of two adjacent integers, the counts of
+            # each follow from the sum, and nothing is being assumed.
+            if vmax == vmin + 1:
+                n_hi = vsum - vmin * vnf
+                n_lo = vnf - n_hi
+                if 0 <= n_hi <= vnf:
+                    print(f'  every long gap was {vmin} or {vmax}: '
+                          f'{n_lo} x {vmin} + {n_hi} x {vmax}')
+                    print(f'    nothing between {vmin} and the threshold got in, so no'
+                          f' half gap was')
+                    print('    counted as a whole one.  The mean is exact, not a fit.')
+            elif vmax == vmin:
+                print(f'  every long gap was exactly {vmin}')
+            else:
+                print(f'  long gaps ran from {vmin} to {vmax} -- more than two values,'
+                      f' so the cadence was not steady')
             print()
             print('  if the clip is        the gyro rate in the sensor\'s own clock')
             for label, fps in (('29.97 fps', 30000 / 1001), ('30.00 fps', 30.0),
