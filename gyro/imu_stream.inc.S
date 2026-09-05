@@ -47,7 +47,7 @@
 .equ STREAM_GHEAD,   0xC072E1F0     /* u32, gyro ring head we have consumed    */
 .equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
 .equ STREAM_INDEX,   0xC072E1F8     /* u32, monotonic; both producers claim it */
-                                    /* 0xC072E1FC spare                        */
+.equ STREAM_GCOUNT,  0xC072E1FC     /* u32, gyro records only -- the rate ruler */
 .equ STREAM_BASE,    0xC072E200
 .equ STREAM_COUNT,   256            /* 2 KiB, about 100 ms of gyro             */
 .equ STREAM_MASK,    (STREAM_COUNT - 1)

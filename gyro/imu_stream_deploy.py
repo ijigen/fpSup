@@ -37,6 +37,7 @@ GYRO_AT  = 0xC072EA00
 STREAM_GHEAD  = 0xC072E1F0
 STREAM_PADBAD = 0xC072E1F4
 STREAM_INDEX  = 0xC072E1F8
+STREAM_GCOUNT = 0xC072E1FC
 STREAM_BASE   = 0xC072E200
 STREAM_COUNT  = 256
 STREAM_SPAN   = STREAM_COUNT * 8
@@ -54,7 +55,8 @@ def _check_header():
     """The constants above are duplicated from the assembly; prove they match."""
     src = (HERE / 'imu_stream.inc.S').read_text()
     want = {'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
-            'STREAM_INDEX': STREAM_INDEX, 'STREAM_BASE': STREAM_BASE,
+            'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
+            'STREAM_BASE': STREAM_BASE,
             'STREAM_COUNT': STREAM_COUNT, 'TAG_GYRO': TAG_GYRO,
             'TAG_ACCEL': TAG_ACCEL}
     for name, value in want.items():
@@ -136,8 +138,9 @@ def restore():
 
 
 def dump(count):
-    ghead, padbad, index, _ = P.mem_get(STREAM_GHEAD, 4)
-    print(f'gyro head 0x{ghead:08X}   index {index}   bad pads {padbad}')
+    ghead, padbad, index, gcount = P.mem_get(STREAM_GHEAD, 4)
+    print(f'gyro head 0x{ghead:08X}   index {index}   gyro {gcount}   '
+          f'bad pads {padbad}')
     if padbad:
         print('  ^ the gyro ring put something in the pad halfword: the tag is '
               'not free after all, and the format has to move')
@@ -175,13 +178,72 @@ def dump(count):
         print(f'  [{slot:3d}] {t:8.0f} us  {g[0]:7d} {g[1]:7d} {g[2]:7d}{extra}')
 
 
+def rate(total, step):
+    """Count gyro records against a long baseline and fit a rate.
+
+    A count is exact; the clock is not.  So the uncertainty is entirely in the
+    host's timestamps, and the fit's residuals are what says how much of it
+    there is -- rather than a single pair of reads and a number with no error
+    bar, which is how the notes ended up with two rates that disagree.
+    """
+    import time
+
+    samples = []
+    t_end = time.time() + total
+    while True:
+        a = time.time()
+        got = P.mem_get(STREAM_GCOUNT)[0]
+        b = time.time()
+        if got is None:
+            raise SystemExit('the counter did not read back')
+        samples.append(((a + b) / 2, got, (b - a) / 2))
+        if len(samples) > 1:
+            dt = samples[-1][0] - samples[0][0]
+            dn = samples[-1][1] - samples[0][1]
+            print(f'  {dt:7.1f} s   {dn:9d} records   {dn / dt:9.3f} Hz'
+                  f'   (+/- {samples[-1][2] * 1000:.0f} ms on this read)')
+        if time.time() >= t_end:
+            break
+        time.sleep(max(0.0, step - (time.time() - b)))
+
+    if len(samples) < 3:
+        raise SystemExit('too few samples to fit')
+
+    n = len(samples)
+    t0 = samples[0][0]
+    xs = [t - t0 for t, _, _ in samples]
+    ys = [float(c - samples[0][1]) for _, c, _ in samples]
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs)
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
+    icpt = my - slope * mx
+    resid = [y - (slope * x + icpt) for x, y in zip(xs, ys)]
+    se = (sum(r * r for r in resid) / (n - 2) / sxx) ** 0.5 if n > 2 else 0.0
+
+    print()
+    print(f'{n} samples over {xs[-1]:.1f} s')
+    print(f'rate  {slope:.3f} +/- {se:.3f} Hz   ({slope / 2500 - 1:+.4%} of 2500)')
+    worst = max(abs(r) for r in resid)
+    print(f'worst residual {worst:.0f} records = {worst / slope * 1000:.0f} ms of clock')
+    for label, hz in (('2500.00 exact', 2500.0), ('2500.50 (+0.02%)', 2500.5),
+                      ('2501.85 (+0.074%)', 2501.85)):
+        drift = (slope / hz - 1) * 180 * 1000
+        print(f'  against {label:20s} 3 min would drift {drift:+7.1f} ms'
+              f'  ({drift / 33.367:+.1f} frames at 29.97)')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--restore', action='store_true')
     ap.add_argument('--dump', action='store_true')
     ap.add_argument('--rows', type=int, default=24)
+    ap.add_argument('--rate', type=float, metavar='SECONDS',
+                    help='count gyro records for this long and fit a rate')
+    ap.add_argument('--step', type=float, default=30.0)
     a = ap.parse_args()
-    if a.restore:
+    if a.rate:
+        rate(a.rate, a.step)
+    elif a.restore:
         restore()
     elif a.dump:
         dump(a.rows)

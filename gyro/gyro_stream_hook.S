@@ -86,6 +86,23 @@ gyro_stream_hook:
     cmp     r2, #0
     bne     3b
 
+    /* Gyro records only, so this is a ruler for the sensor's own rate.  The
+     * shared index counts both sensors and cannot be one.  Only this task
+     * writes it, so it needs no exclusive.
+     *
+     * It is here to settle a real disagreement in the notes: one place records
+     * the gyro at 2500 Hz within 0.02%, another at a hardware-measured 2501.85
+     * Hz, which is 0.074% -- and neither says how it was measured.  On a three
+     * minute take that is the difference between one frame of drift and four,
+     * and it drifts progressively, so it is a candidate for the sync being
+     * right at the head of a clip and wrong at the end.  A count against a long
+     * baseline settles it. */
+    movw    r2, #:lower16:STREAM_GCOUNT
+    movt    r2, #:upper16:STREAM_GCOUNT
+    ldr     r1, [r2]
+    add     r1, r1, r4
+    str     r1, [r2]
+
     add     r6, r6, #GYRO_DATA_OFF  @ source cursor
     add     r5, r8, #GYRO_DATA_OFF  @ first record of the firmware ring
     movw    r9, #GYRO_SPAN
