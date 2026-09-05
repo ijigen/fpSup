@@ -96,6 +96,55 @@ class Assembly(unittest.TestCase):
         code = assemble(HERE / path)
         return struct.unpack(f'<{len(code)//4}I', code)
 
+    def test_no_misaligned_frame_makes_a_call(self):
+        """The stack must be eight-byte aligned when firmware code runs, or its
+        LDRD takes a data abort -- a frozen camera and a battery pull, which
+        this has already cost once.
+
+        Two things stop this being a blanket "pushes must be even".  gcsvgen's
+        put_uint_many pushes five and subtracts twelve, landing on thirty-two.
+        lenscache's pg_json_early_done pushes three and is misaligned, but calls
+        nothing, so no firmware LDRD ever runs on that stack.  The hazard is
+        misaligned AND calling, and a guard that reports anything else gets
+        switched off."""
+        for path in sorted(HERE.glob('*.S')):
+            lines = path.read_text().splitlines()
+            for n, line in enumerate(lines):
+                m = re.match(r'\s*push\s*\{([^}]*)\}', line)
+                if not m:
+                    continue
+                regs = 0
+                for part in m.group(1).split(','):
+                    part = part.strip()
+                    rng = re.match(r'r(\d+)\s*-\s*r(\d+)$', part)
+                    regs += int(rng.group(2)) - int(rng.group(1)) + 1 if rng else 1
+                total = regs * 4
+                for follow in lines[n + 1:n + 4]:
+                    sub = re.match(r'\s*sub\s+sp,\s*sp,\s*#(\d+)', follow)
+                    if sub:
+                        total += int(sub.group(1))
+                        break
+                    if follow.strip().startswith(('push', 'pop', 'bl', 'bx', 'b ')):
+                        break
+                if total % 8 == 0:
+                    continue
+                # A push that reproduces a hooked function's own prologue is
+                # correct by construction -- the firmware arranged that stack.
+                # It says so on the line.
+                if 'displaced' in line:
+                    continue
+                # misaligned: does anything get called before it is unwound?
+                # Stop at anything that ends straight-line flow, or the scan
+                # wanders into code that has nothing to do with this frame.
+                for follow in lines[n + 1:]:
+                    t = follow.strip()
+                    if (re.match(r'pop\s*\{', t) or t.startswith(('bx', 'b '))
+                            or re.match(r'^\S+:', follow)):
+                        break
+                    if re.match(r'bl[x]?\s+\S', t):
+                        self.fail(f'{path.name}:{n + 1} pushes {regs} registers '
+                                  f'({total} bytes, misaligned) and then calls: {t}')
+
     def test_pushes_are_even(self):
         """An odd push misaligns the stack and the firmware's LDRD takes a data
         abort -- which freezes the camera, not the hook."""
