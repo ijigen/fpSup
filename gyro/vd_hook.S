@@ -46,22 +46,65 @@
 vd_hook:
     push    {r0, r1, r2, r3, ip, lr}
 
-    movw    ip, #:lower16:STREAM_VCOUNT
-    movt    ip, #:upper16:STREAM_VCOUNT
-    ldr     r2, [ip]
-    add     r3, r2, #1
-    str     r3, [ip]
+    movw    ip, #:lower16:STREAM_STATE
+    movt    ip, #:upper16:STREAM_STATE
+
+    ldr     r2, [ip, #O_VCOUNT]
+    add     r0, r2, #1
+    str     r0, [ip, #O_VCOUNT]
+    ldr     r3, [ip, #O_GCOUNT]         @ the take's length still comes from here
 
     cmp     r2, #0
-    bne     2f
-    movw    r0, #:lower16:STREAM_GCOUNT
-    movt    r0, #:upper16:STREAM_GCOUNT
-    ldr     r0, [r0]
-    movw    r1, #:lower16:STREAM_V0_GC
-    movt    r1, #:upper16:STREAM_V0_GC
-    str     r0, [r1]
-2:
-    movw    ip, #:lower16:STREAM_INDEX
+    bne     3f
+    /* The take's first exposure.  Both rulers: the batch counter for the
+     * take's length, the ring head for the anchor and the frame period. */
+    str     r3, [ip, #O_V0_GC]
+    gyro_head r3, r0
+    str     r3, [ip, #O_V0_HEAD]
+    str     r3, [ip, #O_VPREV]
+    mvn     r0, #0x80000000             @ 0x7FFFFFFF, so the first gap wins
+    str     r0, [ip, #O_VMIN]
+    mov     r0, #0
+    str     r0, [ip, #O_VMAX]
+    str     r0, [ip, #O_VSUM]
+    str     r0, [ip, #O_VNF]
+    str     r0, [ip, #O_VSHORT]
+    b       4f
+
+3:  /* Gyro samples since the previous exposure -- the frame period, measured
+     * in the sensor's own cadence with no clock of any kind in it. */
+    ldr     r0, [ip, #O_VPREV]
+    cmn     r0, #1                      @ VPREV_FROZEN: the take is over
+    beq     4f
+    gyro_head r3, r1
+    sub     r1, r3, r0                  @ head moves eight bytes a sample
+    cmp     r1, #0
+    addlt   r1, r1, #GYRO_RING_SPAN     @ it wraps every 240 ms
+    lsr     r1, r1, #3
+    str     r3, [ip, #O_VPREV]
+    ldr     r0, [ip, #O_VMIN]
+    cmp     r1, r0
+    strlo   r1, [ip, #O_VMIN]
+    ldr     r0, [ip, #O_VMAX]
+    cmp     r1, r0
+    strhi   r1, [ip, #O_VMAX]
+    /* Only gaps long enough to be a frame go into the mean.  A doubled
+     * interrupt shows up as a near-zero gap next to a full one; averaging both
+     * halves in would report a frame period that never happened. */
+    cmp     r1, #VD_GAP_FLOOR
+    blo     5f
+    ldr     r0, [ip, #O_VSUM]
+    add     r0, r0, r1
+    str     r0, [ip, #O_VSUM]
+    ldr     r0, [ip, #O_VNF]
+    add     r0, r0, #1
+    str     r0, [ip, #O_VNF]
+    b       4f
+5:  ldr     r0, [ip, #O_VSHORT]
+    add     r0, r0, #1
+    str     r0, [ip, #O_VSHORT]
+
+4:  movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX
 1:  ldrex   r0, [ip]
     add     r1, r0, #1

@@ -20,7 +20,6 @@ from armasm import assemble                                    # noqa: E402
 
 ACCEL = (HERE / 'accel_hook.S').read_text()
 GYRO = (HERE / 'gyro_stream_hook.S').read_text()
-FRAME = (HERE / 'frame_hook.S').read_text()
 TRIG = (HERE / 'rec_trigger.S').read_text()
 VD = (HERE / 'vd_hook.S').read_text()
 INC = (HERE / 'imu_stream.inc.S').read_text()
@@ -37,7 +36,6 @@ class Header(unittest.TestCase):
     def test_tags_are_what_the_reader_expects(self):
         self.assertEqual(int(equ('TAG_GYRO'), 0), S.TAG_GYRO)
         self.assertEqual(int(equ('TAG_ACCEL'), 0), S.TAG_ACCEL)
-        self.assertEqual(int(equ('TAG_FRAME'), 0), S.TAG_FRAME)
         self.assertEqual(int(equ('TAG_START'), 0), S.TAG_START)
         self.assertEqual(int(equ('TAG_STOP'), 0), S.TAG_STOP)
         self.assertEqual(int(equ('TAG_VD'), 0), S.TAG_VD)
@@ -48,7 +46,7 @@ class Header(unittest.TestCase):
 
     def test_both_producers_take_the_header_rather_than_a_copy(self):
         for name, src in (('accel_hook.S', ACCEL), ('gyro_stream_hook.S', GYRO),
-                          ('frame_hook.S', FRAME), ('rec_trigger.S', TRIG),
+                          ('rec_trigger.S', TRIG),
                           ('vd_hook.S', VD)):
             self.assertIn('#include "imu_stream.inc.S"', src, name)
             # A literal stream address in a producer is a second source of truth.
@@ -68,23 +66,20 @@ class RecordShape(unittest.TestCase):
         return got
 
     def test_four_halfwords_each(self):
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
-                          ('trigger', TRIG), ('vd', VD)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG), ('vd', VD)):
             self.assertEqual(sorted(self.offsets(src)), [0, 2, 4, 6], name)
 
     def test_tag_is_written_last(self):
         """A reader that catches a half-written record sees the old tag, not a
         new payload under an old one."""
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
-                          ('trigger', TRIG), ('vd', VD)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG), ('vd', VD)):
             body = src[src.index('push'):]
             stores = [int(m.group(1) or 0) for m in
                       re.finditer(r'strh\s+r\d+,\s*\[r\d+(?:,\s*#(\d+))?\]', body)]
             self.assertEqual(stores[-1], 4, f'{name} does not publish with the tag')
 
     def test_records_are_indexed_eight_bytes_apart(self):
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
-                          ('trigger', TRIG), ('vd', VD)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG), ('vd', VD)):
             self.assertRegex(src, r'lsl\s+#3', f'{name} does not stride by eight')
 
 
@@ -96,8 +91,7 @@ class Assembly(unittest.TestCase):
     def test_pushes_are_even(self):
         """An odd push misaligns the stack and the firmware's LDRD takes a data
         abort -- which freezes the camera, not the hook."""
-        for path in ('accel_hook.S', 'gyro_stream_hook.S', 'frame_hook.S',
-                     'rec_trigger.S', 'vd_hook.S'):
+        for path in ('accel_hook.S', 'gyro_stream_hook.S', 'rec_trigger.S', 'vd_hook.S'):
             for w in self.words(path):
                 if (w & 0x0FFF0000) == 0x092D0000:              # push {reglist}
                     self.assertEqual(bin(w & 0xFFFF).count('1') % 2, 0,
@@ -174,13 +168,6 @@ class Reader(unittest.TestCase):
     def test_an_unknown_tag_is_refused_rather_than_guessed(self):
         with self.assertRaises(ValueError):
             S.rows(S.records(self.blob((0, 0, 7, 0))))
-
-    def test_frame_hook_ends_with_the_displaced_instruction(self):
-        import struct as _s
-        code = assemble(HERE / 'frame_hook.S')
-        w = _s.unpack(f'<{len(code)//4}I', code)
-        self.assertEqual(w[-2], 0xE58D0080, 'str r0, [sp, #0x80] is not there')
-        self.assertEqual(w[-1], 0xE12FFF1E, 'bx lr is not there')
 
     def test_no_hook_sits_on_a_function_entry(self):
         """Every one of these functions saves lr in its first instruction, so a

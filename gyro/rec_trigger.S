@@ -84,8 +84,32 @@ rec_trigger:
     movw    r1, #:lower16:LATCH_WORD
     movt    r1, #:upper16:LATCH_WORD
     str     r0, [r1]
+#ifdef REC_STOP
+    /* And how many exposures the take actually had.  Vd free-runs afterwards,
+     * so a count read later would include liveview frames. */
+    movw    r0, #:lower16:STREAM_VCOUNT
+    movt    r0, #:upper16:STREAM_VCOUNT
+    ldr     r0, [r0]
+    movw    r1, #:lower16:STREAM_V1_N
+    movt    r1, #:upper16:STREAM_V1_N
+    str     r0, [r1]
+    /* Freeze the interval tracking.  Vd free-runs at 59.94 once the take ends,
+     * and those much shorter gaps would take over VMIN within one frame. */
+    movw    r0, #:lower16:STREAM_VPREV
+    movt    r0, #:upper16:STREAM_VPREV
+    mvn     r1, #0
+    str     r1, [r0]
+#endif
 2:
 #ifndef REC_STOP
+    /* Where the ring is, to 400 us.  The batch counter latched beside it can
+     * only say "within one 20 ms callback", which is twelve times coarser than
+     * the thing we are trying to measure. */
+    gyro_head r0, r1
+    movw    r1, #:lower16:STREAM_R0_HEAD
+    movt    r1, #:upper16:STREAM_R0_HEAD
+    str     r0, [r1]
+
     /* Re-arm the Vd latch.  Vd free-runs in liveview, so "the first Vd" only
      * means the take's first frame if the take resets the count first.  This
      * runs before the exposure it is arming for: the recorder commits here,

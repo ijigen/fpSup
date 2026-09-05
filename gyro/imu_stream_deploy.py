@@ -14,9 +14,9 @@ Five producers, five hook sites, one 8-byte record shape:
     accel  tag 1    0xC050D498   the MMA8452Q driver publishing a sample
     vd     tag 5    0xC0125480   the sensor Vd frame IRQ, the exposure itself
 
-frame_hook.S (FrameExpos_s, 0xC0315C18) is not deployed: it fired zero times in
+FrameExpos_s (0xC0315C18) was tried first and removed: it fired zero times in
 liveview and zero times through a recording, so it is not on the exposure path.
-It stays in the tree because that is worth not rediscovering.
+The Vd interrupt is.
     start  tag 3    0xC01FBA28   recording begins (movRec tears down monitor audio)
     stop   tag 4    0xC01FB880   recording ends (the REC state is left)
 
@@ -49,8 +49,8 @@ PRODUCERS = {
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
     'gyro':  (0xC072EA00, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
     'start': (0xC072EB40, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
-    'stop':  (0xC072EC00, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
-    'vd':    (0xC072ECA0, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
+    'stop':  (0xC072EC20, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
+    'vd':    (0xC072ECE0, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
 
 
@@ -79,14 +79,22 @@ def branch_word(site, target, thumb):
     return hw1 | (hw2 << 16)
 
 # Must agree with imu_stream.inc.S; _check_header() proves they do.
-STATE_AT      = 0xC072E1C0
-STATE_WORDS   = 16
+STATE_AT      = 0xC072E1B0
+STATE_WORDS   = 20
+STREAM_VSUM   = 0xC072E1B0
+STREAM_VNF    = 0xC072E1B4
+STREAM_VSHORT = 0xC072E1B8
 STREAM_V0_GC  = 0xC072E1C0
 STREAM_VCOUNT = 0xC072E1C4
+STREAM_V1_N   = 0xC072E1C8
+STREAM_VPREV  = 0xC072E1CC
+STREAM_VMIN   = 0xC072E1D8
+STREAM_VMAX   = 0xC072E1DC
+STREAM_R0_HEAD = 0xC072E1E0
+STREAM_V0_HEAD = 0xC072E1E4
+GYRO_RING_SPAN = 0x12C0
 STREAM_R1_GC  = 0xC072E1D0
 STREAM_R1_N   = 0xC072E1D4
-STREAM_FCOUNT = 0xC072E1E0
-STREAM_F0_GC  = 0xC072E1E4
 STREAM_R0_GC  = 0xC072E1E8
 STREAM_R0_N   = 0xC072E1EC
 STREAM_GHEAD  = 0xC072E1F0
@@ -98,7 +106,7 @@ STREAM_COUNT  = 256
 STREAM_SPAN   = STREAM_COUNT * 8
 
 # GHEAD unarmed, everything else zero.
-STATE_INIT = struct.pack('<16I', *([0] * 12 + [0xFFFFFFFF, 0, 0, 0]))
+STATE_INIT = struct.pack('<20I', *([0] * 16 + [0xFFFFFFFF, 0, 0, 0]))
 
 GYRO_PERIOD_US = 400.0
 
@@ -107,10 +115,14 @@ def _check_header():
     """These constants are duplicated from the assembly; prove they match."""
     src = (HERE / 'imu_stream.inc.S').read_text()
     want = {
-        'STREAM_V0_GC': STREAM_V0_GC, 'STREAM_VCOUNT': STREAM_VCOUNT,
+        'STREAM_VSUM': STREAM_VSUM, 'STREAM_VNF': STREAM_VNF,
+        'STREAM_VSHORT': STREAM_VSHORT, 'STREAM_V0_GC': STREAM_V0_GC, 'STREAM_VCOUNT': STREAM_VCOUNT,
+        'STREAM_V1_N': STREAM_V1_N, 'STREAM_VPREV': STREAM_VPREV,
+        'STREAM_VMIN': STREAM_VMIN, 'STREAM_VMAX': STREAM_VMAX,
+        'STREAM_R0_HEAD': STREAM_R0_HEAD, 'STREAM_V0_HEAD': STREAM_V0_HEAD,
+        'GYRO_RING_SPAN': GYRO_RING_SPAN,
         'STREAM_R1_GC': STREAM_R1_GC, 'STREAM_R1_N': STREAM_R1_N,
         'TAG_VD': S.TAG_VD,
-        'STREAM_FCOUNT': STREAM_FCOUNT, 'STREAM_F0_GC': STREAM_F0_GC,
         'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
         'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
         'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
@@ -230,13 +242,15 @@ def take():
     w = P.mem_get(STATE_AT, STATE_WORDS)
     if any(x is None for x in w):
         raise SystemExit('the state words did not read back whole')
-    v0_gc, vcount = w[0], w[1]
-    r1_gc, r1_n = w[4], w[5]
-    fcount, f0_gc, r0_gc, r0_n = w[8], w[9], w[10], w[11]   # fcount unused now
-    _ghead, padbad, index, gcount = w[12], w[13], w[14], w[15]
+    vsum, vnf, vshort = w[0], w[1], w[2]
+    v0_gc, vcount, v1_n = w[4], w[5], w[6]
+    vmin, vmax = w[10], w[11]
+    r1_gc, r1_n = w[8], w[9]
+    r0_head, v0_head, r0_gc, r0_n = w[12], w[13], w[14], w[15]
+    _ghead, padbad, index, gcount = w[16], w[17], w[18], w[19]
 
     print(f'records {index}   gyro {gcount}   bad pads {padbad}')
-    print(f'starts {r0_n}   stops {r1_n}   Vd {vcount}   FrameExpos {fcount}')
+    print(f'starts {r0_n}   stops {r1_n}   Vd now {vcount}, in the take {v1_n}')
     print()
 
     if not r0_n:
@@ -252,44 +266,36 @@ def take():
         print()
 
     if r0_n and vcount:
-        d = v0_gc - r0_gc
-        print(f'gyro at record start   {r0_gc}')
-        print(f'gyro at first exposure {v0_gc}')
-        print(f'  -> the first frame is read out {d:+d} samples = {_ms(d):+.1f} ms '
+        # The ring head wraps every 240 ms; the gap we are measuring is a small
+        # fraction of that, so the modulo is the whole correction needed.
+        d = ((v0_head - r0_head) % GYRO_RING_SPAN) // 8
+        print(f'ring head at record start   {r0_head} (+{r0_head//8} samples)')
+        print(f'ring head at first exposure {v0_head} (+{v0_head//8} samples)')
+        print(f'  -> the first frame is read out {d} samples = {_ms(d):.1f} ms '
               f'after the recorder commits')
+        print(f'     (400 us resolution: this comes from the ring the coprocessor')
+        print(f'      writes, not from our 20 ms batch counter)')
         print()
-        if vcount >= 2 and r1_n:
-            per = (r1_gc - v0_gc) / (vcount - 1)
-            print(f'{vcount} exposures; {r1_gc - v0_gc} gyro from the first to the '
-                  f'stop = {per:.4f} per frame')
-            for label, fps in (('29.97', 30000 / 1001), ('30.00', 30.0),
-                               ('59.94', 60000 / 1001), ('25', 25.0), ('24', 24.0)):
-                hz = per * fps
-                print(f'  at {label:>5} fps -> {hz:9.3f} Hz  ({hz / 2500 - 1:+.4%})')
+        if vnf:
+            mean = vsum / vnf
+            print(f'gaps between exposures: {v1_n - 1} total, '
+                  f'{vnf} long enough to be a frame, {vshort} too short')
+            print(f'  min {vmin}  max {vmax}')
+            print(f'  mean {mean:.4f} gyro samples per frame  '
+                  f'({vsum} samples over {vnf} gaps)')
+            if vshort:
+                print(f'  the {vshort} short ones are doubled interrupts: a real gap '
+                      f'split into a near-zero and a full one')
+            print()
+            print('  if the clip is        the gyro rate in the sensor\'s own clock')
+            for label, fps in (('29.97 fps', 30000 / 1001), ('30.00 fps', 30.0),
+                               ('25 fps', 25.0), ('24 fps', 24.0)):
+                hz = mean * fps
+                print(f'  {label:12s}          {hz:9.3f} Hz   ({hz / 2500 - 1:+.4%})')
+            print()
+            print('  or, taking the gyro as exactly 2500 Hz, the frame rate is')
+            print(f'    {2500 / mean:.5f} fps   (29.97 is {30000/1001:.5f})')
         print()
-
-    if r0_n and fcount:
-        d = f0_gc - r0_gc
-        print(f'gyro sample at record start  {a0_gc}')
-        print(f'gyro sample at first frame   {f0_gc}')
-        print(f'  -> the first exposure is {d:+d} samples = {_ms(d):+.1f} ms '
-              f'from the recorder committing to start')
-        print('     (positive: the exposure is later, which is the direction our')
-        print("      polled flag has always been early in)")
-        print()
-
-    if fcount >= 2:
-        frames = fcount - 1
-        samples = gcount - f0_gc
-        per = samples / frames
-        print(f'{samples} gyro over {frames} frames = {per:.4f} per frame')
-        print("  if the clip is        the gyro rate in the camera's own clock is")
-        for label, fps in (('29.97 fps', 30000 / 1001), ('59.94 fps', 60000 / 1001),
-                           ('25 fps', 25.0), ('24 fps', 24.0)):
-            hz = per * fps
-            print(f'  {label:12s}          {hz:9.3f} Hz  ({hz / 2500 - 1:+.4%} of 2500)')
-
-
 
 
 def dump(count):

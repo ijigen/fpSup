@@ -58,17 +58,31 @@
 /* Provisional home: the logger's own injection cave, with no logger loaded.
  * When the two producers are assembled into the real thing, these move to the
  * buffer declared out of the pool the way the audio writer declares its own. */
-.equ STREAM_FCOUNT,  0xC072E1E0     /* u32, frame markers appended             */
-.equ STREAM_F0_GC,   0xC072E1E4     /* u32, STREAM_GCOUNT at the FIRST marker.
-                                     * The ring holds only 100 ms, so frame
-                                     * zero is long gone by the end of a take.
-                                     * This keeps the one number that cannot be
-                                     * recovered afterwards: which gyro sample
-                                     * the take's first exposure landed on.
-                                     * With it, (gcount - f0_gc) / (fcount - 1)
-                                     * is the samples-per-frame over the whole
-                                     * take, measured against the camera's own
-                                     * frame clock and nothing else.          */
+.equ STREAM_VSUM,    0xC072E1B0     /* u32, gyro samples across every gap
+                                     * between exposures in the take.
+                                     *
+                                     * VMIN turned out to be a bad instrument:
+                                     * one transient at the 59.94 -> 30 mode
+                                     * change put a zero gap in and destroyed
+                                     * it, while VMAX read a clean 84.  A sum
+                                     * over 663 gaps is not moved by one
+                                     * outlier, and the frame period is not an
+                                     * integer anyway -- 2500/29.97 is 83.417,
+                                     * so the gaps alternate 83 and 84 and only
+                                     * a mean can say which way it leans.    */
+.equ STREAM_VNF,     0xC072E1B4     /* u32, gaps counted into VSUM           */
+.equ STREAM_VSHORT,  0xC072E1B8     /* u32, gaps too short to be a frame      */
+.equ VD_GAP_FLOOR,   64             /* A real frame gap is 83 or 84 samples.
+                                     * Vd sometimes fires twice for one frame
+                                     * -- 674 gaps came back with a max of 84
+                                     * and a mean of 80.5, which needs about
+                                     * twenty-three near-zero gaps in the set,
+                                     * and matches the 953-Vd-to-900-frame
+                                     * excess seen on the card.  A doubled
+                                     * interrupt splits a gap into 0 and 84,
+                                     * so dropping the short half keeps the
+                                     * real period intact rather than averaging
+                                     * a fiction.                             */
 .equ STREAM_V0_GC,   0xC072E1C0     /* u32, STREAM_GCOUNT at the first sensor
                                      * Vd after recording began.  THE anchor:
                                      * the gyro sample the take's first frame
@@ -81,8 +95,27 @@
                                      * Vd free-runs in liveview, so the count
                                      * is meaningless unless something resets
                                      * it -- the record-start hook does.     */
+.equ STREAM_V1_N,    0xC072E1C8     /* u32, STREAM_VCOUNT at the stop.  Vd
+                                     * keeps running once the take ends, so
+                                     * reading the live count later counts
+                                     * liveview frames as the take's.        */
+.equ STREAM_VPREV,   0xC072E1CC     /* u32, ring head at the previous Vd      */
 .equ STREAM_R1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT when recording ended */
 .equ STREAM_R1_N,    0xC072E1D4     /* u32, times that has happened            */
+.equ STREAM_VMIN,    0xC072E1D8     /* u32, shortest gap between two exposures,
+                                     * in gyro samples.  With VMAX this is the
+                                     * measurement everything else has been
+                                     * inferred from: samples per frame against
+                                     * the sensor's own cadence, with no host
+                                     * clock and no write pipeline in it.
+                                     * min == max means one rate throughout.  */
+.equ STREAM_VMAX,    0xC072E1DC
+.equ STREAM_R0_HEAD, 0xC072E1E0     /* u32, ring head offset at record start   */
+.equ STREAM_V0_HEAD, 0xC072E1E4     /* u32, ring head offset at the first
+                                     * exposure.  These two differ by the real
+                                     * anchor, to 400 us -- the gyro counter
+                                     * could only ever say "within one 20 ms
+                                     * batch".                               */
 .equ STREAM_R0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
                                      * writer was constructed.  Beside F0_GC
                                      * this is the whole experiment: the gap
@@ -119,5 +152,81 @@
 .equ TAG_START,      3
 .equ TAG_STOP,       4
 .equ TAG_VD,         5
+
+/* Every state word lives in one 64-byte block, so a hook that touches several
+ * of them loads the base once and indexes.  The .if guards below are the whole
+ * point of writing it twice: an offset that drifts from its address would be a
+ * hook quietly reading someone else's counter. */
+.equ GYRO_DESC_PTR,  0xC31E3FCC     /* -> P; P+0x60 -> the firmware's ring    */
+.equ GYRO_RING_SPAN, 0x12C0         /* 600 records of eight bytes             */
+
+/* The ring's head, as a byte offset into it.
+ *
+ * STREAM_GCOUNT is no use for anything finer than a batch: the gyro producer
+ * adds a whole 20 ms callback's worth at once, so two exposures 33 ms apart
+ * read as gaps of 0, 50, 50, 0 -- quantised to twelve times the thing being
+ * measured.  The head is written by the coprocessor at 2500 Hz, so it moves
+ * eight bytes per sample and resolves 400 us.
+ *
+ * It wraps every 240 ms.  Fine for a gap between exposures; useless for the
+ * length of a take, which is what GCOUNT stays for. */
+.macro gyro_head reg, tmp
+    movw    \reg, #:lower16:GYRO_DESC_PTR
+    movt    \reg, #:upper16:GYRO_DESC_PTR
+    ldr     \reg, [\reg]
+    cmp     \reg, #0
+    ldrne   \tmp, [\reg, #0x60]
+    ldrne   \reg, [\tmp]
+    subne   \reg, \reg, \tmp
+    moveq   \reg, #0
+.endm
+
+.equ STREAM_STATE,   0xC072E1C0
+.equ O_VSUM,        -0x10
+.equ O_VNF,         -0x0C
+.equ O_VSHORT,      -0x08
+.equ O_V0_GC,        0x00
+.equ O_VCOUNT,       0x04
+.equ O_V1_N,         0x08
+.equ O_VPREV,        0x0C
+.equ O_R1_GC,        0x10
+.equ O_R1_N,         0x14
+.equ O_VMIN,         0x18
+.equ O_VMAX,         0x1C
+.equ O_R0_HEAD,      0x20
+.equ O_V0_HEAD,      0x24
+.equ O_GCOUNT,       0x3C
+
+.if (STREAM_STATE + O_VSUM)   != STREAM_VSUM
+.error "O_VSUM does not point at STREAM_VSUM"
+.endif
+.if (STREAM_STATE + O_VNF)    != STREAM_VNF
+.error "O_VNF does not point at STREAM_VNF"
+.endif
+.if (STREAM_STATE + O_VSHORT) != STREAM_VSHORT
+.error "O_VSHORT does not point at STREAM_VSHORT"
+.endif
+.if (STREAM_STATE + O_V0_GC)  != STREAM_V0_GC
+.error "O_V0_GC does not point at STREAM_V0_GC"
+.endif
+.if (STREAM_STATE + O_VCOUNT) != STREAM_VCOUNT
+.error "O_VCOUNT does not point at STREAM_VCOUNT"
+.endif
+.if (STREAM_STATE + O_V1_N)   != STREAM_V1_N
+.error "O_V1_N does not point at STREAM_V1_N"
+.endif
+.if (STREAM_STATE + O_GCOUNT) != STREAM_GCOUNT
+.error "O_GCOUNT does not point at STREAM_GCOUNT"
+.endif
+.if (STREAM_STATE + O_R0_HEAD) != STREAM_R0_HEAD
+.error "O_R0_HEAD does not point at STREAM_R0_HEAD"
+.endif
+.if (STREAM_STATE + O_V0_HEAD) != STREAM_V0_HEAD
+.error "O_V0_HEAD does not point at STREAM_V0_HEAD"
+.endif
+
+.equ VPREV_FROZEN,   0xFFFFFFFF   /* the stop hook writes this so liveview Vd
+                                   * stops folding its own, much shorter,
+                                   * intervals into the take's min and max  */
 
 .equ HEAD_UNARMED,   0xFFFFFFFF
