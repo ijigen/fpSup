@@ -69,6 +69,18 @@
                                      * is the samples-per-frame over the whole
                                      * take, measured against the camera's own
                                      * frame clock and nothing else.          */
+.equ STREAM_V0_GC,   0xC072E1C0     /* u32, STREAM_GCOUNT at the first sensor
+                                     * Vd after recording began.  THE anchor:
+                                     * the gyro sample the take's first frame
+                                     * was read out against.  Vd is the
+                                     * exposure side of the pipeline -- a frame
+                                     * reaches the card hundreds of buffered
+                                     * milliseconds later, so the file write is
+                                     * the wrong end to measure from.        */
+.equ STREAM_VCOUNT,  0xC072E1C4     /* u32, Vd since the start re-armed it.
+                                     * Vd free-runs in liveview, so the count
+                                     * is meaningless unless something resets
+                                     * it -- the record-start hook does.     */
 .equ STREAM_R1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT when recording ended */
 .equ STREAM_R1_N,    0xC072E1D4     /* u32, times that has happened            */
 .equ STREAM_R0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
@@ -106,5 +118,6 @@
 .equ TAG_FRAME,      2
 .equ TAG_START,      3
 .equ TAG_STOP,       4
+.equ TAG_VD,         5
 
 .equ HEAD_UNARMED,   0xFFFFFFFF

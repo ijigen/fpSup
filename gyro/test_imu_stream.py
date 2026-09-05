@@ -22,6 +22,7 @@ ACCEL = (HERE / 'accel_hook.S').read_text()
 GYRO = (HERE / 'gyro_stream_hook.S').read_text()
 FRAME = (HERE / 'frame_hook.S').read_text()
 TRIG = (HERE / 'rec_trigger.S').read_text()
+VD = (HERE / 'vd_hook.S').read_text()
 INC = (HERE / 'imu_stream.inc.S').read_text()
 
 
@@ -39,6 +40,7 @@ class Header(unittest.TestCase):
         self.assertEqual(int(equ('TAG_FRAME'), 0), S.TAG_FRAME)
         self.assertEqual(int(equ('TAG_START'), 0), S.TAG_START)
         self.assertEqual(int(equ('TAG_STOP'), 0), S.TAG_STOP)
+        self.assertEqual(int(equ('TAG_VD'), 0), S.TAG_VD)
 
     def test_stream_is_a_power_of_two_of_eight_byte_records(self):
         n = int(equ('STREAM_COUNT'), 0)
@@ -46,7 +48,8 @@ class Header(unittest.TestCase):
 
     def test_both_producers_take_the_header_rather_than_a_copy(self):
         for name, src in (('accel_hook.S', ACCEL), ('gyro_stream_hook.S', GYRO),
-                          ('frame_hook.S', FRAME), ('rec_trigger.S', TRIG)):
+                          ('frame_hook.S', FRAME), ('rec_trigger.S', TRIG),
+                          ('vd_hook.S', VD)):
             self.assertIn('#include "imu_stream.inc.S"', src, name)
             # A literal stream address in a producer is a second source of truth.
             for bad in ('0xC072E1F8', '0xC072E200'):
@@ -66,14 +69,14 @@ class RecordShape(unittest.TestCase):
 
     def test_four_halfwords_each(self):
         for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
-                          ('trigger', TRIG)):
+                          ('trigger', TRIG), ('vd', VD)):
             self.assertEqual(sorted(self.offsets(src)), [0, 2, 4, 6], name)
 
     def test_tag_is_written_last(self):
         """A reader that catches a half-written record sees the old tag, not a
         new payload under an old one."""
         for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
-                          ('trigger', TRIG)):
+                          ('trigger', TRIG), ('vd', VD)):
             body = src[src.index('push'):]
             stores = [int(m.group(1) or 0) for m in
                       re.finditer(r'strh\s+r\d+,\s*\[r\d+(?:,\s*#(\d+))?\]', body)]
@@ -81,7 +84,7 @@ class RecordShape(unittest.TestCase):
 
     def test_records_are_indexed_eight_bytes_apart(self):
         for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
-                          ('trigger', TRIG)):
+                          ('trigger', TRIG), ('vd', VD)):
             self.assertRegex(src, r'lsl\s+#3', f'{name} does not stride by eight')
 
 
@@ -94,7 +97,7 @@ class Assembly(unittest.TestCase):
         """An odd push misaligns the stack and the firmware's LDRD takes a data
         abort -- which freezes the camera, not the hook."""
         for path in ('accel_hook.S', 'gyro_stream_hook.S', 'frame_hook.S',
-                     'rec_trigger.S'):
+                     'rec_trigger.S', 'vd_hook.S'):
             for w in self.words(path):
                 if (w & 0x0FFF0000) == 0x092D0000:              # push {reglist}
                     self.assertEqual(bin(w & 0xFFFF).count('1') % 2, 0,
@@ -185,13 +188,56 @@ class Reader(unittest.TestCase):
         site must be past the push -- and past the early returns, or a take that
         bails out would look like a take that started."""
         import imu_stream_deploy as D
-        entries = {0xC0315C10, 0xC01FB640, 0xC01FB918, 0xC050D250, 0xC01FD380}
-        for name, (_at, _src, _d, site, _orig) in D.PRODUCERS.items():
+        entries = {0xC0315C10, 0xC01FB640, 0xC01FB918, 0xC050D250, 0xC01FD380,
+                   0xC0125478}
+        for name, (_at, _src, _d, site, _orig, _t) in D.PRODUCERS.items():
             self.assertNotIn(site, entries, f'{name} is on a function entry')
 
     def test_every_hook_declares_the_site_it_is_deployed_to(self):
         import imu_stream_deploy as D
         D._check_header()                # raises if a source and the table drift
+
+    def test_the_thumb_branch_matches_the_firmware_layout(self):
+        """A Thumb BLX splits its immediate over two halfwords with J1/J2 derived
+        from the sign; getting it wrong branches into the middle of something
+        rather than faulting.  So the layout is fixed against a branch the
+        camera itself executes -- the bl at 0xC0125494, which the decompilation
+        names FUN_c0128e50 -- and the encoder is round-tripped through it."""
+        import struct as _s
+        import imu_stream_deploy as D
+        fw = Path('/Users/dido/Developer/SIGMAfp_re/out/MAIN_c0000000.bin')
+        if not fw.exists():
+            self.skipTest('no firmware image')
+        blob = fw.read_bytes()
+
+        def decode(site, hw1, hw2):
+            sgn = (hw1 >> 10) & 1
+            j1, x, j2 = (hw2 >> 13) & 1, (hw2 >> 12) & 1, (hw2 >> 11) & 1
+            i1, i2 = (~(j1 ^ sgn)) & 1, (~(j2 ^ sgn)) & 1
+            off = ((sgn << 24) | (i1 << 23) | (i2 << 22)
+                   | ((hw1 & 0x3FF) << 12) | ((hw2 & 0x7FF) << 1))
+            if sgn:
+                off -= 1 << 25
+            return ('bl' if x else 'blx'), (site + 4 if x else (site + 4) & ~3) + off
+
+        anchor = 0xC0125494
+        hw1, hw2 = _s.unpack_from('<HH', blob, anchor - 0xC0000000)
+        self.assertEqual(decode(anchor, hw1, hw2), ('bl', 0xC0128E50))
+
+        site, target = 0xC0125480, D.PRODUCERS['vd'][0]
+        word = D.branch_word(site, target, 1)
+        got = decode(site, word & 0xFFFF, word >> 16)
+        self.assertEqual(got, ('blx', target))
+
+    def test_the_vd_site_is_what_the_firmware_still_has(self):
+        import struct as _s
+        import imu_stream_deploy as D
+        fw = Path('/Users/dido/Developer/SIGMAfp_re/out/MAIN_c0000000.bin')
+        if not fw.exists():
+            self.skipTest('no firmware image')
+        site, orig = D.PRODUCERS['vd'][3], D.PRODUCERS['vd'][4]
+        have = _s.unpack_from('<I', fw.read_bytes(), site - 0xC0000000)[0]
+        self.assertEqual(have, orig, 'the Vd site is not the word we expect')
 
     def test_the_two_triggers_share_one_source(self):
         """Start and stop differ by four lines; two files would drift."""

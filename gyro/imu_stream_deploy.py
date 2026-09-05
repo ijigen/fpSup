@@ -12,7 +12,11 @@ Five producers, five hook sites, one 8-byte record shape:
 
     gyro   tag 0    0xC00D0794   the 20 ms GyroData callback, drains the ring
     accel  tag 1    0xC050D498   the MMA8452Q driver publishing a sample
-    frame  tag 2    0xC0315C18   FrameExpos_s, one per exposure
+    vd     tag 5    0xC0125480   the sensor Vd frame IRQ, the exposure itself
+
+frame_hook.S (FrameExpos_s, 0xC0315C18) is not deployed: it fired zero times in
+liveview and zero times through a recording, so it is not on the exposure path.
+It stays in the tree because that is worth not rediscovering.
     start  tag 3    0xC01FBA28   recording begins (movRec tears down monitor audio)
     stop   tag 4    0xC01FB880   recording ends (the REC state is left)
 
@@ -40,18 +44,45 @@ import imu_stream as S                                         # noqa: E402
 # The injection cave, from notes/: loader.S below, park stub above.
 CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 
-# name -> (code address, source, defines, hook site, the firmware's own word)
+# name -> (code address, source, defines, hook site, firmware's word, thumb?)
 PRODUCERS = {
-    'accel': (0xC072E100, 'accel_hook.S',       (),           0xC050D498, 0xE1D410F0),
-    'gyro':  (0xC072EA00, 'gyro_stream_hook.S', (),           0xC00D0794, 0xFA046FD7),
-    'frame': (0xC072EB40, 'frame_hook.S',       (),           0xC0315C18, 0xE58D0080),
-    'start': (0xC072EBD0, 'rec_trigger.S',      (),           0xC01FBA28, 0xE5940008),
-    'stop':  (0xC072EC60, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004),
+    'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
+    'gyro':  (0xC072EA00, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
+    'start': (0xC072EB40, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
+    'stop':  (0xC072EC00, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
+    'vd':    (0xC072ECA0, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
 
+
+def branch_word(site, target, thumb):
+    """The word to write over the hook site.
+
+    ARM sites take a plain bl.  The Vd handler is Thumb, so it takes a Thumb
+    BLX -- two halfwords with the immediate split across them and J1/J2 derived
+    from the sign.  Encoding that wrong gives a branch into the middle of
+    something rather than a fault, so the test suite decodes the firmware's own
+    bl at 0xC0125494 (which the decompilation names FUN_c0128e50) to fix the bit
+    layout, then round-trips this.
+    """
+    if not thumb:
+        return 0xEB000000 | (((target - (site + 8)) >> 2) & 0xFFFFFF)
+    if target & 3:
+        raise SystemExit(f'a Thumb BLX target must be 4-byte aligned: {target:#x}')
+    off = target - ((site + 4) & ~3)
+    if not -(1 << 24) <= off < (1 << 24) or off & 3:
+        raise SystemExit(f'Thumb BLX offset {off:#x} out of range')
+    s_ = (off >> 24) & 1
+    i1, i2 = (off >> 23) & 1, (off >> 22) & 1
+    j1, j2 = (~i1 & 1) ^ s_, (~i2 & 1) ^ s_
+    hw1 = 0xF000 | (s_ << 10) | ((off >> 12) & 0x3FF)
+    hw2 = 0xC000 | (j1 << 13) | (j2 << 11) | (((off >> 2) & 0x3FF) << 1)
+    return hw1 | (hw2 << 16)
+
 # Must agree with imu_stream.inc.S; _check_header() proves they do.
-STATE_AT      = 0xC072E1D0
-STATE_WORDS   = 12
+STATE_AT      = 0xC072E1C0
+STATE_WORDS   = 16
+STREAM_V0_GC  = 0xC072E1C0
+STREAM_VCOUNT = 0xC072E1C4
 STREAM_R1_GC  = 0xC072E1D0
 STREAM_R1_N   = 0xC072E1D4
 STREAM_FCOUNT = 0xC072E1E0
@@ -67,7 +98,7 @@ STREAM_COUNT  = 256
 STREAM_SPAN   = STREAM_COUNT * 8
 
 # GHEAD unarmed, everything else zero.
-STATE_INIT = struct.pack('<12I', 0, 0, 0, 0, 0, 0, 0, 0, 0xFFFFFFFF, 0, 0, 0)
+STATE_INIT = struct.pack('<16I', *([0] * 12 + [0xFFFFFFFF, 0, 0, 0]))
 
 GYRO_PERIOD_US = 400.0
 
@@ -76,14 +107,16 @@ def _check_header():
     """These constants are duplicated from the assembly; prove they match."""
     src = (HERE / 'imu_stream.inc.S').read_text()
     want = {
+        'STREAM_V0_GC': STREAM_V0_GC, 'STREAM_VCOUNT': STREAM_VCOUNT,
         'STREAM_R1_GC': STREAM_R1_GC, 'STREAM_R1_N': STREAM_R1_N,
+        'TAG_VD': S.TAG_VD,
         'STREAM_FCOUNT': STREAM_FCOUNT, 'STREAM_F0_GC': STREAM_F0_GC,
         'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
         'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
         'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
         'STREAM_BASE': STREAM_BASE, 'STREAM_COUNT': STREAM_COUNT,
         'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
-        'TAG_FRAME': S.TAG_FRAME, 'TAG_START': S.TAG_START, 'TAG_STOP': S.TAG_STOP,
+        'TAG_START': S.TAG_START, 'TAG_STOP': S.TAG_STOP,
     }
     for name, value in want.items():
         m = re.search(rf'^\.equ\s+{name},\s*([^\s/@]+)', src, re.M)
@@ -97,7 +130,7 @@ def _check_header():
     # Each hook must carry the site it is deployed to, and end by performing the
     # instruction it displaced.  A site that drifts between the two is how a
     # branch lands inside something that is running.
-    for name, (_at, source, defines, site, orig) in PRODUCERS.items():
+    for name, (_at, source, defines, site, orig, _t) in PRODUCERS.items():
         text = (HERE / source).read_text()
         if 'REC_STOP' in [d for d in defines]:
             text = text.split('#ifdef REC_STOP')[1].split('#else')[0]
@@ -113,7 +146,8 @@ def _check_header():
 
 def _place():
     """Assemble everything and check nothing lands on anything else."""
-    code = {n: assemble(HERE / src, d) for n, (_a, src, d, _s, _o) in PRODUCERS.items()}
+    code = {n: assemble(HERE / src, d)
+            for n, (_a, src, d, _s, _o, _t) in PRODUCERS.items()}
     spans = [(n, PRODUCERS[n][0], len(c)) for n, c in code.items()]
     spans += [('state words', STATE_AT, STATE_WORDS * 4),
               ('stream', STREAM_BASE, STREAM_SPAN)]
@@ -134,7 +168,7 @@ def arm():
     _check_header()
     code = _place()
 
-    for name, (_at, _src, _d, site, orig) in PRODUCERS.items():
+    for name, (_at, _src, _d, site, orig, _t) in PRODUCERS.items():
         got = P.mem_get(site)[0]
         if got is None:
             raise SystemExit(f'{name}: could not read 0x{site:08X}')
@@ -148,9 +182,10 @@ def arm():
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
     P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
 
-    for name, (at, _src, _d, site, _orig) in PRODUCERS.items():
-        word = 0xEB000000 | (((at - (site + 8)) >> 2) & 0xFFFFFF)
-        print(f'arming {name:6s} 0x{site:08X} -> bl 0x{at:08X}  (0x{word:08X})')
+    for name, (at, _src, _d, site, _orig, thumb) in PRODUCERS.items():
+        word = branch_word(site, at, thumb)
+        kind = 'blx' if thumb else 'bl '
+        print(f'arming {name:6s} 0x{site:08X} -> {kind} 0x{at:08X}  (0x{word:08X})')
         for _ in range(8):
             P.mem_set(site, word)
             if P.mem_get(site)[0] == word:
@@ -161,7 +196,7 @@ def arm():
 
 
 def restore():
-    for name, (_at, _src, _d, site, orig) in PRODUCERS.items():
+    for name, (_at, _src, _d, site, orig, _t) in PRODUCERS.items():
         for _ in range(8):
             P.mem_set(site, orig)
             if P.mem_get(site)[0] == orig:
@@ -195,23 +230,42 @@ def take():
     w = P.mem_get(STATE_AT, STATE_WORDS)
     if any(x is None for x in w):
         raise SystemExit('the state words did not read back whole')
-    r1_gc, r1_n = w[0], w[1]
-    fcount, f0_gc, r0_gc, r0_n = w[4], w[5], w[6], w[7]
-    _ghead, padbad, index, gcount = w[8], w[9], w[10], w[11]
+    v0_gc, vcount = w[0], w[1]
+    r1_gc, r1_n = w[4], w[5]
+    fcount, f0_gc, r0_gc, r0_n = w[8], w[9], w[10], w[11]   # fcount unused now
+    _ghead, padbad, index, gcount = w[12], w[13], w[14], w[15]
 
     print(f'records {index}   gyro {gcount}   bad pads {padbad}')
-    print(f'starts {r0_n}   stops {r1_n}   frames {fcount}')
+    print(f'starts {r0_n}   stops {r1_n}   Vd {vcount}   FrameExpos {fcount}')
     print()
 
     if not r0_n:
         print('recording never began -- 0xC01FBA28 (movRec) did not fire.')
-    if not fcount:
-        print('no frame marker fired -- 0xC0315C18 is not on the exposure path,')
-        print('  or nothing was exposed since the counters were cleared.')
+    if not vcount:
+        print('no Vd fired -- 0xC0125480 is not the frame interrupt, or the')
+        print('  Thumb BLX did not take.  Vd free-runs in liveview, so a live')
+        print('  hook shows a count even with the camera idle.')
 
     if r0_n and r1_n:
         d = r1_gc - r0_gc
         print(f'take: gyro {r0_gc} -> {r1_gc} = {d} samples = {_ms(d)/1000:.2f} s')
+        print()
+
+    if r0_n and vcount:
+        d = v0_gc - r0_gc
+        print(f'gyro at record start   {r0_gc}')
+        print(f'gyro at first exposure {v0_gc}')
+        print(f'  -> the first frame is read out {d:+d} samples = {_ms(d):+.1f} ms '
+              f'after the recorder commits')
+        print()
+        if vcount >= 2 and r1_n:
+            per = (r1_gc - v0_gc) / (vcount - 1)
+            print(f'{vcount} exposures; {r1_gc - v0_gc} gyro from the first to the '
+                  f'stop = {per:.4f} per frame')
+            for label, fps in (('29.97', 30000 / 1001), ('30.00', 30.0),
+                               ('59.94', 60000 / 1001), ('25', 25.0), ('24', 24.0)):
+                hz = per * fps
+                print(f'  at {label:>5} fps -> {hz:9.3f} Hz  ({hz / 2500 - 1:+.4%})')
         print()
 
     if r0_n and fcount:

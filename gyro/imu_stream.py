@@ -17,6 +17,9 @@ the whole protocol:
             between two of them is the gyro rate measured against the camera's
             own clock rather than the host's.
     tag 3   the movie recorder committing to start.
+    tag 5   a sensor Vd -- one frame read out.  The exposure side of the
+            pipeline, which is where gyro data has to line up: a frame reaches
+            the card hundreds of buffered milliseconds later.
     tag 4   the movie recorder stopping.  Neither is a row and neither advances
             time; both are the camera's own record boundaries, put in the
             stream so the gap between "recording started" and "first frame
@@ -27,7 +30,7 @@ clock; everything after that is counting.
 """
 import struct
 
-TAG_GYRO, TAG_ACCEL, TAG_FRAME, TAG_START, TAG_STOP = 0, 1, 2, 3, 4
+TAG_GYRO, TAG_ACCEL, TAG_FRAME, TAG_START, TAG_STOP, TAG_VD = 0, 1, 2, 3, 4, 5
 RECORD = 8
 GYRO_PERIOD_US = 400.0          # 2500 Hz, the hardware grid
 
@@ -63,6 +66,9 @@ def rows(recs, t0=0.0, period=GYRO_PERIOD_US):
         if tag == TAG_STOP:
             pending_f = ('stop', x & 0xFFFF)
             continue
+        if tag == TAG_VD:
+            pending_f = ('vd', x & 0xFFFF)
+            continue
         if tag != TAG_GYRO:
             raise ValueError(f'unknown tag {tag}')
         out.append((t, (x, y, z), pending_a, pending_f))
@@ -86,7 +92,7 @@ def frame_spacing(recs):
     for x, y, tag, z in recs:
         if tag == TAG_GYRO:
             n += 1
-        elif tag == TAG_FRAME:
+        elif tag in (TAG_FRAME, TAG_VD):
             if seen:
                 gaps.append(n)
             seen, n = True, 0
@@ -99,13 +105,14 @@ def summary(recs):
     ngyro = sum(1 for r in recs if r[2] == TAG_GYRO)
     naccel = sum(1 for r in recs if r[2] == TAG_ACCEL)
     nframe = sum(1 for r in recs if r[2] == TAG_FRAME)
-    known = (TAG_GYRO, TAG_ACCEL, TAG_FRAME, TAG_START, TAG_STOP)
+    known = (TAG_GYRO, TAG_ACCEL, TAG_FRAME, TAG_START, TAG_STOP, TAG_VD)
     unknown = sorted({r[2] for r in recs if r[2] not in known})
     _gaps, per_frame = frame_spacing(recs)
     nstart = sum(1 for r in recs if r[2] == TAG_START)
     nstop = sum(1 for r in recs if r[2] == TAG_STOP)
+    nvd = sum(1 for r in recs if r[2] == TAG_VD)
     return {'gyro': ngyro, 'accel': naccel, 'frame': nframe,
-            'start': nstart, 'stop': nstop, 'unknown': unknown,
+            'start': nstart, 'stop': nstop, 'vd': nvd, 'unknown': unknown,
             'per_accel': (ngyro / naccel) if naccel else None,
             'per_frame': per_frame,
             'duration_us': ngyro * GYRO_PERIOD_US}

@@ -85,6 +85,19 @@ rec_trigger:
     movt    r1, #:upper16:LATCH_WORD
     str     r0, [r1]
 2:
+#ifndef REC_STOP
+    /* Re-arm the Vd latch.  Vd free-runs in liveview, so "the first Vd" only
+     * means the take's first frame if the take resets the count first.  This
+     * runs before the exposure it is arming for: the recorder commits here,
+     * and no frame of this take has been read out yet. */
+    movw    r0, #:lower16:STREAM_VCOUNT
+    movt    r0, #:upper16:STREAM_VCOUNT
+    mov     r1, #0
+    str     r1, [r0]
+    movw    r0, #:lower16:STREAM_V0_GC
+    movt    r0, #:upper16:STREAM_V0_GC
+    str     r1, [r0]
+#endif
     movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX
 1:  ldrex   r0, [ip]
