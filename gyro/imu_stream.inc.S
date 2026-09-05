@@ -23,13 +23,22 @@
  * row it lands next to.  The reader advances 400 us on tag 0 and does not
  * advance on tag 1.
  *
- * The one honest cost: the gyro producer runs in the 20 ms callback and appends
- * its batch in one go, so an accelerometer record that arrives mid-batch is
- * ordered after the whole batch rather than inside it.  That places it up to one
- * batch -- 20 ms -- late.  The accelerometer only ever feeds a gravity vector at
- * 47 Hz, which does not move in 20 ms, so this is left as it is rather than paid
- * for; it is written down here because "position implies time" is a claim, and
- * this is the size of the claim's error.
+ * The one honest cost: the gyro producer runs in the firmware's GyroData
+ * callback, measured at 50.0 Hz -- 1170 drains in 23.378 s -- so it appends a
+ * whole 20 ms batch at once, at the end of the 20 ms it covers.  An
+ * accelerometer record that arrives between two callbacks is appended at its own
+ * true instant, but the gyro record it lands against is the last one of the
+ * batch that has already been drained.  So the reader dates it to the start of
+ * the interval it actually arrived in: nought to twenty milliseconds EARLY, ten
+ * on average.  Early, not late -- the gyro records are what run behind, and the
+ * accelerometer inherits their lag.
+ *
+ * The accelerometer only ever feeds a gravity vector at 47 Hz, which does not
+ * move in 20 ms, so this is left as it is rather than paid for.  It is written
+ * down because "position implies time" is a claim and this is the size of the
+ * claim's error.  It is also fixable for free if it ever matters: the hook could
+ * latch the firmware ring's head along with the sample, and the gyro producer
+ * splice the record in at that position inside the batch instead of after it.
  */
 
 /* Provisional home: the logger's own injection cave, with no logger loaded.
