@@ -28,13 +28,15 @@ sys.path.insert(0, str(HERE.parent / 'fp_usb_shell'))
 import putfile as P                                            # noqa: E402
 from armasm import assemble, _compile, _parse                  # noqa: E402
 
-CODE_AT = 0xC072EA40            # after vd_hook, below the park stub
+CODE_AT = 0xC072EAD0            # after vd_hook, below the park stub
 CAVE_HI = 0xC072EFA0
 
-T_ID, T_CRE_RC, T_STA_RC = 0xC072E160, 0xC072E164, 0xC072E168
-T_WAKES, T_SIGNALS, T_ENTRY = 0xC072E16C, 0xC072E170, 0xC072E174
-T_RECV_RC, T_MBX_RC = 0xC072E178, 0xC072E17C
+T_ID, T_CRE_RC, T_STA_RC = 0xC072E0D0, 0xC072E0D4, 0xC072E0D8
+T_WAKES, T_SIGNALS, T_ENTRY = 0xC072E0DC, 0xC072E0E0, 0xC072E0E4
+T_RECV_RC, T_MBX_RC = 0xC072E0E8, 0xC072E0EC
 T_DESC, T_PKT, T_DOOR, T_MBX = 0xC072E080, 0xC072E0A0, 0xC072E0C0, 0xC072E0C4
+T_DRAINED, T_MAXSPAN = 0xC072E0C8, 0xC072E0CC
+STREAM_SIGFN = 0xC072E1A8
 
 
 def symbols(src):
@@ -61,7 +63,8 @@ def _check():
     want = {'T_ID': T_ID, 'T_CRE_RC': T_CRE_RC, 'T_STA_RC': T_STA_RC,
             'T_WAKES': T_WAKES, 'T_SIGNALS': T_SIGNALS, 'T_ENTRY': T_ENTRY,
             'T_RECV_RC': T_RECV_RC, 'T_MBX_RC': T_MBX_RC, 'T_DESC': T_DESC,
-            'T_PKT': T_PKT, 'T_DOOR': T_DOOR, 'T_MBX': T_MBX, 'WRITER_PRI': 6}
+            'T_PKT': T_PKT, 'T_DOOR': T_DOOR, 'T_MBX': T_MBX,
+            'T_DRAINED': T_DRAINED, 'T_MAXSPAN': T_MAXSPAN, 'WRITER_PRI': 6}
     for name, value in want.items():
         m = re.search(rf'^\.equ\s+{name},\s*([^\s/@]+)', src, re.M)
         if not m:
@@ -140,6 +143,9 @@ def create():
     P.put_slow(CODE_AT, code, 'ring_task')
     _setw(T_ENTRY, at['writer_task'], 'the task entry')
     _setw(T_ID, 0, 'the id slot')
+    # The producers ring the doorbell through this word, so it must not point
+    # anywhere until the code behind it is placed.
+    _setw(STREAM_SIGFN, at['writer_signal'], 'the doorbell')
     print(f'creating: priority 6, entry 0x{at["writer_task"]:08X}')
     echo_into(at['make_writer'], 'make_writer')
     state()
@@ -164,7 +170,9 @@ def signal(times, at=None):
 
 def state():
     mbx, door = P.mem_get(T_MBX)[0], P.mem_get(T_DOOR)[0]
+    drained, maxspan = P.mem_get(T_DRAINED)[0], P.mem_get(T_MAXSPAN)[0]
     print(f'  T_MBX      {mbx}   T_DOOR {door}')
+    print(f'  drained    {drained} records   most ever waiting {maxspan}')
     w = P.mem_get(T_ID, 8)
     names = ('T_ID', 'T_CRE_RC', 'T_STA_RC', 'T_WAKES', 'T_SIGNALS', 'T_ENTRY',
              'T_RECV_RC', 'T_MBX_RC')

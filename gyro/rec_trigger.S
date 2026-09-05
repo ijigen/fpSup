@@ -130,10 +130,7 @@ rec_trigger:
     cmp     r3, #0
     bne     1b
 
-    and     r0, r0, #STREAM_MASK
-    movw    r1, #:lower16:STREAM_BASE
-    movt    r1, #:upper16:STREAM_BASE
-    add     r1, r1, r0, lsl #3
+    ring_slot r0, r1, r3
 
     strh    r2, [r1]                    @ x = which one this is
     mov     r0, #0

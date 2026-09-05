@@ -79,8 +79,16 @@ class RecordShape(unittest.TestCase):
             self.assertEqual(stores[-1], 4, f'{name} does not publish with the tag')
 
     def test_records_are_indexed_eight_bytes_apart(self):
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG), ('vd', VD)):
-            self.assertRegex(src, r'lsl\s+#3', f'{name} does not stride by eight')
+        """The stride now lives in the ring_slot macro, so check it there -- and
+        check every producer either uses the macro or carries its own stride,
+        so a fifth copy of the arithmetic cannot appear unnoticed."""
+        macro = INC[INC.index('.macro ring_slot'):INC.index('.endm', INC.index('.macro ring_slot'))]
+        self.assertRegex(macro, r'lsl\s+#3', 'ring_slot does not stride by eight')
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG),
+                          ('vd', VD)):
+            body = src[src.index('push'):]
+            self.assertTrue('ring_slot' in body or re.search(r'lsl\s+#3', body),
+                            f'{name} indexes the ring by neither route')
 
 
 class Assembly(unittest.TestCase):

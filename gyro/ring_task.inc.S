@@ -78,12 +78,18 @@
                                      * packet.                                */
 .equ T_MBX,          0xC072E0C4     /* the mailbox id                         */
 
-.equ T_ID,           0xC072E160     /* the task id                            */
-.equ T_CRE_RC,       0xC072E164
-.equ T_STA_RC,       0xC072E168
-.equ T_WAKES,        0xC072E16C     /* times the task woke                    */
-.equ T_SIGNALS,      0xC072E170     /* times a producer rang the doorbell     */
-.equ T_ENTRY,        0xC072E174     /* the task body, placed by the deployer  */
-.equ T_RECV_RC,      0xC072E178     /* what receive returned when it stopped
+.equ T_ID,           0xC072E0D0     /* the task id                            */
+.equ T_CRE_RC,       0xC072E0D4
+.equ T_STA_RC,       0xC072E0D8
+.equ T_WAKES,        0xC072E0DC     /* times the task woke                    */
+.equ T_SIGNALS,      0xC072E0E0     /* times a producer rang the doorbell     */
+.equ T_ENTRY,        0xC072E0E4     /* the task body, placed by the deployer  */
+.equ T_RECV_RC,      0xC072E0E8     /* what receive returned when it stopped
                                      * returning zero                         */
-.equ T_MBX_RC,       0xC072E17C     /* what the mailbox create returned       */
+.equ T_MBX_RC,       0xC072E0EC     /* what the mailbox create returned       */
+.equ T_DRAINED,      0xC072E0C8     /* records the writer has taken           */
+.equ T_MAXSPAN,      0xC072E0CC     /* the largest it ever found waiting.  If
+                                     * this approaches the ring's capacity the
+                                     * writer is falling behind, which is the
+                                     * one failure the depth is there to stop
+                                     * and the one number that says so.      */     /* what the mailbox create returned       */

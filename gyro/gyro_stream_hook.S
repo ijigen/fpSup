@@ -110,13 +110,22 @@ gyro_stream_hook:
     add     r5, r8, #GYRO_DATA_OFF  @ first record of the firmware ring
     movw    r9, #GYRO_SPAN
     add     r9, r5, r9              @ one past its last
-    movw    r7, #:lower16:STREAM_BASE
-    movt    r7, #:upper16:STREAM_BASE
+    /* Base and mask once, outside the loop: this is the only producer that
+     * appends more than one record per visit. */
+    movw    r7, #:lower16:STREAM_RING
+    movt    r7, #:upper16:STREAM_RING
+    ldr     r7, [r7]
+    cmp     r7, #0
+    movweq  r8, #STREAM_MASK
+    movwne  r8, #:lower16:RING_MASK
+    movtne  r8, #:upper16:RING_MASK
+    movweq  r7, #:lower16:STREAM_BASE
+    movteq  r7, #:upper16:STREAM_BASE
 
 4:  cmp     r6, r9
     movhs   r6, r5                  @ round the firmware ring
 
-    and     r2, r0, #STREAM_MASK
+    and     r2, r0, r8
     add     r2, r7, r2, lsl #3
 
     ldrsh   r3, [r6]
@@ -136,6 +145,29 @@ gyro_stream_hook:
     add     r0, r0, #1
     subs    r4, r4, #1
     bne     4b
+
+    /* Ring the doorbell, but only once enough has piled up to be worth a card
+     * write.  This runs every 20 ms; waking the writer every time would put
+     * fifty small writes a second through the one non-preemptible card lock,
+     * which is exactly the shape that starved the old writer.
+     *
+     * Task context, so a syscall is safe from here.  The Vd hook is an
+     * interrupt and must never reach writer_signal. */
+    movw    ip, #:lower16:STREAM_INDEX
+    movt    ip, #:upper16:STREAM_INDEX
+    ldr     r0, [ip]
+    movw    ip, #:lower16:STREAM_TAIL
+    movt    ip, #:upper16:STREAM_TAIL
+    ldr     r1, [ip]
+    sub     r0, r0, r1
+    movw    r1, #RING_CHUNK
+    cmp     r0, r1
+    blo     9f
+    movw    ip, #:lower16:STREAM_SIGFN
+    movt    ip, #:upper16:STREAM_SIGFN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    blxne   ip
 
 9:  pop     {r0-r9, ip, lr}
     bx      lr

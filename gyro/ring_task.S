@@ -2,6 +2,7 @@
 .arm
 
 #include "ring_task.inc.S"
+#include "imu_stream.inc.S"
 
 /* ------------------------------------------------------------------ task */
 
@@ -39,6 +40,28 @@ writer_task:
     ldr     r1, [ip]
     add     r1, r1, #1
     str     r1, [ip]
+
+    /* Take everything the producers have put in.  The card write goes here;
+     * for now the span is only counted, so the ring and the wake-up can be
+     * proven before anything touches the card lock. */
+    movw    ip, #:lower16:STREAM_INDEX
+    movt    ip, #:upper16:STREAM_INDEX
+    ldr     r2, [ip]
+    movw    ip, #:lower16:STREAM_TAIL
+    movt    ip, #:upper16:STREAM_TAIL
+    ldr     r3, [ip]
+    str     r2, [ip]                    @ taken, as far as the producers know
+    sub     r2, r2, r3
+    movw    ip, #:lower16:T_DRAINED
+    movt    ip, #:upper16:T_DRAINED
+    ldr     r3, [ip]
+    add     r3, r3, r2
+    str     r3, [ip]
+    movw    ip, #:lower16:T_MAXSPAN
+    movt    ip, #:upper16:T_MAXSPAN
+    ldr     r3, [ip]
+    cmp     r2, r3
+    strhi   r2, [ip]
     b       1b
 
 8:  movw    ip, #:lower16:T_RECV_RC

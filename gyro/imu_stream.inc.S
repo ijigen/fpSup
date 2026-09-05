@@ -158,12 +158,36 @@
 .equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
 .equ STREAM_INDEX,   0xC072E1F8     /* u32, monotonic; both producers claim it */
 .equ STREAM_GCOUNT,  0xC072E1FC     /* u32, gyro records only -- the rate ruler */
-.equ STREAM_BASE,    0xC072E200
-.equ STREAM_COUNT,   128            /* 1 KiB, about 50 ms of gyro.  Halved to
-                                     * make room for the writer task; this ring
-                                     * is only the bench one, and the real
-                                     * buffer comes out of the pool.          */
+.equ STREAM_RING,    0xC072E1A0     /* u32, the ring's ABSOLUTE base.  Not a
+                                     * constant: the real buffer lives in the
+                                     * pool, whose address is only known at
+                                     * run time, so the deployer resolves it
+                                     * once and every producer loads it.
+                                     * 0 means "use the bench ring below".   */
+.equ STREAM_TAIL,    0xC072E1A4     /* u32, records the writer has taken      */
+.equ STREAM_SIGFN,   0xC072E1A8     /* u32, writer_signal's address, or 0     */
+.equ STREAM_BASE,    0xC072E200     /* the bench ring, when STREAM_RING is 0  */
+.equ STREAM_COUNT,   128            /* the bench ring: 1 KiB, about 50 ms     */
 .equ STREAM_MASK,    (STREAM_COUNT - 1)
+
+/* The real ring, out of the pool.  16384 records is 128 KiB and 6.5 seconds at
+ * 2500 Hz -- nine times the worst card stall this project has measured (692 ms)
+ * and the same idea as the audio path's forty seconds of headroom, scaled to
+ * our tiny data rate.
+ *
+ * pool+0x20000: 896 KB there is free and 224 of 224 markers survived a
+ * recording start, which is the property that matters -- memory from the
+ * firmware's allocator freezes the camera when held across one. */
+.equ RING_RECORDS,   16384
+.equ RING_MASK,      (RING_RECORDS - 1)
+.equ RING_BYTES,     (RING_RECORDS * 8)
+.equ RING_POOL_OFF,  0x20000
+
+/* Ring the doorbell only when this much is waiting.  The producer runs every
+ * 20 ms; waking the writer that often would put 50 small writes a second
+ * through the one card lock, which is the opposite of what the audio path
+ * does.  1024 records is 8 KiB, about every 400 ms at 2500 Hz. */
+.equ RING_CHUNK,     1024
 
 .equ TAG_GYRO,       0
 .equ TAG_ACCEL,      1
@@ -251,5 +275,25 @@
 .equ VPREV_FROZEN,   0xFFFFFFFF   /* the stop hook writes this so liveview Vd
                                    * stops folding its own, much shorter,
                                    * intervals into the take's min and max  */
+
+/* Where a record goes.  One place, because four producers index this ring and
+ * a fifth copy of the arithmetic is a fifth chance to get the mask wrong.
+ *
+ * \idx is the claimed index, \out comes back as the record's address.  When
+ * STREAM_RING is zero the bench ring in the cave is used instead, so the hooks
+ * work before the pool buffer exists. */
+.macro ring_slot idx, out, tmp
+    movw    \out, #:lower16:STREAM_RING
+    movt    \out, #:upper16:STREAM_RING
+    ldr     \out, [\out]
+    cmp     \out, #0
+    movweq  \tmp, #STREAM_MASK
+    movwne  \tmp, #:lower16:RING_MASK
+    movtne  \tmp, #:upper16:RING_MASK
+    and     \idx, \idx, \tmp
+    movweq  \out, #:lower16:STREAM_BASE
+    movteq  \out, #:upper16:STREAM_BASE
+    add     \out, \out, \idx, lsl #3
+.endm
 
 .equ HEAD_UNARMED,   0xFFFFFFFF

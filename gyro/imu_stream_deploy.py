@@ -48,9 +48,9 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 PRODUCERS = {
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
     'gyro':  (0xC072E600, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
-    'start': (0xC072E740, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
-    'stop':  (0xC072E820, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
-    'vd':    (0xC072E8E0, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
+    'start': (0xC072E790, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
+    'stop':  (0xC072E880, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
+    'vd':    (0xC072E950, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
 
 
@@ -102,7 +102,13 @@ STREAM_GHEAD  = 0xC072E1F0
 STREAM_PADBAD = 0xC072E1F4
 STREAM_INDEX  = 0xC072E1F8
 STREAM_GCOUNT = 0xC072E1FC
+STREAM_RING   = 0xC072E1A0
+STREAM_TAIL   = 0xC072E1A4
+STREAM_SIGFN  = 0xC072E1A8
 STREAM_BASE   = 0xC072E200
+POOL_PTR      = 0xC3757A7C
+RING_POOL_OFF = 0x20000
+RING_RECORDS  = 16384
 STREAM_COUNT  = 128
 STREAM_SPAN   = STREAM_COUNT * 8
 
@@ -127,6 +133,9 @@ def _check_header():
         'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
         'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
         'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
+        'STREAM_RING': STREAM_RING, 'STREAM_TAIL': STREAM_TAIL,
+        'STREAM_SIGFN': STREAM_SIGFN, 'RING_RECORDS': RING_RECORDS,
+        'RING_POOL_OFF': RING_POOL_OFF,
         'STREAM_BASE': STREAM_BASE, 'STREAM_COUNT': STREAM_COUNT,
         'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
         'TAG_START': S.TAG_START, 'TAG_STOP': S.TAG_STOP,
@@ -177,6 +186,14 @@ def _place():
     return code
 
 
+def _setw(addr, value, what):
+    for _ in range(8):
+        P.mem_set(addr, value)
+        if (P.mem_get(addr) or [0])[0] == value:
+            return
+    raise SystemExit(f'could not write {what} at 0x{addr:08X}')
+
+
 def arm():
     _check_header()
     code = _place()
@@ -194,6 +211,23 @@ def arm():
         P.put_slow(PRODUCERS[name][0], blob, name)
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
     P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
+
+    # The real ring lives in the pool, whose address is only known now.  Memory
+    # from the firmware's allocator freezes the camera when held across a
+    # recording start; the pool does not, and pool+0x20000 is inside the 896 KB
+    # that survived 224 of 224 markers.
+    pool = P.mem_get(POOL_PTR)[0]
+    if pool and 0x40000000 <= pool < 0x50000000:
+        ring = pool + RING_POOL_OFF
+        _setw(STREAM_RING, ring, 'the ring base')
+        print(f'ring: pool 0x{pool:08X} + 0x{RING_POOL_OFF:X} = 0x{ring:08X}, '
+              f'{RING_RECORDS} records = {RING_RECORDS * 8 // 1024} KiB '
+              f'= {RING_RECORDS / 2500:.1f} s')
+    else:
+        _setw(STREAM_RING, 0, 'the ring base')
+        print(f'pool pointer reads 0x{pool if pool else 0:08X}; staying on the '
+              f'{STREAM_COUNT}-record bench ring in the cave')
+    _setw(STREAM_TAIL, 0, 'the ring tail')
 
     for name, (at, _src, _d, site, _orig, thumb) in PRODUCERS.items():
         word = branch_word(site, at, thumb)
@@ -228,6 +262,10 @@ def reset():
     firmware's current head.
     """
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
+    # The tail sits outside the block because it is configuration-adjacent, but
+    # it MUST be cleared with the index: a zeroed head against a stale tail
+    # underflows and rings the doorbell without pause.
+    _setw(STREAM_TAIL, 0, 'the ring tail')
     # Not the stream.  It is a ring that overwrites itself in a hundred
     # milliseconds, so zeroing two kilobytes buys nothing -- and `mem set` drops
     # enough of five hundred writes that the retry pass fails outright.
@@ -250,7 +288,10 @@ def take():
     r0_head, v0_head, r0_gc, r0_n = w[12], w[13], w[14], w[15]
     _ghead, padbad, index, gcount = w[16], w[17], w[18], w[19]
 
+    ring, tail = P.mem_get(STREAM_RING)[0], P.mem_get(STREAM_TAIL)[0]
+    where = f'pool 0x{ring:08X}' if ring else 'the bench ring'
     print(f'records {index}   gyro {gcount}   bad pads {padbad}')
+    print(f'ring {where}   tail {tail}   waiting {index - tail} records')
     print(f'starts {r0_n}   stops {r1_n}   Vd now {vcount}, in the take {v1_n}')
     print()
 

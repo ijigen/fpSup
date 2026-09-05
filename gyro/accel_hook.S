@@ -46,10 +46,7 @@ accel_hook:
     cmp     r2, #0
     bne     1b
 
-    and     r0, r0, #STREAM_MASK
-    movw    r1, #:lower16:STREAM_BASE
-    movt    r1, #:upper16:STREAM_BASE
-    add     r1, r1, r0, lsl #3          @ eight bytes a record
+    ring_slot r0, r1, r2          @ eight bytes a record
 
     ldrsh   r0, [r4]
     strh    r0, [r1]
