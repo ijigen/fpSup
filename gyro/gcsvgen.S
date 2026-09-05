@@ -53,13 +53,24 @@
 .equ O_FOBJ2,         0x0800      /* the gcsv, open while the .GYR is read back */
 .equ O_GCSV_PATH,     0x0180      /* its path, beside the .GYR's                */
 #ifdef FPGYRO_GCSV_STREAM
-.equ O_BUF_A,         0x1000
-.equ O_BUF_B,         0x30000
-.equ O_BUF_C,         0x38000
-.equ BUF_SIZE,        0x00008000
-.equ PAYLOAD_CAP,     0x00007FE0
-.equ GYRO_SAMPLE_CAP, 0x00000EFC
-.equ ACCEL_REC_CAP,   170
+/* Deep slots, in the only stretch of the pool big enough: 0x81000 is the
+ * first word past the 64 KiB PG_MAX reserves for the pool code, and three
+ * 128 KiB slots end at 0xE1000, short of PG_TEXT at 0xF8800.  Each slot now
+ * holds 6.5 s at 2500 Hz instead of 1.6, so a writer that falls behind has
+ * room instead of dropping.
+ *
+ * TEXT_FLUSH is deliberately NOT scaled with this.  The card write stays at
+ * 64 KiB, so the number of lock acquisitions per second is exactly what it
+ * was; only the depth changed. */
+.equ O_BUF_A,         0x81000
+.equ O_BUF_B,         0xA1000
+.equ O_BUF_C,         0xC1000
+.equ BUF_SIZE,        0x00020000
+.equ PAYLOAD_CAP,     0x0001FFE0
+.equ GYRO_SAMPLE_CAP, 0x00003BFC
+.equ ACCEL_REC_CAP,   640        /* 682 would fit the zone but is not an
+                                    ARM immediate; 640 is, and 640*12 = 7680
+                                    still lands inside the 8 KiB zone. */
 #else
 .equ O_BUF_A,         0x1000
 .equ O_BUF_B,         0x5000
@@ -81,14 +92,48 @@
 .equ ACCEL_CACHE,     0xC377790C  /* i16 X, Y, Z, axis-remapped by the firmware */
 .equ ACCEL_REC,       12          /* u32 us, i16 x, i16 y, i16 z, i16 pad       */
 #ifdef FPGYRO_GCSV_STREAM
-.equ ACCEL_ZONE,      0x0800      /* twice the duration needs twice the records */
-.equ ACCEL_BASE,      0x7800      /* 32 KiB buffer - ACCEL_ZONE                  */
-.equ GYRO_CAP,        0x77E0      /* ACCEL_BASE - BLOCK_HEADER                   */
+.equ ACCEL_ZONE,      0x2000      /* four times the block, four times the records */
+.equ ACCEL_BASE,      0x1E000     /* 128 KiB buffer - ACCEL_ZONE                 */
+.equ GYRO_CAP,        0x1DFE0     /* ACCEL_BASE - BLOCK_HEADER                   */
 #else
 .equ ACCEL_ZONE,      0x0400      /* the accel records grow in their own end of */
 .equ ACCEL_BASE,      0x3C00      /* 16 KiB buffer - ACCEL_ZONE                  */
 .equ GYRO_CAP,        0x3BE0      /* ACCEL_BASE - BLOCK_HEADER                   */
 #endif
+
+/* Slot geometry, checked here because getting it wrong is silent: the block
+ * writer simply runs off the end of a buffer and the camera freezes on the next
+ * take.  0x81000 is PG_CODE + PG_MAX and 0xF8800 is PG_TEXT, both from
+ * profilegen.S; they are spelled out because assembly cannot see across files. */
+#ifdef FPGYRO_GCSV_STREAM
+.if O_BUF_A < 0x81000
+.error "slot A is inside the window PG_MAX reserves for the pool code"
+.endif
+.if (O_BUF_C + BUF_SIZE) > 0xF8800
+.error "the slots run into PG_TEXT"
+.endif
+.if (O_BUF_A + BUF_SIZE) > O_BUF_B
+.error "slot A overlaps slot B"
+.endif
+.if (O_BUF_B + BUF_SIZE) > O_BUF_C
+.error "slot B overlaps slot C"
+.endif
+.if (ACCEL_BASE + ACCEL_ZONE) != BUF_SIZE
+.error "the accel zone does not end at the top of the slot"
+.endif
+.if (GYRO_CAP + BLOCK_HEADER) != ACCEL_BASE
+.error "the gyro capacity does not meet the accel zone"
+.endif
+.if (ACCEL_REC_CAP * ACCEL_REC) > ACCEL_ZONE
+.error "more accel records than the zone holds"
+.endif
+#endif
+
+/* 0x80000 froze the camera the moment a take started -- before the first flush
+ * could even happen, so it was the address and not the size.  It is inside the
+ * 64 KiB window PG_MAX reserves for the pool code (0x71000..0x81000); the bound
+ * below had been written against the code's *actual* length instead, which let
+ * it through.  Left where it has always worked. */
 .equ O_TEXT,          0x1A000     /* pool+0x20000: the gcsv's text, at the stop.
                                      It used to borrow O_BUF_B, which is sixteen
                                      kilobytes, so the text went to the card every
@@ -98,15 +143,39 @@
                                      896 KB nobody uses, verified across a
                                      recording 224 markers out of 224.          */
 #ifdef FPGYRO_GCSV_STREAM
-.equ TEXT_FLUSH,      0x10000     /* r28: shorten the recording-time filesystem
-                                     hold. r15's older formatter could not keep
-                                     up at this call rate; r23 removed its three
-                                     signed divisions and the three-slot queue
-                                     now measures that trade-off directly.       */
+.equ TEXT_FLUSH,      0x10000     /* Sixty-four kilobytes, which is what fits where
+                                     kilobytes.  r28 chose the small figure to
+                                     shorten the hold on the filesystem, which
+                                     was optimising the wrong quantity: writing
+                                     64 KiB holds the card lock for about 0.6 ms,
+                                     while *waiting* for it costs 0.5-0.6 s
+                                     because the video writer has it.  The bill
+                                     is per acquisition, so the lever is fewer
+                                     and larger writes.  At 2500 Hz this takes
+                                     the writer from about one acquisition a
+                                     second to one every four, and a 256 KiB
+                                     hold is still six times shorter than the
+                                     3.2 MB the video writer holds it for on
+                                     every single frame.                        */
 #else
 .equ TEXT_FLUSH,      0x10000     /* Keep the non-streaming post-read converter
                                      unchanged; it runs after recording.         */
 #endif
+/* The text buffer has to clear the pool code below it and PG_TEXT above it.
+ * Both move when the build changes, and nothing else would notice: the writer
+ * would simply format over whatever was there. */
+#ifdef FPGYRO_GCSV_STREAM
+/* What the text may grow into, checked against everything below it rather than
+ * against the one or two neighbours that came to mind.  Getting this wrong is
+ * silent: the formatter writes over whatever is there and the camera freezes on
+ * the next take.  Both mistakes have now been made -- 0x80000 landed inside the
+ * 64 KiB window PG_MAX reserves for the pool code, and 128 KiB at 0x1A000 ran
+ * into the slot buffers at O_BUF_B. */
+.if (O_TEXT + TEXT_FLUSH + 0x1000) > O_BUF_B
+.error "the streaming text buffer runs into the block slots"
+.endif
+#endif
+
 .equ ACC_VARS,        0x10000     /* pool: +0 ptr, +4 left, +8 x, +12 y, +16 z.
                                    * From r10, not PC-relative: the routines
                                    * that touch these are more than an `adr`
@@ -745,9 +814,13 @@ gcsv_stream_block:
     beq     51f                          @ first block of the take: keep the anchor
     cmp     r1, r3
     bne     51f                          @ samples were dropped since the last block: a real hole
+#ifdef FPGYRO_GCSV_2500
+    mov     r1, r9                       @ every row is a lone sample at the anchor
+#else
     cmp     r8, #2
     addhs   r1, r9, #200                 @ first row = pair midpoint ...
     movlo   r1, r9                       @ ... or a lone sample at the anchor
+#endif
     sub     r3, r1, r0
     cmp     r3, #0
     rsblt   r3, r3, #0                   @ |first row - expected|
@@ -832,6 +905,14 @@ gcsv_stream_sample:
      * averaged sample is built on the stack and read the same way.  A lone final
      * sample (odd block count) is emitted un-averaged at its own timestamp. */
     sub     sp, sp, #8
+#ifdef FPGYRO_GCSV_2500
+    /* Measuring build: every native sample on its own row, no averaging and no
+     * halving. The 3402-drop A/B that put the shipping build at 1250 Hz also
+     * changed the accelerometer columns, so it never isolated the rate; this
+     * is the missing arm. Doubles the text, so it doubles how often a slot has
+     * to reach the card. */
+    b       gcsv_stream_single
+#else
     cmp     r8, #1
     beq     gcsv_stream_single
     ldrsh   r0, [r7]
@@ -853,6 +934,7 @@ gcsv_stream_sample:
     add     r1, r0, #800
     str     r1, [r11, #ST_NEXT_EXPECT]   @ next pair sits 800 us on
     b       gcsv_stream_emit
+#endif
 gcsv_stream_single:
     ldrsh   r0, [r7]
     strh    r0, [sp]
@@ -861,8 +943,12 @@ gcsv_stream_single:
     ldrsh   r0, [r7, #6]
     strh    r0, [sp, #6]
     mov     r0, r9
-    add     r1, r0, #600
-    str     r1, [r11, #ST_NEXT_EXPECT]   @ lone tail: next pair midpoint is 600 us on
+#ifdef FPGYRO_GCSV_2500
+    add     r1, r0, #400                 @ every row is a native sample
+#else
+    add     r1, r0, #600                 @ lone tail: next pair midpoint is 600 us on
+#endif
+    str     r1, [r11, #ST_NEXT_EXPECT]
 gcsv_stream_emit:
     mov     r1, r5
     bl      put_uint
@@ -950,11 +1036,15 @@ gcsv_stream_acc_newline:
     mov     r0, #10
     strb    r0, [r5], #1
 
+#ifdef FPGYRO_GCSV_2500
+    b       gcsv_stream_step_one
+#else
     cmp     r8, #2                       @ same test the head used: pair vs lone tail
     blo     gcsv_stream_step_one
     add     r7, r7, #16
     sub     r8, r8, #2
     add     r9, r9, #800
+#endif
     b       gcsv_stream_flushchk
 gcsv_stream_step_one:
     add     r7, r7, #8

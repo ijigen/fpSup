@@ -69,9 +69,9 @@
                                      * is the samples-per-frame over the whole
                                      * take, measured against the camera's own
                                      * frame clock and nothing else.          */
-.equ STREAM_A1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT at the stop         */
-.equ STREAM_ZCOUNT,  0xC072E1D4     /* u32, times the recorder was stopped    */
-.equ STREAM_A0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
+.equ STREAM_R1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT when recording ended */
+.equ STREAM_R1_N,    0xC072E1D4     /* u32, times that has happened            */
+.equ STREAM_R0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
                                      * writer was constructed.  Beside F0_GC
                                      * this is the whole experiment: the gap
                                      * between them is how far our start point
@@ -79,8 +79,20 @@
                                      * measured in gyro samples of 400 us --
                                      * a number, where the 470-570 ms has only
                                      * ever been an inference from Gyroflow's
-                                     * auto-sync.                             */
-.equ STREAM_ACOUNT,  0xC072E1EC     /* u32, times the audio writer was built  */
+                                     * auto-sync.
+                                     *
+                                     * MEASURED 2026-09-06, two takes: the gap
+                                     * between R0 and R1 tracked the take -- an
+                                     * 11 s take gave 11.38 s, a 3 s take gave
+                                     * 4.40 s -- and 0xC01FBA28 fired first
+                                     * both times.  So that one is the start
+                                     * and 0xC01FB880 is the end, which is the
+                                     * opposite of what the call sites read
+                                     * like.  movRec tears the running monitor
+                                     * audio down when recording begins; the
+                                     * state machine's case 1 builds it back up
+                                     * when recording ends.                   */
+.equ STREAM_R0_N,    0xC072E1EC     /* u32, times that has happened            */
 .equ STREAM_GHEAD,   0xC072E1F0     /* u32, gyro ring head we have consumed    */
 .equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
 .equ STREAM_INDEX,   0xC072E1F8     /* u32, monotonic; both producers claim it */

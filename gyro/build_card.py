@@ -14,6 +14,7 @@ import pathlib, subprocess, sys
 HERE = pathlib.Path(__file__).resolve().parent
 SHELL = HERE.parent / 'fp_usb_shell' / 'build_autorun.py'
 PARK_AT = 0xC072EFB4        # above the logger, below the shell's worker state
+PAYLOAD_AT = 0xC072E064     # must match --payload-addr below
 PHASE_AT = 0xC072F000       # release-only: debug shell state/worker begin here
 F_WRITE_AT = 0xC03660E8
 ORIENT_AT = 0xC072EF00      # the call-through that suppresses the DNG rotation
@@ -22,6 +23,10 @@ ORIENT_AT = 0xC072EF00      # the call-through that suppresses the DNG rotation
                             # the GYR logger runs to the park stub with nothing
                             # to spare, so this rides with --gcsv-stream only.
 ORIENT_PATCH_AT = 0xC00C32C8
+ORIENT_AT_ANCHOR = 0xC072EF40   # the frame-anchor payload is 64 bytes longer and
+                                # runs past 0xC072EF00; only that build moves it,
+                                # so the shipping VSHL stays byte for byte the one
+                                # that was tested
 TABLE_LOAD_AT = 0xC072F800  # the shell's template slot: nothing uses it at boot,
                             # and the worker sits below it at 0xC072F050
 
@@ -30,6 +35,11 @@ if __name__ == '__main__':
     phase_probe = '--phase-probe' in forwarded
     gcsv_stream = '--gcsv-stream' in forwarded
     backpressure_probe = '--backpressure-probe' in forwarded
+    frame_anchor = '--frame-anchor' in forwarded
+    if frame_anchor:
+        forwarded = [arg for arg in forwarded if arg != '--frame-anchor']
+        if not gcsv_stream:
+            raise SystemExit('--frame-anchor is a GCSV-only streaming build')
     if phase_probe:
         forwarded = [arg for arg in forwarded if arg != '--phase-probe']
         if '--no-shell' not in forwarded:
@@ -44,7 +54,8 @@ if __name__ == '__main__':
             raise SystemExit('--backpressure-probe requires --gcsv-stream')
     if phase_probe and gcsv_stream:
         raise SystemExit('--phase-probe and --gcsv-stream are separate A/B builds')
-    payload = HERE / ('logger_phase.S' if phase_probe else
+    payload = HERE / ('logger_stream_anchor.S' if frame_anchor else
+                      'logger_phase.S' if phase_probe else
                       'logger_stream_probe.S' if backpressure_probe else
                       'logger_stream.S' if gcsv_stream else 'logger.S')
     command = [
@@ -90,8 +101,32 @@ if __name__ == '__main__':
         # Spelled out here rather than passed on the command line, which is how
         # v1.4 shipped without it: the release was rebuilt from build_card.py
         # and the two --also arguments v1.3 had been given by hand were gone.
+        # Where the stub goes is decided by how big the payload turned out, not
+        # by a constant someone has to remember to move.  The logger has grown
+        # past 0xC072EF00 twice now; the first time it took the orientation
+        # call-through with it and the camera froze on the take's first frame.
+        sys.path.insert(0, str(SHELL.parent))
+        from armasm import assemble as _asm
+        _end = PAYLOAD_AT + len(_asm(payload))
+        at = (_end + 0xF) & ~0xF
+        if at + 64 > PARK_AT:
+            raise SystemExit(f'the payload ends at 0x{_end:08X}, leaving no room for '
+                             f'orient_stub below the park stub at 0x{PARK_AT:08X}')
+
+        # The patch is a bare `bl` word, so its target and the address the stub
+        # is placed at have to agree -- and nothing used to make them.  Moving
+        # the stub for the frame-anchor build left the word still branching to
+        # 0xC072EF00, which by then was inside the logger: the DNG tag writer
+        # calls it for every frame, so recording froze on the first one.
+        # Generated from the same variable now, so they cannot disagree.
+        disp = ((at - ORIENT_PATCH_AT - 8) >> 2) & 0xFFFFFF
+        gen = HERE / '.orient_patch.S'
+        gen.write_text('.syntax unified\n.arm\n.text\n'
+                       f'/* generated: bl 0x{at:08X} over the call at '
+                       f'0x{ORIENT_PATCH_AT:08X} */\n'
+                       f'    .word   0x{0xEB000000 | disp:08X}\n')
         command += [
-            '--also', f'0x{ORIENT_AT:08X}:{HERE / "orient_stub.S"}',
-            '--also', f'0x{ORIENT_PATCH_AT:08X}:{HERE / "orient_patch.S"}',
+            '--also', f'0x{at:08X}:{HERE / "orient_stub.S"}',
+            '--also', f'0x{ORIENT_PATCH_AT:08X}:{gen}',
         ]
     sys.exit(subprocess.call(command + forwarded))

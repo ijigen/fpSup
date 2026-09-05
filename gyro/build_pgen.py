@@ -24,7 +24,7 @@ from armasm import assemble, symbols                           # noqa: E402
 
 
 def build(native_lifecycle=False, recovery=False, gcsv_stream=False,
-          backpressure_probe=False):
+          backpressure_probe=False, gcsv_2500=False, frame_anchor=False):
     """Both pool routines in one file, with the entry points in the header.
 
         "PGEN" | u32 post-process entry | u32 gcsv entry | u32 length | the code
@@ -39,6 +39,8 @@ def build(native_lifecycle=False, recovery=False, gcsv_stream=False,
         raise ValueError('GCSV-only streaming has no GYR recovery source')
     if backpressure_probe and not gcsv_stream:
         raise ValueError('backpressure probe requires GCSV-only streaming')
+    if gcsv_2500 and not gcsv_stream:
+        raise ValueError('the 2500 Hz measuring build is GCSV-only streaming')
     defines = []
     if native_lifecycle:
         defines.append('FPGYRO_NATIVE_LIFECYCLE')
@@ -48,6 +50,10 @@ def build(native_lifecycle=False, recovery=False, gcsv_stream=False,
         defines.append('FPGYRO_GCSV_STREAM')
     if backpressure_probe:
         defines.append('FPGYRO_BACKPRESSURE_PROBE')
+    if gcsv_2500:
+        defines.append('FPGYRO_GCSV_2500')
+    if frame_anchor:
+        defines.append('FPGYRO_FRAME_ANCHOR')
     defines = tuple(defines)
     prof = assemble(HERE / 'profilegen.S', defines)
     prof += b'\0' * (-len(prof) % 4)
@@ -67,15 +73,20 @@ if __name__ == '__main__':
     recovery = '--recovery' in sys.argv
     gcsv_stream = '--gcsv-stream' in sys.argv
     backpressure_probe = '--backpressure-probe' in sys.argv
+    frame_anchor = '--frame-anchor' in sys.argv
+    gcsv_2500 = '--gcsv-2500' in sys.argv
     blob, (a, b), n = build(native_lifecycle=native, recovery=recovery,
                              gcsv_stream=gcsv_stream,
-                             backpressure_probe=backpressure_probe)
+                             backpressure_probe=backpressure_probe,
+                             gcsv_2500=gcsv_2500, frame_anchor=frame_anchor)
     local = HERE / '.pgen.bin'
     local.write_bytes(blob)
     print(f'  pool code     {n} bytes: post +0x{a:X}, gcsv +0x{b:X}, '
           f'{len(blob)} on the card' + (' [native lifecycle]' if native else '')
           + (' [GCSV-only stream]' if gcsv_stream else '')
           + (' [backpressure probe]' if backpressure_probe else '')
+          + (' [2500 Hz]' if gcsv_2500 else '')
+          + (' [frame anchor]' if frame_anchor else '')
           + (' [recovery]' if recovery else ' [no recovery]' if native else ''))
     if '--local' not in sys.argv:
         r = subprocess.run([sys.executable, str(SHELL / 'putfile.py'),

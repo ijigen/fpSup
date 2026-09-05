@@ -13,8 +13,8 @@ Five producers, five hook sites, one 8-byte record shape:
     gyro   tag 0    0xC00D0794   the 20 ms GyroData callback, drains the ring
     accel  tag 1    0xC050D498   the MMA8452Q driver publishing a sample
     frame  tag 2    0xC0315C18   FrameExpos_s, one per exposure
-    start  tag 3    0xC01FB880   the movie recorder committing to start
-    stop   tag 4    0xC01FBA28   the movie recorder stopping
+    start  tag 3    0xC01FBA28   recording begins (movRec tears down monitor audio)
+    stop   tag 4    0xC01FB880   recording ends (the REC state is left)
 
 Nothing writes over live code by accident: placement is checked against the
 injection cave and against every other span before a byte goes out, because the
@@ -45,19 +45,19 @@ PRODUCERS = {
     'accel': (0xC072E100, 'accel_hook.S',       (),           0xC050D498, 0xE1D410F0),
     'gyro':  (0xC072EA00, 'gyro_stream_hook.S', (),           0xC00D0794, 0xFA046FD7),
     'frame': (0xC072EB40, 'frame_hook.S',       (),           0xC0315C18, 0xE58D0080),
-    'start': (0xC072EBD0, 'rec_trigger.S',      (),           0xC01FB880, 0xE1A00004),
-    'stop':  (0xC072EC60, 'rec_trigger.S',      ('REC_STOP',), 0xC01FBA28, 0xE5940008),
+    'start': (0xC072EBD0, 'rec_trigger.S',      (),           0xC01FBA28, 0xE5940008),
+    'stop':  (0xC072EC60, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004),
 }
 
 # Must agree with imu_stream.inc.S; _check_header() proves they do.
 STATE_AT      = 0xC072E1D0
 STATE_WORDS   = 12
-STREAM_A1_GC  = 0xC072E1D0
-STREAM_ZCOUNT = 0xC072E1D4
+STREAM_R1_GC  = 0xC072E1D0
+STREAM_R1_N   = 0xC072E1D4
 STREAM_FCOUNT = 0xC072E1E0
 STREAM_F0_GC  = 0xC072E1E4
-STREAM_A0_GC  = 0xC072E1E8
-STREAM_ACOUNT = 0xC072E1EC
+STREAM_R0_GC  = 0xC072E1E8
+STREAM_R0_N   = 0xC072E1EC
 STREAM_GHEAD  = 0xC072E1F0
 STREAM_PADBAD = 0xC072E1F4
 STREAM_INDEX  = 0xC072E1F8
@@ -76,9 +76,9 @@ def _check_header():
     """These constants are duplicated from the assembly; prove they match."""
     src = (HERE / 'imu_stream.inc.S').read_text()
     want = {
-        'STREAM_A1_GC': STREAM_A1_GC, 'STREAM_ZCOUNT': STREAM_ZCOUNT,
+        'STREAM_R1_GC': STREAM_R1_GC, 'STREAM_R1_N': STREAM_R1_N,
         'STREAM_FCOUNT': STREAM_FCOUNT, 'STREAM_F0_GC': STREAM_F0_GC,
-        'STREAM_A0_GC': STREAM_A0_GC, 'STREAM_ACOUNT': STREAM_ACOUNT,
+        'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
         'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
         'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
         'STREAM_BASE': STREAM_BASE, 'STREAM_COUNT': STREAM_COUNT,
@@ -180,7 +180,9 @@ def reset():
     firmware's current head.
     """
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
-    P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
+    # Not the stream.  It is a ring that overwrites itself in a hundred
+    # milliseconds, so zeroing two kilobytes buys nothing -- and `mem set` drops
+    # enough of five hundred writes that the retry pass fails outright.
     print('counters cleared -- the next start, and the next frame, are take zero')
 
 
@@ -193,24 +195,27 @@ def take():
     w = P.mem_get(STATE_AT, STATE_WORDS)
     if any(x is None for x in w):
         raise SystemExit('the state words did not read back whole')
-    a1_gc, zcount = w[0], w[1]
-    fcount, f0_gc, a0_gc, acount = w[4], w[5], w[6], w[7]
+    r1_gc, r1_n = w[0], w[1]
+    fcount, f0_gc, r0_gc, r0_n = w[4], w[5], w[6], w[7]
     _ghead, padbad, index, gcount = w[8], w[9], w[10], w[11]
 
     print(f'records {index}   gyro {gcount}   bad pads {padbad}')
-    print(f'starts {acount}   stops {zcount}   frames {fcount}')
+    print(f'starts {r0_n}   stops {r1_n}   frames {fcount}')
     print()
 
-    if not acount:
-        print('the recorder never committed to start.')
-        print('  0xC01FB880 is on the movie path (MovRecFuncStateREC -> FUN_c01fb640);')
-        print('  a take that reached it would have bumped this.')
+    if not r0_n:
+        print('recording never began -- 0xC01FBA28 (movRec) did not fire.')
     if not fcount:
         print('no frame marker fired -- 0xC0315C18 is not on the exposure path,')
         print('  or nothing was exposed since the counters were cleared.')
 
-    if acount and fcount:
-        d = f0_gc - a0_gc
+    if r0_n and r1_n:
+        d = r1_gc - r0_gc
+        print(f'take: gyro {r0_gc} -> {r1_gc} = {d} samples = {_ms(d)/1000:.2f} s')
+        print()
+
+    if r0_n and fcount:
+        d = f0_gc - r0_gc
         print(f'gyro sample at record start  {a0_gc}')
         print(f'gyro sample at first frame   {f0_gc}')
         print(f'  -> the first exposure is {d:+d} samples = {_ms(d):+.1f} ms '
@@ -230,10 +235,7 @@ def take():
             hz = per * fps
             print(f'  {label:12s}          {hz:9.3f} Hz  ({hz / 2500 - 1:+.4%} of 2500)')
 
-    if acount and zcount:
-        print()
-        print(f'take length {a1_gc - a0_gc} samples = {_ms(a1_gc - a0_gc) / 1000:.2f} s '
-              f'of gyro between start and stop')
+
 
 
 def dump(count):

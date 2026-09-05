@@ -61,6 +61,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--plain', action='store_true',
                     help='build without GCSV-only streaming')
+    ap.add_argument('--gcsv-2500', action='store_true',
+                    help='measuring build: every native sample on its own row')
     a = ap.parse_args()
 
     if P.sh('version', retries=3).startswith('ERR'):
@@ -71,7 +73,10 @@ def main():
     r10 = pool + O_STATE
     base = r10 + PG_CODE
 
-    blob = build_pgen.build(native_lifecycle=True, gcsv_stream=not a.plain)[0]
+    blob = build_pgen.build(native_lifecycle=True, gcsv_stream=not a.plain,
+                            gcsv_2500=a.gcsv_2500)[0]
+    if a.gcsv_2500:
+        print('  2500 Hz measuring build -- reboot to get the shipping one back')
     magic, prof_off, gcsv_off, length = struct.unpack_from('<4sIII', blob, 0)
     if magic != b'PGEN':
         raise SystemExit('the build did not produce a PGEN blob')

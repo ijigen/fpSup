@@ -69,11 +69,20 @@
 /* A grows through the old B slot and ends exactly where O_PROFILE starts.  B
  * sits beyond the live text window.  C adds queue depth; r28 keeps all three
  * raw slots unchanged while shortening only the formatter's media calls. */
-.equ O_BUF_A,         0x1000
-.equ O_BUF_B,         0x30000
-.equ O_BUF_C,         0x38000
-.equ BUF_SIZE,        0x00008000
-.equ PAYLOAD_CAP,     0x00007FE0
+/* Deep slots, in the only stretch of the pool big enough: 0x81000 is the
+ * first word past the 64 KiB PG_MAX reserves for the pool code, and three
+ * 128 KiB slots end at 0xE1000, short of PG_TEXT at 0xF8800.  Each slot now
+ * holds 6.5 s at 2500 Hz instead of 1.6, so a writer that falls behind has
+ * room instead of dropping.
+ *
+ * TEXT_FLUSH is deliberately NOT scaled with this.  The card write stays at
+ * 64 KiB, so the number of lock acquisitions per second is exactly what it
+ * was; only the depth changed. */
+.equ O_BUF_A,         0x81000
+.equ O_BUF_B,         0xA1000
+.equ O_BUF_C,         0xC1000
+.equ BUF_SIZE,        0x00020000
+.equ PAYLOAD_CAP,     0x0001FFE0
 .equ SLOT_COUNT,      2   /* r23 two-slot */
 #else
 .equ O_BUF_A,         0x1000
@@ -94,14 +103,41 @@
 .equ ACCEL_CACHE,     0xC377790C  /* i16 X, Y, Z, axis-remapped by the firmware */
 .equ ACCEL_REC,       12          /* u32 us, i16 x, i16 y, i16 z, i16 pad       */
 #ifdef FPGYRO_GCSV_STREAM
-.equ ACCEL_ZONE,      0x0800      /* twice the duration needs twice the records */
-.equ ACCEL_BASE,      0x7800      /* 32 KiB buffer - ACCEL_ZONE                  */
-.equ GYRO_CAP,        0x77E0      /* ACCEL_BASE - BLOCK_HEADER                   */
+.equ ACCEL_ZONE,      0x2000      /* four times the block, four times the records */
+.equ ACCEL_BASE,      0x1E000     /* 128 KiB buffer - ACCEL_ZONE                 */
+.equ GYRO_CAP,        0x1DFE0     /* ACCEL_BASE - BLOCK_HEADER                   */
 #else
 .equ ACCEL_ZONE,      0x0400      /* the accel records grow in their own end of */
 .equ ACCEL_BASE,      0x3C00      /* 16 KiB buffer - ACCEL_ZONE                  */
 .equ GYRO_CAP,        0x3BE0      /* ACCEL_BASE - BLOCK_HEADER                   */
 #endif
+
+/* Slot geometry, checked here because getting it wrong is silent: the block
+ * writer simply runs off the end of a buffer and the camera freezes on the next
+ * take.  0x81000 is PG_CODE + PG_MAX and 0xF8800 is PG_TEXT, both from
+ * profilegen.S; they are spelled out because assembly cannot see across files. */
+#ifdef FPGYRO_GCSV_STREAM
+.if O_BUF_A < 0x81000
+.error "slot A is inside the window PG_MAX reserves for the pool code"
+.endif
+.if (O_BUF_C + BUF_SIZE) > 0xF8800
+.error "the slots run into PG_TEXT"
+.endif
+.if (O_BUF_A + BUF_SIZE) > O_BUF_B
+.error "slot A overlaps slot B"
+.endif
+.if (O_BUF_B + BUF_SIZE) > O_BUF_C
+.error "slot B overlaps slot C"
+.endif
+.if (ACCEL_BASE + ACCEL_ZONE) != BUF_SIZE
+.error "the accel zone does not end at the top of the slot"
+.endif
+.if (GYRO_CAP + BLOCK_HEADER) != ACCEL_BASE
+.error "the gyro capacity does not meet the accel zone"
+.endif
+/* ACCEL_REC_CAP belongs to gcsvgen.S; that file checks it against the zone. */
+#endif
+
 .equ O_TEXT,          0x1A000     /* pool+0x20000: the gcsv's text, at the stop.
                                      It used to borrow O_BUF_B, which is sixteen
                                      kilobytes, so the text went to the card every
@@ -194,6 +230,9 @@
 .equ S_C_FLAGS,       0x1EC
 .equ S_C_GYRO,        0x1F0
 .equ S_C_ACC,         0x1F4
+.equ S_FRAME0_US,     0x1F8        /* diagnostic: monotonic clock at the first   */
+.equ S_FRAME0_RAW,    0x1FC        /* exposed frame, and the raw address that    */
+                                   /* announced it.  O_HEADER starts at 0x200.   */
 .equ S_STOP,          0x60
 .equ S_MAGIC,         0x64        /* 'S6G6' once the block has been initialised */
 .equ S_LIMIT,         0x68        /* one past the end of the buffer being filled */
@@ -381,6 +420,33 @@ native_clip_checked:
     ldr     r0, [r10, #O_LC_STATE]
     cmp     r0, #3                  @ adapter says native finalize completed
     beq     recording_stopped
+#ifdef FPGYRO_FRAME_ANCHOR
+    /* When did this take's first frame actually get exposed?
+     *
+     * The gcsv's t=0 is the tick at which this callback noticed the recording
+     * flag, which is not when the camera started imaging: Gyroflow's auto-sync
+     * has been measuring 470-570 ms of offset, and the spread between clips is
+     * what makes it unreliable rather than the offset itself.
+     *
+     * 0xC343943C is the raw buffer address the imaging path latches for every
+     * exposure, and it reads zero until one has been taken. One load per 50 Hz
+     * tick until the first frame, then nothing. Diagnostic only: the timeline
+     * is unchanged, so a gcsv from this build is the same as any other. */
+    ldr     r0, [r10, #S_FRAME0_US]
+    cmp     r0, #0
+    bne     29f
+    movw    r0, #0x943C
+    movt    r0, #0xC343
+    ldr     r1, [r0]
+    cmp     r1, #0
+    beq     29f
+    str     r1, [r10, #S_FRAME0_RAW]
+    movw    ip, #0xB6E0
+    movt    ip, #0xC002
+    blx     ip                       @ the same clock S_START_US was taken from
+    str     r0, [r10, #S_FRAME0_US]
+29:
+#endif
     b       drain_ring
 
 recording_not_active:
@@ -505,6 +571,11 @@ recording_bp_clear:
     str     r0, [r9, #12]            /* sample_period_us */
     str     r6, [r9, #16]
     str     r6, [r10, #S_START_US]   @ the header gets overwritten by the footer
+#ifdef FPGYRO_FRAME_ANCHOR
+    mov     r0, #0
+    str     r0, [r10, #S_FRAME0_US]
+    str     r0, [r10, #S_FRAME0_RAW]
+#endif
 
     /* What the camera is actually recording.
      *
@@ -829,7 +900,8 @@ copy_done:
     addne   r2, r10, #S_B_STATE
 #endif
     ldr     r0, [r2, #0x1C]          /* accel records so far */
-    cmp     r0, #(ACCEL_ZONE / ACCEL_REC) - 1
+    ldr_addr ip, (ACCEL_ZONE / ACCEL_REC) - 1
+    cmp     r0, ip                   /* the cap stopped being an ARM immediate */
     bhi     16f                      /* zone full: drop this one, keep the gyro */
 
     ldr     r7, [r10, #S_INDEX]
@@ -842,7 +914,7 @@ copy_done:
     addeq   r7, r10, #O_BUF_A
     addne   r7, r10, #O_BUF_B
 #endif
-    movw    r12, #ACCEL_BASE
+    ldr_addr r12, ACCEL_BASE  /* past 0xFFFF now, so movw alone will not do */
     add     r7, r7, r12
     add     r12, r0, r0, lsl #1      /* count * 3 */
     add     r7, r7, r12, lsl #2      /* ... * 4 = count * 12, no divide needed */

@@ -374,6 +374,10 @@ pg_em:
 .equ PG_LENS,      0xF9800      /* from r12: what the lens hands back    */
 /* Early-JSON bookkeeping (r39b/r39d), past the 4 KiB the bus name block can
  * occupy.  LC_MAGIC guards against whatever the pool held. */
+#ifdef FPGYRO_FRAME_ANCHOR
+.equ S_FRAME0_US,  0x1F8        /* written by the callback; see logger.S */
+.equ S_FRAME0_RAW, 0x1FC
+#endif
 .equ PG_DIST,      0xF9C00      /* PG_LENS + 0x400: four kr doubles at +0,   */
                                 /* three coefficients at +32, a flag at +56, */
                                 /* and 96 bytes of solver room at +64.  Well */
@@ -1180,6 +1184,30 @@ pg_lens_ready:
     bl      pg_ei
     S ", \"drop_other\": "
     ldr     r0, [r3, #BP_DROP_OTHER]
+    bl      pg_ei
+    S "},\n"
+#endif
+#ifdef FPGYRO_FRAME_ANCHOR
+    /* Diagnostic, written into every take so the numbers can be read off the
+     * card instead of out of RAM.  start_us is the tick this callback noticed
+     * the recording flag; frame0_us is the first exposure the imaging path
+     * announced.  Their difference is what Gyroflow's auto-sync has been
+     * having to find for itself, and how much it moves between takes is what
+     * decides whether a constant would do or the anchor has to change. */
+    S "  \"fpgyrosup_frame_anchor\": {\"start_us\": "
+    ldr     r0, [r10, #S_START_US]
+    bl      pg_ei
+    S ", \"frame0_us\": "
+    ldr     r0, [r10, #S_FRAME0_US]
+    bl      pg_ei
+    S ", \"delta_us\": "
+    ldr     r0, [r10, #S_FRAME0_US]
+    ldr     r1, [r10, #S_START_US]
+    subs    r0, r0, r1
+    movmi   r0, #0                      /* not seen yet, or the clock wrapped */
+    bl      pg_ei
+    S ", \"raw_addr\": "
+    ldr     r0, [r10, #S_FRAME0_RAW]
     bl      pg_ei
     S "},\n"
 #endif

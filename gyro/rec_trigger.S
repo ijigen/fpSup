@@ -10,24 +10,31 @@
  * has two callers, a debug command with a "/test_wav" string and one path that
  * starts and stops immediately.  The movie path is:
  *
- *   START  MovRecFuncStateREC__v36 case 1  ->  FUN_c01fb640(recorder, 0)
- *          which takes the class 6 heap -- MOVAUDIO -- checks it has room,
- *          and past every early return commits at
+ * Which of the two is the start was settled on the camera, not from the call
+ * sites -- reading those the other way round is the obvious mistake, and it is
+ * the one I made.  Two takes: an eleven second take put 11.38 s between them,
+ * a three second take 4.40 s, and c01fba28 fired first both times.  So:
  *
- *              c01fb880  mov r0, r4          <- displaced
- *              c01fb884  mov r1, #1
- *              c01fb888  bl  FUN_c01fbad0    (mark the recorder running)
- *              c01fb88c  cmp r5, #0          (movie passes 0)
- *                        ... vtable +0x1c, the capture actually starts
- *
- *   STOP   movRec  ->  FUN_c01fb918(recorder)
- *          past the "am I recording" check, immediately before the call:
+ *   START  movRec  ->  FUN_c01fb918(recorder), past the "am I recording"
+ *          check, immediately before the call that tears the running monitor
+ *          audio down:
  *
  *              c01fba28  ldr r0, [r4, #8]    <- displaced
  *              c01fba2c  ldr r1, [r0, #0xc]
  *              c01fba30  add r1, r1, #0x20
  *              c01fba34  ldr r1, [r1]
- *              c01fba38  blx r1              vtable +0x20, the capture stops
+ *              c01fba38  blx r1              vtable +0x20
+ *
+ *   STOP   MovRecFuncStateREC__v36 case 1  ->  FUN_c01fb640(recorder, 0),
+ *          which takes the class 6 heap -- MOVAUDIO -- checks it has room, and
+ *          past every early return commits at
+ *
+ *              c01fb880  mov r0, r4          <- displaced
+ *              c01fb884  mov r1, #1
+ *              c01fb888  bl  FUN_c01fbad0    (mark the recorder running)
+ *                        ... vtable +0x1c, the capture starts again
+ *
+ *          Case 1 is the state being LEFT, not entered.
  *
  * Neither site is a function entry, and that is deliberate: both functions save
  * lr in their first instruction, and both have early returns in front of the
@@ -43,17 +50,17 @@
  */
 
 #ifdef REC_STOP
-.equ SITE,        0xC01FBA28
-.equ SITE_ORIG,   0xE5940008          /* ldr r0, [r4, #8] */
-.equ TAG_THIS,    TAG_STOP
-.equ COUNT_WORD,  STREAM_ZCOUNT
-.equ LATCH_WORD,  STREAM_A1_GC
-#else
 .equ SITE,        0xC01FB880
 .equ SITE_ORIG,   0xE1A00004          /* mov r0, r4 */
+.equ TAG_THIS,    TAG_STOP
+.equ COUNT_WORD,  STREAM_R1_N
+.equ LATCH_WORD,  STREAM_R1_GC
+#else
+.equ SITE,        0xC01FBA28
+.equ SITE_ORIG,   0xE5940008          /* ldr r0, [r4, #8] */
 .equ TAG_THIS,    TAG_START
-.equ COUNT_WORD,  STREAM_ACOUNT
-.equ LATCH_WORD,  STREAM_A0_GC
+.equ COUNT_WORD,  STREAM_R0_N
+.equ LATCH_WORD,  STREAM_R0_GC
 #endif
 
     .global rec_trigger
@@ -100,8 +107,8 @@ rec_trigger:
 
     pop     {r0, r1, r2, r3, ip, lr}
 #ifdef REC_STOP
-    ldr     r0, [r4, #8]                @ the displaced instruction
-#else
     mov     r0, r4                      @ the displaced instruction
+#else
+    ldr     r0, [r4, #8]                @ the displaced instruction
 #endif
     bx      lr
