@@ -96,22 +96,29 @@ class Assembly(unittest.TestCase):
         code = assemble(HERE / path)
         return struct.unpack(f'<{len(code)//4}I', code)
 
-    def test_no_misaligned_frame_makes_a_call(self):
-        """The stack must be eight-byte aligned when firmware code runs, or its
-        LDRD takes a data abort -- a frozen camera and a battery pull, which
-        this has already cost once.
+    def test_no_frame_leaves_the_stack_misaligned(self):
+        """The stack must stay eight-byte aligned, full stop.
 
-        Two things stop this being a blanket "pushes must be even".  gcsvgen's
-        put_uint_many pushes five and subtracts twelve, landing on thirty-two.
-        lenscache's pg_json_early_done pushes three and is misaligned, but calls
-        nothing, so no firmware LDRD ever runs on that stack.  The hazard is
-        misaligned AND calling, and a guard that reports anything else gets
-        switched off."""
+        This was weakened once to "misaligned AND calls something", on the
+        reasoning that a leaf function cannot reach a firmware LDRD.  The
+        camera disagreed: mpool_free was a leaf, pushed five registers, and
+        wedged it; pushing four fixed it and the same probe then ran clean
+        through every stage.  The window is the interrupt taken before the
+        function masks them -- the context save lands on the interrupted
+        task's own stack.  The mutation test had already shown the weakened
+        guard could not catch it, and that should have been the end of the
+        argument.
+
+        A push may still be odd if a `sub sp` in the same prologue makes the
+        total a multiple of eight -- gcsvgen's put_uint_many pushes five and
+        subtracts twelve.  And a frame that reproduces a hooked function's own
+        prologue is the firmware's alignment, not ours; it says so on the line.
+        """
         for path in sorted(HERE.glob('*.S')):
             lines = path.read_text().splitlines()
             for n, line in enumerate(lines):
                 m = re.match(r'\s*push\s*\{([^}]*)\}', line)
-                if not m:
+                if not m or 'displaced' in line:
                     continue
                 regs = 0
                 for part in m.group(1).split(','):
@@ -126,24 +133,9 @@ class Assembly(unittest.TestCase):
                         break
                     if follow.strip().startswith(('push', 'pop', 'bl', 'bx', 'b ')):
                         break
-                if total % 8 == 0:
-                    continue
-                # A push that reproduces a hooked function's own prologue is
-                # correct by construction -- the firmware arranged that stack.
-                # It says so on the line.
-                if 'displaced' in line:
-                    continue
-                # misaligned: does anything get called before it is unwound?
-                # Stop at anything that ends straight-line flow, or the scan
-                # wanders into code that has nothing to do with this frame.
-                for follow in lines[n + 1:]:
-                    t = follow.strip()
-                    if (re.match(r'pop\s*\{', t) or t.startswith(('bx', 'b '))
-                            or re.match(r'^\S+:', follow)):
-                        break
-                    if re.match(r'bl[x]?\s+\S', t):
-                        self.fail(f'{path.name}:{n + 1} pushes {regs} registers '
-                                  f'({total} bytes, misaligned) and then calls: {t}')
+                self.assertEqual(total % 8, 0,
+                                 f'{path.name}:{n + 1} pushes {regs} registers, '
+                                 f'leaving the stack at {total}: {line.strip()}')
 
     def test_pushes_are_even(self):
         """An odd push misaligns the stack and the firmware's LDRD takes a data

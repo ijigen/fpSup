@@ -23,7 +23,12 @@ pg_post_owner:                          /* r0 = 1 if this task may build/write a
 /* r0 = queue job -> r0 = 1 when that job's clip is the take whose JSON the
  * early write already produced (J_PATH equals O_PATH and the write succeeded). */
 pg_json_early_done:
-    push    {r4, r5, lr}
+    /* Four registers, not three.  r6 is unused here; it is pushed so the frame
+     * is a multiple of eight.  A misaligned frame is not safe just because the
+     * function calls nothing: an interrupt taken while it runs saves the
+     * context onto this task's own stack, and that save is an STRD.  Proven on
+     * the camera -- a five-register push in a leaf froze it, four did not. */
+    push    {r4, r5, r6, lr}
     movw    r4, #:lower16:PG_LCACHE
     movt    r4, #:upper16:PG_LCACHE
     add     r4, r10, r4
@@ -43,9 +48,9 @@ pg_json_early_done:
     add     r0, r0, #1
     str     r0, [r4, #LC_JSON_SKIP]
     mov     r0, #1
-    pop     {r4, r5, pc}
+    pop     {r4, r5, r6, pc}
 8:  mov     r0, #0
-    pop     {r4, r5, pc}
+    pop     {r4, r5, r6, pc}
 
 pg_json_early:
     push    {r4, r5, r6, r7, r8, lr}
