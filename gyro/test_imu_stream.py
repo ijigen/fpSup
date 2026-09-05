@@ -20,6 +20,8 @@ from armasm import assemble                                    # noqa: E402
 
 ACCEL = (HERE / 'accel_hook.S').read_text()
 GYRO = (HERE / 'gyro_stream_hook.S').read_text()
+FRAME = (HERE / 'frame_hook.S').read_text()
+TRIG = (HERE / 'rec_trigger.S').read_text()
 INC = (HERE / 'imu_stream.inc.S').read_text()
 
 
@@ -34,13 +36,17 @@ class Header(unittest.TestCase):
     def test_tags_are_what_the_reader_expects(self):
         self.assertEqual(int(equ('TAG_GYRO'), 0), S.TAG_GYRO)
         self.assertEqual(int(equ('TAG_ACCEL'), 0), S.TAG_ACCEL)
+        self.assertEqual(int(equ('TAG_FRAME'), 0), S.TAG_FRAME)
+        self.assertEqual(int(equ('TAG_START'), 0), S.TAG_START)
+        self.assertEqual(int(equ('TAG_STOP'), 0), S.TAG_STOP)
 
     def test_stream_is_a_power_of_two_of_eight_byte_records(self):
         n = int(equ('STREAM_COUNT'), 0)
         self.assertEqual(n & (n - 1), 0, 'the mask assumes a power of two')
 
     def test_both_producers_take_the_header_rather_than_a_copy(self):
-        for name, src in (('accel_hook.S', ACCEL), ('gyro_stream_hook.S', GYRO)):
+        for name, src in (('accel_hook.S', ACCEL), ('gyro_stream_hook.S', GYRO),
+                          ('frame_hook.S', FRAME), ('rec_trigger.S', TRIG)):
             self.assertIn('#include "imu_stream.inc.S"', src, name)
             # A literal stream address in a producer is a second source of truth.
             for bad in ('0xC072E1F8', '0xC072E200'):
@@ -59,20 +65,23 @@ class RecordShape(unittest.TestCase):
         return got
 
     def test_four_halfwords_each(self):
-        for name, src in (('accel', ACCEL), ('gyro', GYRO)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
+                          ('trigger', TRIG)):
             self.assertEqual(sorted(self.offsets(src)), [0, 2, 4, 6], name)
 
     def test_tag_is_written_last(self):
         """A reader that catches a half-written record sees the old tag, not a
         new payload under an old one."""
-        for name, src in (('accel', ACCEL), ('gyro', GYRO)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
+                          ('trigger', TRIG)):
             body = src[src.index('push'):]
             stores = [int(m.group(1) or 0) for m in
                       re.finditer(r'strh\s+r\d+,\s*\[r\d+(?:,\s*#(\d+))?\]', body)]
             self.assertEqual(stores[-1], 4, f'{name} does not publish with the tag')
 
     def test_records_are_indexed_eight_bytes_apart(self):
-        for name, src in (('accel', ACCEL), ('gyro', GYRO)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('frame', FRAME),
+                          ('trigger', TRIG)):
             self.assertRegex(src, r'lsl\s+#3', f'{name} does not stride by eight')
 
 
@@ -84,7 +93,8 @@ class Assembly(unittest.TestCase):
     def test_pushes_are_even(self):
         """An odd push misaligns the stack and the firmware's LDRD takes a data
         abort -- which freezes the camera, not the hook."""
-        for path in ('accel_hook.S', 'gyro_stream_hook.S'):
+        for path in ('accel_hook.S', 'gyro_stream_hook.S', 'frame_hook.S',
+                     'rec_trigger.S'):
             for w in self.words(path):
                 if (w & 0x0FFF0000) == 0x092D0000:              # push {reglist}
                     self.assertEqual(bin(w & 0xFFFF).count('1') % 2, 0,
@@ -103,7 +113,7 @@ class Assembly(unittest.TestCase):
         self.assertEqual(w[-2], 0xE1D410F0, 'ldrsh r1, [r4] is not there')
         self.assertEqual(w[-1], 0xE12FFF1E, 'bx lr is not there')
 
-    def test_both_fit_where_they_are_put(self):
+    def test_all_of_them_fit_where_they_are_put(self):
         import imu_stream_deploy as D
         D._check_header()
         D._place()                      # raises on overlap or on leaving the cave
@@ -116,14 +126,36 @@ class Reader(unittest.TestCase):
     def test_position_is_time(self):
         b = self.blob((1, 2, 0, 3), (4, 5, 0, 6), (7, 8, 0, 9))
         r = S.rows(S.records(b))
-        self.assertEqual([t for t, _, _ in r], [0.0, 400.0, 800.0])
+        self.assertEqual([t for t, _, _, _ in r], [0.0, 400.0, 800.0])
 
     def test_accel_does_not_advance_time(self):
         b = self.blob((1, 1, 0, 1), (9, 9, 1, 9), (2, 2, 0, 2))
         r = S.rows(S.records(b))
-        self.assertEqual([t for t, _, _ in r], [0.0, 400.0])
+        self.assertEqual([t for t, _, _, _ in r], [0.0, 400.0])
         self.assertIsNone(r[0][2])
         self.assertEqual(r[1][2], (9, 9, 9))
+
+    def test_a_frame_marker_does_not_advance_time_either(self):
+        b = self.blob((1, 1, 0, 1), (7, 0, 2, 0), (2, 2, 0, 2), (3, 3, 0, 3))
+        r = S.rows(S.records(b))
+        self.assertEqual([t for t, _, _, _ in r], [0.0, 400.0, 800.0])
+        self.assertIsNone(r[0][3])
+        self.assertEqual(r[1][3], ('frame', 7), 'the frame lands on the row after it')
+        self.assertIsNone(r[2][3])
+
+    def test_frame_spacing_counts_gyro_between_markers(self):
+        recs = S.records(self.blob(
+            (0, 0, 2, 0), *([(0, 0, 0, 0)] * 83), (1, 0, 2, 0),
+            *([(0, 0, 0, 0)] * 84), (2, 0, 2, 0)))
+        gaps, mean = S.frame_spacing(recs)
+        self.assertEqual(gaps, [83, 84], 'each gap must be visible, not averaged away')
+        self.assertAlmostEqual(mean, 83.5)
+
+    def test_frame_spacing_ignores_accel_records(self):
+        recs = S.records(self.blob(
+            (0, 0, 2, 0), (0, 0, 0, 0), (9, 9, 1, 9), (0, 0, 0, 0), (1, 0, 2, 0)))
+        gaps, _ = S.frame_spacing(recs)
+        self.assertEqual(gaps, [2])
 
     def test_a_leading_accel_lands_on_the_first_row(self):
         b = self.blob((9, 9, 1, 9), (1, 1, 0, 1))
@@ -140,6 +172,33 @@ class Reader(unittest.TestCase):
         with self.assertRaises(ValueError):
             S.rows(S.records(self.blob((0, 0, 7, 0))))
 
+    def test_frame_hook_ends_with_the_displaced_instruction(self):
+        import struct as _s
+        code = assemble(HERE / 'frame_hook.S')
+        w = _s.unpack(f'<{len(code)//4}I', code)
+        self.assertEqual(w[-2], 0xE58D0080, 'str r0, [sp, #0x80] is not there')
+        self.assertEqual(w[-1], 0xE12FFF1E, 'bx lr is not there')
+
+    def test_no_hook_sits_on_a_function_entry(self):
+        """Every one of these functions saves lr in its first instruction, so a
+        bl there would put our return address in the function's own frame.  Each
+        site must be past the push -- and past the early returns, or a take that
+        bails out would look like a take that started."""
+        import imu_stream_deploy as D
+        entries = {0xC0315C10, 0xC01FB640, 0xC01FB918, 0xC050D250, 0xC01FD380}
+        for name, (_at, _src, _d, site, _orig) in D.PRODUCERS.items():
+            self.assertNotIn(site, entries, f'{name} is on a function entry')
+
+    def test_every_hook_declares_the_site_it_is_deployed_to(self):
+        import imu_stream_deploy as D
+        D._check_header()                # raises if a source and the table drift
+
+    def test_the_two_triggers_share_one_source(self):
+        """Start and stop differ by four lines; two files would drift."""
+        import imu_stream_deploy as D
+        self.assertEqual(D.PRODUCERS['start'][1], D.PRODUCERS['stop'][1])
+        self.assertEqual(D.PRODUCERS['stop'][2], ('REC_STOP',))
+
     def test_a_short_buffer_is_refused(self):
         with self.assertRaises(ValueError):
             S.records(b'\0' * 12)
@@ -147,7 +206,8 @@ class Reader(unittest.TestCase):
     def test_summary_counts_the_interleave(self):
         recs = S.records(self.blob(*([(0, 0, 0, 0)] * 53 + [(0, 0, 1, 0)])))
         s = S.summary(recs)
-        self.assertEqual((s['gyro'], s['accel']), (53, 1))
+        self.assertEqual((s['gyro'], s['accel'], s['frame']), (53, 1, 0))
+        self.assertEqual((s['start'], s['stop']), (0, 0))
         self.assertAlmostEqual(s['duration_us'], 53 * 400)
 
 

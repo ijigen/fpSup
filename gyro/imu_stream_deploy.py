@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
-"""Put both IMU producers on the camera, writing one ordered stream.
+"""Put the IMU producers on the camera, all writing one ordered stream.
 
-    ./imu_stream_deploy.py            arm both hooks
-    ./imu_stream_deploy.py --restore  put the firmware's instructions back
-    ./imu_stream_deploy.py --dump     read the stream and report the interleave
+    ./imu_stream_deploy.py             arm every hook
+    ./imu_stream_deploy.py --restore   put the firmware's instructions back
+    ./imu_stream_deploy.py --reset     clear the counters before a take
+    ./imu_stream_deploy.py --take      read what one take measured (twelve words)
+    ./imu_stream_deploy.py --dump      read the stream itself
+    ./imu_stream_deploy.py --rate 600  count gyro against the host clock
 
-The two hooks are separate test units that share a record shape and an index.
-`--dump` is a `mem read`; it is never issued without being asked for.
+Five producers, five hook sites, one 8-byte record shape:
 
-Nothing here writes over live code by accident: the placement is checked against
-the injection cave and against the stream's own span before a single word goes
-out, because the last time a probe landed on something that was running it cost
-four power cycles to work out why.
+    gyro   tag 0    0xC00D0794   the 20 ms GyroData callback, drains the ring
+    accel  tag 1    0xC050D498   the MMA8452Q driver publishing a sample
+    frame  tag 2    0xC0315C18   FrameExpos_s, one per exposure
+    start  tag 3    0xC01FB880   the movie recorder committing to start
+    stop   tag 4    0xC01FBA28   the movie recorder stopping
+
+Nothing writes over live code by accident: placement is checked against the
+injection cave and against every other span before a byte goes out, because the
+last time a probe landed on something that was running it cost four power
+cycles to work out why.  `--dump` and `--take` are `mem read`; they are never
+issued without being asked for.
 """
 import argparse
 import re
 import struct
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -30,10 +40,24 @@ import imu_stream as S                                         # noqa: E402
 # The injection cave, from notes/: loader.S below, park stub above.
 CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 
-ACCEL_AT = 0xC072E100
-GYRO_AT  = 0xC072EA00
+# name -> (code address, source, defines, hook site, the firmware's own word)
+PRODUCERS = {
+    'accel': (0xC072E100, 'accel_hook.S',       (),           0xC050D498, 0xE1D410F0),
+    'gyro':  (0xC072EA00, 'gyro_stream_hook.S', (),           0xC00D0794, 0xFA046FD7),
+    'frame': (0xC072EB40, 'frame_hook.S',       (),           0xC0315C18, 0xE58D0080),
+    'start': (0xC072EBD0, 'rec_trigger.S',      (),           0xC01FB880, 0xE1A00004),
+    'stop':  (0xC072EC60, 'rec_trigger.S',      ('REC_STOP',), 0xC01FBA28, 0xE5940008),
+}
 
 # Must agree with imu_stream.inc.S; _check_header() proves they do.
+STATE_AT      = 0xC072E1D0
+STATE_WORDS   = 12
+STREAM_A1_GC  = 0xC072E1D0
+STREAM_ZCOUNT = 0xC072E1D4
+STREAM_FCOUNT = 0xC072E1E0
+STREAM_F0_GC  = 0xC072E1E4
+STREAM_A0_GC  = 0xC072E1E8
+STREAM_ACOUNT = 0xC072E1EC
 STREAM_GHEAD  = 0xC072E1F0
 STREAM_PADBAD = 0xC072E1F4
 STREAM_INDEX  = 0xC072E1F8
@@ -42,39 +66,57 @@ STREAM_BASE   = 0xC072E200
 STREAM_COUNT  = 256
 STREAM_SPAN   = STREAM_COUNT * 8
 
-# hook site -> the firmware's own word there
-SITES = {
-    'accel': (0xC050D498, 0xE1D410F0),      # ldrsh r1, [r4]
-    'gyro':  (0xC00D0794, 0xFA046FD7),      # blx   0xC01EC6F8
-}
+# GHEAD unarmed, everything else zero.
+STATE_INIT = struct.pack('<12I', 0, 0, 0, 0, 0, 0, 0, 0, 0xFFFFFFFF, 0, 0, 0)
 
-TAG_GYRO, TAG_ACCEL = 0, 1
+GYRO_PERIOD_US = 400.0
 
 
 def _check_header():
-    """The constants above are duplicated from the assembly; prove they match."""
+    """These constants are duplicated from the assembly; prove they match."""
     src = (HERE / 'imu_stream.inc.S').read_text()
-    want = {'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
-            'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
-            'STREAM_BASE': STREAM_BASE,
-            'STREAM_COUNT': STREAM_COUNT, 'TAG_GYRO': TAG_GYRO,
-            'TAG_ACCEL': TAG_ACCEL}
+    want = {
+        'STREAM_A1_GC': STREAM_A1_GC, 'STREAM_ZCOUNT': STREAM_ZCOUNT,
+        'STREAM_FCOUNT': STREAM_FCOUNT, 'STREAM_F0_GC': STREAM_F0_GC,
+        'STREAM_A0_GC': STREAM_A0_GC, 'STREAM_ACOUNT': STREAM_ACOUNT,
+        'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
+        'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
+        'STREAM_BASE': STREAM_BASE, 'STREAM_COUNT': STREAM_COUNT,
+        'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
+        'TAG_FRAME': S.TAG_FRAME, 'TAG_START': S.TAG_START, 'TAG_STOP': S.TAG_STOP,
+    }
     for name, value in want.items():
-        m = re.search(rf'^\.equ\s+{name},\s*(\S+)', src, re.M)
+        m = re.search(rf'^\.equ\s+{name},\s*([^\s/@]+)', src, re.M)
         if not m:
             raise SystemExit(f'imu_stream.inc.S has no {name}')
         if int(m.group(1).rstrip(','), 0) != value:
             raise SystemExit(f'{name}: header says {m.group(1)}, this says {value:#x}')
+    if STATE_AT + STATE_WORDS * 4 != STREAM_BASE:
+        raise SystemExit('the state words do not end where the stream begins')
+
+    # Each hook must carry the site it is deployed to, and end by performing the
+    # instruction it displaced.  A site that drifts between the two is how a
+    # branch lands inside something that is running.
+    for name, (_at, source, defines, site, orig) in PRODUCERS.items():
+        text = (HERE / source).read_text()
+        if 'REC_STOP' in [d for d in defines]:
+            text = text.split('#ifdef REC_STOP')[1].split('#else')[0]
+        elif '#ifdef REC_STOP' in text:
+            text = text.split('#else')[1].split('#endif')[0]
+        if f'{site:#010X}'.replace('0X', '0x') not in text.replace('0X', '0x'):
+            if f'0x{site:08X}' not in text:
+                raise SystemExit(f'{name}: {source} does not mention site 0x{site:08X}')
+        if f'0x{orig:08X}' not in text:
+            raise SystemExit(f'{name}: {source} does not mention its displaced '
+                             f'word 0x{orig:08X}')
 
 
 def _place():
-    """Assemble both and check nothing lands on anything else."""
-    code = {'accel': assemble(HERE / 'accel_hook.S'),
-            'gyro': assemble(HERE / 'gyro_stream_hook.S')}
-    spans = [('accel_hook', ACCEL_AT, len(code['accel'])),
-             ('gyro_stream_hook', GYRO_AT, len(code['gyro'])),
-             ('stream words', STREAM_GHEAD, 16),
-             ('stream', STREAM_BASE, STREAM_SPAN)]
+    """Assemble everything and check nothing lands on anything else."""
+    code = {n: assemble(HERE / src, d) for n, (_a, src, d, _s, _o) in PRODUCERS.items()}
+    spans = [(n, PRODUCERS[n][0], len(c)) for n, c in code.items()]
+    spans += [('state words', STATE_AT, STATE_WORDS * 4),
+              ('stream', STREAM_BASE, STREAM_SPAN)]
     for name, at, n in spans:
         if at < CAVE_LO or at + n > CAVE_HI:
             raise SystemExit(f'{name}: 0x{at:08X}..0x{at+n:08X} leaves the cave '
@@ -83,111 +125,158 @@ def _place():
         for bn, ba, bl in spans[i + 1:]:
             if aa < ba + bl and ba < aa + al:
                 raise SystemExit(f'{an} and {bn} overlap')
-    for name, at, n in spans:
-        print(f'  {name:18s} 0x{at:08X}..0x{at+n:08X}  {n} bytes')
+    for name, at, n in sorted(spans, key=lambda s: s[1]):
+        print(f'  {name:14s} 0x{at:08X}..0x{at+n:08X}  {n} bytes')
     return code
-
-
-def _put(addr, blob, label):
-    P.put_slow(addr, blob, label)
 
 
 def arm():
     _check_header()
     code = _place()
 
-    for name, (site, orig) in SITES.items():
+    for name, (_at, _src, _d, site, orig) in PRODUCERS.items():
         got = P.mem_get(site)[0]
         if got is None:
             raise SystemExit(f'{name}: could not read 0x{site:08X}')
         if got != orig:
             raise SystemExit(f'{name}: 0x{site:08X} is 0x{got:08X}, not the '
-                             f'firmware\'s 0x{orig:08X} -- something is already '
+                             f"firmware's 0x{orig:08X} -- something is already "
                              f'hooked there, refusing')
 
-    _put(ACCEL_AT, code['accel'], 'accel_hook')
-    _put(GYRO_AT, code['gyro'], 'gyro_stream_hook')
+    for name, blob in code.items():
+        P.put_slow(PRODUCERS[name][0], blob, name)
+    P.put_slow(STATE_AT, STATE_INIT, 'state words')
+    P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
 
-    # State before either hook can run: an unarmed head makes the gyro producer
-    # take the firmware's current head on its first visit and drop the history.
-    _put(STREAM_GHEAD, struct.pack('<4I', 0xFFFFFFFF, 0, 0, 0), 'stream words')
-    _put(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
-
-    for name, (site, _orig) in SITES.items():
-        at = ACCEL_AT if name == 'accel' else GYRO_AT
+    for name, (at, _src, _d, site, _orig) in PRODUCERS.items():
         word = 0xEB000000 | (((at - (site + 8)) >> 2) & 0xFFFFFF)
-        print(f'arming {name}: 0x{site:08X} -> bl 0x{at:08X}  (0x{word:08X})')
+        print(f'arming {name:6s} 0x{site:08X} -> bl 0x{at:08X}  (0x{word:08X})')
         for _ in range(8):
             P.mem_set(site, word)
             if P.mem_get(site)[0] == word:
                 break
         else:
             raise SystemExit(f'{name}: the branch would not take')
-    print('both producers live')
+    print(f'{len(PRODUCERS)} producers live')
 
 
 def restore():
-    for name, (site, orig) in SITES.items():
+    for name, (_at, _src, _d, site, orig) in PRODUCERS.items():
         for _ in range(8):
             P.mem_set(site, orig)
             if P.mem_get(site)[0] == orig:
-                print(f'{name}: 0x{site:08X} back to 0x{orig:08X}')
+                print(f'{name:6s} 0x{site:08X} back to 0x{orig:08X}')
                 break
         else:
             raise SystemExit(f'{name}: could not restore 0x{site:08X}')
 
 
-def dump(count):
-    ghead, padbad, index, gcount = P.mem_get(STREAM_GHEAD, 4)
-    print(f'gyro head 0x{ghead:08X}   index {index}   gyro {gcount}   '
-          f'bad pads {padbad}')
-    if padbad:
-        print('  ^ the gyro ring put something in the pad halfword: the tag is '
-              'not free after all, and the format has to move')
-    if not index:
-        print('nothing has been written')
-        return
+def reset():
+    """Clear the counters between takes without rewriting a byte of code.
 
+    Arming re-writes the hooks, and rewriting live code is what killed the
+    camera four times.  A take needs only the counters cleared: each latch fires
+    again on its next first event, and the gyro producer re-anchors on the
+    firmware's current head.
+    """
+    P.put_slow(STATE_AT, STATE_INIT, 'state words')
+    P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
+    print('counters cleared -- the next start, and the next frame, are take zero')
+
+
+def _ms(samples):
+    return samples * GYRO_PERIOD_US / 1000.0
+
+
+def take():
+    """What one take measured.  Twelve words, no stream dump."""
+    w = P.mem_get(STATE_AT, STATE_WORDS)
+    if any(x is None for x in w):
+        raise SystemExit('the state words did not read back whole')
+    a1_gc, zcount = w[0], w[1]
+    fcount, f0_gc, a0_gc, acount = w[4], w[5], w[6], w[7]
+    _ghead, padbad, index, gcount = w[8], w[9], w[10], w[11]
+
+    print(f'records {index}   gyro {gcount}   bad pads {padbad}')
+    print(f'starts {acount}   stops {zcount}   frames {fcount}')
+    print()
+
+    if not acount:
+        print('the recorder never committed to start.')
+        print('  0xC01FB880 is on the movie path (MovRecFuncStateREC -> FUN_c01fb640);')
+        print('  a take that reached it would have bumped this.')
+    if not fcount:
+        print('no frame marker fired -- 0xC0315C18 is not on the exposure path,')
+        print('  or nothing was exposed since the counters were cleared.')
+
+    if acount and fcount:
+        d = f0_gc - a0_gc
+        print(f'gyro sample at record start  {a0_gc}')
+        print(f'gyro sample at first frame   {f0_gc}')
+        print(f'  -> the first exposure is {d:+d} samples = {_ms(d):+.1f} ms '
+              f'from the recorder committing to start')
+        print('     (positive: the exposure is later, which is the direction our')
+        print("      polled flag has always been early in)")
+        print()
+
+    if fcount >= 2:
+        frames = fcount - 1
+        samples = gcount - f0_gc
+        per = samples / frames
+        print(f'{samples} gyro over {frames} frames = {per:.4f} per frame')
+        print("  if the clip is        the gyro rate in the camera's own clock is")
+        for label, fps in (('29.97 fps', 30000 / 1001), ('59.94 fps', 60000 / 1001),
+                           ('25 fps', 25.0), ('24 fps', 24.0)):
+            hz = per * fps
+            print(f'  {label:12s}          {hz:9.3f} Hz  ({hz / 2500 - 1:+.4%} of 2500)')
+
+    if acount and zcount:
+        print()
+        print(f'take length {a1_gc - a0_gc} samples = {_ms(a1_gc - a0_gc) / 1000:.2f} s '
+              f'of gyro between start and stop')
+
+
+def dump(count):
+    take()
+    print()
     words = P.read_back(STREAM_BASE, STREAM_COUNT * 2)
     if any(w is None for w in words):
         raise SystemExit('the stream did not read back whole')
-    blob = struct.pack(f'<{len(words)}I', *words)
-    recs = S.records(blob)
+    recs = S.records(struct.pack(f'<{len(words)}I', *words))
 
-    # The index is monotonic, so the next slot to be written is also the oldest
-    # record still standing.
+    index = P.mem_get(STREAM_INDEX)[0]
     live = min(index, STREAM_COUNT)
     first = index % STREAM_COUNT
-    order = [(first + i) % STREAM_COUNT for i in range(live)] if index > STREAM_COUNT \
-        else list(range(live))
+    order = ([(first + i) % STREAM_COUNT for i in range(live)]
+             if index > STREAM_COUNT else list(range(live)))
     seq = [recs[i] for i in order]
 
     info = S.summary(seq)
-    print(f"{live} records: {info['gyro']} gyro, {info['accel']} accel"
+    print(f"{live} records: {info['gyro']} gyro, {info['accel']} accel, "
+          f"{info['frame']} frame, {info['start']} start, {info['stop']} stop"
           + (f", unknown tags {info['unknown']}" if info['unknown'] else ''))
     if info['per_accel']:
         print(f"one accel every {info['per_accel']:.0f} gyro "
               f"(2500 Hz against a measured 47.2 Hz is about 53)")
+    gaps, per_frame = S.frame_spacing(seq)
+    if per_frame:
+        print(f"{per_frame:.2f} gyro per frame in the ring; spacings {gaps}")
     print(f"{info['duration_us'] / 1000:.1f} ms of gyro in the stream")
-
-    for (t, g, a), slot in zip(S.rows(seq), order):
-        if count <= 0:
-            break
-        count -= 1
+    for t, g, a, mark in S.rows(seq)[:count]:
         extra = f'   accel {a[0]:6d} {a[1]:6d} {a[2]:6d}' if a else ''
-        print(f'  [{slot:3d}] {t:8.0f} us  {g[0]:7d} {g[1]:7d} {g[2]:7d}{extra}')
+        m = f'   <- {mark[0].upper()} {mark[1]}' if mark else ''
+        print(f'  {t:8.0f} us  {g[0]:7d} {g[1]:7d} {g[2]:7d}{extra}{m}')
 
 
 def rate(total, step):
     """Count gyro records against a long baseline and fit a rate.
 
-    A count is exact; the clock is not.  So the uncertainty is entirely in the
-    host's timestamps, and the fit's residuals are what says how much of it
-    there is -- rather than a single pair of reads and a number with no error
-    bar, which is how the notes ended up with two rates that disagree.
+    A count is exact; the host's clock is not, so the uncertainty is entirely in
+    the timestamps and the fit's residuals are what says how much of it there
+    is.  A rate quoted without an error bar is how the notes ended up with two
+    that disagree.  Note this measures the gyro against the HOST -- for the ratio
+    that actually matters, against the camera's own frame clock, use --take.
     """
-    import time
-
     samples = []
     t_end = time.time() + total
     while True:
@@ -200,53 +289,49 @@ def rate(total, step):
         if len(samples) > 1:
             dt = samples[-1][0] - samples[0][0]
             dn = samples[-1][1] - samples[0][1]
-            print(f'  {dt:7.1f} s   {dn:9d} records   {dn / dt:9.3f} Hz'
-                  f'   (+/- {samples[-1][2] * 1000:.0f} ms on this read)')
+            print(f'  {dt:7.1f} s   {dn:9d} records   {dn / dt:9.3f} Hz')
         if time.time() >= t_end:
             break
         time.sleep(max(0.0, step - (time.time() - b)))
 
     if len(samples) < 3:
         raise SystemExit('too few samples to fit')
-
     n = len(samples)
-    t0 = samples[0][0]
+    t0, c0 = samples[0][0], samples[0][1]
     xs = [t - t0 for t, _, _ in samples]
-    ys = [float(c - samples[0][1]) for _, c, _ in samples]
+    ys = [float(c - c0) for _, c, _ in samples]
     mx, my = sum(xs) / n, sum(ys) / n
     sxx = sum((x - mx) ** 2 for x in xs)
     slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
     icpt = my - slope * mx
     resid = [y - (slope * x + icpt) for x, y in zip(xs, ys)]
-    se = (sum(r * r for r in resid) / (n - 2) / sxx) ** 0.5 if n > 2 else 0.0
-
+    se = (sum(r * r for r in resid) / (n - 2) / sxx) ** 0.5
     print()
     print(f'{n} samples over {xs[-1]:.1f} s')
     print(f'rate  {slope:.3f} +/- {se:.3f} Hz   ({slope / 2500 - 1:+.4%} of 2500)')
-    worst = max(abs(r) for r in resid)
-    print(f'worst residual {worst:.0f} records = {worst / slope * 1000:.0f} ms of clock')
-    for label, hz in (('2500.00 exact', 2500.0), ('2500.50 (+0.02%)', 2500.5),
-                      ('2501.85 (+0.074%)', 2501.85)):
-        drift = (slope / hz - 1) * 180 * 1000
-        print(f'  against {label:20s} 3 min would drift {drift:+7.1f} ms'
-              f'  ({drift / 33.367:+.1f} frames at 29.97)')
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--restore', action='store_true')
-    ap.add_argument('--dump', action='store_true')
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument('--restore', action='store_true')
+    g.add_argument('--reset', action='store_true')
+    g.add_argument('--take', action='store_true')
+    g.add_argument('--dump', action='store_true')
+    g.add_argument('--rate', type=float, metavar='SECONDS')
     ap.add_argument('--rows', type=int, default=24)
-    ap.add_argument('--rate', type=float, metavar='SECONDS',
-                    help='count gyro records for this long and fit a rate')
     ap.add_argument('--step', type=float, default=30.0)
     a = ap.parse_args()
-    if a.rate:
-        rate(a.rate, a.step)
-    elif a.restore:
+    if a.restore:
         restore()
+    elif a.reset:
+        reset()
+    elif a.take:
+        take()
     elif a.dump:
         dump(a.rows)
+    elif a.rate:
+        rate(a.rate, a.step)
     else:
         arm()
     return 0

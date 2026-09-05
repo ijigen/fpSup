@@ -34,6 +34,9 @@
 .equ GYRO_DATA_OFF,  4              /* records start at base+4, head is base+off */
 .equ GYRO_SPAN,      0x12C0         /* 600 records of eight bytes                */
 
+.equ GYRO_SITE,      0xC00D0794
+.equ GYRO_SITE_ORIG, 0xFA046FD7     /* blx 0xC01EC6F8 */
+
 .equ HOOK_RESUME_LO, 0xC6F9         /* 0xC01EC6F9: thumb, so bx not blx          */
 .equ HOOK_RESUME_HI, 0xC01E
 

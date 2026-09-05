@@ -31,6 +31,9 @@
  * be on an address both of them can name.
  */
 
+.equ ACCEL_SITE,      0xC050D498
+.equ ACCEL_SITE_ORIG, 0xE1D410F0    /* ldrsh r1, [r4] */
+
     .global accel_hook
 accel_hook:
     push    {r0, r1, r2, r3, ip, lr}

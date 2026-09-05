@@ -39,11 +39,48 @@
  * claim's error.  It is also fixable for free if it ever matters: the hook could
  * latch the firmware ring's head along with the sample, and the gyro producer
  * splice the record in at that position inside the batch instead of after it.
+ *
+ * tag 2 is a video frame exposure.  Not a row either, and it carries no time of
+ * its own -- it IS a time, the one the clip is cut on.  Its position says which
+ * gyro sample the frame was exposed against, so both of the questions that
+ * matter -- how many samples per frame, and which sample is frame zero -- are
+ * read straight out of the stream rather than computed from a clock.
+ *
+ * Note what this does NOT claim.  Audio is in sync with video without knowing
+ * an accurate start time at all: both begin filling at the same event, so any
+ * common offset is invisible inside the clip.  By the same argument, a gyro
+ * stream that begins at that event needs no timestamp either.  So the 470-570
+ * ms our anchor is out by is not evidence that the factory's start point is
+ * late -- it has never been established which side is late, and the marker is
+ * here to settle that by measurement rather than to assume it.
  */
 
 /* Provisional home: the logger's own injection cave, with no logger loaded.
  * When the two producers are assembled into the real thing, these move to the
  * buffer declared out of the pool the way the audio writer declares its own. */
+.equ STREAM_FCOUNT,  0xC072E1E0     /* u32, frame markers appended             */
+.equ STREAM_F0_GC,   0xC072E1E4     /* u32, STREAM_GCOUNT at the FIRST marker.
+                                     * The ring holds only 100 ms, so frame
+                                     * zero is long gone by the end of a take.
+                                     * This keeps the one number that cannot be
+                                     * recovered afterwards: which gyro sample
+                                     * the take's first exposure landed on.
+                                     * With it, (gcount - f0_gc) / (fcount - 1)
+                                     * is the samples-per-frame over the whole
+                                     * take, measured against the camera's own
+                                     * frame clock and nothing else.          */
+.equ STREAM_A1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT at the stop         */
+.equ STREAM_ZCOUNT,  0xC072E1D4     /* u32, times the recorder was stopped    */
+.equ STREAM_A0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
+                                     * writer was constructed.  Beside F0_GC
+                                     * this is the whole experiment: the gap
+                                     * between them is how far our start point
+                                     * sits from the take's first exposure,
+                                     * measured in gyro samples of 400 us --
+                                     * a number, where the 470-570 ms has only
+                                     * ever been an inference from Gyroflow's
+                                     * auto-sync.                             */
+.equ STREAM_ACOUNT,  0xC072E1EC     /* u32, times the audio writer was built  */
 .equ STREAM_GHEAD,   0xC072E1F0     /* u32, gyro ring head we have consumed    */
 .equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
 .equ STREAM_INDEX,   0xC072E1F8     /* u32, monotonic; both producers claim it */
@@ -54,5 +91,8 @@
 
 .equ TAG_GYRO,       0
 .equ TAG_ACCEL,      1
+.equ TAG_FRAME,      2
+.equ TAG_START,      3
+.equ TAG_STOP,       4
 
 .equ HEAD_UNARMED,   0xFFFFFFFF
