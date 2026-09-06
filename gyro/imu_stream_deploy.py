@@ -375,7 +375,10 @@ def reset():
     # The block bookkeeping too, so a stage that never builds a take still
     # reads cleanly.  B_CUR must be -1, not 0: zero means "block zero is mine",
     # and on a fresh boot block zero has no allocation behind it.
-    P.put_slow(0xC072EBA0, struct.pack('<%dI' % (2 * BUF_N), *([0] * 2 * BUF_N))
+    # B_PTR is NOT cleared: it holds the allocator's pointers and they are
+    # held for the session.  Clearing it once leaked 128 KiB and made take_open
+    # decline every take.  Only the busy flags and the fill state reset.
+    P.put_slow(0xC072EBC0, struct.pack('<%dI' % BUF_N, *([0] * BUF_N))
                + struct.pack('<6i', -1, 0, 0, 0, 0, 0), 'block state')
 
     # NOT the call-throughs.  Clearing counters must not undo --stage: this
