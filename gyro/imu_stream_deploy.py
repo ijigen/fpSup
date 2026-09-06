@@ -47,10 +47,10 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 # name -> (code address, source, defines, hook site, firmware's word, thumb?)
 PRODUCERS = {
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
-    'gyro':  (0xC072E600, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
-    'start': (0xC072E790, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
-    'stop':  (0xC072E880, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
-    'vd':    (0xC072E950, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
+    'gyro':  (0xC072E300, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
+    'start': (0xC072E490, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
+    'stop':  (0xC072E580, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
+    'vd':    (0xC072E650, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
 
 
@@ -109,7 +109,7 @@ STREAM_BASE   = 0xC072E200
 POOL_PTR      = 0xC3757A7C
 RING_POOL_OFF = 0x20000
 RING_RECORDS  = 16384
-STREAM_COUNT  = 128
+STREAM_COUNT  = 32
 STREAM_SPAN   = STREAM_COUNT * 8
 
 # GHEAD unarmed, everything else zero.

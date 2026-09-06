@@ -64,7 +64,12 @@
 .equ D_DSNAME,       0x14           /* eight bytes                            */
 
 .equ WRITER_PRI,     6              /* what AudF_W and SRecFile run at        */
-.equ WRITER_STKSZ,   0x2000         /* what AudF_W asks for                   */
+.equ WRITER_STKSZ,   0x4000         /* AudF_W asks for 0x2000, but SRecFile --
+                                     * the VIDEO file writer, which pushes far
+                                     * more through the same XC_MediaFile --
+                                     * asks for 0x4000.  The SD path is deep
+                                     * and 8 KiB is the cheaper thing to be
+                                     * wrong about.                          */
 
 /* Below the accel hook, clear of the stream's own words at 0xC072E1B0. */
 .equ T_DESC,         0xC072E080     /* 32 bytes, the task descriptor          */
@@ -87,6 +92,35 @@
 .equ T_RECV_RC,      0xC072E0E8     /* what receive returned when it stopped
                                      * returning zero                         */
 .equ T_MBX_RC,       0xC072E0EC     /* what the mailbox create returned       */
+
+/* ---- the card write ---------------------------------------------------- */
+
+/* The same file object the audio writer uses.  XC_MediaFile::Write is where
+ * every write on this camera funnels through, and it takes and releases the one
+ * non-preemptible card lock, so writing from here is writing exactly the way
+ * audio does.  F_WRITE(object, source, length) -- the source is a pointer, and
+ * ours points straight into the ring.  Nothing is copied. */
+.equ F_MGR,          0xC0444658
+.equ F_VOL,          0xC0444698
+.equ F_CTOR,         0xC0365E90
+.equ F_OPEN,         0xC0365FB0
+.equ F_WRITE,        0xC03660E8
+.equ F_CLOSE,        0xC0366020
+.equ F_DTOR,         0xC0365ED0
+.equ F_MODE_RW,      7              /* overwrites; 0x402 fails when it exists */
+
+.equ T_FOBJ,         0xC072E0F8     /* the file object, placed by the deployer */
+.equ T_FOPEN,        0xC072E0FC     /* non-zero once it is open               */
+.equ T_BYTES,        0xC072E180     /* in the gap between the accel hook and
+                                     * the stream's own words; the accel hook
+                                     * grew into 0xC072E140 when the ring base
+                                     * became a variable.                    */     /* bytes written                          */
+.equ T_WRITES,       0xC072E184     /* F_WRITE calls                          */
+.equ T_WRC,          0xC072E188     /* what the last one returned             */
+.equ T_LOST,         0xC072E18C     /* records overwritten before we took them.
+                                     * The one number that says the ring is
+                                     * too shallow; it must stay zero.       */
+.equ T_WRAPS,        0xC072E190     /* spans that had to be split at the end  */     /* what the mailbox create returned       */
 .equ T_DRAINED,      0xC072E0C8     /* records the writer has taken           */
 .equ T_MAXSPAN,      0xC072E0CC     /* the largest it ever found waiting.  If
                                      * this approaches the ring's capacity the

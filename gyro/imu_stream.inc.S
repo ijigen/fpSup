@@ -167,7 +167,11 @@
 .equ STREAM_TAIL,    0xC072E1A4     /* u32, records the writer has taken      */
 .equ STREAM_SIGFN,   0xC072E1A8     /* u32, writer_signal's address, or 0     */
 .equ STREAM_BASE,    0xC072E200     /* the bench ring, when STREAM_RING is 0  */
-.equ STREAM_COUNT,   128            /* the bench ring: 1 KiB, about 50 ms     */
+.equ STREAM_COUNT,   32             /* The bench ring, and only a fallback: the
+                                     * producers use it when STREAM_RING is 0,
+                                     * which is before the pool buffer exists.
+                                     * 256 bytes is enough to be valid, and the
+                                     * cave needs the rest for the writer.    */
 .equ STREAM_MASK,    (STREAM_COUNT - 1)
 
 /* The real ring, out of the pool.  16384 records is 128 KiB and 6.5 seconds at
