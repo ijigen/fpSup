@@ -211,6 +211,20 @@ class AudioShape(unittest.TestCase):
         commit = SPACE[SPACE.index('stream_commit:'):]
         self.assertIn('B_OFF', commit, 'the offset is not carried at all')
 
+    def test_attach_passes_the_body_objects_address(self):
+        """FUN_c036efe8 calls (**(code **)(**(int **)(holder + 8) + 0xc))(): B is
+        the stored pointer, *B the body's vtable, vtable+0xC the function.
+        W_BODYOBJ is the body -- one word holding &W_VT -- so attach must pass
+        &W_BODYOBJ.  Passing its VALUE (&W_VT) hands the worker W_VT[0] as a
+        vtable, which nothing writes, and it died the instant it was woken."""
+        t = self.body('take_open')
+        att = t.index('XT_ATTACH')
+        window = t[att - 400:att]
+        self.assertIn('W_BODYOBJ', window)
+        self.assertNotRegex(window, r'W_BODYOBJ\n\s+ldr\s+r1, \[r1\]',
+                            'attach dereferences the body object')
+        self.assertNotIn('ldr     r1, [r1]', window[window.rindex('W_BODYOBJ'):])
+
     def test_the_thread_is_the_firmwares_own(self):
         """XC_Thread.cpp's pool, used rather than reimplemented: the flag, the
         task, the parking and the wup/ter/del all live inside these four calls,

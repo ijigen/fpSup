@@ -577,9 +577,16 @@ take_open:
     beq     9f                          @ the pool refused: leave it unstarted
     cmp     r7, #4
     blo     9f
+    /* The ADDRESS of the body object, not its contents.  The worker does
+     * (**(code **)(**(int **)(holder + 8) + 0xc))(): it stores this pointer as
+     * B, reads *B for the vtable, and calls vtable+0xC.  W_BODYOBJ is the body
+     * -- one word holding &W_VT -- so B must be &W_BODYOBJ.  Passing its value
+     * (&W_VT) made the worker read W_VT[0], which nothing ever writes, as a
+     * vtable: the instant it was woken it called a garbage pointer.  Build 3,
+     * which never wakes it, ran; every build that woke it died on the spot,
+     * at either site, with either stack. */
     movw    r1, #:lower16:W_BODYOBJ
     movt    r1, #:upper16:W_BODYOBJ
-    ldr     r1, [r1]
     movw    ip, #:lower16:XT_ATTACH
     movt    ip, #:upper16:XT_ATTACH
     blx     ip                          @ the writer is running from here
