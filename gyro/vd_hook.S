@@ -3,7 +3,19 @@
 
 #include "imu_stream.inc.S"
 
-/* The exposure side.  It measures; it no longer writes to the stream.
+/* SCAFFOLDING.  This hook comes out once the stream is trusted -- decided
+ * 2026-09-07.  It is an instrument, not a feature: nothing downstream reads it,
+ * it costs an IRQ, and every question it was built to answer has been answered.
+ *
+ * Before deleting it, be sure about ONE of the numbers it holds: V0_HEAD, the
+ * ring head at the take's first exposure.  Against R0_HEAD it says how far our
+ * record-start point sits from the first frame -- the 470-570 ms that varies
+ * per clip and is the reason Gyroflow's auto-sync is reliable on one take and
+ * not the next.  The frame period, the rate check and the doubled-Vd census are
+ * all finished work; that one is not.  If the anchor is settled another way, or
+ * declared out of scope, this file goes.
+ *
+ * The exposure side.  It measures; it no longer writes to the stream.
  *
  * Gyro data has to line up with when light hit the sensor, not with when a
  * frame reached the card.  CinemaDNG is a 96 MB/s buffered write, so the file
