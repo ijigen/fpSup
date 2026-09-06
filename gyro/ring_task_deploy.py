@@ -56,11 +56,10 @@ T_RECV_RC, T_MBX_RC = 0xC072E0E8, 0xC072E0EC
 T_DESC, T_PKT, T_MBX = 0xC072E080, 0xC072E0A0, 0xC072E0C4
 T_DRAINED, T_MAXSPAN = 0xC072E0C8, 0xC072E0CC
 T_FOBJ, T_FOPEN = 0xC072E0F8, 0xC072E0FC
-T_WANT = 0xC072E194
+T_WANT = 0xC072EC50
 T_STAGE = 0xC072E198
-T_STOPSENT = 0xC072E15C
-T_JSEQ = 0xC072E160
-T_JOBSLOT = 0xC072E164
+T_JSEQ = 0xC072EC48
+T_JOBSLOT = 0xC072EC4C
 STREAM_JPOOL = 0xC072E19C
 STREAM_POSTED = 0xC072E1AC
 STREAM_INDEX, STREAM_TAIL = 0xC072E1F8, 0xC072E1A4
@@ -240,7 +239,7 @@ def place_code():
     _setw(T_FOBJ, pool + FOBJ_POOL_OFF, 'the file object')
     _setw(STREAM_JPOOL, pool + JPOOL_POOL_OFF, 'the job pool')
     _setw(STREAM_POSTED, 0, 'the posted mark')
-    for a in (T_STOPSENT, T_JSEQ, T_JOBSLOT):
+    for a in (T_JSEQ, T_JOBSLOT):
         _setw(a, 0, 'a job word')
     # Build the free list before anything can take a descriptor from it.
     echo_into(at['mpool_init_jobs'], 'mpool_init_jobs')
@@ -341,11 +340,11 @@ def state():
     print(f'  T_MBX      {mbx}   wanted {want}   file open {fopen}')
     if st:
         print(f'  close got to 0x{st:X}' + (f' -- {where}' if where else ''))
-    jseq, sent = P.mem_get(T_JSEQ)[0], P.mem_get(T_STOPSENT)[0]
+    jseq = P.mem_get(T_JSEQ)[0]
     jfree = P.mem_get((pool_base() + JPOOL_POOL_OFF) + 4)[0]
     jfail = P.mem_get((pool_base() + JPOOL_POOL_OFF) + 0x10)[0]
     print(f'  writes     {wr}   bytes {by}   last result {wrc}')
-    print(f'  jobs       {jseq} posted   stop sent {sent}   '
+    print(f'  jobs       {jseq} posted   '
           f'pool {jfree}/{JOB_COUNT} free   refused {jfail}')
     print(f'  wraps      {wraps}   LOST {lost}'
           + ('   <- the ring is too shallow' if lost else ''))
@@ -451,7 +450,6 @@ def main():
         # exercises the path the record hook uses rather than a second one.
         head = P.mem_get(STREAM_INDEX)[0]
         _setw(STREAM_POSTED, head, 'the posted mark')
-        _setw(T_STOPSENT, 0, 'the stop flag')
         _setw(T_WANT, 1, 'the wanted state')
         print(f'asked for a file, take starts at record {head}')
         time.sleep(1.0)

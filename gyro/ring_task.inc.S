@@ -220,14 +220,13 @@
  * the cheap half of that choice: moving the hook instead would have changed
  * which addresses we write, which is exactly the variable a freeze
  * postmortem cannot afford. */
-.equ T_STOPSENT,     0xC072E15C     /* one stop job per take, not one a wake  */
-.equ T_JSEQ,         0xC072E160     /* jobs posted, so a dump can see order   */
-.equ T_JOBSLOT,      0xC072E164     /* where MBX_RECV leaves the descriptor   */
+.equ T_JSEQ,         0xC072EC48     /* jobs posted, so a dump can see order   */
+.equ T_JOBSLOT,      0xC072EC4C     /* where MBX_RECV leaves the descriptor   */
 .equ T_STAGE,        0xC072E198     /* how far the close got.  A wedge that
                                      * leaves a number behind is a bisect; one
                                      * that leaves nothing is another reboot
                                      * spent guessing. */
-.equ T_WANT,         0xC072E194     /* 1 = a take wants the file, 0 = it does
+.equ T_WANT,         0xC072EC50     /* 1 = a take wants the file, 0 = it does
                                      * not.  The recording hooks set this and
                                      * nothing else: opening a file is far too
                                      * heavy for a firmware callback, and those

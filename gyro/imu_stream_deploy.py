@@ -120,6 +120,7 @@ STREAM_SIGFN  = 0xC072E1A8
 STREAM_CLAIMFN  = 0xC072EC38
 STREAM_COMMITFN = 0xC072EC3C
 STREAM_DRAINFN  = 0xC072EC40
+T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 BUF_N, BUF_BYTES = 8, 0x4000
 B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
 POOL_PTR      = 0xC3757A7C
@@ -192,6 +193,7 @@ def _place(measure_accel=False):
     code = {n: assemble(HERE / src, defines(n, d))
             for n, (_a, src, d, _s, _o, _t) in PRODUCERS.items()}
     spans = [(n, PRODUCERS[n][0], len(c)) for n, c in code.items()]
+    code_spans = list(spans)      # words may sit in data, never in code
     spans += [('state words', STATE_AT, STATE_WORDS * 4),
               ('accel state', ACC_STATE, ACC_WORDS * 4),
               # ring_task_deploy owns these, but only this script knows
@@ -202,7 +204,7 @@ def _place(measure_accel=False):
               # the writer's own words and the four call-throughs.  These
               # used to sit under the space provider, and W_VT sat on top of
               # T_POS: putting them in the map is what stops that happening.
-              ('writer words', 0xC072EC00, 0x44)]
+              ('writer words', 0xC072EC00, 0x58)]
     for name, at, n in spans:
         if at < CAVE_LO or at + n > CAVE_HI:
             raise SystemExit(f'{name}: 0x{at:08X}..0x{at+n:08X} leaves the cave '
@@ -211,6 +213,29 @@ def _place(measure_accel=False):
         for bn, ba, bl in spans[i + 1:]:
             if aa < ba + bl and ba < aa + al:
                 raise SystemExit(f'{an} and {bn} overlap')
+    # Every .equ in the cave, against every blob.  This is the check that was
+    # missing: T_JSEQ, T_JOBSLOT and T_WANT had been sitting INSIDE the
+    # accelerometer hook's code, so writing T_WANT at record start overwrote an
+    # instruction and the kernel wrote received messages into another one.  The
+    # map only listed what the deployer places; the words are declared in the
+    # headers, so nothing compared the two.
+    caves = {}
+    for hdr in ('imu_stream.inc.S', 'ring_task.inc.S'):
+        text = (HERE / hdr).read_text()
+        for m in re.finditer(r'^\.equ\s+([A-Z_0-9]+),\s*(0xC072E[0-9A-Fa-f]{3})',
+                             text, re.M):
+            caves[m.group(1)] = int(m.group(2), 16)
+    sized = {'T_DESC': 32, 'T_PKT': 32, 'W_VT': 16, 'B_PTR': 32, 'B_BUSY': 32}
+    hit = []
+    for wname, wa in sorted(caves.items(), key=lambda kv: kv[1]):
+        wn = sized.get(wname, 4)
+        for bn, ba, bl in code_spans:
+            if wa < ba + bl and ba < wa + wn:
+                hit.append(f'{wname} 0x{wa:08X}+{wn} is inside {bn} '
+                           f'0x{ba:08X}..0x{ba + bl:08X}')
+    if hit:
+        raise SystemExit('state words land on code:\n  ' + '\n  '.join(hit))
+
     for name, at, n in sorted(spans, key=lambda s: s[1]):
         print(f'  {name:14s} 0x{at:08X}..0x{at+n:08X}  {n} bytes')
     return code
