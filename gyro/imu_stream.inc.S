@@ -338,6 +338,8 @@
 
 .equ T_FOPEN,        0xC072E0FC     /* shared with ring_task.inc.S */
 .equ T_STOPSENT,     0xC072E15C     /* shared with ring_task.inc.S */
+.equ T_OPENFN,       0xC072EA64     /* shared with ring_task.inc.S: -> take_open  */
+.equ T_CLOSEFN,      0xC072EA68     /* shared with ring_task.inc.S: -> take_close */
 .equ T_WANT,         0xC072E194     /* shared with ring_task.inc.S: 1 = a take
                                      * wants the file.  Declared in both because
                                      * the producers and the writer are placed

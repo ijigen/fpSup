@@ -219,6 +219,34 @@ rec_trigger:
      * with it a window: a slot claimed and not yet filled is a slot the writer
      * could post as whatever was in the ring before. */
 
+    /* Build the take, or tear it down.
+     *
+     * This is the line the rewrite turns on.  XC_AudioRecorder::Start builds
+     * the file, the thread and the mailbox together, in the recorder's own task,
+     * and XC_AudioRecorder::Stop posts the stop, waits for the writer to finish
+     * and closes the file in that same task.  Both hooks run in exactly that
+     * task, so both calls belong here.
+     *
+     * The address is a word rather than a branch because these two live in the
+     * pool and this lives in the cave: only the deployer knows where they
+     * landed.  Zero means the writer was never placed, and then a take runs
+     * with the producers alone -- which is the layer the ladder already
+     * cleared.
+     *
+     * take_close BLOCKS until the writer has drained.  Audio's join does the
+     * same thing in the same place; it is what buys a file closed by a task the
+     * camera can preempt. */
+#ifdef REC_STOP
+    movw    ip, #:lower16:T_CLOSEFN
+    movt    ip, #:upper16:T_CLOSEFN
+#else
+    movw    ip, #:lower16:T_OPENFN
+    movt    ip, #:upper16:T_OPENFN
+#endif
+    ldr     ip, [ip]
+    cmp     ip, #0
+    blxne   ip
+
     pop     {r0, r1, r2, r3, ip, lr}
 #ifdef REC_STOP
     mov     r0, r4                      @ the displaced instruction

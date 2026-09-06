@@ -64,6 +64,10 @@ T_JOBSLOT = 0xC072E164
 STREAM_JPOOL = 0xC072E19C
 STREAM_POSTED = 0xC072E1AC
 STREAM_INDEX, STREAM_TAIL = 0xC072E1F8, 0xC072E1A4
+T_OPENFN, T_CLOSEFN = 0xC072EA64, 0xC072EA68
+W_FLG, W_FLGRC, W_JOINRC = 0xC072EA10, 0xC072EA14, 0xC072EA18
+W_TERRC, W_DELRC = 0xC072EA1C, 0xC072EA20
+W_OPENS, W_CLOSES, W_STAGE = 0xC072EA24, 0xC072EA28, 0xC072EA2C
 T_BYTES, T_WRITES = 0xC072E8E0, 0xC072E8E4
 T_WRC, T_LOST, T_WRAPS = 0xC072E8E8, 0xC072E8EC, 0xC072E8F0
 STREAM_SIGFN = 0xC072E1A8
@@ -82,9 +86,10 @@ def symbols(src, defines=()):
         # by type -- an empty map here would place the task at zero.
         end = elf.index(b'\0', strtab[4] + name_off)
         name = elf[strtab[4] + name_off:end].decode()
-        if name in ('writer_task', 'make_writer', 'writer_signal',
+        if name in ('writer_entry', 'make_writer', 'writer_signal',
                     'writer_openfile', 'writer_closefile',
-                    'writer_selftest', 'writer_post', 'mpool_init_jobs'):
+                    'writer_selftest', 'writer_post', 'mpool_init_jobs',
+                    'take_open', 'take_close'):
             out[name] = value
     return out
 
@@ -98,6 +103,9 @@ def _check():
             'T_PKT': T_PKT, 'T_DOOR': T_DOOR, 'T_MBX': T_MBX,
             'T_DRAINED': T_DRAINED, 'T_MAXSPAN': T_MAXSPAN,
             'T_FOBJ': T_FOBJ, 'T_FOPEN': T_FOPEN, 'T_WANT': T_WANT, 'T_STAGE': T_STAGE,
+            'T_OPENFN': T_OPENFN, 'T_CLOSEFN': T_CLOSEFN,
+            'W_FLG': W_FLG, 'W_OPENS': W_OPENS, 'W_CLOSES': W_CLOSES,
+            'W_STAGE': W_STAGE,
             'T_BYTES': T_BYTES,
             'T_WRITES': T_WRITES, 'T_WRC': T_WRC, 'T_LOST': T_LOST,
             'T_WRAPS': T_WRAPS, 'WRITER_PRI': 6}
@@ -166,7 +174,7 @@ def place():
             raise SystemExit(f'{name} 0x{lo:08X}..0x{hi:08X} overlaps the ring')
         if not (pool + 0x20000 <= lo and hi <= pool + 0x100000):
             raise SystemExit(f'{name} 0x{lo:08X}..0x{hi:08X} leaves the free pool')
-    missing = {'writer_task', 'make_writer', 'writer_signal'} - set(syms)
+    missing = {'writer_entry', 'take_open', 'take_close'} - set(syms)
     if missing:
         raise SystemExit(f'the blob has no {sorted(missing)}')
     print(f'  ring_task     0x{CODE_AT:08X}..0x{end:08X}  {len(code)} bytes (pool)'
@@ -216,7 +224,11 @@ def place_code():
     P.put(CODE_AT, code, 'ring_task')
     # Freshly written code in the pool is still only data to the caches.
     echo_into(F_CACHE, 'the cache maintenance routine')
-    _setw(T_ENTRY, at['writer_task'], 'the task entry')
+    _setw(T_ENTRY, at['writer_entry'], 'the task entry')
+    # The record hooks live in the cave and these live in the pool, so the
+    # hooks reach them through a word only the deployer can fill in.
+    _setw(T_OPENFN, at['take_open'], 'what the record start calls')
+    _setw(T_CLOSEFN, at['take_close'], 'what the record stop calls')
     _setw(STREAM_SIGFN, at['writer_post'], 'what the producer calls')
     pool = pool_base()
     _setw(T_FOBJ, pool + FOBJ_POOL_OFF, 'the file object')
@@ -280,16 +292,15 @@ def _verify_placed(code, at):
 
 
 def create():
-    code, at = place()
-    _verify_placed(code, at)
-    have = P.mem_get(T_ID)[0]
-    if have and 0 < have < 0x1000:
-        raise SystemExit(f'a task id {have} is already recorded; creating a second '
-                         f'one would leak the first (tk_ext_tsk is not isolated)')
-    _setw(T_ID, 0, 'the id slot')
-    print(f'creating: priority 6, entry 0x{at["writer_task"]:08X}')
-    echo_into(at['make_writer'], 'make_writer')
-    state()
+    """There is nothing left for this to do.
+
+    The task used to be made once, at deploy time, and live for the session.
+    It is now built by take_open at record start and destroyed by take_close at
+    record stop, the way XC_AudioRecorder::Start and ::Stop build and destroy
+    AudF_W -- which is the whole point of the rewrite.  --place is the entire
+    deployment.
+    """
+    raise SystemExit('the take builds its own task now; --place is all there is')
 
 
 def signal(times, at=None):
@@ -333,6 +344,22 @@ def state():
     print(f'  wraps      {wraps}   LOST {lost}'
           + ('   <- the ring is too shallow' if lost else ''))
     print(f'  drained    {drained} records   most ever waiting {maxspan}')
+
+    # The take's own lifecycle, the part that now mirrors AudF_W.
+    opens, closes = P.mem_get(W_OPENS)[0], P.mem_get(W_CLOSES)[0]
+    wst, flg = P.mem_get(W_STAGE)[0], P.mem_get(W_FLG)[0]
+    join, ter, dele = (P.mem_get(W_JOINRC)[0], P.mem_get(W_TERRC)[0],
+                       P.mem_get(W_DELRC)[0])
+    stage = {0x01: 'take_open entered', 0x02: 'the file is open',
+             0x03: 'flag made, about to make the thread',
+             0x04: 'built, the writer is running',
+             0x11: 'take_close entered', 0x12: 'the stop job is posted',
+             0x13: 'joined -- the body returned',
+             0x14: 'the file is closed', 0x15: 'the task is gone',
+             0x16: 'torn down, all the way'}.get(wst)
+    print(f'  takes      {opens} built   {closes} torn down   flag {flg}')
+    print(f'  last stage 0x{(wst or 0):02X}' + (f' -- {stage}' if stage else ''))
+    print(f'  join rc    {join}   ter {ter}   del {dele}')
     w = P.mem_get(T_ID, 8)
     names = ('T_ID', 'T_CRE_RC', 'T_STA_RC', 'T_WAKES', 'T_SIGNALS', 'T_ENTRY',
              'T_RECV_RC', 'T_MBX_RC')
@@ -430,7 +457,7 @@ def main():
         time.sleep(2.0)
         state()
     else:
-        create()
+        place_code()
     return 0
 
 

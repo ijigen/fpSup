@@ -52,7 +52,38 @@
 .equ MBX_SEND,       0xC01F8D48     /* 0x80280200  f(id, msg) -> 0 = ok       */
 .equ MBX_RECV,       0xC01F8B74     /* 0x80290300  f(id, &out, tmout)         */
 
+/* The rest of the set, read out of the syscall table rather than guessed:
+ * the trampoline at 0xC00011D0 indexes *(0xC0001568) by the service id, and
+ * every stub carries its id at stub+0x20.  See notes and [[tkos-thread-pool]].
+ *
+ * tk_ext_tsk (id 0x04) and tk_exd_tsk (0x05) are the only gap in the table --
+ * a task cannot end ITSELF here.  Everything else audio does to its writer is
+ * available, including terminating and deleting it from another task. */
+.equ TK_DEL_TSK,     0xC01F897C     /* 0x80020100  f(id)                      */
+.equ TK_TER_TSK,     0xC01F8E44     /* 0x80060100  f(id)                      */
+.equ TK_SLP_TSK,     0xC01F8D00     /* 0x80130100  f(tmout)                   */
+.equ TK_WUP_TSK,     0xC01F8ED4     /* 0x80140100  f(id)                      */
+.equ FLG_CREATE,     0xC00169EC     /* 0x80200100  id = f(&packet)            */
+.equ FLG_DELETE,     0xC0016AA0     /* 0x80210100  f(id)                      */
+.equ FLG_SET,        0xC0016B9C     /* 0x80220200  f(id, ptn)                 */
+.equ FLG_CLEAR,      0xC00169C8     /* 0x80230200  f(id, ptn)                 */
+.equ FLG_WAIT,       0xC0016C08     /* 0x80240500  f(id,ptn,mode,&out,tmout)  */
+.equ MBX_DELETE,     0xC0682FA4     /* 0x80270100  f(id)                      */
+
+/* The T_CFLG XC_Thread.cpp hands tk_cre_flg, copied field for field from
+ * 0xC0B98830: attr TA_TPRI|TA_WMUL|TA_DSNAME, initial pattern 1, name OsPool.
+ * The pattern starts SET and the take clears it; the worker sets it again when
+ * its body returns, and that is what the joiner waits for. */
+.equ FLGATR,         0x49
+.equ FLG_DONE,       1              /* the bit the body sets on its way out   */
+.equ FLG_KEEP,       0xFFFFFFFE     /* clr_flg ANDs, so this clears bit 0     */
+
 .equ TMO_FEVR,       -1
+.equ JOIN_TMO,       8000           /* ms.  Audio joins with TMO_FEVR; we cannot,
+                                     * because our join runs inside a firmware
+                                     * callback and an infinite wait there is a
+                                     * battery pull.  8 s is ten times the worst
+                                     * card write this project has measured.  */
 
 /* Descriptor for tk_cre_tsk, 32 bytes.  itskpri must be 1..32 and stksz at
  * least 0x100, or it returns E_PAR (-17). */
@@ -70,6 +101,26 @@
                                      * asks for 0x4000.  The SD path is deep
                                      * and 8 KiB is the cheaper thing to be
                                      * wrong about.                          */
+
+/* The take's own objects.  Audio builds file, thread and mailbox together at
+ * record start and destroys all three at stop; these are the words that hold
+ * them for one take.  Above everything else in the cave, clear of the
+ * measuring accel build at 0xC072E900..0xC072EA04. */
+.equ W_FLG,          0xC072EA10     /* the completion flag id                 */
+.equ W_FLGRC,        0xC072EA14     /* what tk_cre_flg returned               */
+.equ W_JOINRC,       0xC072EA18     /* what the join returned                 */
+.equ W_TERRC,        0xC072EA1C
+.equ W_DELRC,        0xC072EA20
+.equ W_OPENS,        0xC072EA24     /* takes built                            */
+.equ W_CLOSES,       0xC072EA28     /* takes torn down                        */
+.equ W_STAGE,        0xC072EA2C     /* how far the build or the teardown got  */
+.equ W_PKT,          0xC072EA40     /* 32 bytes, the T_CFLG                   */
+.equ W_SCRATCH,      0xC072EA60     /* where tk_wai_flg leaves the pattern    */
+
+/* Placed by the deployer, the way STREAM_SIGFN is: the record hooks live in the
+ * cave and these live in the pool, so the address is only known at deploy. */
+.equ T_OPENFN,       0xC072EA64     /* -> take_open                           */
+.equ T_CLOSEFN,      0xC072EA68     /* -> take_close                          */
 
 /* Below the accel hook, clear of the stream's own words at 0xC072E1B0. */
 .equ T_DESC,         0xC072E080     /* 32 bytes, the task descriptor          */
@@ -108,6 +159,10 @@
 .equ F_CLOSE,        0xC0366020
 .equ F_DTOR,         0xC0365ED0
 .equ F_MODE_RW,      7              /* overwrites; 0x402 fails when it exists */
+.equ F_MODE_AUD,     6              /* what AudF_W opens with                 */
+.equ F_STAMP,        0xC0369310     /* XC_MediaFileSdCard::v13, vtable +0x3C:
+                                     * the call AudF_W makes right after the
+                                     * open.  Takes the card lock and stamps  */
 
 .equ T_FOBJ,         0xC072E0F8     /* the file object, placed by the deployer */
 .equ T_FOPEN,        0xC072E0FC     /* non-zero once it is open               */

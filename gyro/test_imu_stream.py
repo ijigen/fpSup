@@ -174,6 +174,76 @@ class RecordShape(unittest.TestCase):
                             f'{name} indexes the ring by neither route')
 
 
+class AudioShape(unittest.TestCase):
+    """The writer must have the shape AudF_W has, not the shape it grew.
+
+    Each of these is a line from the audio source, not a preference:
+    AudioFileWriter::v1 @0xC01FBD40 for the body, AudF_W @0xC01FD380 for the
+    build order, AudioFileRecordingObserver::v0 @0xC01FBB18 for the teardown.
+    """
+
+    def setUp(self):
+        self.task = (HERE / 'ring_task.S').read_text()
+
+    def body(self, name):
+        i = self.task.index(f'\n{name}:')
+        j = self.task.index('\n    bx      lr', i)
+        return self.task[i:j]
+
+    def test_the_writer_body_returns(self):
+        """AudioFileWriter::v1 breaks out of its loop on the stop message and
+        returns; the wrapper catches that and sets the completion flag.  A body
+        that can never return has no one to wait for it."""
+        b = self.body('writer_body')
+        self.assertIn('bl      writer_release', b)
+        self.assertIn('pop     {r4, lr}', b)
+
+    def test_the_writer_never_touches_the_file_lifecycle(self):
+        """The file is open before this task exists and closed after it has
+        finished.  Opening it from inside the loop, at priority 6, is what this
+        rewrite removes."""
+        b = self.body('writer_body')
+        for bad in ('writer_openfile', 'writer_closefile', 'writer_reconcile'):
+            self.assertNotIn(bad, b, f'writer_body still calls {bad}')
+        self.assertNotIn('writer_reconcile', self.task, 'reconcile is still here')
+
+    def test_take_open_opens_before_it_starts_anything(self):
+        """AudF_W's constructor opens the file, then attaches the body and wakes
+        it.  Reversed, the writer can be posted to before there is a file --
+        which is what the knock job existed to paper over."""
+        t = self.body('take_open')
+        self.assertLess(t.index('bl      writer_openfile'),
+                        t.index('bl      make_writer'))
+        # the knock job is gone from the code; the comment saying why is not
+        self.assertNotIn('bl      writer_make_job             @ an empty job',
+                         self.task)
+
+    def test_take_close_joins_before_it_closes(self):
+        """The observer's destructor posts the stop, waits on the thread's
+        completion flag, and only then runs the file's destructor.  Closing
+        first would close a file the writer is still writing to."""
+        t = self.body('take_close')
+        self.assertLess(t.index('writer_make_job'), t.index('FLG_WAIT'))
+        self.assertLess(t.index('FLG_WAIT'), t.index('bl      writer_closefile'))
+        self.assertLess(t.index('bl      writer_closefile'), t.index('TK_TER_TSK'))
+        self.assertLess(t.index('TK_TER_TSK'), t.index('TK_DEL_TSK'))
+
+    def test_the_record_hooks_are_what_build_and_tear_down(self):
+        """XC_AudioRecorder::Start and ::Stop do this, in the recorder's own
+        task.  Both hooks run in that task; that is why the calls live there."""
+        tail = TRIG[TRIG.index('T_CLOSEFN'):]
+        # one #ifdef, two arms: stop takes T_CLOSEFN, start takes T_OPENFN
+        self.assertIn('#ifdef REC_STOP', TRIG[:TRIG.index('T_CLOSEFN')][-200:])
+        self.assertIn('T_OPENFN', tail[:tail.index('#endif')])
+        self.assertIn('blxne   ip', tail)
+
+    def test_the_stop_still_travels_as_a_job(self):
+        """Ordering by construction: the stop comes out of the queue behind
+        every write of the take, because it went in behind them."""
+        t = self.body('take_close')
+        self.assertIn('mov     r0, #1', t.split('writer_make_job')[0][-200:])
+
+
 class Assembly(unittest.TestCase):
     def words(self, path):
         code = assemble(HERE / path)

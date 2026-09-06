@@ -6,13 +6,66 @@
 
 /* ------------------------------------------------------------------ task */
 
-    .global writer_task
-writer_task:
-    /* r0 = exinf.  Never returns: tk_ext_tsk is not isolated in this firmware
-     * (notes/TASK_ABI_VERIFIED.md), so a task here lives for the session. */
+/* The worker, in the shape XC_Thread.cpp gives every firmware thread.
+ *
+ * FUN_c036efe8 is the firmware's wrapper: it sleeps, runs the attached body,
+ * and when the body RETURNS it sets a completion flag and sleeps again.  Whoever
+ * built the thread waits on that flag and only then tears things down.  This is
+ * the same wrapper written out by hand, because we cannot hand the firmware's
+ * one a body: it calls vtable slot +0xC of an object, and building a C++ object
+ * with a vtable to be called from a firmware thread pool is more moving parts
+ * than a five instruction wrapper.
+ *
+ * The one thing the firmware has that we cannot copy is tk_ext_tsk, id 0x04.
+ * It is the only gap in the syscall table, and its stub shape (push, bl, pop,
+ * bx lr) could not hold a call that never returns.  We do not need it: the
+ * firmware's own wrapper does not exit either -- it parks in tk_slp_tsk and is
+ * terminated from outside.  So do we.
+ */
+    .global writer_entry
+writer_entry:
+    bl      writer_body
+
+    /* The body has returned, which means the stop job came out of the queue
+     * behind every write of this take.  Say so, and park. */
+    movw    r0, #:lower16:W_FLG
+    movt    r0, #:upper16:W_FLG
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     9f
+    mov     r1, #FLG_DONE
+    movw    ip, #:lower16:FLG_SET
+    movt    ip, #:upper16:FLG_SET
+    blx     ip
+
+9:  mvn     r0, #0                      @ TMO_FEVR
+    movw    ip, #:lower16:TK_SLP_TSK
+    movt    ip, #:upper16:TK_SLP_TSK
+    blx     ip
+    b       9b                          @ woken only to be terminated
+
+/* The body.  AudioFileWriter::v1 @0xC01FBD40, instruction for instruction:
+ *
+ *     while (true) {
+ *         rcv_mbx(mbx, &msg, TMO_FEVR);
+ *         if (msg->stop) break;
+ *         F_WRITE(file, msg->ptr, msg->len);
+ *         release(msg);
+ *     }
+ *     release(msg);
+ *
+ * It does not open the file and it does not close it.  The file was open before
+ * this task existed and is closed after it has finished, both by whoever built
+ * the take -- which is what the return is for.
+ */
+writer_body:
+    push    {r4, lr}
+
 1:  movw    r0, #:lower16:T_MBX
     movt    r0, #:upper16:T_MBX
     ldr     r0, [r0]
+    cmp     r0, #0
+    beq     8f
     movw    r1, #:lower16:T_JOBSLOT
     movt    r1, #:upper16:T_JOBSLOT
     mvn     r2, #0                      @ TMO_FEVR
@@ -20,10 +73,9 @@ writer_task:
     movt    ip, #:upper16:MBX_RECV
     blx     ip
 
-    /* An error return would otherwise spin this loop at priority 6, which
-     * starves the whole camera and costs a battery pull.  There is no way to
-     * exit a task, so the backstop parks in a long delay instead, leaving the
-     * reason readable and the camera alive. */
+    /* An error return would spin this loop at priority 6, which starves the
+     * camera.  Leaving is now a real option -- the wrapper above catches it --
+     * so leave, with the reason in a word. */
     cmp     r0, #0
     bne     8f
 
@@ -33,15 +85,6 @@ writer_task:
     add     r1, r1, #1
     str     r1, [ip]
 
-    /* Open the file if a take has asked for one.  This runs before the job is
-     * looked at, so the empty job a producer sends to knock finds a file
-     * already open by the time anything needs to be written. */
-    bl      writer_reconcile
-
-    /* The message IS the job.  Write what it says, then give the descriptor
-     * back -- which is also giving the queue slot back.  This is the whole of
-     * the audio writer's loop, and it looks at nothing else: not the ring's
-     * indices, not a flag on the side. */
     movw    ip, #:lower16:T_JOBSLOT
     movt    ip, #:upper16:T_JOBSLOT
     ldr     r4, [ip]
@@ -60,20 +103,15 @@ writer_task:
 2:  bl      writer_release
     b       1b
 
-    /* The stop job.  Everything posted before it has been written, because it
-     * came through the same queue behind them. */
 3:  bl      writer_release
-    bl      writer_closefile
-    b       1b
+    pop     {r4, lr}
+    bx      lr
 
 8:  movw    ip, #:lower16:T_RECV_RC
     movt    ip, #:upper16:T_RECV_RC
     str     r0, [ip]
-9:  movw    r0, #1000
-    movw    ip, #:lower16:TK_DLY_TSK
-    movt    ip, #:upper16:TK_DLY_TSK
-    blx     ip
-    b       9b
+    pop     {r4, lr}
+    bx      lr
 
 /* Build the job pool's free list.  Called once, through the borrowed shell
  * handler, before anything can take a descriptor. */
@@ -118,26 +156,16 @@ writer_post:
     cmp     r4, #0
     beq     9f                          @ no pool yet
 
-    /* No file yet, but one is wanted: post an empty job purely to wake the
-     * writer, which opens it before it looks at what the job says.  Without
-     * this the two sides deadlock -- the writer blocks until a job arrives,
-     * and nothing posts a job until the file is open. */
+    /* Nothing to post unless a take is live.  There is no knock job any more:
+     * audio opens the file, then creates the thread, then starts it, so by the
+     * time anything can post there is always a file.  The knock existed only
+     * because our writer used to open the file itself, from inside its own
+     * loop, at priority 6 -- which is the thing this rewrite removes. */
     movw    ip, #:lower16:T_FOPEN
     movt    ip, #:upper16:T_FOPEN
     ldr     ip, [ip]
     cmp     ip, #0
-    bne     1f
-    movw    ip, #:lower16:T_WANT
-    movt    ip, #:upper16:T_WANT
-    ldr     ip, [ip]
-    cmp     ip, #0
-    beq     9f                          @ not wanted either: nothing to do
-    mov     r0, #0
-    mov     r1, #0
-    mov     r2, #0
-    bl      writer_make_job             @ an empty job is just a knock
-    b       9f
-1:
+    beq     9f
 
     movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX
@@ -317,36 +345,6 @@ writer_make_job:
 
 /* -------------------------------------------------------------- reconcile */
 
-/* Open or close the file to match what the recording asked for.
- *
- * The hooks that know a take has begun or ended run in firmware callbacks, so
- * all they do is set a word.  This is the task side of that: the heavy work,
- * on a stack that has room for it, in a context that is allowed to block.
- */
-    .global writer_reconcile
-writer_reconcile:
-    push    {r4, r5, r6, lr}
-    movw    r4, #:lower16:T_WANT
-    movt    r4, #:upper16:T_WANT
-    ldr     r4, [r4]
-    movw    r5, #:lower16:T_FOPEN
-    movt    r5, #:upper16:T_FOPEN
-    ldr     r5, [r5]
-
-    cmp     r4, #0
-    beq     2f
-    cmp     r5, #0
-    bne     9f                          @ wanted and open: nothing to do
-    bl      writer_openfile             @ the tail was latched by the hook
-    b       9f
-
-2:  /* Closing is NOT done here.  It is done when the stop job comes out of the
-     * queue, behind every write of that take -- which is the whole reason the
-     * stop travels as a job rather than as a flag read on the side. */
-
-9:  pop     {r4, r5, r6, lr}
-    bx      lr
-
 /* Give a descriptor back, and the queue slot with it. */
 writer_release:
     push    {r0, r1, r2, r3, ip, lr}
@@ -486,6 +484,234 @@ make_writer:
 9:  pop     {r4, r5, r6, r7, r8, lr}
     bx      lr
 
+/* ------------------------------------------------------------- the take */
+
+/* Build a take, in AudF_W's order (@0xC01FD380):
+ *
+ *     F_CTOR(file, volume)
+ *     create the thread            -- built, not running
+ *     create the mailbox
+ *     F_OPEN(file, path, 6)
+ *     stamp the file               -- vtable +0x3C
+ *     attach the body and wake it  -- only now does anything run
+ *
+ * The order that matters is the last line: the file is open before the writer
+ * exists.  Ours used to open it from inside the writer's own loop, at priority
+ * 6, four hundred milliseconds into the take, with a knock job to get there.
+ *
+ * This runs in whatever task the record hook runs in -- the recorder's, at
+ * priority 9 to 17, which is exactly where XC_AudioRecorder::Start runs it.
+ */
+    .global take_open
+take_open:
+    push    {r4, lr}
+    movw    r4, #:lower16:W_STAGE
+    movt    r4, #:upper16:W_STAGE
+    mov     r0, #0x01
+    str     r0, [r4]
+
+    movw    r0, #:lower16:T_FOPEN
+    movt    r0, #:upper16:T_FOPEN
+    ldr     r0, [r0]
+    cmp     r0, #0
+    bne     9f                          @ a take is already built
+
+    bl      writer_openfile
+    movw    r0, #:lower16:T_FOPEN
+    movt    r0, #:upper16:T_FOPEN
+    ldr     r0, [r0]
+    cmp     r0, #0
+    mov     r0, #0x02
+    str     r0, [r4]                    @ neither mov nor str touches the flags
+    beq     9f                          @ it did not open: build nothing else
+
+    /* The completion flag, field for field from the T_CFLG at 0xC0B98830 that
+     * XC_Thread.cpp hands tk_cre_flg.  The pattern starts SET and the take
+     * clears it; the worker sets it again when its body returns. */
+    movw    r1, #:lower16:W_PKT
+    movt    r1, #:upper16:W_PKT
+    mov     r0, #0
+    str     r0, [r1]
+    str     r0, [r1, #12]
+    str     r0, [r1, #16]
+    mov     r0, #FLGATR
+    str     r0, [r1, #4]
+    mov     r0, #FLG_DONE
+    str     r0, [r1, #8]
+    mov     r0, r1
+    movw    ip, #:lower16:FLG_CREATE
+    movt    ip, #:upper16:FLG_CREATE
+    blx     ip
+    movw    r1, #:lower16:W_FLGRC
+    movt    r1, #:upper16:W_FLGRC
+    str     r0, [r1]
+    cmp     r0, #0
+    ble     9f
+    movw    r1, #:lower16:W_FLG
+    movt    r1, #:upper16:W_FLG
+    str     r0, [r1]
+
+    mvn     r1, #1                      @ 0xFFFFFFFE: clr_flg ANDs
+    movw    ip, #:lower16:FLG_CLEAR
+    movt    ip, #:upper16:FLG_CLEAR
+    blx     ip
+
+    mov     r0, #0x03
+    str     r0, [r4]
+    bl      make_writer                 @ mailbox, task, start
+    mov     r0, #0x04
+    str     r0, [r4]
+
+    movw    r0, #:lower16:W_OPENS
+    movt    r0, #:upper16:W_OPENS
+    ldr     r1, [r0]
+    add     r1, r1, #1
+    str     r1, [r0]
+
+9:  pop     {r4, lr}
+    bx      lr
+
+
+/* Tear a take down, in AudioFileRecordingObserver::v0's order (@0xC01FBB18):
+ *
+ *     post the stop job     -- through the SAME queue as every write
+ *     tk_wai_flg(FEVR)      -- wait for the body to return
+ *     the file's destructor -- close, and only now
+ *
+ * Then what XC_ThreadPoolImpl::v0 does to the thread: wake it out of its sleep,
+ * terminate it, delete it, and delete the flag.  tk_ter_tsk (0x06) and
+ * tk_del_tsk (0x02) both exist; only tk_ext_tsk, a task ending ITSELF, does not.
+ *
+ * This blocks the caller until the writer has drained.  So does audio's: the
+ * join is a tk_wai_flg with TMO_FEVR in the recorder's own task.  It is the
+ * price of the file being closed by someone who can be preempted.
+ */
+    .global take_close
+take_close:
+    push    {r4, r5, r6, lr}
+    movw    r4, #:lower16:W_STAGE
+    movt    r4, #:upper16:W_STAGE
+    mov     r0, #0x11
+    str     r0, [r4]
+
+    movw    r0, #:lower16:T_FOPEN
+    movt    r0, #:upper16:T_FOPEN
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     9f
+
+    mov     r0, #1                      @ J_STOP
+    mov     r1, #0
+    mov     r2, #0
+    bl      writer_make_job
+    cmp     r0, #0
+    mov     r0, #0x12
+    str     r0, [r4]
+    beq     9f                          @ no descriptor: the stop was never
+                                        @ posted, so there is nothing to wait
+                                        @ for.  Leave everything standing.
+
+    movw    r0, #:lower16:W_FLG
+    movt    r0, #:upper16:W_FLG
+    ldr     r0, [r0]
+    cmp     r0, #0
+    ble     3f
+
+    /* TWO DELIBERATE DEPARTURES FROM AUDIO, BOTH FOR THE SAME REASON.
+     *
+     * Audio joins with TMO_FEVR and can afford to: its pool is its own, its
+     * failures assert, and an assert is a controlled stop.  Ours runs inside a
+     * firmware callback on the recorder's task.  An infinite wait there is a
+     * frozen camera and a battery pull -- the exact failure this whole rewrite
+     * exists to remove -- so the wait is bounded.
+     *
+     * And if the wait does NOT come back clean, the file is left OPEN and the
+     * task left alive.  Closing a file the writer may still be writing to is
+     * worse than leaking one: the next take's take_open sees T_FOPEN set and
+     * declines, so the damage stops at one take and the counters say why. */
+    movw    r3, #:lower16:W_SCRATCH
+    movt    r3, #:upper16:W_SCRATCH
+    movw    r5, #JOIN_TMO
+    push    {r5, r6}                    @ two, so the stack stays eight aligned
+    mov     r1, #FLG_DONE
+    mov     r2, #0                      @ TWF_ANDW
+    movw    ip, #:lower16:FLG_WAIT
+    movt    ip, #:upper16:FLG_WAIT
+    blx     ip
+    add     sp, sp, #8
+    movw    r1, #:lower16:W_JOINRC
+    movt    r1, #:upper16:W_JOINRC
+    str     r0, [r1]
+    cmp     r0, #0
+    bne     9f                          @ it did not finish: touch nothing else
+3:  mov     r0, #0x13
+    str     r0, [r4]
+
+    bl      writer_closefile
+    mov     r0, #0x14
+    str     r0, [r4]
+
+    movw    r5, #:lower16:T_ID
+    movt    r5, #:upper16:T_ID
+    ldr     r0, [r5]
+    cmp     r0, #0
+    ble     4f
+    movw    ip, #:lower16:TK_WUP_TSK
+    movt    ip, #:upper16:TK_WUP_TSK
+    blx     ip
+    ldr     r0, [r5]
+    movw    ip, #:lower16:TK_TER_TSK
+    movt    ip, #:upper16:TK_TER_TSK
+    blx     ip
+    movw    r1, #:lower16:W_TERRC
+    movt    r1, #:upper16:W_TERRC
+    str     r0, [r1]
+    ldr     r0, [r5]
+    movw    ip, #:lower16:TK_DEL_TSK
+    movt    ip, #:upper16:TK_DEL_TSK
+    blx     ip
+    movw    r1, #:lower16:W_DELRC
+    movt    r1, #:upper16:W_DELRC
+    str     r0, [r1]
+    mov     r0, #0
+    str     r0, [r5]
+4:  mov     r0, #0x15
+    str     r0, [r4]
+
+    movw    r5, #:lower16:T_MBX
+    movt    r5, #:upper16:T_MBX
+    ldr     r0, [r5]
+    cmp     r0, #0
+    ble     5f
+    movw    ip, #:lower16:MBX_DELETE
+    movt    ip, #:upper16:MBX_DELETE
+    blx     ip
+    mov     r0, #0
+    str     r0, [r5]
+
+5:  movw    r5, #:lower16:W_FLG
+    movt    r5, #:upper16:W_FLG
+    ldr     r0, [r5]
+    cmp     r0, #0
+    ble     6f
+    movw    ip, #:lower16:FLG_DELETE
+    movt    ip, #:upper16:FLG_DELETE
+    blx     ip
+    mov     r0, #0
+    str     r0, [r5]
+
+6:  mov     r0, #0x16
+    str     r0, [r4]
+    movw    r0, #:lower16:W_CLOSES
+    movt    r0, #:upper16:W_CLOSES
+    ldr     r1, [r0]
+    add     r1, r1, #1
+    str     r1, [r0]
+
+9:  pop     {r4, r5, r6, lr}
+    bx      lr
+
+
 /* ---------------------------------------------------------------- signal */
 
 /* What a producer calls when the ring has work.  Task context only -- the Vd
@@ -582,7 +808,7 @@ writer_openfile:
 
     mov     r0, r4
     adr     r1, writer_path
-    mov     r2, #F_MODE_RW
+    mov     r2, #F_MODE_AUD             @ 6, the mode AudF_W opens with
     movw    ip, #:lower16:F_OPEN
     movt    ip, #:upper16:F_OPEN
     blx     ip
@@ -592,10 +818,18 @@ writer_openfile:
     cmp     r0, #0
     beq     8f
 
+    /* What AudF_W does next, and we did not: XC_MediaFileSdCard::v13, vtable
+     * +0x3C, which takes the card lock and stamps the file.  Copied because the
+     * instruction is to copy, and because a file the firmware has stamped is a
+     * file the firmware's own bookkeeping has seen. */
+    mov     r0, r4
+    movw    ip, #:lower16:F_STAMP
+    movt    ip, #:upper16:F_STAMP
+    blx     ip
+
     /* The tail is NOT touched here.  Whoever asked for the file to be opened
      * decides where the take starts: the record hook latches it at the instant
-     * recording begins, which is up to a doorbell earlier than this runs.
-     * Moving it here would throw those records away. */
+     * recording begins. */
     b       9f
 
 8:
