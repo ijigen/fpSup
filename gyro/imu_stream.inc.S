@@ -60,7 +60,7 @@
  * buffer declared out of the pool the way the audio writer declares its own. */
 .equ STREAM_R1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT when recording ended */
 .equ STREAM_R1_N,    0xC072E1D4     /* u32, times that has happened            */
-.equ STREAM_DRAINFN, 0xC072EA78     /* -> gyro_drain, placed by the deployer   */
+.equ STREAM_DRAINFN, 0xC072EC40     /* -> gyro_drain, placed by the deployer   */
 .equ STREAM_R0_HEAD, 0xC072E1E0     /* u32, ring head offset at record start   */
 .equ STREAM_R0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
                                      * writer was constructed.  Beside F0_GC
@@ -88,27 +88,10 @@
 .equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
 .equ STREAM_INDEX,   0xC072E1F8     /* u32, monotonic; both producers claim it */
 .equ STREAM_GCOUNT,  0xC072E1FC     /* u32, gyro records only -- the rate ruler */
-.equ STREAM_DONE,    0xC072EA6C     /* records actually IN the ring, as opposed
-                                     * to spoken for.  A buffer is full when this
-                                     * lands on its end, not when the space was
-                                     * claimed.                                */
-.equ STREAM_CLAIMFN, 0xC072EA70     /* -> stream_claim, placed by the deployer */
-.equ STREAM_COMMITFN,0xC072EA74     /* -> stream_commit                        */     /* u32, gyro records only -- the rate ruler */
-.equ STREAM_RING,    0xC072E1A0     /* u32, the ring's ABSOLUTE base.  Not a
-                                     * constant: the real buffer lives in the
-                                     * pool, whose address is only known at
-                                     * run time, so the deployer resolves it
-                                     * once and every producer loads it.
-                                     * 0 means "use the bench ring below".   */
+.equ STREAM_CLAIMFN, 0xC072EC38     /* -> stream_claim, placed by the deployer */
+.equ STREAM_COMMITFN,0xC072EC3C     /* -> stream_commit                        */     /* u32, gyro records only -- the rate ruler */
 .equ STREAM_TAIL,    0xC072E1A4     /* u32, records the writer has taken      */
 .equ STREAM_SIGFN,   0xC072E1A8     /* u32, writer_signal's address, or 0     */
-.equ STREAM_BASE,    0xC072E200     /* the bench ring, when STREAM_RING is 0  */
-.equ STREAM_COUNT,   32             /* The bench ring, and only a fallback: the
-                                     * producers use it when STREAM_RING is 0,
-                                     * which is before the pool buffer exists.
-                                     * 256 bytes is enough to be valid, and the
-                                     * cave needs the rest for the writer.    */
-.equ STREAM_MASK,    (STREAM_COUNT - 1)
 
 /* The real ring, out of the pool.  16384 records is 128 KiB and 6.5 seconds at
  * 2500 Hz -- nine times the worst card stall this project has measured (692 ms)
@@ -118,39 +101,53 @@
  * pool+0x20000: 896 KB there is free and 224 of 224 markers survived a
  * recording start, which is the property that matters -- memory from the
  * firmware's allocator freezes the camera when held across one. */
-.equ RING_RECORDS,   16384
-.equ RING_MASK,      (RING_RECORDS - 1)
-.equ RING_BYTES,     (RING_RECORDS * 8)
-.equ RING_POOL_OFF,  0x20000
 
-/* The ring is read as a row of buffers, and a buffer is posted the moment it
- * FILLS -- not when a later poll notices that it is full.
+/* The buffers, as AudF_W has them: separate allocations, and "full" is not a
+ * number anyone computes -- it is this block being used up.
  *
- * This is the one thing audio never does: nothing on its path runs on a timer.
- * DspAudioDevice::v5 (@0xC01FF3B8) takes two 16 KiB blocks out of the class 6
- * heap, hands both to the DSP, and registers a completion callback; the buffer
- * filling IS the event, all the way through to the writer.
+ * DspAudioDevice::v5 asks the class 6 heap for two 16 KiB blocks, hands both to
+ * the DSP, and the DSP raises a completion when one of them ends.  The boundary
+ * is the allocation's own size; there is no index, no mask and no modulo, and
+ * nothing anywhere tests "have we reached a multiple of something".
  *
- * Our producer cannot be told when a buffer fills by hardware -- but it does
- * not need to be told.  It is the one doing the filling, so it knows at the
- * instant it happens.  A claim that crosses a boundary posts the buffer it just
- * completed, right there.  No threshold, no "is there enough yet", no fifty
- * checks a second that find nothing.
+ * We had one big allocation tiled into sixteen by arithmetic, and that meant
+ * "full" was still a calculation -- just one that had moved out of the
+ * producer.  These are real blocks now.  stream_claim hands out what is left of
+ * the current one, and when nothing is left, that block is done: the same
+ * subtraction that decides how much to give also decides that it is over.
  *
- * 1024 records is 8 KiB, the same span the old threshold used, and sixteen of
- * them fit in the ring.  Audio runs on two buffers of 85 ms each; ours are
- * 410 ms and there are sixteen. */
-.equ BUF_RECORDS,    1024
-.equ BUF_MASK,       (BUF_RECORDS - 1)
-.equ BUF_BYTES,      (BUF_RECORDS * 8)
-.equ BUF_COUNT,      (RING_RECORDS / BUF_RECORDS)
+ * 16 KiB is audio's block size, so a write is the size a write is on this
+ * camera.  Eight of them, not two, because audio's producer can be throttled by
+ * its hardware and ours cannot: a DSP that overruns is audio's problem to size
+ * for, and it sized for 85 ms.  Ours is 0.8 s a block and 6.6 s in total.
+ */
+.equ BUF_N,          8
+.equ BUF_BYTES,      0x4000                 /* what AudF_W's blocks are        */
+.equ BUF_RECORDS,    (BUF_BYTES / 8)
 
-.if (BUF_RECORDS & BUF_MASK) != 0
-.error "BUF_RECORDS must be a power of two: the producers mask with it"
-.endif
-.if (BUF_COUNT * BUF_RECORDS) != RING_RECORDS
-.error "the buffers must tile the ring exactly"
-.endif
+.equ B_PTR,          0xC072EBA0             /* BUF_N words: the allocations    */
+.equ B_BUSY,         0xC072EBC0             /* BUF_N words: 0 free, 1 with the
+                                             * writer.  Audio has no such flag
+                                             * -- its DSP simply reuses its two
+                                             * blocks on schedule and the writer
+                                             * has to keep up.  Ours cannot be
+                                             * throttled, so a block that is
+                                             * still being written must not be
+                                             * refilled: that is a drop, and a
+                                             * drop we can count.             */
+.equ B_CUR,          0xC072EBE0             /* which block is filling, -1 none */
+.equ B_FILL,         0xC072EBE4             /* records claimed in it           */
+.equ B_DONE,         0xC072EBE8             /* records written into it         */
+.equ B_OFF,          0xC072EBEC             /* file offset of its first byte    */
+.equ B_DROPS,        0xC072EBF0             /* times no block was free          */
+.equ B_HANDED,       0xC072EBF4             /* blocks handed to the writer      */
+.equ T_JBLK,         0xC072EBF8             /* the block writer_post is about to
+                                             * describe.  One producer posts, so
+                                             * a word is enough and it saves
+                                             * threading a fifth argument through
+                                             * a hand-written call.            */             /* blocks handed to the writer      */
+
+.equ B_NONE,         -1
 
 .equ TAG_GYRO,       0
 .equ TAG_ACCEL,      1
@@ -200,19 +197,6 @@
  * \idx is the claimed index, \out comes back as the record's address.  When
  * STREAM_RING is zero the bench ring in the cave is used instead, so the hooks
  * work before the pool buffer exists. */
-.macro ring_slot idx, out, tmp
-    movw    \out, #:lower16:STREAM_RING
-    movt    \out, #:upper16:STREAM_RING
-    ldr     \out, [\out]
-    cmp     \out, #0
-    movweq  \tmp, #STREAM_MASK
-    movwne  \tmp, #:lower16:RING_MASK
-    movtne  \tmp, #:upper16:RING_MASK
-    and     \idx, \idx, \tmp
-    movweq  \out, #:lower16:STREAM_BASE
-    movteq  \out, #:upper16:STREAM_BASE
-    add     \out, \out, \idx, lsl #3
-.endm
 
 .equ STREAM_JPOOL,   0xC072E19C     /* u32, our MPoolFixed of job descriptors */
 
@@ -239,7 +223,7 @@
 .equ J_OFF,          0x04           /* where in the file this belongs         */
 .equ J_PTR,          0x08           /* straight into the ring                 */
 .equ J_LEN,          0x0C           /* bytes                                  */
-.equ J_SEQ,          0x10           /* which job this is, for reading back    */
+.equ J_BLK,          0x10           /* which block, so the writer can free it */
 .equ J_STOP,         0x14           /* 1 = the take is over, close after this  */
 .equ J_SIZE,         24
 
@@ -264,8 +248,8 @@
 .equ JOB_COUNT,      32             /* what audio's pool holds                */
 
 .equ T_FOPEN,        0xC072E0FC     /* shared with ring_task.inc.S */
-.equ T_OPENFN,       0xC072EA64     /* shared with ring_task.inc.S: -> take_open  */
-.equ T_CLOSEFN,      0xC072EA68     /* shared with ring_task.inc.S: -> take_close */
+.equ T_OPENFN,       0xC072EC30     /* shared with ring_task.inc.S: -> take_open  */
+.equ T_CLOSEFN,      0xC072EC34     /* shared with ring_task.inc.S: -> take_close */
 .equ T_WANT,         0xC072E194     /* shared with ring_task.inc.S: 1 = a take
                                      * wants the file.  Declared in both because
                                      * the producers and the writer are placed

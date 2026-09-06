@@ -117,13 +117,13 @@
  * record start and destroys all three at stop; these are the words that hold
  * them for one take.  Above everything else in the cave, clear of the
  * measuring accel build at 0xC072E900..0xC072EA04. */
-.equ W_THREAD,       0xC072EA10     /* the holder XT_CREATE fills             */
-.equ W_BODYOBJ,      0xC072EA14     /* our body object: one word, its vtable  */
-.equ W_JOINRC,       0xC072EA18     /* reserved                               */
-.equ W_OPENS,        0xC072EA24     /* takes built                            */
-.equ W_CLOSES,       0xC072EA28     /* takes torn down                        */
-.equ W_STAGE,        0xC072EA2C     /* how far the build or the teardown got  */
-.equ W_VT,           0xC072EA30     /* 16 bytes.  The pool worker calls slot
+.equ W_THREAD,       0xC072EC00     /* the holder XT_CREATE fills             */
+.equ W_BODYOBJ,      0xC072EC04     /* our body object: one word, its vtable  */
+.equ W_JOINRC,       0xC072EC08     /* reserved                               */
+.equ W_OPENS,        0xC072EC0C     /* takes built                            */
+.equ W_CLOSES,       0xC072EC10     /* takes torn down                        */
+.equ W_STAGE,        0xC072EC14     /* how far the build or the teardown got  */
+.equ W_VT,           0xC072EC20     /* 16 bytes.  The pool worker calls slot
                                      * +0xC of whatever object it is handed;
                                      * that is the whole interface, so this is
                                      * the whole class.  The deployer writes
@@ -133,8 +133,8 @@
 
 /* Placed by the deployer, the way STREAM_SIGFN is: the record hooks live in the
  * cave and these live in the pool, so the address is only known at deploy. */
-.equ T_OPENFN,       0xC072EA64     /* -> take_open                           */
-.equ T_CLOSEFN,      0xC072EA68     /* -> take_close                          */
+.equ T_OPENFN,       0xC072EC30     /* -> take_open                           */
+.equ T_CLOSEFN,      0xC072EC34     /* -> take_close                          */
 
 /* Below the accel hook, clear of the stream's own words at 0xC072E1B0. */
 .equ T_DESC,         0xC072E080     /* 32 bytes, the task descriptor          */
@@ -155,10 +155,10 @@
 .equ T_ENTRY,        0xC072E0E4     /* the task body, placed by the deployer  */
 .equ T_RECV_RC,      0xC072E0E8     /* what receive returned when it stopped
                                      * returning zero                         */
-.equ T_POS,          0xC072EA34     /* where the file is, in bytes.  Audio keeps
+.equ T_POS,          0xC072EC18     /* where the file is, in bytes.  Audio keeps
                                      * this at writer+0x14; it is the other half
                                      * of J_OFF.                              */
-.equ T_SEEKS,        0xC072EA38     /* times the two disagreed -- every one of
+.equ T_SEEKS,        0xC072EC1C     /* times the two disagreed -- every one of
                                      * these is a job that never made it       */
 .equ T_MBX_RC,       0xC072E0EC     /* what the mailbox create returned       */
 

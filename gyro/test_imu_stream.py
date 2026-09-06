@@ -49,10 +49,6 @@ class Header(unittest.TestCase):
         # appends them any more.  The decoder still knows them, for files
         # written before the markers came out.
 
-    def test_stream_is_a_power_of_two_of_eight_byte_records(self):
-        n = int(equ('STREAM_COUNT'), 0)
-        self.assertEqual(n & (n - 1), 0, 'the mask assumes a power of two')
-
     def test_both_producers_take_the_header_rather_than_a_copy(self):
         for name, src in (('accel_hook.S', ACCEL), ('gyro_drain.S', DRAIN),
                           ('stream_space.S', SPACE),
@@ -105,46 +101,24 @@ class RecordShape(unittest.TestCase):
             self.assertIn('STREAM_CLAIMFN', body)
             self.assertIn('STREAM_COMMITFN', body)
 
-    def test_only_the_space_provider_knows_the_ring_is_divided(self):
+    def test_full_is_the_block_running_out(self):
+        """Audio's blocks are separate allocations and "full" is not a number
+        anyone computes -- it is that block being used up.  Ours are separate
+        allocations too now, so the same subtraction that decides how much of
+        the current one to hand out is what discovers there is none left.  No
+        mask, no modulo, no index into a tiled ring."""
         body = SPACE[SPACE.index('stream_claim:'):]
-        for needed in ('BUF_RECORDS', 'BUF_MASK', 'ldrex', 'ring_slot',
-                       'STREAM_SIGFN'):
-            self.assertIn(needed, body, f'the space provider lost {needed}')
+        for gone in ('BUF_MASK', 'RING_MASK', 'ring_slot', 'STREAM_INDEX'):
+            self.assertNotIn(gone, body, f'{gone} is arithmetic on a tiled ring')
+        self.assertIn('B_PTR', body)
+        self.assertIn('BUF_RECORDS', body)
 
-    def test_a_buffer_is_posted_on_an_equality_not_a_threshold(self):
-        """A threshold is something to tune and something to be late about.  A
-        buffer is full at exactly one count, so the test is ==, and it can only
-        be true once per buffer."""
+    def test_a_block_is_handed_over_when_it_is_used_up(self):
         commit = SPACE[SPACE.index('stream_commit:'):]
-        self.assertIn('ands    r2, r1, r2', commit)
-        self.assertIn('bne     9f', commit)
-        self.assertNotIn('bhs', commit)
-        self.assertNotIn('bls', commit)
-
-    def test_record_start_anchors_the_gyro_cursor(self):
-        """With no idle drain the cursor is stale by however long the camera
-        sat, and a stale cursor is a WRAPPED one -- indistinguishable from a
-        normal wrap.  The start hook has to latch the head itself."""
-        self.assertIn('STREAM_GHEAD', TRIG, 'the start hook does not anchor it')
-        self.assertLess(TRIG.index('STREAM_R0_HEAD'), TRIG.index('STREAM_GHEAD'))
-        # it is in an #else arm, so the stop build never assembles it
-        i = TRIG.index('STREAM_GHEAD')
-        opened = TRIG.rindex('#else', 0, i)
-        self.assertLess(TRIG.rindex('#ifdef REC_STOP', 0, i), opened)
-        self.assertLess(i, TRIG.index('#endif', opened))
-
-    def test_the_job_leaves_the_kernels_word_alone(self):
-        """tk_snd_mbx takes a message beginning with T_MSG -- the kernel's queue
-        link at offset 0, which it writes while the message is queued.  The
-        audio writer's descriptor starts its fields at +4 for exactly this
-        reason.  Ours had J_PTR on that word: a ring address in the kernel's
-        list pointer, and a list pointer where the writer read its source."""
-        self.assertEqual(int(equ('J_MSGQ'), 0), 0)
-        for name in ('J_PTR', 'J_LEN', 'J_STOP', 'J_SEQ'):
-            self.assertGreaterEqual(int(equ(name), 0), 4,
-                                    f'{name} is on the kernel word')
-        task = (HERE / 'ring_task.S').read_text()
-        self.assertNotIn('J_MSGQ]', task, 'something writes the kernel word')
+        self.assertIn('BUF_RECORDS', commit)
+        self.assertIn('blo     9f', commit, 'the test is not against capacity')
+        self.assertIn('B_BUSY', commit, 'the block is not marked as gone')
+        self.assertIn('STREAM_SIGFN', commit)
 
     def test_the_markers_append_nothing_to_the_stream(self):
         """A marker appended from outside the gyro producer lands where the last
@@ -163,17 +137,14 @@ class RecordShape(unittest.TestCase):
                               f'{name} still writes a record')
         self.assertIn('gyro_head', TRIG, 'the record trigger stopped measuring')
 
-    def test_records_are_indexed_eight_bytes_apart(self):
-        """The stride now lives in the ring_slot macro, so check it there -- and
-        check every producer either uses the macro or carries its own stride,
-        so a fifth copy of the arithmetic cannot appear unnoticed."""
-        macro = INC[INC.index('.macro ring_slot'):INC.index('.endm', INC.index('.macro ring_slot'))]
-        self.assertRegex(macro, r'lsl\s+#3', 'ring_slot does not stride by eight')
+    def test_records_are_eight_bytes_apart(self):
+        """The stride lives in the space provider now, and only there: it is the
+        only thing that turns a record count into an address."""
         body = SPACE[SPACE.index('stream_claim:'):]
-        self.assertIn('ring_slot', body,
-                      'the space provider indexes the ring by neither route')
-
-
+        self.assertRegex(body, r'lsl #3')
+        for name, src in WRITERS:
+            self.assertNotRegex(src[src.index('push'):], r'lsl\s+#3',
+                                f'{name} is doing address arithmetic')
 class AudioShape(unittest.TestCase):
     """The writer must have the shape AudF_W has, not the shape it grew.
 
@@ -210,9 +181,8 @@ class AudioShape(unittest.TestCase):
         self.assertIn('J_OFF', put)
         self.assertIn('F_SEEK', put)
         self.assertIn('T_POS', put)
-        post = self.task[self.task.index('\nwriter_post:'):]
-        post = post[:post.index('\nwriter_make_job:')]
-        self.assertIn('STREAM_TAIL', post, 'the offset is not computed at all')
+        commit = SPACE[SPACE.index('stream_commit:'):]
+        self.assertIn('B_OFF', commit, 'the offset is not carried at all')
 
     def test_the_thread_is_the_firmwares_own(self):
         """XC_Thread.cpp's pool, used rather than reimplemented: the flag, the
@@ -245,7 +215,8 @@ class AudioShape(unittest.TestCase):
         self.assertLess(t.index('MEM_GET'), t.index('bl      writer_openfile'),
                         'a refusal must cost nothing: ask before opening')
         c = self.body('take_close')
-        self.assertIn('MEM_FREE', c, 'the buffers are never given back')
+        self.assertIn('bl      free_blocks', c, 'the blocks are never given back')
+        self.assertIn('MEM_FREE', self.task)
         self.assertEqual(int(equ('MEM_CLASS', self.inc), 0), 0)
 
     def test_take_open_opens_before_it_starts_anything(self):

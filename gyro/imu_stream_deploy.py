@@ -117,25 +117,18 @@ STREAM_GHEAD  = 0xC072E1F0
 STREAM_PADBAD = 0xC072E1F4
 STREAM_INDEX  = 0xC072E1F8
 STREAM_GCOUNT = 0xC072E1FC
-STREAM_RING   = 0xC072E1A0
 STREAM_TAIL   = 0xC072E1A4
 STREAM_SIGFN  = 0xC072E1A8
-STREAM_DONE     = 0xC072EA6C
-STREAM_CLAIMFN  = 0xC072EA70
-STREAM_COMMITFN = 0xC072EA74
-STREAM_DRAINFN  = 0xC072EA78
-STREAM_BASE   = 0xC072E200
+STREAM_CLAIMFN  = 0xC072EC38
+STREAM_COMMITFN = 0xC072EC3C
+STREAM_DRAINFN  = 0xC072EC40
+BUF_N, BUF_BYTES = 8, 0x4000
 POOL_PTR      = 0xC3757A7C
-RING_POOL_OFF = 0x20000
-RING_RECORDS  = 16384
-RING_BYTES    = 16384 * 8
-STREAM_COUNT  = 32
-STREAM_SPAN   = STREAM_COUNT * 8
 
 # GHEAD unarmed, everything else zero.
 STATE_INIT = struct.pack('<20I', *([0] * 16 + [0xFFFFFFFF, 0, 0, 0]))
 
-ACC_CODE_AT   = 0xC072EA80   # only the measuring build needs the room;
+ACC_CODE_AT   = 0xC072ECC0   # only the measuring build needs the room;
                              # 0xC072E900 is the space provider now
 ACC_STATE     = 0xC072E8C0
 ACC_WORDS     = 5
@@ -156,11 +149,8 @@ def _check_header():
         'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
         'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
         'ACC_STATE': ACC_STATE, 'ACC_WORDS': ACC_WORDS,
-        'ACC_DANGER': ACC_DANGER,
-        'STREAM_RING': STREAM_RING, 'STREAM_TAIL': STREAM_TAIL,
-        'STREAM_SIGFN': STREAM_SIGFN, 'RING_RECORDS': RING_RECORDS,
-        'RING_POOL_OFF': RING_POOL_OFF,
-        'STREAM_BASE': STREAM_BASE, 'STREAM_COUNT': STREAM_COUNT,
+        'ACC_DANGER': ACC_DANGER, 'STREAM_TAIL': STREAM_TAIL,
+        'STREAM_SIGFN': STREAM_SIGFN,
         'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
     }
     for name, value in want.items():
@@ -169,8 +159,6 @@ def _check_header():
             raise SystemExit(f'imu_stream.inc.S has no {name}')
         if int(m.group(1).rstrip(','), 0) != value:
             raise SystemExit(f'{name}: header says {m.group(1)}, this says {value:#x}')
-    if STATE_AT + STATE_WORDS * 4 != STREAM_BASE:
-        raise SystemExit('the state words do not end where the stream begins')
 
     # Each hook must carry the site it is deployed to, and end by performing the
     # instruction it displaced.  A site that drifts between the two is how a
@@ -211,7 +199,12 @@ def _place(measure_accel=False):
               # ring_task_deploy owns these, but only this script knows
               # where the hooks land -- so the overlap check lives here.
               ('writer counters', 0xC072E8E0, 5 * 4),
-              ('stream', STREAM_BASE, STREAM_SPAN)]
+              # the blocks are the allocator's; only their bookkeeping is here
+              ('block state', 0xC072EBA0, (2 * BUF_N + 7) * 4),
+              # the writer's own words and the four call-throughs.  These
+              # used to sit under the space provider, and W_VT sat on top of
+              # T_POS: putting them in the map is what stops that happening.
+              ('writer words', 0xC072EC00, 0x44)]
     for name, at, n in spans:
         if at < CAVE_LO or at + n > CAVE_HI:
             raise SystemExit(f'{name}: 0x{at:08X}..0x{at+n:08X} leaves the cave '
@@ -294,7 +287,6 @@ def arm(only=None, measure_accel=False):
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
     if measure_accel:
         P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
-    P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
 
     # The real ring lives in the pool, whose address is only known now.  Memory
     # from the firmware's allocator freezes the camera when held across a
@@ -304,12 +296,9 @@ def arm(only=None, measure_accel=False):
     # at stop, the way DspAudioDevice::v5 asks for its two blocks.  Nothing is
     # resolved here any more: take_open fills this word in and take_close clears
     # it, so between takes there is no buffer standing around at all.
-    _setw(STREAM_RING, 0, 'the ring base')
-    print(f'ring: from the allocator at record start, '
-          f'{RING_RECORDS} records = {RING_RECORDS * 8 // 1024} KiB '
-          f'= {RING_RECORDS / 2500:.1f} s')
+    print(f'buffers: {BUF_N} x {BUF_BYTES // 1024} KiB from the allocator at '
+          f'record start = {BUF_N * BUF_BYTES / 8 / 2500:.1f} s')
     _setw(STREAM_TAIL, 0, 'the ring tail')
-    _setw(STREAM_DONE, 0, 'the committed count')
 
     # The producers call these; only the deployer knows where they landed.
     syms = _symbols(HERE / 'stream_space.S')
@@ -364,7 +353,6 @@ def reset():
     # it MUST be cleared with the index: a zeroed head against a stale tail
     # underflows and rings the doorbell without pause.
     _setw(STREAM_TAIL, 0, 'the ring tail')
-    _setw(STREAM_DONE, 0, 'the committed count')
 
     # The producers call these; only the deployer knows where they landed.
     syms = _symbols(HERE / 'stream_space.S')

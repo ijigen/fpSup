@@ -102,47 +102,33 @@ mpool_init_jobs:
 
 /* --------------------------------------------------------------- posting */
 
-/* writer_post(r0 = the first record of the buffer that just filled).
+/* writer_post(r0 = the block, r1 = its length, r2 = where it belongs in the
+ * file, r3 = which block it is).
  *
- * stream_commit calls this and nothing else does.  There is no span to work
- * out, no threshold to compare against, no backlog to bound and no wrap to
- * split: a buffer is a fixed length, it tiles the ring exactly, and it is
- * whole by the time this runs.  Everything that used to be here -- POSTED, the
- * chunk cap, the LOST accounting, the second job for the part that ran past the
- * end -- existed to make a threshold poll behave, and the poll is gone.
+ * stream_commit calls this when a block is used up, and nothing else calls it.
+ * There is no span to work out, no threshold, no backlog to bound and no wrap
+ * to split: it is handed a whole allocation that is finished with.
  */
     .global writer_post
 writer_post:
     push    {r4, r5, r6, r7, ip, lr}
-    mov     r4, r0
+    mov     r5, r0
+    mov     r6, r1
+    mov     r7, r2
+    movw    ip, #:lower16:T_JBLK
+    movt    ip, #:upper16:T_JBLK
+    str     r3, [ip]
 
     movw    r0, #:lower16:T_FOPEN
     movt    r0, #:upper16:T_FOPEN
     ldr     r0, [r0]
     cmp     r0, #0
-    beq     9f                          @ no file yet: this buffer is dropped,
-                                        @ and J_OFF will leave its hole behind
+    beq     9f                          @ no file: the block is dropped, and
+                                        @ J_OFF leaves its hole behind
 
-    movw    r5, #:lower16:STREAM_RING
-    movt    r5, #:upper16:STREAM_RING
-    ldr     r5, [r5]
-    cmp     r5, #0
-    beq     9f
-
-    movw    r6, #:lower16:RING_MASK
-    movt    r6, #:upper16:RING_MASK
-    and     r6, r4, r6
-    add     r1, r5, r6, lsl #3          @ where the buffer starts, in the ring
-
-    movw    r2, #:lower16:BUF_BYTES
-    movt    r2, #:upper16:BUF_BYTES
-
-    movw    r3, #:lower16:STREAM_TAIL
-    movt    r3, #:upper16:STREAM_TAIL
-    ldr     r3, [r3]
-    sub     r3, r4, r3
-    lsl     r3, r3, #3                  @ where it belongs in the file
-
+    mov     r1, r5
+    mov     r2, r6
+    mov     r3, r7
     mov     r0, #0                      @ not a stop
     bl      writer_make_job
 
@@ -173,10 +159,13 @@ writer_make_job:
     str     r5, [r0, #J_PTR]
     str     r6, [r0, #J_LEN]
     str     r4, [r0, #J_STOP]
+    movw    ip, #:lower16:T_JBLK
+    movt    ip, #:upper16:T_JBLK
+    ldr     r1, [ip]
+    str     r1, [r0, #J_BLK]            @ so the writer can hand the block back
     movw    ip, #:lower16:T_JSEQ
     movt    ip, #:upper16:T_JSEQ
     ldr     r1, [ip]
-    str     r1, [r0, #J_SEQ]
     add     r1, r1, #1
     str     r1, [ip]
 
@@ -202,7 +191,29 @@ writer_make_job:
 /* Give a descriptor back, and the queue slot with it. */
 writer_release:
     push    {r0, r1, r2, r3, ip, lr}
-    movw    r0, #:lower16:STREAM_JPOOL
+
+    /* The block goes back to the producer first.  Audio has nothing like this:
+     * its DSP owns its two buffers outright and simply overwrites them on
+     * schedule.  Ours cannot be throttled, so the producer must be told when a
+     * block is safe to refill -- and until it is told, it counts a drop rather
+     * than writing over data the card has not seen. */
+    movw    r0, #:lower16:T_JOBSLOT
+    movt    r0, #:upper16:T_JOBSLOT
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     1f
+    ldr     r1, [r0, #J_LEN]
+    cmp     r1, #0
+    beq     1f                          @ the stop job holds no block
+    ldr     r1, [r0, #J_BLK]
+    cmp     r1, #BUF_N
+    bhs     1f
+    movw    r2, #:lower16:B_BUSY
+    movt    r2, #:upper16:B_BUSY
+    mov     r3, #0
+    str     r3, [r2, r1, lsl #2]
+
+1:  movw    r0, #:lower16:STREAM_JPOOL
     movt    r0, #:upper16:STREAM_JPOOL
     ldr     r0, [r0]
     movw    r1, #:lower16:T_JOBSLOT
@@ -338,6 +349,36 @@ make_writer:
  * way.  Splitting our open in two to match the line order would add a failure
  * path for no behaviour.
  */
+/* Give every block we hold back to the allocator.  Used by the teardown and by
+ * a build that could not get them all. */
+free_blocks:
+    push    {r4, r5, r6, lr}
+    mov     r0, #MEM_CLASS
+    movw    ip, #:lower16:MEM_HEAP
+    movt    ip, #:upper16:MEM_HEAP
+    blx     ip
+    cmp     r0, #0
+    beq     9f
+    mov     r5, r0
+    mov     r6, #0
+    movw    r4, #:lower16:B_PTR
+    movt    r4, #:upper16:B_PTR
+1:  ldr     r1, [r4, r6, lsl #2]
+    cmp     r1, #0
+    beq     2f
+    mov     r0, r5
+    movw    ip, #:lower16:MEM_FREE
+    movt    ip, #:upper16:MEM_FREE
+    blx     ip
+    mov     r0, #0
+    str     r0, [r4, r6, lsl #2]
+2:  add     r6, r6, #1
+    cmp     r6, #BUF_N
+    blo     1b
+9:  pop     {r4, r5, r6, lr}
+    bx      lr
+
+
     .global take_open
 take_open:
     push    {r4, r5, r6, lr}
@@ -352,20 +393,27 @@ take_open:
     cmp     r0, #0
     bne     9f                          @ a take is already built
 
-    /* The buffers, from the allocator, at capture start -- DspAudioDevice::v5
-     * asks for its two 16 KiB blocks here and gives them back at stop.  Ours is
-     * one block that the space provider then tiles into sixteen.
+    /* The blocks, from the allocator, at capture start -- DspAudioDevice::v5
+     * asks for its two 16 KiB blocks here and gives them back at stop.  Ours
+     * are eight of the same size, because audio's producer can be throttled by
+     * its hardware and ours cannot.
      *
      * First, so that a refusal costs nothing: no file has been opened and no
-     * thread exists yet. */
+     * thread exists yet.  All or nothing -- a half-built row of blocks is a row
+     * with a hole in it, and the producer would drop into that hole for the
+     * whole take. */
     mov     r0, #MEM_CLASS
     movw    ip, #:lower16:MEM_HEAP
     movt    ip, #:upper16:MEM_HEAP
     blx     ip
     cmp     r0, #0
     beq     9f
-    movw    r1, #:lower16:RING_BYTES
-    movt    r1, #:upper16:RING_BYTES
+    mov     r5, r0                      @ the channel
+    mov     r6, #0                      @ i
+
+1:  mov     r0, r5
+    movw    r1, #:lower16:BUF_BYTES
+    movt    r1, #:upper16:BUF_BYTES
     mov     r2, #0
     mov     r3, #0
     mov     ip, #0
@@ -374,13 +422,48 @@ take_open:
     movt    ip, #:upper16:MEM_GET
     blx     ip
     add     sp, sp, #8
-    movw    r1, #:lower16:STREAM_RING
-    movt    r1, #:upper16:STREAM_RING
-    str     r0, [r1]
     cmp     r0, #0
+    beq     2f                          @ refused: give back what we took
+    movw    ip, #:lower16:B_PTR
+    movt    ip, #:upper16:B_PTR
+    str     r0, [ip, r6, lsl #2]
+    movw    ip, #:lower16:B_BUSY
+    movt    ip, #:upper16:B_BUSY
+    mov     r1, #0
+    str     r1, [ip, r6, lsl #2]
+    add     r6, r6, #1
+    cmp     r6, #BUF_N
+    blo     1b
+    b       3f
+
+2:  bl      free_blocks
     mov     r0, #0x06
     str     r0, [r4]
-    beq     9f                          @ no buffers: build nothing else
+    b       9f
+
+3:  /* A fresh take starts at byte zero with no block in hand. */
+    movw    ip, #:lower16:B_CUR
+    movt    ip, #:upper16:B_CUR
+    mvn     r0, #0
+    str     r0, [ip]
+    mov     r0, #0
+    movw    ip, #:lower16:B_FILL
+    movt    ip, #:upper16:B_FILL
+    str     r0, [ip]
+    movw    ip, #:lower16:B_DONE
+    movt    ip, #:upper16:B_DONE
+    str     r0, [ip]
+    movw    ip, #:lower16:B_OFF
+    movt    ip, #:upper16:B_OFF
+    str     r0, [ip]
+    movw    ip, #:lower16:B_DROPS
+    movt    ip, #:upper16:B_DROPS
+    str     r0, [ip]
+    movw    ip, #:lower16:B_HANDED
+    movt    ip, #:upper16:B_HANDED
+    str     r0, [ip]
+    mov     r0, #0x06
+    str     r0, [r4]
 
     bl      writer_openfile
     movw    r0, #:lower16:T_FOPEN
@@ -527,24 +610,8 @@ take_close:
     mov     r0, #0
     str     r0, [r5]
 
-5:  /* Give the buffers back, the way the device's capture stop does. */
-    movw    r5, #:lower16:STREAM_RING
-    movt    r5, #:upper16:STREAM_RING
-    ldr     r6, [r5]
-    cmp     r6, #0
-    beq     6f
-    mov     r0, #MEM_CLASS
-    movw    ip, #:lower16:MEM_HEAP
-    movt    ip, #:upper16:MEM_HEAP
-    blx     ip
-    cmp     r0, #0
-    beq     6f
-    mov     r1, r6
-    movw    ip, #:lower16:MEM_FREE
-    movt    ip, #:upper16:MEM_FREE
-    blx     ip
-    mov     r0, #0
-    str     r0, [r5]
+5:  /* Give the blocks back, the way the device's capture stop does. */
+    bl      free_blocks
 
 6:  mov     r0, #0x16
     str     r0, [r4]
@@ -740,15 +807,15 @@ writer_selftest:
     mov     r0, #0x13
     str     r0, [r4]                    @ open done, about to write
 
-    movw    r6, #:lower16:STREAM_RING
-    movt    r6, #:upper16:STREAM_RING
-    ldr     r6, [r6]
+    movw    r6, #:lower16:B_PTR
+    movt    r6, #:upper16:B_PTR
+    ldr     r6, [r6]                    @ the first block, if a take built any
     cmp     r6, #0
     moveq   r0, #0x14
     streq   r0, [r4]
     beq     8f
 
-    mov     r1, r6                      @ straight out of the ring
+    mov     r1, r6                      @ straight out of the block
     movw    r2, #1024
     movw    r0, #:lower16:T_FOBJ
     movt    r0, #:upper16:T_FOBJ

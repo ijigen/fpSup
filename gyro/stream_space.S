@@ -5,90 +5,155 @@
 
 /* The space provider.
  *
- * Audio's producer is a DMA engine.  It does not test anything: it is pointed
- * at a buffer, it writes until that buffer ends, and the DSP raises the
- * completion.  The judgement -- which buffer, is it full, hand it over -- lives
- * on the other side of the hardware, in one place, and the filler never sees
- * it.
+ * Audio's producer is a DMA engine.  It is pointed at a block, it writes until
+ * that block ends, and the DSP raises the completion.  It tests nothing, and
+ * "full" is not a number: it is the block being used up.
  *
- * These two routines are that other side.  A producer says "room for n
- * records", writes what it is given, and says "done".  It contains no
- * threshold, no boundary test, no posting, and no knowledge that buffers exist
- * at all.  Everything that used to be scattered through the gyro hook's tail --
- * "is INDEX minus POSTED at least a chunk", "is a file open", "has the stop
- * gone" -- is gone from the producers entirely.
+ * These two routines are the other side of that hardware.  A producer says
+ * "room for n records", writes what it is given, and says "done".  It contains
+ * no threshold, no boundary, no posting, and no knowledge that blocks exist.
  *
- * Buffers are not a second allocation: the ring the deployer already carves out
- * of the pool IS the row of buffers, tiled exactly.  Audio's two come out of
- * the class 6 heap at capture start; ours come out of the block AutoRun asked
- * the allocator for at boot, which is the same memory from the same allocator,
- * taken at a moment that cannot collide with the recorder.
+ * And there is no arithmetic here that decides fullness either.  The same
+ * subtraction that works out how much of the current block is left is what
+ * discovers there is none: give what there is, and when what there is runs to
+ * zero, that block is over.
  */
 
 /* stream_claim(r0 = records wanted) -> r0 = where to write, r1 = records given.
  *
- * Never spans a buffer, so a producer that wants more than the current buffer
- * has left is simply given less and comes back.  That is the whole of the
- * flow control, and it is why the producers have no loop condition to get
- * wrong: they ask until they have been given everything.
+ * Never spans a block, so a producer that wants more than this one has left is
+ * given less and comes back.  That is the whole of the flow control.
  */
     .global stream_claim
 stream_claim:
     push    {r2, r3, r4, r5, ip, lr}
     mov     r4, r0                      @ wanted
-    movw    r5, #BUF_MASK
 
-    movw    r3, #:lower16:STREAM_INDEX
-    movt    r3, #:upper16:STREAM_INDEX
-1:  ldrex   r0, [r3]
-    and     r1, r0, r5                  @ how far into the buffer we are
-    movw    r2, #BUF_RECORDS
-    sub     r1, r2, r1                  @ room left in it
+    movw    r5, #:lower16:B_CUR
+    movt    r5, #:upper16:B_CUR
+    ldr     r0, [r5]
+    cmn     r0, #1
+    bne     2f
+
+    /* No block in hand.  Take a free one -- and if there is none, the writer
+     * has not kept up and this data is lost.  Audio cannot reach this state: it
+     * has two blocks and 85 ms, and if its writer were ever that late the DSP
+     * would simply overwrite.  We would rather count it, because J_OFF then
+     * leaves the hole in the right place and every later record keeps its own
+     * time. */
+    movw    r2, #:lower16:B_BUSY
+    movt    r2, #:upper16:B_BUSY
+    mov     r0, #0
+1:  ldr     r3, [r2, r0, lsl #2]
+    cmp     r3, #0
+    beq     3f
+    add     r0, r0, #1
+    cmp     r0, #BUF_N
+    blo     1b
+
+    movw    r2, #:lower16:B_DROPS
+    movt    r2, #:upper16:B_DROPS
+    ldr     r3, [r2]
+    add     r3, r3, #1
+    str     r3, [r2]
+    mov     r0, #0
+    mov     r1, #0
+    pop     {r2, r3, r4, r5, ip, lr}
+    bx      lr
+
+3:  str     r0, [r5]                    @ B_CUR = the block we just took
+    movw    r2, #:lower16:B_FILL
+    movt    r2, #:upper16:B_FILL
+    mov     r3, #0
+    str     r3, [r2]
+    movw    r2, #:lower16:B_DONE
+    movt    r2, #:upper16:B_DONE
+    str     r3, [r2]
+
+2:  /* r0 = the block.  How much of it is left, and where in it we are. */
+    movw    r2, #:lower16:B_FILL
+    movt    r2, #:upper16:B_FILL
+    ldr     r3, [r2]
+    movw    r1, #:lower16:BUF_RECORDS
+    movt    r1, #:upper16:BUF_RECORDS
+    sub     r1, r1, r3                  @ room
     cmp     r4, r1
     movlo   r1, r4                      @ r1 = min(wanted, room)
-    add     r2, r0, r1
-    strex   ip, r2, [r3]
-    cmp     ip, #0
-    bne     1b
+    add     ip, r3, r1
+    str     ip, [r2]                    @ B_FILL += given
 
-    ring_slot r0, r2, ip                @ r2 = the byte address of record r0
-    mov     r0, r2
+    movw    r2, #:lower16:B_PTR
+    movt    r2, #:upper16:B_PTR
+    ldr     r0, [r2, r0, lsl #2]
+    add     r0, r0, r3, lsl #3          @ where in the block
+
     pop     {r2, r3, r4, r5, ip, lr}
     bx      lr
 
 
 /* stream_commit(r0 = records written).
  *
- * Raised AFTER the records are in memory, not when the space was reserved: a
- * buffer that is spoken for is not a buffer that is full.  When the count lands
- * exactly on a buffer's end that buffer is complete and goes over, once, from
- * here.  It is an equality, not a threshold -- there is nothing to tune and
- * nothing to be late about.
+ * After the records are in memory, not when the space was reserved: a block
+ * that is spoken for is not a block that is full.  When the block is used up it
+ * goes to the writer, once, from here.
  */
     .global stream_commit
 stream_commit:
-    push    {r1, r2, r3, r4, ip, lr}
-    mov     r4, r0                      @ records written
+    push    {r1, r2, r3, r4, r5, lr}
+    mov     r4, r0
 
-    movw    r3, #:lower16:STREAM_DONE
-    movt    r3, #:upper16:STREAM_DONE
-1:  ldrex   r0, [r3]
-    add     r1, r0, r4
-    strex   r2, r1, [r3]
-    cmp     r2, #0
-    bne     1b
+    movw    r5, #:lower16:B_CUR
+    movt    r5, #:upper16:B_CUR
+    ldr     r5, [r5]
+    cmn     r5, #1
+    beq     9f                          @ nothing was given, nothing to commit
 
-    movw    r2, #BUF_MASK
-    ands    r2, r1, r2
-    bne     9f
+    movw    r2, #:lower16:B_DONE
+    movt    r2, #:upper16:B_DONE
+    ldr     r3, [r2]
+    add     r3, r3, r4
+    str     r3, [r2]
 
-    movw    r2, #BUF_RECORDS
-    sub     r0, r1, r2                  @ the first record of the buffer that filled
+    movw    r1, #:lower16:BUF_RECORDS
+    movt    r1, #:upper16:BUF_RECORDS
+    cmp     r3, r1
+    blo     9f                          @ this block still has room in it
+
+    /* Used up.  Hand it over. */
+    movw    r1, #:lower16:B_BUSY
+    movt    r1, #:upper16:B_BUSY
+    mov     r2, #1
+    str     r2, [r1, r5, lsl #2]
+
+    movw    r1, #:lower16:B_HANDED
+    movt    r1, #:upper16:B_HANDED
+    ldr     r2, [r1]
+    add     r2, r2, #1
+    str     r2, [r1]
+
+    movw    r1, #:lower16:B_PTR
+    movt    r1, #:upper16:B_PTR
+    ldr     r0, [r1, r5, lsl #2]        @ r0 = the block
+    movw    r1, #:lower16:BUF_BYTES
+    movt    r1, #:upper16:BUF_BYTES     @ r1 = its length
+    movw    r2, #:lower16:B_OFF
+    movt    r2, #:upper16:B_OFF
+    ldr     r3, [r2]                    @ r3 = where it belongs in the file
+    add     r4, r3, r1
+    str     r4, [r2]                    @ the next block starts after it
+    mov     r2, r3
+    mov     r3, r5                      @ r3 = which block, so it can be freed
+
+    movw    ip, #:lower16:B_CUR
+    movt    ip, #:upper16:B_CUR
+    mvn     r4, #0
+    str     r4, [ip]                    @ take a fresh one on the next claim
+
     movw    ip, #:lower16:STREAM_SIGFN
     movt    ip, #:upper16:STREAM_SIGFN
     ldr     ip, [ip]
     cmp     ip, #0
-    blxne   ip                          @ writer_post_buffer(r0)
+    blxne   ip                          @ writer_post(ptr, len, offset, block)
 
-9:  pop     {r1, r2, r3, r4, ip, lr}
+9:  pop     {r1, r2, r3, r4, r5, lr}
     bx      lr
