@@ -130,6 +130,19 @@ class RecordShape(unittest.TestCase):
                            'the VPREV freeze is still inside the first-one-only block')
         self.assertLess(first_only, rearm)
 
+    def test_the_job_leaves_the_kernels_word_alone(self):
+        """tk_snd_mbx takes a message beginning with T_MSG -- the kernel's queue
+        link at offset 0, which it writes while the message is queued.  The
+        audio writer's descriptor starts its fields at +4 for exactly this
+        reason.  Ours had J_PTR on that word: a ring address in the kernel's
+        list pointer, and a list pointer where the writer read its source."""
+        self.assertEqual(int(equ('J_MSGQ'), 0), 0)
+        for name in ('J_PTR', 'J_LEN', 'J_STOP', 'J_SEQ'):
+            self.assertGreaterEqual(int(equ(name), 0), 4,
+                                    f'{name} is on the kernel word')
+        task = (HERE / 'ring_task.S').read_text()
+        self.assertNotIn('J_MSGQ]', task, 'something writes the kernel word')
+
     def test_the_markers_append_nothing_to_the_stream(self):
         """A marker appended from outside the gyro producer lands where the last
         drain left the index, 0-20 ms before it belongs -- most of a frame, on a

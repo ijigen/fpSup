@@ -314,10 +314,24 @@
  * The pool IS the queue: taking a descriptor is taking a queue slot, and an
  * empty pool is a full queue.  That is the back-pressure signal, for free, in
  * the form the firmware already trusts. */
-.equ J_PTR,          0x00           /* straight into the ring                 */
-.equ J_LEN,          0x04           /* bytes                                  */
-.equ J_STOP,         0x08           /* 1 = the take is over, close after this  */
-.equ J_SEQ,          0x0C           /* which job this is, for reading back    */
+/* Offset 0 is NOT ours.
+ *
+ * tk_snd_mbx takes a message that must begin with T_MSG -- the kernel's own
+ * queue link, one word at offset 0, which it writes into while the message is
+ * queued.  The audio writer's descriptor leaves that word alone and starts its
+ * fields at +4; ours had J_PTR sitting on it, so we were storing a ring address
+ * in the kernel's list pointer and the kernel was storing a list pointer in our
+ * ring address.  That is the whole of it: it froze the camera five seconds into
+ * a take even with every card call stubbed out, because it was never about the
+ * card.
+ *
+ * Nothing here writes J_MSGQ.  It is declared only so the layout says why the
+ * gap exists. */
+.equ J_MSGQ,         0x00           /* the kernel's.  Do not touch.           */
+.equ J_PTR,          0x04           /* straight into the ring                 */
+.equ J_LEN,          0x08           /* bytes                                  */
+.equ J_STOP,         0x0C           /* 1 = the take is over, close after this  */
+.equ J_SEQ,          0x10           /* which job this is, for reading back    */
 .equ J_SIZE,         24
 
 .equ JOB_COUNT,      32             /* what audio's pool holds                */
