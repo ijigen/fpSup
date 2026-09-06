@@ -37,8 +37,18 @@ sys.path.insert(0, str(HERE.parent / 'fp_usb_shell'))
 import putfile as P                                            # noqa: E402
 from armasm import assemble, _compile, _parse                  # noqa: E402
 
-CODE_AT = 0xC072E7D0            # after vd_hook, below the park stub
-CAVE_HI = 0xC072EFB4
+# The task lives in the POOL, not the injection cave.  The cave is a hard 3900
+# bytes and the producers already take most of it; the task is reached by
+# absolute address -- tk_cre_tsk's entry, and an indirect blx from the gyro
+# producer -- so it does not need to be inside a firmware bl's range the way
+# the hooks do.  Code runs from the pool once the caches have been maintained.
+CODE_POOL_OFF = 0x44000
+JPOOL_POOL_OFF = 0x43000
+FOBJ_POOL_OFF = 0x42000
+F_CACHE = 0xC000E91C            # what makes freshly written pool code runnable
+POOL_PTR = 0xC3757A7C
+JOB_COUNT = 32
+JOB_SIZE = 24
 
 T_ID, T_CRE_RC, T_STA_RC = 0xC072E0D0, 0xC072E0D4, 0xC072E0D8
 T_WAKES, T_SIGNALS, T_ENTRY = 0xC072E0DC, 0xC072E0E0, 0xC072E0E4
@@ -46,9 +56,16 @@ T_RECV_RC, T_MBX_RC = 0xC072E0E8, 0xC072E0EC
 T_DESC, T_PKT, T_DOOR, T_MBX = 0xC072E080, 0xC072E0A0, 0xC072E0C0, 0xC072E0C4
 T_DRAINED, T_MAXSPAN = 0xC072E0C8, 0xC072E0CC
 T_FOBJ, T_FOPEN = 0xC072E0F8, 0xC072E0FC
+T_WANT = 0xC072E194
+T_STAGE = 0xC072E198
+T_STOPSENT = 0xC072E15C
+T_JSEQ = 0xC072E160
+T_JOBSLOT = 0xC072E164
+STREAM_JPOOL = 0xC072E19C
+STREAM_POSTED = 0xC072E1AC
+STREAM_INDEX, STREAM_TAIL = 0xC072E1F8, 0xC072E1A4
 T_BYTES, T_WRITES = 0xC072E180, 0xC072E184
 T_WRC, T_LOST, T_WRAPS = 0xC072E188, 0xC072E18C, 0xC072E190
-FOBJ_POOL_OFF = 0x42000
 STREAM_SIGFN = 0xC072E1A8
 
 
@@ -66,8 +83,8 @@ def symbols(src):
         end = elf.index(b'\0', strtab[4] + name_off)
         name = elf[strtab[4] + name_off:end].decode()
         if name in ('writer_task', 'make_writer', 'writer_signal',
-                    'writer_openfile', 'writer_closefile', 'writer_drain',
-                    'writer_selftest'):
+                    'writer_openfile', 'writer_closefile',
+                    'writer_selftest', 'writer_post', 'mpool_init_jobs'):
             out[name] = value
     return out
 
@@ -80,7 +97,8 @@ def _check():
             'T_RECV_RC': T_RECV_RC, 'T_MBX_RC': T_MBX_RC, 'T_DESC': T_DESC,
             'T_PKT': T_PKT, 'T_DOOR': T_DOOR, 'T_MBX': T_MBX,
             'T_DRAINED': T_DRAINED, 'T_MAXSPAN': T_MAXSPAN,
-            'T_FOBJ': T_FOBJ, 'T_FOPEN': T_FOPEN, 'T_BYTES': T_BYTES,
+            'T_FOBJ': T_FOBJ, 'T_FOPEN': T_FOPEN, 'T_WANT': T_WANT, 'T_STAGE': T_STAGE,
+            'T_BYTES': T_BYTES,
             'T_WRITES': T_WRITES, 'T_WRC': T_WRC, 'T_LOST': T_LOST,
             'T_WRAPS': T_WRAPS, 'WRITER_PRI': 6}
     for name, value in want.items():
@@ -112,33 +130,43 @@ def _check():
                 raise SystemExit(f'{name} 0x{stub:08X} does not start with push {{r4}}')
 
 
+def pool_base():
+    seen = [P.mem_get(POOL_PTR)[0] for _ in range(3)]
+    if len(set(seen)) != 1:
+        raise SystemExit('the pool pointer read back differently three times: '
+                         + ', '.join(f'0x{v:08X}' if v else str(v) for v in seen))
+    pool = seen[0]
+    if not pool or not 0x40000000 <= pool < 0x50000000:
+        raise SystemExit(f'the pool pointer reads 0x{pool or 0:08X}')
+    return pool
+
+
 def place():
     _check()
     code = assemble(HERE / 'ring_task.S')
     syms = symbols(HERE / 'ring_task.S')
+    pool = pool_base()
+    global CODE_AT
+    CODE_AT = pool + CODE_POOL_OFF
     end = CODE_AT + len(code)
-    if end > CAVE_HI:
-        raise SystemExit(f'0x{CODE_AT:08X}..0x{end:08X} runs into the park stub')
-    # Nothing here may land on anything the stream deployer placed.  The two
-    # scripts share the cave and neither can see the other's table.
+    # The regions this deployer owns, against the ring the stream deployer set.
     import imu_stream_deploy as D
-    theirs = [(n, a, len(assemble(HERE / src, d)))
-              for n, (a, src, d, _s, _o, _t) in D.PRODUCERS.items()]
-    theirs += [('state words', D.STATE_AT, D.STATE_WORDS * 4),
-               ('stream', D.STREAM_BASE, D.STREAM_SPAN)]
-    mine = [('ring_task', CODE_AT, len(code)),
-            ('task desc', T_DESC, 32), ('task packet', T_PKT, 32),
-            ('task words', T_DOOR, 0xC072E0F0 - T_DOOR + 16),
-            ('write words', T_BYTES, 20)]
-    for an, aa, al in mine:
-        for bn, ba, bl in theirs:
-            if aa < ba + bl and ba < aa + al:
-                raise SystemExit(f'{an} 0x{aa:08X}+{al} overlaps '
-                                 f'{bn} 0x{ba:08X}+{bl}')
+    ring_lo = pool + D.RING_POOL_OFF
+    ring_hi = ring_lo + D.RING_BYTES
+    jlo = pool + JPOOL_POOL_OFF
+    jhi = jlo + JOB_COUNT * (JOB_SIZE + 8) + 0x14
+    flo = pool + FOBJ_POOL_OFF
+    for name, lo, hi in (('code', CODE_AT, end), ('job pool', jlo, jhi),
+                         ('file object', flo, flo + 0x1000)):
+        if lo < ring_hi and ring_lo < hi:
+            raise SystemExit(f'{name} 0x{lo:08X}..0x{hi:08X} overlaps the ring')
+        if not (pool + 0x20000 <= lo and hi <= pool + 0x100000):
+            raise SystemExit(f'{name} 0x{lo:08X}..0x{hi:08X} leaves the free pool')
     missing = {'writer_task', 'make_writer', 'writer_signal'} - set(syms)
     if missing:
         raise SystemExit(f'the blob has no {sorted(missing)}')
-    print(f'  ring_task     0x{CODE_AT:08X}..0x{end:08X}  {len(code)} bytes')
+    print(f'  ring_task     0x{CODE_AT:08X}..0x{end:08X}  {len(code)} bytes (pool)')
+    print(f'  job pool      0x{jlo:08X}..0x{jhi:08X}  {JOB_COUNT} jobs')
     for n, o in sorted(syms.items(), key=lambda kv: kv[1]):
         print(f'    {n:16s} 0x{CODE_AT + o:08X}')
     return code, {n: CODE_AT + o for n, o in syms.items()}
@@ -181,13 +209,25 @@ def place_code():
     # a file object possibly open.  put() sends about 240 bytes a round trip
     # and repairs whatever did not land, one word at a time.
     P.put(CODE_AT, code, 'ring_task')
+    # Freshly written code in the pool is still only data to the caches.
+    echo_into(F_CACHE, 'the cache maintenance routine')
     _setw(T_ENTRY, at['writer_task'], 'the task entry')
-    _setw(STREAM_SIGFN, at['writer_signal'], 'the doorbell')
-    pool = P.mem_get(0xC3757A7C)[0]
-    if not pool or not 0x40000000 <= pool < 0x50000000:
-        raise SystemExit(f'the pool pointer reads 0x{pool or 0:08X}')
+    _setw(STREAM_SIGFN, at['writer_post'], 'what the producer calls')
+    pool = pool_base()
     _setw(T_FOBJ, pool + FOBJ_POOL_OFF, 'the file object')
+    _setw(STREAM_JPOOL, pool + JPOOL_POOL_OFF, 'the job pool')
+    _setw(STREAM_POSTED, 0, 'the posted mark')
+    for a in (T_STOPSENT, T_JSEQ, T_JOBSLOT):
+        _setw(a, 0, 'a job word')
+    # Build the free list before anything can take a descriptor from it.
+    echo_into(at['mpool_init_jobs'], 'mpool_init_jobs')
+    free = P.mem_get(pool + JPOOL_POOL_OFF + 4)[0]
+    print(f'job pool at 0x{pool + JPOOL_POOL_OFF:08X}: {free} free')
+    if free != JOB_COUNT:
+        raise SystemExit(f'the job pool says {free} free, not {JOB_COUNT}')
     _setw(T_FOPEN, 0, 'the open flag')
+    _setw(T_WANT, 0, 'the wanted state')
+    _setw(T_STAGE, 0, 'the close stage')
     for a in (T_BYTES, T_WRITES, T_WRC, T_LOST, T_WRAPS):
         _setw(a, 0, 'a write counter')
     print(f'placed; file object 0x{pool + FOBJ_POOL_OFF:08X}, no task yet')
@@ -230,8 +270,19 @@ def state():
                      P.mem_get(T_BYTES)[0])
     lost, wraps, wrc = (P.mem_get(T_LOST)[0], P.mem_get(T_WRAPS)[0],
                         P.mem_get(T_WRC)[0])
-    print(f'  T_MBX      {mbx}   T_DOOR {door}   file open {fopen}')
+    want = P.mem_get(T_WANT)[0]
+    st = P.mem_get(T_STAGE)[0]
+    where = {0x21: 'entered close', 0x22: 'about to drain', 0x23: 'drained, about to close',
+             0x24: 'closed, about to destroy', 0x25: 'destroyed, all the way'}.get(st)
+    print(f'  T_MBX      {mbx}   T_DOOR {door}   wanted {want}   file open {fopen}')
+    if st:
+        print(f'  close got to 0x{st:X}' + (f' -- {where}' if where else ''))
+    jseq, sent = P.mem_get(T_JSEQ)[0], P.mem_get(T_STOPSENT)[0]
+    jfree = P.mem_get((pool_base() + JPOOL_POOL_OFF) + 4)[0]
+    jfail = P.mem_get((pool_base() + JPOOL_POOL_OFF) + 0x10)[0]
     print(f'  writes     {wr}   bytes {by}   last result {wrc}')
+    print(f'  jobs       {jseq} posted   stop sent {sent}   '
+          f'pool {jfree}/{JOB_COUNT} free   refused {jfail}')
     print(f'  wraps      {wraps}   LOST {lost}'
           + ('   <- the ring is too shallow' if lost else ''))
     print(f'  drained    {drained} records   most ever waiting {maxspan}')
@@ -256,6 +307,10 @@ def main():
     g.add_argument('--place-only', action='store_true')
     g.add_argument('--place', action='store_true',
                    help='write the code and the words, create nothing')
+    g.add_argument('--holdopen', action='store_true',
+                   help='open the file and hold it, with nothing writing')
+    g.add_argument('--dropfile', action='store_true',
+                   help='close it directly, without the task')
     g.add_argument('--selftest', action='store_true',
                    help='open, write from the ring, close -- all in this context')
     g.add_argument('--open', action='store_true', help='open the file')
@@ -269,8 +324,33 @@ def main():
         place()
     elif a.place:
         place_code()
-    elif a.selftest:
+    elif a.holdopen:
+        # Open with no task in existence, so nothing drains and nothing writes.
+        # This separates HOLDING a file across the camera's stop sequence from
+        # WRITING during it -- the two have been tangled together in every run
+        # so far, and the last freeze reached neither the stop hook nor the
+        # close, so the writing may have had nothing to do with it.
         at = place_code()
+        echo_into(at['writer_openfile'], 'writer_openfile')
+        print(f'file open: {P.mem_get(T_FOPEN)[0]}   (no task exists; nothing '
+              f'will write to it)')
+    elif a.dropfile:
+        # place(), not place_code(): the action modes must NOT reset the state
+        # words.  place_code() zeroes T_FOPEN, and a close that sees a zero
+        # flag skips the destroy -- leaving a constructed file object behind,
+        # which is the \LENS.DAT trap the logger warns about and which then
+        # makes every later open fail.
+        _code, at = place()
+        echo_into(at['writer_closefile'], 'writer_closefile')
+        print(f'file open: {P.mem_get(T_FOPEN)[0]}   stage '
+              f'0x{(P.mem_get(T_STAGE)[0] or 0):X}')
+    elif a.selftest:
+        # place(), not place_code(): the action modes must NOT reset the state
+        # words.  place_code() zeroes T_FOPEN, and a close that sees a zero
+        # flag skips the destroy -- leaving a constructed file object behind,
+        # which is the \LENS.DAT trap the logger warns about and which then
+        # makes every later open fail.
+        _code, at = place()
         echo_into(at['writer_selftest'], 'writer_selftest')
         w = P.mem_get(T_WRC)[0]
         stage = {0x11: 'entered', 0x12: 'the open FAILED', 0x13: 'opened, about to write',
@@ -281,12 +361,20 @@ def main():
             print(f'  F_WRITE returned {P.mem_get(T_BYTES)[0]}')
         state()
     elif a.open:
-        _code, at = place()
-        echo_into(at['writer_openfile'], 'writer_openfile')
+        # The same way a recording asks: latch where the take starts, then say
+        # it wants a file.  The writer opens it on its next wake, so this
+        # exercises the path the record hook uses rather than a second one.
+        head = P.mem_get(STREAM_INDEX)[0]
+        _setw(STREAM_POSTED, head, 'the posted mark')
+        _setw(T_STOPSENT, 0, 'the stop flag')
+        _setw(T_WANT, 1, 'the wanted state')
+        print(f'asked for a file, take starts at record {head}')
+        time.sleep(1.0)
         state()
     elif a.close:
-        _code, at = place()
-        echo_into(at['writer_closefile'], 'writer_closefile')
+        _setw(T_WANT, 0, 'the wanted state')
+        print('asked for it to be closed; the producer posts a stop job')
+        time.sleep(2.0)
         state()
     else:
         create()

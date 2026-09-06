@@ -101,6 +101,52 @@ rec_trigger:
     str     r1, [r0]
 #endif
 2:
+#ifdef REC_STOP
+    /* The take is over.  Ask for the file to be closed; the writer does it on
+     * its next wake, after draining what is still in the ring.  Nothing heavy
+     * happens here: this is a firmware callback, and opening or closing a file
+     * from one has never been shown safe. */
+    movw    r0, #:lower16:T_WANT
+    movt    r0, #:upper16:T_WANT
+    mov     r1, #0
+    str     r1, [r0]
+#else
+    /* A take begins here.  Two plain stores: where it starts, and that it
+     * wants a file.
+     *
+     * The tail is latched HERE rather than when the file opens, because the
+     * open happens up to a doorbell later -- moving the tail then would throw
+     * away everything recorded in between.  The ring holds 6.6 seconds; a
+     * 400 ms wait for the writer to notice costs nothing. */
+    movw    r0, #:lower16:STREAM_INDEX
+    movt    r0, #:upper16:STREAM_INDEX
+    ldr     r0, [r0]
+    movw    r1, #:lower16:STREAM_POSTED
+    movt    r1, #:upper16:STREAM_POSTED
+    str     r0, [r1]                    @ POSTED, not TAIL: the producer reads
+                                        @ this one, and between takes it stops
+                                        @ moving while the head runs on.  Setting
+                                        @ the wrong word left a span of a hundred
+                                        @ and thirty thousand records, all of it
+                                        @ counted lost.
+    movw    r1, #:lower16:STREAM_TAIL
+    movt    r1, #:upper16:STREAM_TAIL
+    str     r0, [r1]                    @ kept in step, for reading back
+
+    /* Re-arm the stop.  It is a one-shot per take, and nothing else clears it:
+     * left set from the previous take, the second take can never post its stop
+     * job and its file is never closed. */
+    movw    r0, #:lower16:T_STOPSENT
+    movt    r0, #:upper16:T_STOPSENT
+    mov     r1, #0
+    str     r1, [r0]
+
+    movw    r0, #:lower16:T_WANT
+    movt    r0, #:upper16:T_WANT
+    mov     r1, #1
+    str     r1, [r0]
+
+#endif
 #ifndef REC_STOP
     /* Where the ring is, to 400 us.  The batch counter latched beside it can
      * only say "within one 20 ms callback", which is twelve times coarser than

@@ -156,14 +156,23 @@ gyro_stream_hook:
     movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX
     ldr     r0, [ip]
-    movw    ip, #:lower16:STREAM_TAIL
-    movt    ip, #:upper16:STREAM_TAIL
+    movw    ip, #:lower16:STREAM_POSTED
+    movt    ip, #:upper16:STREAM_POSTED
     ldr     r1, [ip]
     sub     r0, r0, r1
     movw    r1, #RING_CHUNK
     cmp     r0, r1
-    blo     9f
-    movw    ip, #:lower16:STREAM_SIGFN
+    bhs     7f
+    /* Not enough yet -- but a take may have ended, and the stop has to go
+     * through the queue behind whatever is still unposted.  Only the producer
+     * can post it: this is task context, where a syscall is safe, and the
+     * record hooks are not. */
+    movw    ip, #:lower16:T_WANT
+    movt    ip, #:upper16:T_WANT
+    ldr     ip, [ip]
+    cmp     ip, #0
+    bne     9f
+7:  movw    ip, #:lower16:STREAM_SIGFN
     movt    ip, #:upper16:STREAM_SIGFN
     ldr     ip, [ip]
     cmp     ip, #0

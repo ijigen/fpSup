@@ -111,6 +111,24 @@
 
 .equ T_FOBJ,         0xC072E0F8     /* the file object, placed by the deployer */
 .equ T_FOPEN,        0xC072E0FC     /* non-zero once it is open               */
+/* Two more words, in the gap the accel hook left at 0xC072E180.  T_BYTES and
+ * friends start there; these follow them. */
+.equ T_STOPSENT,     0xC072E15C     /* one stop job per take, not one a wake  */
+.equ T_JSEQ,         0xC072E160     /* jobs posted, so a dump can see order   */
+.equ T_JOBSLOT,      0xC072E164     /* where MBX_RECV leaves the descriptor   */
+.equ T_STAGE,        0xC072E198     /* how far the close got.  A wedge that
+                                     * leaves a number behind is a bisect; one
+                                     * that leaves nothing is another reboot
+                                     * spent guessing. */
+.equ T_WANT,         0xC072E194     /* 1 = a take wants the file, 0 = it does
+                                     * not.  The recording hooks set this and
+                                     * nothing else: opening a file is far too
+                                     * heavy for a firmware callback, and those
+                                     * two contexts have never been shown safe
+                                     * for a syscall.  The writer reconciles it
+                                     * on its next wake, at most a doorbell
+                                     * away -- about 400 ms, against a ring
+                                     * that holds 6.6 seconds. */
 .equ T_BYTES,        0xC072E180     /* in the gap between the accel hook and
                                      * the stream's own words; the accel hook
                                      * grew into 0xC072E140 when the ring base

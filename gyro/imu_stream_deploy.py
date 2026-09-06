@@ -48,9 +48,9 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 PRODUCERS = {
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
     'gyro':  (0xC072E300, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
-    'start': (0xC072E490, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
-    'stop':  (0xC072E580, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
-    'vd':    (0xC072E650, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
+    'start': (0xC072E4B0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
+    'stop':  (0xC072E5F0, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
+    'vd':    (0xC072E6E0, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
 
 
@@ -109,6 +109,7 @@ STREAM_BASE   = 0xC072E200
 POOL_PTR      = 0xC3757A7C
 RING_POOL_OFF = 0x20000
 RING_RECORDS  = 16384
+RING_BYTES    = 16384 * 8
 STREAM_COUNT  = 32
 STREAM_SPAN   = STREAM_COUNT * 8
 
@@ -194,6 +195,42 @@ def _setw(addr, value, what):
     raise SystemExit(f'could not write {what} at 0x{addr:08X}')
 
 
+def resolve_ring():
+    """Where the ring goes -- and prove it before 20 KB/s starts landing there.
+
+    A range check is not enough.  The pool pointer came back as two different
+    values in one boot with no reboot between them, and the second was inside
+    the plausible range: a garbled read passes `0x4xxxxxxx` as easily as a real
+    one.  Arming the producers on a wrong base points five hooks at whatever
+    happens to live there, at two and a half thousand records a second, and the
+    camera does not survive it.
+
+    So: agree three times, then write a marker at each end of the span and read
+    it back.  That proves the address is real, writable, and that the whole ring
+    fits -- which the pointer alone never did.
+    """
+    seen = [P.mem_get(POOL_PTR)[0] for _ in range(3)]
+    if len(set(seen)) != 1:
+        print(f'the pool pointer read back differently three times: '
+              + ', '.join(f'0x{v:08X}' if v else str(v) for v in seen))
+        return None
+    pool = seen[0]
+    if not pool or not 0x40000000 <= pool < 0x50000000:
+        print(f'the pool pointer reads 0x{pool or 0:08X}')
+        return None
+    ring = pool + RING_POOL_OFF
+    for addr, mark in ((ring, 0x5AA5C33C), (ring + RING_BYTES - 4, 0xC33C5AA5)):
+        for _ in range(6):
+            P.mem_set(addr, mark)
+            if (P.mem_get(addr) or [0])[0] == mark:
+                break
+        else:
+            print(f'0x{addr:08X} would not hold a marker; the ring is not there')
+            return None
+    print(f'pool 0x{pool:08X}, ring proved writable at both ends')
+    return ring
+
+
 def arm():
     _check_header()
     code = _place()
@@ -216,17 +253,14 @@ def arm():
     # from the firmware's allocator freezes the camera when held across a
     # recording start; the pool does not, and pool+0x20000 is inside the 896 KB
     # that survived 224 of 224 markers.
-    pool = P.mem_get(POOL_PTR)[0]
-    if pool and 0x40000000 <= pool < 0x50000000:
-        ring = pool + RING_POOL_OFF
+    ring = resolve_ring()
+    if ring:
         _setw(STREAM_RING, ring, 'the ring base')
-        print(f'ring: pool 0x{pool:08X} + 0x{RING_POOL_OFF:X} = 0x{ring:08X}, '
-              f'{RING_RECORDS} records = {RING_RECORDS * 8 // 1024} KiB '
-              f'= {RING_RECORDS / 2500:.1f} s')
+        print(f'ring: 0x{ring:08X}, {RING_RECORDS} records = '
+              f'{RING_RECORDS * 8 // 1024} KiB = {RING_RECORDS / 2500:.1f} s')
     else:
         _setw(STREAM_RING, 0, 'the ring base')
-        print(f'pool pointer reads 0x{pool if pool else 0:08X}; staying on the '
-              f'{STREAM_COUNT}-record bench ring in the cave')
+        print(f'staying on the {STREAM_COUNT}-record bench ring in the cave')
     _setw(STREAM_TAIL, 0, 'the ring tail')
 
     for name, (at, _src, _d, site, _orig, thumb) in PRODUCERS.items():

@@ -300,4 +300,33 @@
     add     \out, \out, \idx, lsl #3
 .endm
 
+.equ STREAM_JPOOL,   0xC072E19C     /* u32, our MPoolFixed of job descriptors */
+.equ STREAM_POSTED,  0xC072E1AC     /* u32, records already handed to the
+                                     * writer.  The producer owns this; the
+                                     * writer never touches the ring's indices
+                                     * at all, exactly as the audio writer does
+                                     * not -- it writes the pointer and length
+                                     * it was given and nothing else.        */
+
+/* A job, 24 bytes -- the same payload size the firmware's own
+ * MPoolFixed<24,32> hands out to the audio path.
+ *
+ * The pool IS the queue: taking a descriptor is taking a queue slot, and an
+ * empty pool is a full queue.  That is the back-pressure signal, for free, in
+ * the form the firmware already trusts. */
+.equ J_PTR,          0x00           /* straight into the ring                 */
+.equ J_LEN,          0x04           /* bytes                                  */
+.equ J_STOP,         0x08           /* 1 = the take is over, close after this  */
+.equ J_SEQ,          0x0C           /* which job this is, for reading back    */
+.equ J_SIZE,         24
+
+.equ JOB_COUNT,      32             /* what audio's pool holds                */
+
+.equ T_STOPSENT,     0xC072E15C     /* shared with ring_task.inc.S */
+.equ T_WANT,         0xC072E194     /* shared with ring_task.inc.S: 1 = a take
+                                     * wants the file.  Declared in both because
+                                     * the producers and the writer are placed
+                                     * by different scripts; the deployers check
+                                     * the two agree. */
+
 .equ HEAD_UNARMED,   0xFFFFFFFF
