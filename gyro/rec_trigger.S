@@ -25,16 +25,22 @@
  *              c01fba34  ldr r1, [r1]
  *              c01fba38  blx r1              vtable +0x20
  *
- *   STOP   MovRecFuncStateREC__v36 case 1  ->  FUN_c01fb640(recorder, 0),
- *          which takes the class 6 heap -- MOVAUDIO -- checks it has room, and
- *          past every early return commits at
+ *   STOP   cDevt_stop @0xC038C3C0, the recorder's device-stop step, at the
+ *          instruction right after it has fetched the object that says whether
+ *          an audio file was recorded and right before it acts on that:
  *
- *              c01fb880  mov r0, r4          <- displaced
- *              c01fb884  mov r1, #1
- *              c01fb888  bl  FUN_c01fbad0    (mark the recorder running)
- *                        ... vtable +0x1c, the capture starts again
+ *              c038c458  bl   FUN_c0207088
+ *              c038c45c  ldrb r3, [r0, #0xe0]   <- displaced
+ *              c038c464  beq  (no audio file: restart the monitor)
+ *              c038c46c  bl   XC_AudioRecorder::Stop   <- audio joins and CLOSES
  *
- *          Case 1 is the state being LEFT, not entered.
+ *          This is where audio closes its file, and it is the moment that
+ *          matters.  The hook used to sit at 0xC01FB880, inside FUN_c01fb640,
+ *          which is the audio capture being restarted -- two steps later in the
+ *          same function, after "stop_fin", while that restart is taking the
+ *          class 6 heap and programming the DSP.  Closing a file there froze the
+ *          camera every time; closing the same file from the shell, idle, was
+ *          clean.  Same task, same function, different step.
  *
  * Neither site is a function entry, and that is deliberate: both functions save
  * lr in their first instruction, and both have early returns in front of the
@@ -50,8 +56,8 @@
  */
 
 #ifdef REC_STOP
-.equ SITE,        0xC01FB880
-.equ SITE_ORIG,   0xE1A00004          /* mov r0, r4 */
+.equ SITE,        0xC038C45C
+.equ SITE_ORIG,   0xE5D030E0          /* ldrb r3, [r0, #0xe0] */
 .equ COUNT_WORD,  STREAM_R1_N
 .equ LATCH_WORD,  STREAM_R1_GC
 #else
@@ -153,7 +159,9 @@ rec_trigger:
 
     pop     {r0, r1, r2, r3, ip, lr}
 #ifdef REC_STOP
-    mov     r0, r4                      @ the displaced instruction
+    ldrb    r3, [r0, #0xe0]             @ the displaced instruction: r0 is the
+                                        @ object FUN_c0207088 just returned,
+                                        @ restored by the pop above
 #else
     ldr     r0, [r4, #8]                @ the displaced instruction
 #endif
