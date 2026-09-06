@@ -232,12 +232,6 @@
  *   5  + attached and running        (the whole thing)
  */
 .equ T_BUILD,        0xC072EC54
-.equ T_YIELD,        0xC072EC5C     /* ms to sleep before closing when there is
-                                     * no writer to join.  A DIAGNOSTIC, not a
-                                     * design element: audio never closes
-                                     * without first having yielded in its
-                                     * join, and this stands in for that yield
-                                     * at the builds that have no thread.    */
 .equ T_TEARDOWN,     0xC072EC58     /* 0 = take_close does nothing and leaves
                                      * the take standing for the shell to
                                      * dismantle later.  Splits "open at
