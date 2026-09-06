@@ -154,6 +154,31 @@ rec_trigger:
     movt    r1, #:upper16:STREAM_R0_HEAD
     str     r0, [r1]
 
+    /* Anchor the gyro cursor to THIS instant.
+     *
+     * The producers no longer drain while the camera is idle, so GHEAD is stale
+     * by however long it has been sitting -- and a stale cursor is not just a
+     * big number, it is a wrapped one, indistinguishable from a normal wrap.
+     * Latching the coprocessor's write pointer here is what makes the take's
+     * first record the sample that existed when the recorder committed, to
+     * 400 us, instead of wherever the previous batch boundary happened to fall.
+     *
+     * GHEAD holds the ABSOLUTE pointer, which is what the producer compares
+     * against, not the offset gyro_head returns. */
+    movw    r0, #:lower16:GYRO_DESC_PTR
+    movt    r0, #:upper16:GYRO_DESC_PTR
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     3f
+    ldr     r0, [r0, #0x60]
+    cmp     r0, #0
+    beq     3f
+    ldr     r0, [r0]
+    movw    r1, #:lower16:STREAM_GHEAD
+    movt    r1, #:upper16:STREAM_GHEAD
+    str     r0, [r1]
+3:
+
     /* Re-arm the Vd latch.  Vd free-runs in liveview, so "the first Vd" only
      * means the take's first frame if the take resets the count first.  This
      * runs before the exposure it is arming for: the recorder commits here,

@@ -232,6 +232,24 @@ writer_post:
     ldr     r0, [ip]
     cmp     r0, #0
     bne     9f
+
+    /* "After every job above" stopped being true when the chunk cap went in.
+     * One call now posts at most 1024 records, so a take that ends with more
+     * than that still waiting would queue its stop AHEAD of the rest and the
+     * writer would close the file on the tail of the take.
+     *
+     * Nothing is lost by waiting: a producer reaches here every 20 ms while the
+     * file is open, and each visit hands over another 1024 against an inflow of
+     * 50, so the backlog closes long before the ring could lap. */
+    movw    ip, #:lower16:STREAM_INDEX
+    movt    ip, #:upper16:STREAM_INDEX
+    ldr     r0, [ip]
+    movw    ip, #:lower16:STREAM_POSTED
+    movt    ip, #:upper16:STREAM_POSTED
+    ldr     r1, [ip]
+    cmp     r0, r1
+    bne     9f                          @ still a backlog: the next call posts it
+
     movw    ip, #:lower16:T_STOPSENT
     movt    ip, #:upper16:T_STOPSENT
     ldr     r0, [ip]

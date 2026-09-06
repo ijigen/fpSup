@@ -49,6 +49,24 @@ gyro_stream_hook:
     blx     ip
     str     r0, [sp]                @ the caller's r11; the pop returns it
 
+    /* Nothing is recording: do not touch the ring at all.
+     *
+     * The shipping logger has always worked this way -- its drain sits behind
+     * the MovieRecording flag and an idle callback returns without reading a
+     * byte.  The rewrite dropped that, and the fix at 013e12f only put back the
+     * half the bisect pointed at, the doorbell.  This is the other half: fifty
+     * memcpys a second into the pool, for the whole life of the session, for
+     * data no file will ever contain.
+     *
+     * It branches to the TAIL, not to the exit.  The stop job is posted from
+     * down there when T_WANT has just gone to zero, and skipping the whole hook
+     * would leave the take's file open for ever. */
+    movw    ip, #:lower16:T_WANT
+    movt    ip, #:upper16:T_WANT
+    ldr     ip, [ip]
+    cmp     ip, #0
+    beq     8f
+
     movw    r0, #:lower16:GYRO_DESC_PTR
     movt    r0, #:upper16:GYRO_DESC_PTR
     ldr     r0, [r0]
@@ -153,7 +171,7 @@ gyro_stream_hook:
      *
      * Task context, so a syscall is safe from here.  The Vd hook is an
      * interrupt and must never reach writer_signal. */
-    movw    ip, #:lower16:STREAM_INDEX
+8:  movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX
     ldr     r0, [ip]
     movw    ip, #:lower16:STREAM_POSTED

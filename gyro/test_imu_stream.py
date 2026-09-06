@@ -84,6 +84,40 @@ class RecordShape(unittest.TestCase):
                       re.finditer(r'strh\s+r\d+,\s*\[r\d+(?:,\s*#(\d+))?\]', body)]
             self.assertEqual(stores[-1], 4, f'{name} does not publish with the tag')
 
+    def test_neither_producer_touches_the_ring_when_nothing_records(self):
+        """The shipping logger's drain sits behind the recording flag and an
+        idle callback returns without reading a byte.  The rewrite dropped that
+        and 013e12f only restored the doorbell half; this is the other half.
+        Both gates must come before the producer claims anything."""
+        for name, src in WRITERS:
+            body = src[src.index('push'):]
+            gate = body.index('T_WANT')
+            self.assertLess(gate, body.index('ldrex'),
+                            f'{name} claims a slot before checking for a take')
+
+    def test_the_gyro_gate_still_reaches_the_doorbell(self):
+        """Skipping the whole hook would leave the take's file open for ever:
+        the stop job is posted from the tail, precisely when T_WANT has just
+        gone to zero.  The gate must branch INTO the tail, not past it."""
+        body = GYRO[GYRO.index('push'):]
+        self.assertIn('beq     8f', body, 'the gate does not branch to the tail')
+        tail = body.index('\n8:')
+        self.assertLess(tail, body.index('STREAM_SIGFN'),
+                        'the tail label is not before the doorbell')
+        self.assertLess(body.index('T_STOPSENT'), body.index('STREAM_SIGFN'))
+
+    def test_record_start_anchors_the_gyro_cursor(self):
+        """With no idle drain the cursor is stale by however long the camera
+        sat, and a stale cursor is a WRAPPED one -- indistinguishable from a
+        normal wrap.  The start hook has to latch the head itself."""
+        # the start half is what #ifndef REC_STOP selects
+        start = TRIG.split('#ifndef REC_STOP')[1].split('#endif')[0]
+        self.assertIn('STREAM_GHEAD', start, 'the start hook does not anchor it')
+        self.assertLess(start.index('STREAM_R0_HEAD'), start.index('STREAM_GHEAD'))
+        self.assertNotIn('STREAM_GHEAD',
+                         TRIG.split('#ifdef REC_STOP')[1].split('#else')[0],
+                         'the stop hook must not move the cursor')
+
     def test_the_markers_append_nothing_to_the_stream(self):
         """A marker appended from outside the gyro producer lands where the last
         drain left the index, 0-20 ms before it belongs -- most of a frame, on a

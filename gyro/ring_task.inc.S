@@ -111,8 +111,14 @@
 
 .equ T_FOBJ,         0xC072E0F8     /* the file object, placed by the deployer */
 .equ T_FOPEN,        0xC072E0FC     /* non-zero once it is open               */
-/* Two more words, in the gap the accel hook left at 0xC072E180.  T_BYTES and
- * friends start there; these follow them. */
+/* T_BYTES and friends used to sit at 0xC072E180, in what was then a gap
+ * above the accel hook.  The gate that stops the producers touching the
+ * ring when nothing is recording made that hook 140 bytes and took the gap
+ * back, so the five counters moved to 0xC072E8E0 -- beside the accel
+ * measurement block, in cave nothing else claims.  Moving the counters was
+ * the cheap half of that choice: moving the hook instead would have changed
+ * which addresses we write, which is exactly the variable a freeze
+ * postmortem cannot afford. */
 .equ T_STOPSENT,     0xC072E15C     /* one stop job per take, not one a wake  */
 .equ T_JSEQ,         0xC072E160     /* jobs posted, so a dump can see order   */
 .equ T_JOBSLOT,      0xC072E164     /* where MBX_RECV leaves the descriptor   */
@@ -129,16 +135,16 @@
                                      * on its next wake, at most a doorbell
                                      * away -- about 400 ms, against a ring
                                      * that holds 6.6 seconds. */
-.equ T_BYTES,        0xC072E180     /* in the gap between the accel hook and
+.equ T_BYTES,        0xC072E8E0     /* in the gap between the accel hook and
                                      * the stream's own words; the accel hook
                                      * grew into 0xC072E140 when the ring base
                                      * became a variable.                    */     /* bytes written                          */
-.equ T_WRITES,       0xC072E184     /* F_WRITE calls                          */
-.equ T_WRC,          0xC072E188     /* what the last one returned             */
-.equ T_LOST,         0xC072E18C     /* records overwritten before we took them.
+.equ T_WRITES,       0xC072E8E4     /* F_WRITE calls                          */
+.equ T_WRC,          0xC072E8E8     /* what the last one returned             */
+.equ T_LOST,         0xC072E8EC     /* records overwritten before we took them.
                                      * The one number that says the ring is
                                      * too shallow; it must stay zero.       */
-.equ T_WRAPS,        0xC072E190     /* spans that had to be split at the end  */     /* what the mailbox create returned       */
+.equ T_WRAPS,        0xC072E8F0     /* spans that had to be split at the end  */     /* what the mailbox create returned       */
 .equ T_DRAINED,      0xC072E0C8     /* records the writer has taken           */
 .equ T_MAXSPAN,      0xC072E0CC     /* the largest it ever found waiting.  If
                                      * this approaches the ring's capacity the

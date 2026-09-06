@@ -91,6 +91,15 @@ accel_hook:
 2:
 #endif
 
+    /* Nothing is recording: append nothing.  Same reason as the gyro producer
+     * -- see the note there.  Unlike it, this hook has no tail worth reaching,
+     * so the gate goes straight to the exit. */
+    movw    ip, #:lower16:T_WANT
+    movt    ip, #:upper16:T_WANT
+    ldr     ip, [ip]
+    cmp     ip, #0
+    beq     3f
+
     movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX
 1:  ldrex   r0, [ip]
@@ -110,6 +119,6 @@ accel_hook:
     mov     r0, #TAG_ACCEL
     strh    r0, [r1, #4]                @ last: the tag publishes the record
 
-    pop     {r0, r1, r2, r3, ip, lr}
+3:  pop     {r0, r1, r2, r3, ip, lr}
     ldrsh   r1, [r4]                    @ the displaced instruction
     bx      lr

@@ -200,6 +200,9 @@ def _place(measure_accel=False):
     spans = [(n, PRODUCERS[n][0], len(c)) for n, c in code.items()]
     spans += [('state words', STATE_AT, STATE_WORDS * 4),
               ('accel state', ACC_STATE, ACC_WORDS * 4),
+              # ring_task_deploy owns these, but only this script knows
+              # where the hooks land -- so the overlap check lives here.
+              ('writer counters', 0xC072E8E0, 5 * 4),
               ('stream', STREAM_BASE, STREAM_SPAN)]
     for name, at, n in spans:
         if at < CAVE_LO or at + n > CAVE_HI:
