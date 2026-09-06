@@ -91,14 +91,26 @@ rec_trigger:
     movw    r1, #:lower16:STREAM_V1_N
     movt    r1, #:upper16:STREAM_V1_N
     str     r0, [r1]
-    /* Freeze the interval tracking.  Vd free-runs at 59.94 once the take ends,
-     * and those much shorter gaps would take over VMIN within one frame. */
+#endif
+2:
+#ifdef REC_STOP
+    /* Freeze the interval tracking -- on EVERY stop, not just the first.
+     *
+     * This used to sit above, inside the first-one-only block, and that is a
+     * different kind of thing from the latches up there: those record what the
+     * first take measured and must not be redefined by a second, but this one
+     * is a GATE.  Left open after the second take, Vd goes on firing at 59.94
+     * in liveview and its 42-sample gaps pour into the census: one run came
+     * back with 40975 "doubled interrupts, longest 42" -- which is not a
+     * doubled interrupt at all, it is liveview, wearing the right shape to be
+     * believed.
+     *
+     * The start side re-arms on every take.  The stop side has to match it. */
     movw    r0, #:lower16:STREAM_VPREV
     movt    r0, #:upper16:STREAM_VPREV
     mvn     r1, #0
     str     r1, [r0]
 #endif
-2:
 #ifdef REC_STOP
     /* The take is over.  Ask for the file to be closed; the writer does it on
      * its next wake, after draining what is still in the ring.  Nothing heavy

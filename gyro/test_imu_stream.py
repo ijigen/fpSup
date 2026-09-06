@@ -118,6 +118,18 @@ class RecordShape(unittest.TestCase):
                          TRIG.split('#ifdef REC_STOP')[1].split('#else')[0],
                          'the stop hook must not move the cursor')
 
+    def test_every_stop_closes_the_exposure_census(self):
+        """VPREV is a gate, not a latch.  The take-scoped latches must not be
+        redefined by a second take, but leaving this one open after one lets
+        liveview Vd -- 59.94 Hz, 42-sample gaps -- pour into the census as
+        'doubled interrupts'.  The start side re-arms every take; so must this."""
+        body = TRIG[TRIG.index('rec_trigger:'):]
+        first_only = body.index('bne     2f')
+        rearm = body.index('\n2:')
+        self.assertGreater(body.index('STREAM_VPREV'), rearm,
+                           'the VPREV freeze is still inside the first-one-only block')
+        self.assertLess(first_only, rearm)
+
     def test_the_markers_append_nothing_to_the_stream(self):
         """A marker appended from outside the gyro producer lands where the last
         drain left the index, 0-20 ms before it belongs -- most of a frame, on a
