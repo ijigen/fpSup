@@ -24,6 +24,12 @@ TRIG = (HERE / 'rec_trigger.S').read_text()
 VD = (HERE / 'vd_hook.S').read_text()
 INC = (HERE / 'imu_stream.inc.S').read_text()
 
+# Who may append to the stream, and who may not.  Only a hook that lays
+# samples down in the order the coprocessor made them can claim a position;
+# everything else measures into state words.
+WRITERS = (('accel', ACCEL), ('gyro', GYRO))
+MARKERS = (('vd', VD), ('trigger', TRIG))
+
 
 def equ(name, src=INC):
     m = re.search(rf'^\.equ\s+{name},\s*([^\s/@]+)', src, re.M)
@@ -66,30 +72,36 @@ class RecordShape(unittest.TestCase):
         return got
 
     def test_four_halfwords_each(self):
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG)):
+        for name, src in WRITERS:
             self.assertEqual(sorted(self.offsets(src)), [0, 2, 4, 6], name)
 
     def test_tag_is_written_last(self):
         """A reader that catches a half-written record sees the old tag, not a
         new payload under an old one."""
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG)):
+        for name, src in WRITERS:
             body = src[src.index('push'):]
             stores = [int(m.group(1) or 0) for m in
                       re.finditer(r'strh\s+r\d+,\s*\[r\d+(?:,\s*#(\d+))?\]', body)]
             self.assertEqual(stores[-1], 4, f'{name} does not publish with the tag')
 
-    def test_vd_appends_nothing_to_the_stream(self):
+    def test_the_markers_append_nothing_to_the_stream(self):
         """A marker appended from outside the gyro producer lands where the last
         drain left the index, 0-20 ms before it belongs -- most of a frame, on a
-        thing whose whole job is to say which frame.  The Vd hook measures with
-        the coprocessor's head instead, into state words, and claims no
-        position.  It may append again when the drain moves into the producers
+        thing whose whole job is to say which frame.  Both marker hooks measure
+        with the coprocessor's head instead, into state words, and claim no
+        position.  They may append again when the drain moves into the producers
         and the position becomes true by construction, not before."""
-        body = VD[VD.index('push'):]
-        self.assertNotIn('ring_slot', body)
-        self.assertNotIn('ldrex', body, 'vd still claims a stream slot')
-        self.assertNotIn('TAG_VD', body)
-        self.assertIn('gyro_head', body, 'vd stopped measuring as well')
+        for name, src in MARKERS:
+            body = src[src.index('push'):]
+            self.assertNotIn('ring_slot', body, name)
+            self.assertNotIn('ldrex', body, f'{name} still claims a stream slot')
+            # \b, because strhi and strlo are conditional word stores and the
+            # Vd hook is full of them.
+            self.assertIsNone(re.search(r'strh\s+r\d+,\s*\[', body),
+                              f'{name} still writes a record')
+        self.assertIn('gyro_head', VD[VD.index('push'):], 'vd stopped measuring')
+        self.assertIn('gyro_head', TRIG[TRIG.index('push'):],
+                      'the record trigger stopped measuring')
 
     def test_records_are_indexed_eight_bytes_apart(self):
         """The stride now lives in the ring_slot macro, so check it there -- and
@@ -97,7 +109,7 @@ class RecordShape(unittest.TestCase):
         so a fifth copy of the arithmetic cannot appear unnoticed."""
         macro = INC[INC.index('.macro ring_slot'):INC.index('.endm', INC.index('.macro ring_slot'))]
         self.assertRegex(macro, r'lsl\s+#3', 'ring_slot does not stride by eight')
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG)):
+        for name, src in WRITERS:
             body = src[src.index('push'):]
             self.assertTrue('ring_slot' in body or re.search(r'lsl\s+#3', body),
                             f'{name} indexes the ring by neither route')

@@ -52,13 +52,11 @@
 #ifdef REC_STOP
 .equ SITE,        0xC01FB880
 .equ SITE_ORIG,   0xE1A00004          /* mov r0, r4 */
-.equ TAG_THIS,    TAG_STOP
 .equ COUNT_WORD,  STREAM_R1_N
 .equ LATCH_WORD,  STREAM_R1_GC
 #else
 .equ SITE,        0xC01FBA28
 .equ SITE_ORIG,   0xE5940008          /* ldr r0, [r4, #8] */
-.equ TAG_THIS,    TAG_START
 .equ COUNT_WORD,  STREAM_R0_N
 .equ LATCH_WORD,  STREAM_R0_GC
 #endif
@@ -168,22 +166,21 @@ rec_trigger:
     movt    r0, #:upper16:STREAM_V0_GC
     str     r1, [r0]
 #endif
-    movw    ip, #:lower16:STREAM_INDEX
-    movt    ip, #:upper16:STREAM_INDEX
-1:  ldrex   r0, [ip]
-    add     r1, r0, #1
-    strex   r3, r1, [ip]
-    cmp     r3, #0
-    bne     1b
-
-    ring_slot r0, r1, r3
-
-    strh    r2, [r1]                    @ x = which one this is
-    mov     r0, #0
-    strh    r0, [r1, #2]
-    strh    r0, [r1, #6]
-    mov     r0, #TAG_THIS
-    strh    r0, [r1, #4]                @ last: the tag publishes the record
+    /* No record goes into the stream, for the same reason the Vd hook stopped
+     * writing one: a marker appended from outside the gyro producer lands where
+     * the last drain left the write index, not where it belongs.
+     *
+     * Here it also had nothing to say.  The take's file is opened for the take,
+     * and START latches POSTED at this instant, so the first record IN THE FILE
+     * is already the take's beginning and the last is its end -- the two markers
+     * restated a boundary the file itself carries.  Everything these hooks do
+     * that matters is the stores above: POSTED and TAIL, T_WANT, T_STOPSENT,
+     * the gyro-count latches, R0_HEAD from the coprocessor's own head, and the
+     * Vd re-arm.  None of it is a position in the stream.
+     *
+     * Removing the append also removes the last exclusive from this path, and
+     * with it a window: a slot claimed and not yet filled is a slot the writer
+     * could post as whatever was in the ring before. */
 
     pop     {r0, r1, r2, r3, ip, lr}
 #ifdef REC_STOP
