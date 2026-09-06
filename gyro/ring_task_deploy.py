@@ -65,8 +65,8 @@ STREAM_JPOOL = 0xC072E19C
 STREAM_POSTED = 0xC072E1AC
 STREAM_INDEX, STREAM_TAIL = 0xC072E1F8, 0xC072E1A4
 T_OPENFN, T_CLOSEFN = 0xC072EA64, 0xC072EA68
-W_FLG, W_FLGRC, W_JOINRC = 0xC072EA10, 0xC072EA14, 0xC072EA18
-W_TERRC, W_DELRC = 0xC072EA1C, 0xC072EA20
+W_THREAD, W_BODYOBJ, W_JOINRC = 0xC072EA10, 0xC072EA14, 0xC072EA18
+W_VT, W_VT_SLOT = 0xC072EA30, 0x0C
 W_OPENS, W_CLOSES, W_STAGE = 0xC072EA24, 0xC072EA28, 0xC072EA2C
 T_BYTES, T_WRITES = 0xC072E8E0, 0xC072E8E4
 T_WRC, T_LOST, T_WRAPS = 0xC072E8E8, 0xC072E8EC, 0xC072E8F0
@@ -86,7 +86,7 @@ def symbols(src, defines=()):
         # by type -- an empty map here would place the task at zero.
         end = elf.index(b'\0', strtab[4] + name_off)
         name = elf[strtab[4] + name_off:end].decode()
-        if name in ('writer_entry', 'make_writer', 'writer_signal',
+        if name in ('writer_body', 'make_writer',
                     'writer_openfile', 'writer_closefile',
                     'writer_selftest', 'writer_post', 'mpool_init_jobs',
                     'take_open', 'take_close'):
@@ -104,7 +104,10 @@ def _check():
             'T_DRAINED': T_DRAINED, 'T_MAXSPAN': T_MAXSPAN,
             'T_FOBJ': T_FOBJ, 'T_FOPEN': T_FOPEN, 'T_WANT': T_WANT, 'T_STAGE': T_STAGE,
             'T_OPENFN': T_OPENFN, 'T_CLOSEFN': T_CLOSEFN,
-            'W_FLG': W_FLG, 'W_OPENS': W_OPENS, 'W_CLOSES': W_CLOSES,
+            'W_THREAD': W_THREAD, 'W_BODYOBJ': W_BODYOBJ, 'W_VT': W_VT,
+            'W_OPENS': W_OPENS, 'W_CLOSES': W_CLOSES,
+            'XT_CREATE': 0xC036E108, 'XT_ATTACH': 0xC036E1B8,
+            'XT_JOIN': 0xC036E1F8, 'XT_DESTROY': 0xC036E168,
             'W_STAGE': W_STAGE,
             'T_BYTES': T_BYTES,
             'T_WRITES': T_WRITES, 'T_WRC': T_WRC, 'T_LOST': T_LOST,
@@ -174,7 +177,7 @@ def place():
             raise SystemExit(f'{name} 0x{lo:08X}..0x{hi:08X} overlaps the ring')
         if not (pool + 0x20000 <= lo and hi <= pool + 0x100000):
             raise SystemExit(f'{name} 0x{lo:08X}..0x{hi:08X} leaves the free pool')
-    missing = {'writer_entry', 'take_open', 'take_close'} - set(syms)
+    missing = {'writer_body', 'take_open', 'take_close'} - set(syms)
     if missing:
         raise SystemExit(f'the blob has no {sorted(missing)}')
     print(f'  ring_task     0x{CODE_AT:08X}..0x{end:08X}  {len(code)} bytes (pool)'
@@ -224,7 +227,10 @@ def place_code():
     P.put(CODE_AT, code, 'ring_task')
     # Freshly written code in the pool is still only data to the caches.
     echo_into(F_CACHE, 'the cache maintenance routine')
-    _setw(T_ENTRY, at['writer_entry'], 'the task entry')
+    # The pool worker calls slot +0xC of the object it is handed.  That slot
+    # is the only interface it has, and only we know where the body landed.
+    _setw(W_VT + W_VT_SLOT, at['writer_body'], 'the body, in the vtable slot')
+    _setw(T_ENTRY, at['writer_body'], 'the body, for reading back')
     # The record hooks live in the cave and these live in the pool, so the
     # hooks reach them through a word only the deployer can fill in.
     _setw(T_OPENFN, at['take_open'], 'what the record start calls')
@@ -347,19 +353,18 @@ def state():
 
     # The take's own lifecycle, the part that now mirrors AudF_W.
     opens, closes = P.mem_get(W_OPENS)[0], P.mem_get(W_CLOSES)[0]
-    wst, flg = P.mem_get(W_STAGE)[0], P.mem_get(W_FLG)[0]
-    join, ter, dele = (P.mem_get(W_JOINRC)[0], P.mem_get(W_TERRC)[0],
-                       P.mem_get(W_DELRC)[0])
+    wst, thr = P.mem_get(W_STAGE)[0], P.mem_get(W_THREAD)[0]
     stage = {0x01: 'take_open entered', 0x02: 'the file is open',
              0x03: 'flag made, about to make the thread',
-             0x04: 'built, the writer is running',
+             0x04: 'thread made, about to attach',
+             0x05: 'built, the writer is running',
              0x11: 'take_close entered', 0x12: 'the stop job is posted',
              0x13: 'joined -- the body returned',
              0x14: 'the file is closed', 0x15: 'the task is gone',
              0x16: 'torn down, all the way'}.get(wst)
-    print(f'  takes      {opens} built   {closes} torn down   flag {flg}')
+    print(f'  takes      {opens} built   {closes} torn down   '
+          f'thread 0x{(thr or 0):08X}')
     print(f'  last stage 0x{(wst or 0):02X}' + (f' -- {stage}' if stage else ''))
-    print(f'  join rc    {join}   ter {ter}   del {dele}')
     w = P.mem_get(T_ID, 8)
     names = ('T_ID', 'T_CRE_RC', 'T_STA_RC', 'T_WAKES', 'T_SIGNALS', 'T_ENTRY',
              'T_RECV_RC', 'T_MBX_RC')

@@ -192,11 +192,37 @@ class AudioShape(unittest.TestCase):
 
     def test_the_writer_body_returns(self):
         """AudioFileWriter::v1 breaks out of its loop on the stop message and
-        returns; the wrapper catches that and sets the completion flag.  A body
+        returns; FUN_c036efe8 catches that and sets the completion flag.  A body
         that can never return has no one to wait for it."""
         b = self.body('writer_body')
         self.assertIn('bl      writer_release', b)
         self.assertIn('pop     {r4, lr}', b)
+
+    def test_every_job_says_where_it_belongs(self):
+        """A job that never gets a descriptor used to vanish, and every record
+        after it moved earlier in the file by the length of the hole -- which in
+        a format whose claim is that position IS time silently rewrites the
+        timeline.  Audio's writer compares the job's offset against its own file
+        position and seeks when they disagree."""
+        self.assertEqual(int(equ('J_OFF'), 0), 4)
+        put = self.body('writer_put')
+        self.assertIn('J_OFF', put)
+        self.assertIn('F_SEEK', put)
+        self.assertIn('T_POS', put)
+        post = self.task[self.task.index('\nwriter_post:'):]
+        post = post[:post.index('\nwriter_make_job:')]
+        self.assertIn('STREAM_TAIL', post, 'the offset is not computed at all')
+
+    def test_the_thread_is_the_firmwares_own(self):
+        """XC_Thread.cpp's pool, used rather than reimplemented: the flag, the
+        task, the parking and the wup/ter/del all live inside these four calls,
+        and the only interface the worker has is slot +0xC of the object it is
+        handed."""
+        for call in ('XT_CREATE', 'XT_ATTACH', 'XT_JOIN', 'XT_DESTROY'):
+            self.assertIn(call, self.task, f'{call} is not used')
+        self.assertNotIn('TK_CRE_TSK', self.task, 'still making its own task')
+        self.assertNotIn('FLG_CREATE', self.task, 'still making its own flag')
+        self.assertIn('W_VT', self.task)
 
     def test_the_writer_never_touches_the_file_lifecycle(self):
         """The file is open before this task exists and closed after it has
@@ -223,10 +249,9 @@ class AudioShape(unittest.TestCase):
         completion flag, and only then runs the file's destructor.  Closing
         first would close a file the writer is still writing to."""
         t = self.body('take_close')
-        self.assertLess(t.index('writer_make_job'), t.index('FLG_WAIT'))
-        self.assertLess(t.index('FLG_WAIT'), t.index('bl      writer_closefile'))
-        self.assertLess(t.index('bl      writer_closefile'), t.index('TK_TER_TSK'))
-        self.assertLess(t.index('TK_TER_TSK'), t.index('TK_DEL_TSK'))
+        self.assertLess(t.index('writer_make_job'), t.index('XT_JOIN'))
+        self.assertLess(t.index('XT_JOIN'), t.index('bl      writer_closefile'))
+        self.assertLess(t.index('bl      writer_closefile'), t.index('XT_DESTROY'))
 
     def test_the_record_hooks_are_what_build_and_tear_down(self):
         """XC_AudioRecorder::Start and ::Stop do this, in the recorder's own

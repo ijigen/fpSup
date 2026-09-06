@@ -102,20 +102,34 @@
                                      * and 8 KiB is the cheaper thing to be
                                      * wrong about.                          */
 
+/* XC_Thread.cpp's own thread pool, used as audio uses it rather than
+ * reimplemented.  FUN_c036e108 news a 0x14-byte object, creates the completion
+ * flag, builds the T_CTSK with FUN_c036efe8 as the entry and starts it; the
+ * worker then sleeps until a body is attached.  Everything the hand-written
+ * version did -- the flag, tk_cre_tsk, tk_sta_tsk, the parking, the wup/ter/del
+ * -- is inside these four calls. */
+.equ XT_CREATE,      0xC036E108     /* f(&holder, pri, stksz, name8)          */
+.equ XT_ATTACH,      0xC036E1B8     /* f(&holder, bodyobj): attach and wake   */
+.equ XT_JOIN,        0xC036E1F8     /* f(&holder): tk_wai_flg, TMO_FEVR       */
+.equ XT_DESTROY,     0xC036E168     /* f(&holder, 2): join, wup, ter, del     */
+
 /* The take's own objects.  Audio builds file, thread and mailbox together at
  * record start and destroys all three at stop; these are the words that hold
  * them for one take.  Above everything else in the cave, clear of the
  * measuring accel build at 0xC072E900..0xC072EA04. */
-.equ W_FLG,          0xC072EA10     /* the completion flag id                 */
-.equ W_FLGRC,        0xC072EA14     /* what tk_cre_flg returned               */
-.equ W_JOINRC,       0xC072EA18     /* what the join returned                 */
-.equ W_TERRC,        0xC072EA1C
-.equ W_DELRC,        0xC072EA20
+.equ W_THREAD,       0xC072EA10     /* the holder XT_CREATE fills             */
+.equ W_BODYOBJ,      0xC072EA14     /* our body object: one word, its vtable  */
+.equ W_JOINRC,       0xC072EA18     /* reserved                               */
 .equ W_OPENS,        0xC072EA24     /* takes built                            */
 .equ W_CLOSES,       0xC072EA28     /* takes torn down                        */
 .equ W_STAGE,        0xC072EA2C     /* how far the build or the teardown got  */
-.equ W_PKT,          0xC072EA40     /* 32 bytes, the T_CFLG                   */
-.equ W_SCRATCH,      0xC072EA60     /* where tk_wai_flg leaves the pattern    */
+.equ W_VT,           0xC072EA30     /* 16 bytes.  The pool worker calls slot
+                                     * +0xC of whatever object it is handed;
+                                     * that is the whole interface, so this is
+                                     * the whole class.  The deployer writes
+                                     * writer_body into +0xC because only it
+                                     * knows where the pool landed.          */
+.equ W_VT_SLOT,      0x0C
 
 /* Placed by the deployer, the way STREAM_SIGFN is: the record hooks live in the
  * cave and these live in the pool, so the address is only known at deploy. */
@@ -126,12 +140,11 @@
 .equ T_DESC,         0xC072E080     /* 32 bytes, the task descriptor          */
 .equ T_PKT,          0xC072E0A0     /* 32 bytes, the mailbox message.  Real
                                      * memory, because the kernel links it.   */
-.equ T_DOOR,         0xC072E0C0     /* 0 = the doorbell is not ringing.  The
-                                     * message says only "there is work"; the
-                                     * work itself is the ring's indices, so a
-                                     * second message while one is queued would
-                                     * buy nothing and would need a second
-                                     * packet.                                */
+/* T_DOOR and writer_signal are gone.  They were a doorbell of my own
+ * design: a flag claimed with LDREX, a fixed packet, a producer ringing
+ * it.  Audio has nothing of the kind -- sending the job IS the wake-up,
+ * and the message IS the work.  Nothing had called writer_signal since
+ * the job queue went in; it was a leftover from the wrong design. */
 .equ T_MBX,          0xC072E0C4     /* the mailbox id                         */
 
 .equ T_ID,           0xC072E0D0     /* the task id                            */
@@ -142,6 +155,11 @@
 .equ T_ENTRY,        0xC072E0E4     /* the task body, placed by the deployer  */
 .equ T_RECV_RC,      0xC072E0E8     /* what receive returned when it stopped
                                      * returning zero                         */
+.equ T_POS,          0xC072EA34     /* where the file is, in bytes.  Audio keeps
+                                     * this at writer+0x14; it is the other half
+                                     * of J_OFF.                              */
+.equ T_SEEKS,        0xC072EA38     /* times the two disagreed -- every one of
+                                     * these is a job that never made it       */
 .equ T_MBX_RC,       0xC072E0EC     /* what the mailbox create returned       */
 
 /* ---- the card write ---------------------------------------------------- */
@@ -156,6 +174,10 @@
 .equ F_CTOR,         0xC0365E90
 .equ F_OPEN,         0xC0365FB0
 .equ F_WRITE,        0xC03660E8
+.equ F_SEEK,         0xC03661E0     /* what AudioFileWriter::v1 calls when the
+                                     * job's offset and its own position
+                                     * disagree.  vtable +0x1C, takes the card
+                                     * lock like every other media call.      */
 .equ F_CLOSE,        0xC0366020
 .equ F_DTOR,         0xC0365ED0
 .equ F_MODE_RW,      7              /* overwrites; 0x402 fails when it exists */

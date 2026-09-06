@@ -328,11 +328,30 @@
  * Nothing here writes J_MSGQ.  It is declared only so the layout says why the
  * gap exists. */
 .equ J_MSGQ,         0x00           /* the kernel's.  Do not touch.           */
-.equ J_PTR,          0x04           /* straight into the ring                 */
-.equ J_LEN,          0x08           /* bytes                                  */
-.equ J_STOP,         0x0C           /* 1 = the take is over, close after this  */
+.equ J_OFF,          0x04           /* where in the file this belongs         */
+.equ J_PTR,          0x08           /* straight into the ring                 */
+.equ J_LEN,          0x0C           /* bytes                                  */
 .equ J_SEQ,          0x10           /* which job this is, for reading back    */
+.equ J_STOP,         0x14           /* 1 = the take is over, close after this  */
 .equ J_SIZE,         24
+
+/* The field order is AudioFileWriter's, not one of ours: +4, +8, +0xC and
+ * +0x14 are the words FUN_c01fbc80 fills and AudioFileWriter::v1 reads.
+ *
+ * J_OFF is the field we did not have, and it is not decoration.  Our jobs used
+ * to be a pure append -- "copy this many bytes from here" -- so a job that
+ * could not get a descriptor (the counters have read back thousands of those)
+ * simply vanished, and every record after it moved earlier in the file by the
+ * length of the hole.  In a format whose whole claim is that position IS time,
+ * that silently rewrites the timeline and nothing downstream can tell.
+ *
+ * Carrying the offset means a lost job leaves a hole exactly where it belonged
+ * and every record after it keeps its own time.  Audio's writer compares the
+ * offset against its running file position and seeks when they disagree; so
+ * does ours now.  (The decompilation of v1 reads +4 as an end offset in the
+ * matching branch and as a start offset in the seeking one; we implement the
+ * evident intent -- a start offset -- because the property we need is the hole
+ * in the right place.) */
 
 .equ JOB_COUNT,      32             /* what audio's pool holds                */
 
