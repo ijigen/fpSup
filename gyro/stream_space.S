@@ -87,8 +87,27 @@ stream_claim:
     movw    r2, #:lower16:B_PTR
     movt    r2, #:upper16:B_PTR
     ldr     r0, [r2, r0, lsl #2]
+    cmp     r0, #0
+    beq     8f                          @ no allocation behind it: hand out
+                                        @ nothing rather than address zero.
+                                        @ take_open may never have run -- the
+                                        @ layered test switches it off -- and a
+                                        @ producer writing to a null block is a
+                                        @ data abort, not a lost sample.
     add     r0, r0, r3, lsl #3          @ where in the block
 
+    st_unlock r6
+    pop     {r2, r3, r4, r5, r6, lr}
+    bx      lr
+
+8:  /* The block has no memory behind it.  Undo the claim and give nothing.
+     * r2 is B_PTR by now, so B_FILL has to be addressed again -- r3 still holds
+     * what it was before the claim. */
+    movw    r2, #:lower16:B_FILL
+    movt    r2, #:upper16:B_FILL
+    str     r3, [r2]
+    mov     r0, #0
+    mov     r1, #0
     st_unlock r6
     pop     {r2, r3, r4, r5, r6, lr}
     bx      lr
