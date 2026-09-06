@@ -159,6 +159,23 @@ class Assembly(unittest.TestCase):
         self.assertEqual(w[-2], 0xE1D410F0, 'ldrsh r1, [r4] is not there')
         self.assertEqual(w[-1], 0xE12FFF1E, 'bx lr is not there')
 
+    def test_only_the_accel_hook_writes_its_own_cursor(self):
+        """ACC_GHEAD carries no exclusive, so it is only correct while exactly
+        one producer advances it.  The day the drain moves into this hook, that
+        stops being true of STREAM_GHEAD too -- this test is the tripwire."""
+        for path in ('gyro_stream_hook.S', 'rec_trigger.S', 'vd_hook.S'):
+            src = (HERE / path).read_text()
+            self.assertNotIn('ACC_', src,
+                             f'{path} touches the accel hook\'s private counters')
+        self.assertIn('ACC_O_GHEAD', ACCEL)
+
+    def test_the_gap_measurement_cannot_report_a_negative(self):
+        """The head is a byte offset that wraps at GYRO_RING_SPAN, so a visit
+        that straddles a wrap must add the span back, not produce a huge
+        unsigned number."""
+        self.assertIn('movwlo', ACCEL)
+        self.assertIn('GYRO_RING_SPAN', ACCEL)
+
     def test_all_of_them_fit_where_they_are_put(self):
         import imu_stream_deploy as D
         D._check_header()

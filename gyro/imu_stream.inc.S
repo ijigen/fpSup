@@ -331,3 +331,56 @@
                                      * the two agree. */
 
 .equ HEAD_UNARMED,   0xFFFFFFFF
+
+/* ---- can the accelerometer hook carry the drain on its own? -------------- *
+ *
+ * The 20 ms callback we borrow is a level/body-motion detector: it hands us no
+ * gyro data, only a moment at which to go and copy the ring.  The accelerometer
+ * hook could do that job instead, and doing it THERE would place the tag 1
+ * record exactly rather than 0-20 ms early, because the ring would be drained
+ * in the same breath as the record is appended.
+ *
+ * That only works if the accelerometer fires often enough.  The firmware ring
+ * holds 600 records = 240 ms; a gap longer than that overwrites samples we
+ * never took, and -- this is the dangerous part -- head-minus-cursor cannot
+ * tell that apart from an ordinary wrap, so the loss would be silent.
+ *
+ * So measure before deciding.  These five words are pure observation: the accel
+ * hook already runs, and all it does extra is note how many gyro samples piled
+ * up since its own previous visit.  That number IS the batch an accel-only
+ * drain would have had to move, measured on the coprocessor's own 400 us grid
+ * rather than assumed from a nominal rate.
+ *
+ * ACC_MAX is the number that decides it.  A mean near 53 says "about 47 Hz";
+ * only the maximum says whether the worst gap has margin against 600.
+ */
+.equ ACC_STATE,      0xC072E8C0     /* the block, so a reader takes it in one  */
+.equ ACC_GHEAD,      0xC072E8C0     /* ring head at the previous accel visit   */
+.equ ACC_MAX,        0xC072E8C4     /* largest gap seen, in records            */
+.equ ACC_COUNT,      0xC072E8C8     /* accel visits that measured a gap        */
+.equ ACC_SUM,        0xC072E8CC     /* records across every gap -> the mean    */
+.equ ACC_OVER,       0xC072E8D0     /* gaps at or past ACC_DANGER              */
+.equ ACC_WORDS,      5
+
+/* 500 records = 200 ms, five sixths of the ring.  Anything at or past this is
+ * already too close to call safe, whether or not it lost a sample. */
+.equ ACC_DANGER,     500
+
+.equ ACC_O_GHEAD,    0x00
+.equ ACC_O_MAX,      0x04
+.equ ACC_O_COUNT,    0x08
+.equ ACC_O_SUM,      0x0C
+.equ ACC_O_OVER,     0x10
+
+.if ACC_GHEAD + ACC_O_MAX   != ACC_MAX
+.err
+.endif
+.if ACC_GHEAD + ACC_O_COUNT != ACC_COUNT
+.err
+.endif
+.if ACC_GHEAD + ACC_O_SUM   != ACC_SUM
+.err
+.endif
+.if ACC_GHEAD + ACC_O_OVER  != ACC_OVER
+.err
+.endif

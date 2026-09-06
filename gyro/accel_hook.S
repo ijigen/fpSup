@@ -38,6 +38,57 @@
 accel_hook:
     push    {r0, r1, r2, r3, ip, lr}
 
+    /* ---- observation, not behaviour -------------------------------------
+     *
+     * The question this answers: could the drain live HERE instead of in the
+     * 20 ms callback?  Doing it here would place this record exactly, because
+     * the ring would be emptied in the same breath as the record is appended.
+     * It is only safe if this hook fires often enough that the firmware's 600
+     * record (240 ms) ring never laps us -- and a lap is invisible afterwards,
+     * because head-minus-cursor reads the same as an ordinary wrap.
+     *
+     * So count the gap now, while the 20 ms hook is still doing the work and a
+     * wrong answer costs nothing.  The gap is measured on the coprocessor's own
+     * head, so it is the true number of samples an accel-only drain would have
+     * had to move, not a rate multiplied by an assumed period.
+     *
+     * ACC_GHEAD has exactly one writer -- this hook -- so nothing here needs an
+     * exclusive, and none of it touches a word another producer owns.  r4 is
+     * the driver's cache pointer and is never written. */
+    gyro_head r0, r1                    @ head as a byte offset into the ring
+    movw    r2, #:lower16:ACC_STATE
+    movt    r2, #:upper16:ACC_STATE
+    ldr     r3, [r2, #ACC_O_GHEAD]
+    cmp     r0, #0                      @ what gyro_head returns when the
+    mvneq   r0, #0                      @ descriptor is not there -- and an
+    str     r0, [r2, #ACC_O_GHEAD]      @ offset we can afford to skip.  Unarm
+    beq     2f                          @ rather than measure across it: a false
+                                        @ maximum on the one number that decides
+                                        @ this would be worse than a lost sample
+                                        @ of it.  mvn #0 is HEAD_UNARMED, and
+                                        @ neither mvn nor str touches the flags.
+    cmn     r3, #1                      @ HEAD_UNARMED: nothing to measure yet
+    beq     2f
+    subs    r1, r0, r3
+    movwlo  ip, #GYRO_RING_SPAN         @ the head wrapped between visits
+    addlo   r1, r1, ip
+    lsr     r1, r1, #3                  @ bytes -> records
+    ldr     ip, [r2, #ACC_O_MAX]
+    cmp     r1, ip
+    strhi   r1, [r2, #ACC_O_MAX]        @ the one number that decides it
+    ldr     ip, [r2, #ACC_O_COUNT]
+    add     ip, ip, #1
+    str     ip, [r2, #ACC_O_COUNT]
+    ldr     ip, [r2, #ACC_O_SUM]
+    add     ip, ip, r1
+    str     ip, [r2, #ACC_O_SUM]
+    movw    r3, #ACC_DANGER
+    cmp     r1, r3
+    ldrhs   ip, [r2, #ACC_O_OVER]
+    addhs   ip, ip, #1
+    strhs   ip, [r2, #ACC_O_OVER]
+2:
+
     movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX
 1:  ldrex   r0, [ip]

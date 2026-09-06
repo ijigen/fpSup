@@ -46,7 +46,10 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 
 # name -> (code address, source, defines, hook site, firmware's word, thumb?)
 PRODUCERS = {
-    'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
+    # 248 bytes now that it measures its own interval, so it can no longer
+    # live at 0xC072E100 with T_BYTES 128 bytes above it.  Up here it has
+    # room to 0xC072EC00.
+    'accel': (0xC072E900, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
     'gyro':  (0xC072E300, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
     'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
     'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
@@ -116,6 +119,12 @@ STREAM_SPAN   = STREAM_COUNT * 8
 # GHEAD unarmed, everything else zero.
 STATE_INIT = struct.pack('<20I', *([0] * 16 + [0xFFFFFFFF, 0, 0, 0]))
 
+ACC_STATE     = 0xC072E8C0
+ACC_WORDS     = 5
+ACC_DANGER    = 500
+# GHEAD unarmed, then max/count/sum/over.
+ACC_INIT = struct.pack('<5I', 0xFFFFFFFF, 0, 0, 0, 0)
+
 GYRO_PERIOD_US = 400.0
 
 
@@ -134,6 +143,8 @@ def _check_header():
         'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
         'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
         'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
+        'ACC_STATE': ACC_STATE, 'ACC_WORDS': ACC_WORDS,
+        'ACC_DANGER': ACC_DANGER,
         'STREAM_RING': STREAM_RING, 'STREAM_TAIL': STREAM_TAIL,
         'STREAM_SIGFN': STREAM_SIGFN, 'RING_RECORDS': RING_RECORDS,
         'RING_POOL_OFF': RING_POOL_OFF,
@@ -173,6 +184,7 @@ def _place():
             for n, (_a, src, d, _s, _o, _t) in PRODUCERS.items()}
     spans = [(n, PRODUCERS[n][0], len(c)) for n, c in code.items()]
     spans += [('state words', STATE_AT, STATE_WORDS * 4),
+              ('accel state', ACC_STATE, ACC_WORDS * 4),
               ('stream', STREAM_BASE, STREAM_SPAN)]
     for name, at, n in spans:
         if at < CAVE_LO or at + n > CAVE_HI:
@@ -252,6 +264,7 @@ def arm(only=None):
             continue
         P.put_slow(PRODUCERS[name][0], blob, name)
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
+    P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
     P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
 
     # The real ring lives in the pool, whose address is only known now.  Memory
@@ -304,6 +317,7 @@ def reset():
     firmware's current head.
     """
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
+    P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
     # The tail sits outside the block because it is configuration-adjacent, but
     # it MUST be cleared with the index: a zeroed head against a stale tail
     # underflows and rings the doorbell without pause.
@@ -409,6 +423,47 @@ def take():
         print()
 
 
+def accel_interval():
+    """Can the accelerometer hook carry the drain on its own?
+
+    One number decides it: the largest gap, in gyro samples, between two
+    accelerometer visits.  The firmware ring holds 600, and a lap is silent --
+    head-minus-cursor reads the same as a wrap -- so the answer has to come with
+    margin, not just "it did not happen this time".
+    """
+    w = P.mem_get(ACC_STATE, ACC_WORDS)
+    if any(x is None for x in w):
+        raise SystemExit('the accel counters did not read back whole')
+    ghead, mx, n, total, over = w
+    if not n:
+        print('the accelerometer hook has not fired twice yet.')
+        print('  ghead 0x%08X -- if that is 0xFFFFFFFF the hook never ran at '
+              'all.' % ghead)
+        return
+    mean = total / n
+    print(f'accelerometer visits {n}   ring head now +{ghead} bytes')
+    print(f'gap between visits, in gyro samples:')
+    print(f'  mean {mean:.2f} = {_ms(mean):.2f} ms  -> {1000.0 / _ms(mean):.2f} Hz')
+    print(f'  max  {mx} = {_ms(mx):.1f} ms')
+    print(f'  gaps at or past {ACC_DANGER} records ({_ms(ACC_DANGER):.0f} ms): {over}')
+    print()
+    print(f'the firmware ring holds {GYRO_RING_SPAN // 8} records = '
+          f'{_ms(GYRO_RING_SPAN // 8):.0f} ms')
+    if mx:
+        print(f'worst gap used {100.0 * mx / (GYRO_RING_SPAN // 8):.1f}% of it, '
+              f'margin {GYRO_RING_SPAN // 8 - mx} records')
+    print()
+    if over or mx >= GYRO_RING_SPAN // 8:
+        print('NO.  Dropping the 20 ms hook would lose samples, silently.')
+    elif mx > (GYRO_RING_SPAN // 8) // 2:
+        print('NOT YET.  The worst gap is past half the ring; that is not margin,')
+        print('  it is luck.  Keep the 20 ms hook.')
+    else:
+        print('So far so good -- but this is a maximum, and a maximum only means')
+        print('  something over a long run that included whatever the camera does')
+        print('  worst (record start, card flush, menu, playback).  Run it long.')
+
+
 def dump(count):
     take()
     print()
@@ -491,6 +546,8 @@ def main():
     g.add_argument('--reset', action='store_true')
     g.add_argument('--take', action='store_true')
     g.add_argument('--dump', action='store_true')
+    g.add_argument('--accel', action='store_true',
+                   help='the accelerometer hook interval, in gyro samples')
     g.add_argument('--rate', type=float, metavar='SECONDS')
     ap.add_argument('--rows', type=int, default=24)
     ap.add_argument('--step', type=float, default=30.0)
@@ -504,6 +561,8 @@ def main():
         take()
     elif a.dump:
         dump(a.rows)
+    elif a.accel:
+        accel_interval()
     elif a.rate:
         rate(a.rate, a.step)
     else:
