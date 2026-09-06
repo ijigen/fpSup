@@ -368,6 +368,7 @@ writer_release:
 /* writer_put(r1 = source, r2 = bytes).  Clobbers r0, r3, ip. */
 writer_put:
     push    {r1, r2, r3, lr}
+#ifndef DRY_RUN
     movw    r0, #:lower16:T_FOBJ
     movt    r0, #:upper16:T_FOBJ
     ldr     r0, [r0]
@@ -377,6 +378,17 @@ writer_put:
     movw    ip, #:lower16:T_WRC
     movt    ip, #:upper16:T_WRC
     str     r0, [ip]
+#else
+    /* Everything except the card.  The point of the flag is that the path is
+     * otherwise identical -- the same post, the same descriptor, the same
+     * mailbox, the same task waking at priority 6, the same release -- so a
+     * run that survives here and dies without the flag has narrowed the
+     * trouble to F_WRITE itself and not to the machinery around it. */
+    movw    ip, #:lower16:T_WRC
+    movt    ip, #:upper16:T_WRC
+    mov     r0, #1
+    str     r0, [ip]
+#endif
     pop     {r1, r2, r3, lr}
     movw    ip, #:lower16:T_BYTES
     movt    ip, #:upper16:T_BYTES
@@ -538,6 +550,17 @@ writer_signal:
     .global writer_openfile
 writer_openfile:
     push    {r4, r5, r6, lr}
+#ifdef DRY_RUN
+    /* No file object is built and nothing touches the volume.  T_FOPEN is what
+     * every other decision reads, so setting it is enough to make the rest of
+     * the machinery behave exactly as it would with a real file. */
+    movw    ip, #:lower16:T_FOPEN
+    movt    ip, #:upper16:T_FOPEN
+    mov     r0, #1
+    str     r0, [ip]
+    pop     {r4, r5, r6, lr}
+    bx      lr
+#endif
     movw    r4, #:lower16:T_FOBJ
     movt    r4, #:upper16:T_FOBJ
     ldr     r4, [r4]
@@ -601,6 +624,14 @@ writer_closefile:
     ldr     r5, [r4]
     cmp     r5, #0
     beq     9f
+#ifdef DRY_RUN
+    mov     r0, #0
+    str     r0, [r4]                    @ nothing was opened; nothing to close
+    mov     r0, #0x25
+    str     r0, [r6]                    @ the stage the real path ends on
+    pop     {r4, r5, r6, lr}
+    bx      lr
+#endif
 
     /* No drain here.  Everything of this take was written as jobs, and the
      * stop job came out of the queue behind all of them -- draining again

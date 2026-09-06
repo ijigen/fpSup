@@ -69,9 +69,9 @@ T_WRC, T_LOST, T_WRAPS = 0xC072E8E8, 0xC072E8EC, 0xC072E8F0
 STREAM_SIGFN = 0xC072E1A8
 
 
-def symbols(src):
+def symbols(src, defines=()):
     """Offsets of the global symbols inside the assembled blob."""
-    elf, sections, by_name = _parse(_compile(src))
+    elf, sections, by_name = _parse(_compile(src, defines))
     _, symtab = by_name['.symtab']
     _, strtab = by_name['.strtab']
     out = {}
@@ -141,10 +141,14 @@ def pool_base():
     return pool
 
 
+DRY_RUN = False   # set by --dry-run: everything except the card
+
+
 def place():
     _check()
-    code = assemble(HERE / 'ring_task.S')
-    syms = symbols(HERE / 'ring_task.S')
+    defines = ('DRY_RUN',) if DRY_RUN else ()
+    code = assemble(HERE / 'ring_task.S', defines)
+    syms = symbols(HERE / 'ring_task.S', defines)
     pool = pool_base()
     global CODE_AT
     CODE_AT = pool + CODE_POOL_OFF
@@ -165,7 +169,8 @@ def place():
     missing = {'writer_task', 'make_writer', 'writer_signal'} - set(syms)
     if missing:
         raise SystemExit(f'the blob has no {sorted(missing)}')
-    print(f'  ring_task     0x{CODE_AT:08X}..0x{end:08X}  {len(code)} bytes (pool)')
+    print(f'  ring_task     0x{CODE_AT:08X}..0x{end:08X}  {len(code)} bytes (pool)'
+          + ('   DRY RUN: no open, no write, no close' if DRY_RUN else ''))
     print(f'  job pool      0x{jlo:08X}..0x{jhi:08X}  {JOB_COUNT} jobs')
     for n, o in sorted(syms.items(), key=lambda kv: kv[1]):
         print(f'    {n:16s} 0x{CODE_AT + o:08X}')
@@ -357,7 +362,11 @@ def main():
                    help='open, write from the ring, close -- all in this context')
     g.add_argument('--open', action='store_true', help='open the file')
     g.add_argument('--close', action='store_true', help='drain and close it')
+    ap.add_argument('--dry-run', action='store_true',
+                    help='build the writer with the card calls stubbed out')
     a = ap.parse_args()
+    global DRY_RUN
+    DRY_RUN = a.dry_run
     if a.state:
         state()
     elif a.signal:
