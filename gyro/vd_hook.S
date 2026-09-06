@@ -3,7 +3,7 @@
 
 #include "imu_stream.inc.S"
 
-/* The exposure side: one record per sensor Vd.
+/* The exposure side.  It measures; it no longer writes to the stream.
  *
  * Gyro data has to line up with when light hit the sensor, not with when a
  * frame reached the card.  CinemaDNG is a 96 MB/s buffered write, so the file
@@ -114,23 +114,26 @@ vd_hook:
     cmp     r1, r0
     strhi   r1, [ip, #O_VOMAX]
 
-4:  movw    ip, #:lower16:STREAM_INDEX
-    movt    ip, #:upper16:STREAM_INDEX
-1:  ldrex   r0, [ip]
-    add     r1, r0, #1
-    strex   r3, r1, [ip]
-    cmp     r3, #0
-    bne     1b
-
-    ring_slot r0, r1, r3
-
-    strh    r2, [r1]                    @ x = which Vd of this take
-    mov     r0, #0
-    strh    r0, [r1, #2]
-    strh    r0, [r1, #6]
-    mov     r0, #TAG_VD
-    strh    r0, [r1, #4]                @ last: the tag publishes the record
-
-    pop     {r0, r1, r2, r3, ip, lr}
+    /* No record goes into the stream.
+     *
+     * A tag 5 record used to be appended here, and it was a lie.  Position is
+     * time only because the gyro producer lays samples down in the order the
+     * coprocessor made them; a marker appended from anywhere else lands wherever
+     * the last drain happened to leave the write index, which is 0-20 ms before
+     * where it belongs.  A frame is 33 ms.  An exposure marker that could be
+     * most of a frame early is not an anchor, it is a plausible number, and a
+     * plausible number is worse than none -- everything downstream would trust
+     * it.
+     *
+     * The latches above are a different thing and they stay.  They read the
+     * coprocessor's own head, which resolves 400 us and owes nothing to when we
+     * were woken, so V0_HEAD, the frame period and the doubled-Vd census are
+     * all still measured exactly.  They are state words, read with --take.  Only
+     * the thing that claimed a POSITION is gone.
+     *
+     * It can come back the day the drain moves into the producers, because then
+     * the ring is emptied before a marker is appended and the position is true
+     * by construction.  Not before. */
+4:  pop     {r0, r1, r2, r3, ip, lr}
     movt    r4, #0xC31D                 @ the displaced instruction
     bx      lr                          @ lr has bit 0 set: back to Thumb

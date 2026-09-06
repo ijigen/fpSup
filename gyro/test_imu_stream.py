@@ -66,17 +66,30 @@ class RecordShape(unittest.TestCase):
         return got
 
     def test_four_halfwords_each(self):
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG), ('vd', VD)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG)):
             self.assertEqual(sorted(self.offsets(src)), [0, 2, 4, 6], name)
 
     def test_tag_is_written_last(self):
         """A reader that catches a half-written record sees the old tag, not a
         new payload under an old one."""
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG), ('vd', VD)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG)):
             body = src[src.index('push'):]
             stores = [int(m.group(1) or 0) for m in
                       re.finditer(r'strh\s+r\d+,\s*\[r\d+(?:,\s*#(\d+))?\]', body)]
             self.assertEqual(stores[-1], 4, f'{name} does not publish with the tag')
+
+    def test_vd_appends_nothing_to_the_stream(self):
+        """A marker appended from outside the gyro producer lands where the last
+        drain left the index, 0-20 ms before it belongs -- most of a frame, on a
+        thing whose whole job is to say which frame.  The Vd hook measures with
+        the coprocessor's head instead, into state words, and claims no
+        position.  It may append again when the drain moves into the producers
+        and the position becomes true by construction, not before."""
+        body = VD[VD.index('push'):]
+        self.assertNotIn('ring_slot', body)
+        self.assertNotIn('ldrex', body, 'vd still claims a stream slot')
+        self.assertNotIn('TAG_VD', body)
+        self.assertIn('gyro_head', body, 'vd stopped measuring as well')
 
     def test_records_are_indexed_eight_bytes_apart(self):
         """The stride now lives in the ring_slot macro, so check it there -- and
@@ -84,8 +97,7 @@ class RecordShape(unittest.TestCase):
         so a fifth copy of the arithmetic cannot appear unnoticed."""
         macro = INC[INC.index('.macro ring_slot'):INC.index('.endm', INC.index('.macro ring_slot'))]
         self.assertRegex(macro, r'lsl\s+#3', 'ring_slot does not stride by eight')
-        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG),
-                          ('vd', VD)):
+        for name, src in (('accel', ACCEL), ('gyro', GYRO), ('trigger', TRIG)):
             body = src[src.index('push'):]
             self.assertTrue('ring_slot' in body or re.search(r'lsl\s+#3', body),
                             f'{name} indexes the ring by neither route')
@@ -158,6 +170,18 @@ class Assembly(unittest.TestCase):
         w = self.words('accel_hook.S')
         self.assertEqual(w[-2], 0xE1D410F0, 'ldrsh r1, [r4] is not there')
         self.assertEqual(w[-1], 0xE12FFF1E, 'bx lr is not there')
+
+    def test_the_accel_measurement_is_off_by_default(self):
+        """A bisect with two variables in it is not a bisect.  Without the flag
+        the hook must be the same bytes it was before the counters existed:
+        the flag inserts a block after the push and changes nothing else."""
+        self.assertIn('#ifdef ACC_MEASURE', ACCEL)
+        plain = assemble(HERE / 'accel_hook.S', ())
+        measured = assemble(HERE / 'accel_hook.S', ('ACC_MEASURE',))
+        self.assertGreater(len(measured), len(plain))
+        self.assertEqual(measured[:4], plain[:4], 'the push moved')
+        self.assertEqual(measured[-(len(plain) - 4):], plain[4:],
+                         'the flag changed the work, not just added to it')
 
     def test_only_the_accel_hook_writes_its_own_cursor(self):
         """ACC_GHEAD carries no exclusive, so it is only correct while exactly

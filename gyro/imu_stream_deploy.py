@@ -46,9 +46,10 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 
 # name -> (code address, source, defines, hook site, firmware's word, thumb?)
 PRODUCERS = {
-    # 248 bytes now that it measures its own interval, so it can no longer
-    # live at 0xC072E100 with T_BYTES 128 bytes above it.  Up here it has
-    # room to 0xC072EC00.
+    # With ACC_MEASURE it is 260 bytes and no longer fits at 0xC072E100,
+    # where T_BYTES sits 128 bytes above it.  Up here there is room to
+    # 0xC072EC00 either way, so the address does not depend on the flag --
+    # one less thing that differs between two builds being compared.
     'accel': (0xC072E900, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
     'gyro':  (0xC072E300, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
     'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
@@ -178,9 +179,14 @@ def _check_header():
                              f'word 0x{orig:08X}')
 
 
-def _place():
+def _place(measure_accel=False):
     """Assemble everything and check nothing lands on anything else."""
-    code = {n: assemble(HERE / src, d)
+    def defines(name, d):
+        # Off by default, and deliberately so: it is the only difference
+        # between this build and the one the layered bisection is walking,
+        # and a bisect with two variables in it is not a bisect.
+        return d + ('ACC_MEASURE',) if (name == 'accel' and measure_accel) else d
+    code = {n: assemble(HERE / src, defines(n, d))
             for n, (_a, src, d, _s, _o, _t) in PRODUCERS.items()}
     spans = [(n, PRODUCERS[n][0], len(c)) for n, c in code.items()]
     spans += [('state words', STATE_AT, STATE_WORDS * 4),
@@ -243,12 +249,12 @@ def resolve_ring():
     return ring
 
 
-def arm(only=None):
+def arm(only=None, measure_accel=False):
     """Arm the producers.  `only` names a subset -- the record triggers sit
     INSIDE the firmware's audio teardown and rebuild, so being able to leave
     them out is how one tells whether they are what broke the audio."""
     _check_header()
-    code = _place()
+    code = _place(measure_accel)
 
     for name, (_at, _src, _d, site, orig, _t) in PRODUCERS.items():
         got = P.mem_get(site)[0]
@@ -264,7 +270,8 @@ def arm(only=None):
             continue
         P.put_slow(PRODUCERS[name][0], blob, name)
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
-    P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
+    if measure_accel:
+        P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
     P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
 
     # The real ring lives in the pool, whose address is only known now.  Memory
@@ -552,6 +559,8 @@ def main():
     ap.add_argument('--rows', type=int, default=24)
     ap.add_argument('--step', type=float, default=30.0)
     ap.add_argument('--only', help='comma-separated producers to arm')
+    ap.add_argument('--measure-accel', action='store_true',
+                    help='build the accel hook with its interval counters')
     a = ap.parse_args()
     if a.restore:
         restore()
@@ -566,7 +575,7 @@ def main():
     elif a.rate:
         rate(a.rate, a.step)
     else:
-        arm(set(a.only.split(',')) if a.only else None)
+        arm(set(a.only.split(',')) if a.only else None, a.measure_accel)
     return 0
 
 

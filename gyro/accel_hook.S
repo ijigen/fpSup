@@ -38,6 +38,7 @@
 accel_hook:
     push    {r0, r1, r2, r3, ip, lr}
 
+#ifdef ACC_MEASURE
     /* ---- observation, not behaviour -------------------------------------
      *
      * The question this answers: could the drain live HERE instead of in the
@@ -88,6 +89,7 @@ accel_hook:
     addhs   ip, ip, #1
     strhs   ip, [r2, #ACC_O_OVER]
 2:
+#endif
 
     movw    ip, #:lower16:STREAM_INDEX
     movt    ip, #:upper16:STREAM_INDEX
