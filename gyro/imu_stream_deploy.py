@@ -54,11 +54,35 @@ PRODUCERS = {
     # ACC_MEASURE build, which is 260 bytes and cannot fit under T_BYTES at
     # 0xC072E180, moves -- and when it does, it moves on its own.
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
+    # Not a hook: the space provider the producers call.  It is the only thing
+    # in the cave that knows the ring is a row of buffers.
+    'space': (0xC072E900, 'stream_space.S',      (),            None,       None,       0),
     'gyro':  (0xC072E300, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
     'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
     'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
     'vd':    (0xC072E710, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
+
+
+def _symbols(src):
+    """Offsets of the global symbols in a blob, so the callers can be pointed
+    at them: the space provider lives in the cave but the hooks that call it are
+    separate blobs, so a branch cannot reach it by assembly alone."""
+    from armasm import _compile, _parse
+    elf, _sections, by_name = _parse(_compile(src))
+    _, symtab = by_name['.symtab']
+    _, strtab = by_name['.strtab']
+    out = {}
+    for off in range(symtab[4], symtab[4] + symtab[5], 16):
+        name_off, value, _size, _info, _other, _shndx = struct.unpack_from(
+            '<IIIBBH', elf, off)
+        end = elf.index(b'\0', strtab[4] + name_off)
+        name = elf[strtab[4] + name_off:end].decode()
+        if name in ('stream_claim', 'stream_commit'):
+            out[name] = value
+    if len(out) != 2:
+        raise SystemExit(f'stream_space.S is missing {out}')
+    return out
 
 
 def branch_word(site, target, thumb):
@@ -112,6 +136,9 @@ STREAM_GCOUNT = 0xC072E1FC
 STREAM_RING   = 0xC072E1A0
 STREAM_TAIL   = 0xC072E1A4
 STREAM_SIGFN  = 0xC072E1A8
+STREAM_DONE     = 0xC072EA6C
+STREAM_CLAIMFN  = 0xC072EA70
+STREAM_COMMITFN = 0xC072EA74
 STREAM_BASE   = 0xC072E200
 POOL_PTR      = 0xC3757A7C
 RING_POOL_OFF = 0x20000
@@ -170,6 +197,8 @@ def _check_header():
     # instruction it displaced.  A site that drifts between the two is how a
     # branch lands inside something that is running.
     for name, (_at, source, defines, site, orig, _t) in PRODUCERS.items():
+        if site is None:
+            continue                    # not a hook: placed code the hooks call
         text = (HERE / source).read_text()
         if 'REC_STOP' in [d for d in defines]:
             text = text.split('#ifdef REC_STOP')[1].split('#else')[0]
@@ -269,6 +298,8 @@ def arm(only=None, measure_accel=False):
     code = _place(measure_accel)
 
     for name, (_at, _src, _d, site, orig, _t) in PRODUCERS.items():
+        if site is None:
+            continue
         got = P.mem_get(site)[0]
         if got is None:
             raise SystemExit(f'{name}: could not read 0x{site:08X}')
@@ -299,8 +330,17 @@ def arm(only=None, measure_accel=False):
         _setw(STREAM_RING, 0, 'the ring base')
         print(f'staying on the {STREAM_COUNT}-record bench ring in the cave')
     _setw(STREAM_TAIL, 0, 'the ring tail')
+    _setw(STREAM_DONE, 0, 'the committed count')
+
+    # The producers call these; only the deployer knows where they landed.
+    syms = _symbols(HERE / 'stream_space.S')
+    base = PRODUCERS['space'][0]
+    _setw(STREAM_CLAIMFN, base + syms['stream_claim'], 'stream_claim')
+    _setw(STREAM_COMMITFN, base + syms['stream_commit'], 'stream_commit')
 
     for name, (at, _src, _d, site, _orig, thumb) in PRODUCERS.items():
+        if site is None:
+            continue                    # nothing to arm: it is called, not hooked
         if only and name not in only:
             print(f'skipping {name}')
             continue
@@ -318,6 +358,8 @@ def arm(only=None, measure_accel=False):
 
 def restore():
     for name, (_at, _src, _d, site, orig, _t) in PRODUCERS.items():
+        if site is None:
+            continue
         for _ in range(8):
             P.mem_set(site, orig)
             if P.mem_get(site)[0] == orig:
@@ -341,6 +383,13 @@ def reset():
     # it MUST be cleared with the index: a zeroed head against a stale tail
     # underflows and rings the doorbell without pause.
     _setw(STREAM_TAIL, 0, 'the ring tail')
+    _setw(STREAM_DONE, 0, 'the committed count')
+
+    # The producers call these; only the deployer knows where they landed.
+    syms = _symbols(HERE / 'stream_space.S')
+    base = PRODUCERS['space'][0]
+    _setw(STREAM_CLAIMFN, base + syms['stream_claim'], 'stream_claim')
+    _setw(STREAM_COMMITFN, base + syms['stream_commit'], 'stream_commit')
     # Not the stream.  It is a ring that overwrites itself in a hundred
     # milliseconds, so zeroing two kilobytes buys nothing -- and `mem set` drops
     # enough of five hundred writes that the retry pass fails outright.

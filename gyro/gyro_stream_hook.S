@@ -58,14 +58,15 @@ gyro_stream_hook:
      * memcpys a second into the pool, for the whole life of the session, for
      * data no file will ever contain.
      *
-     * It branches to the TAIL, not to the exit.  The stop job is posted from
-     * down there when T_WANT has just gone to zero, and skipping the whole hook
-     * would leave the take's file open for ever. */
+     * It can branch straight to the exit now.  The stop job used to be posted
+     * from a tail down here, which is why this used to have to fall through it;
+     * take_close posts it from the record hook, so there is nothing left in
+     * this hook that a stopped take still needs. */
     movw    ip, #:lower16:T_WANT
     movt    ip, #:upper16:T_WANT
     ldr     ip, [ip]
     cmp     ip, #0
-    beq     8f
+    beq     9f
 
     movw    r0, #:lower16:GYRO_DESC_PTR
     movt    r0, #:upper16:GYRO_DESC_PTR
@@ -96,120 +97,75 @@ gyro_stream_hook:
 2:  lsrs    r4, r3, #3              @ records
     beq     9f
 
-    /* Claim the whole batch in one step.  The accelerometer hook fires from a
-     * different task and claims one; either order is fine, each record owns its
-     * slot, and the batch stays contiguous. */
-    movw    r7, #:lower16:STREAM_INDEX
-    movt    r7, #:upper16:STREAM_INDEX
-3:  ldrex   r0, [r7]
-    add     r1, r0, r4
-    strex   r2, r1, [r7]
-    cmp     r2, #0
-    bne     3b
-
-    /* Gyro records only, so this is a ruler for the sensor's own rate.  The
+    /* Gyro records only, so this is a ruler for the sensor's own rate: the
      * shared index counts both sensors and cannot be one.  Only this task
-     * writes it, so it needs no exclusive.
-     *
-     * It is here to settle a real disagreement in the notes: one place records
-     * the gyro at 2500 Hz within 0.02%, another at a hardware-measured 2501.85
-     * Hz, which is 0.074% -- and neither says how it was measured.  On a three
-     * minute take that is the difference between one frame of drift and four,
-     * and it drifts progressively, so it is a candidate for the sync being
-     * right at the head of a clip and wrong at the end.  A count against a long
-     * baseline settles it. */
+     * writes it, so it needs no exclusive. */
     movw    r2, #:lower16:STREAM_GCOUNT
     movt    r2, #:upper16:STREAM_GCOUNT
     ldr     r1, [r2]
     add     r1, r1, r4
     str     r1, [r2]
 
-    add     r6, r6, #GYRO_DATA_OFF  @ source cursor
-    add     r5, r8, #GYRO_DATA_OFF  @ first record of the firmware ring
+    add     r6, r6, #GYRO_DATA_OFF      @ source cursor
+    add     r5, r8, #GYRO_DATA_OFF      @ first record of the firmware ring
     movw    r9, #GYRO_SPAN
-    add     r9, r5, r9              @ one past its last
-    /* Base and mask once, outside the loop: this is the only producer that
-     * appends more than one record per visit. */
-    movw    r7, #:lower16:STREAM_RING
-    movt    r7, #:upper16:STREAM_RING
-    ldr     r7, [r7]
-    cmp     r7, #0
-    movweq  r8, #STREAM_MASK
-    movwne  r8, #:lower16:RING_MASK
-    movtne  r8, #:upper16:RING_MASK
-    movweq  r7, #:lower16:STREAM_BASE
-    movteq  r7, #:upper16:STREAM_BASE
+    add     r9, r5, r9                  @ one past its last
+
+    /* Ask, copy, say done.  That is the whole of it.
+     *
+     * This hook does not know that buffers exist, how big they are, when one
+     * fills, or that anything is ever posted.  It asks for room, is given as
+     * much as there is, writes it, says how much it wrote, and asks again if it
+     * still has records left.  Every judgement that used to live here -- the
+     * ring mask, the chunk threshold, whether a file was open, whether the stop
+     * had gone -- is in stream_space.S now, which is the only thing in the
+     * system that has any business making it.
+     *
+     * The audio producer is a DMA engine and tests nothing at all.  This is as
+     * close to that as software gets. */
+10: mov     r0, r4
+    movw    ip, #:lower16:STREAM_CLAIMFN
+    movt    ip, #:upper16:STREAM_CLAIMFN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    beq     9f
+    blx     ip                          @ r0 = where, r1 = how many
+    cmp     r1, #0
+    beq     9f
+    mov     r7, r0
+    mov     r8, r1                      @ keep the count for the commit
+    sub     r4, r4, r1
 
 4:  cmp     r6, r9
-    movhs   r6, r5                  @ round the firmware ring
-
-    and     r2, r0, r8
-    add     r2, r7, r2, lsl #3
+    movhs   r6, r5                      @ round the firmware ring
 
     ldrsh   r3, [r6]
-    strh    r3, [r2]
+    strh    r3, [r7]
     ldrsh   r3, [r6, #2]
-    strh    r3, [r2, #2]
+    strh    r3, [r7, #2]
     ldrsh   r3, [r6, #6]
-    strh    r3, [r2, #6]
+    strh    r3, [r7, #6]
     mov     r3, #TAG_GYRO
-    strh    r3, [r2, #4]            @ last: the tag publishes the record
+    strh    r3, [r7, #4]                @ last: the tag publishes the record
 
-    ldrsh   r3, [r6, #4]            @ the pad this format spends
+    ldrsh   r3, [r6, #4]                @ the pad this format spends
     cmp     r3, #0
     bne     5f
 
 6:  add     r6, r6, #8
-    add     r0, r0, #1
-    subs    r4, r4, #1
+    add     r7, r7, #8
+    subs    r1, r1, #1
     bne     4b
 
-    /* Ring the doorbell, but only once enough has piled up to be worth a card
-     * write.  This runs every 20 ms; waking the writer every time would put
-     * fifty small writes a second through the one non-preemptible card lock,
-     * which is exactly the shape that starved the old writer.
-     *
-     * Task context, so a syscall is safe from here.  The Vd hook is an
-     * interrupt and must never reach writer_signal. */
-8:  movw    ip, #:lower16:STREAM_INDEX
-    movt    ip, #:upper16:STREAM_INDEX
-    ldr     r0, [ip]
-    movw    ip, #:lower16:STREAM_POSTED
-    movt    ip, #:upper16:STREAM_POSTED
-    ldr     r1, [ip]
-    sub     r0, r0, r1
-    movw    r1, #RING_CHUNK
-    cmp     r0, r1
-    bhs     7f
-    /* Not enough yet -- but a take may have ended, and the stop has to go
-     * through the queue behind whatever is still unposted.  Only the producer
-     * can post it: this is task context, where a syscall is safe, and the
-     * record hooks are not.
-     *
-     * Three conditions, not one.  Checking only "not recording" called into
-     * the pool fifty times a second for the whole life of the session, with
-     * nothing to do every time -- a firmware callback should not be running
-     * code it does not need. */
-    movw    ip, #:lower16:T_FOPEN
-    movt    ip, #:upper16:T_FOPEN
+    mov     r0, r8
+    movw    ip, #:lower16:STREAM_COMMITFN
+    movt    ip, #:upper16:STREAM_COMMITFN
     ldr     ip, [ip]
     cmp     ip, #0
-    beq     9f                      @ no file: nothing to post and none to stop
-    movw    ip, #:lower16:T_WANT
-    movt    ip, #:upper16:T_WANT
-    ldr     ip, [ip]
-    cmp     ip, #0
-    bne     9f                      @ still recording, and not enough yet
-    movw    ip, #:lower16:T_STOPSENT
-    movt    ip, #:upper16:T_STOPSENT
-    ldr     ip, [ip]
-    cmp     ip, #0
-    bne     9f                      @ the stop has already gone
-7:  movw    ip, #:lower16:STREAM_SIGFN
-    movt    ip, #:upper16:STREAM_SIGFN
-    ldr     ip, [ip]
-    cmp     ip, #0
-    blxne   ip
+    blxne   ip                          @ and it decides whether a buffer filled
+
+    cmp     r4, #0
+    bne     10b
 
 9:  pop     {r0-r9, ip, lr}
     bx      lr

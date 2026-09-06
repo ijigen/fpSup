@@ -23,6 +23,7 @@ GYRO = (HERE / 'gyro_stream_hook.S').read_text()
 TRIG = (HERE / 'rec_trigger.S').read_text()
 VD = (HERE / 'vd_hook.S').read_text()
 INC = (HERE / 'imu_stream.inc.S').read_text()
+SPACE = (HERE / 'stream_space.S').read_text()
 
 # Who may append to the stream, and who may not.  Only a hook that lays
 # samples down in the order the coprocessor made them can claim a position;
@@ -84,27 +85,47 @@ class RecordShape(unittest.TestCase):
                       re.finditer(r'strh\s+r\d+,\s*\[r\d+(?:,\s*#(\d+))?\]', body)]
             self.assertEqual(stores[-1], 4, f'{name} does not publish with the tag')
 
-    def test_neither_producer_touches_the_ring_when_nothing_records(self):
-        """The shipping logger's drain sits behind the recording flag and an
-        idle callback returns without reading a byte.  The rewrite dropped that
-        and 013e12f only restored the doorbell half; this is the other half.
-        Both gates must come before the producer claims anything."""
+    def test_the_producers_make_no_judgement(self):
+        """Audio's producer is a DMA engine: it is pointed at a buffer, it
+        writes, and the hardware raises the completion.  It tests nothing.
+
+        Ours ask for room, write what they are given, and say how much.  Every
+        judgement -- where the ring is, how it is divided, whether a buffer
+        filled, whether anything should be posted -- belongs to the space
+        provider, and a producer that grows one back fails here."""
         for name, src in WRITERS:
             body = src[src.index('push'):]
-            gate = body.index('T_WANT')
-            self.assertLess(gate, body.index('ldrex'),
-                            f'{name} claims a slot before checking for a take')
+            for forbidden in ('ring_slot', 'RING_MASK', 'BUF_', 'ldrex',
+                              'STREAM_POSTED', 'T_FOPEN', 'T_STOPSENT',
+                              'STREAM_SIGFN'):
+                self.assertNotIn(forbidden, body,
+                                 f'{name} is deciding something: {forbidden}')
+            self.assertIn('STREAM_CLAIMFN', body)
+            self.assertIn('STREAM_COMMITFN', body)
 
-    def test_the_gyro_gate_still_reaches_the_doorbell(self):
-        """Skipping the whole hook would leave the take's file open for ever:
-        the stop job is posted from the tail, precisely when T_WANT has just
-        gone to zero.  The gate must branch INTO the tail, not past it."""
+    def test_only_the_space_provider_knows_the_ring_is_divided(self):
+        body = SPACE[SPACE.index('stream_claim:'):]
+        for needed in ('BUF_RECORDS', 'BUF_MASK', 'ldrex', 'ring_slot',
+                       'STREAM_SIGFN'):
+            self.assertIn(needed, body, f'the space provider lost {needed}')
+
+    def test_a_buffer_is_posted_on_an_equality_not_a_threshold(self):
+        """A threshold is something to tune and something to be late about.  A
+        buffer is full at exactly one count, so the test is ==, and it can only
+        be true once per buffer."""
+        commit = SPACE[SPACE.index('stream_commit:'):]
+        self.assertIn('ands    r2, r1, r2', commit)
+        self.assertIn('bne     9f', commit)
+        self.assertNotIn('bhs', commit)
+        self.assertNotIn('bls', commit)
+
+    def test_the_gate_goes_straight_to_the_exit(self):
+        """It used to have to fall through the hook's tail, because the stop job
+        was posted from down there.  take_close posts it now, so a stopped take
+        needs nothing from this hook at all."""
         body = GYRO[GYRO.index('push'):]
-        self.assertIn('beq     8f', body, 'the gate does not branch to the tail')
-        tail = body.index('\n8:')
-        self.assertLess(tail, body.index('STREAM_SIGFN'),
-                        'the tail label is not before the doorbell')
-        self.assertLess(body.index('T_STOPSENT'), body.index('STREAM_SIGFN'))
+        gate = body.index('T_WANT')
+        self.assertIn('beq     9f', body[gate:gate + 200])
 
     def test_record_start_anchors_the_gyro_cursor(self):
         """With no idle drain the cursor is stale by however long the camera
@@ -168,10 +189,9 @@ class RecordShape(unittest.TestCase):
         so a fifth copy of the arithmetic cannot appear unnoticed."""
         macro = INC[INC.index('.macro ring_slot'):INC.index('.endm', INC.index('.macro ring_slot'))]
         self.assertRegex(macro, r'lsl\s+#3', 'ring_slot does not stride by eight')
-        for name, src in WRITERS:
-            body = src[src.index('push'):]
-            self.assertTrue('ring_slot' in body or re.search(r'lsl\s+#3', body),
-                            f'{name} indexes the ring by neither route')
+        body = SPACE[SPACE.index('stream_claim:'):]
+        self.assertIn('ring_slot', body,
+                      'the space provider indexes the ring by neither route')
 
 
 class AudioShape(unittest.TestCase):

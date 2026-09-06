@@ -158,6 +158,12 @@
 .equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
 .equ STREAM_INDEX,   0xC072E1F8     /* u32, monotonic; both producers claim it */
 .equ STREAM_GCOUNT,  0xC072E1FC     /* u32, gyro records only -- the rate ruler */
+.equ STREAM_DONE,    0xC072EA6C     /* records actually IN the ring, as opposed
+                                     * to spoken for.  A buffer is full when this
+                                     * lands on its end, not when the space was
+                                     * claimed.                                */
+.equ STREAM_CLAIMFN, 0xC072EA70     /* -> stream_claim, placed by the deployer */
+.equ STREAM_COMMITFN,0xC072EA74     /* -> stream_commit                        */     /* u32, gyro records only -- the rate ruler */
 .equ STREAM_RING,    0xC072E1A0     /* u32, the ring's ABSOLUTE base.  Not a
                                      * constant: the real buffer lives in the
                                      * pool, whose address is only known at
@@ -187,11 +193,34 @@
 .equ RING_BYTES,     (RING_RECORDS * 8)
 .equ RING_POOL_OFF,  0x20000
 
-/* Ring the doorbell only when this much is waiting.  The producer runs every
- * 20 ms; waking the writer that often would put 50 small writes a second
- * through the one card lock, which is the opposite of what the audio path
- * does.  1024 records is 8 KiB, about every 400 ms at 2500 Hz. */
-.equ RING_CHUNK,     1024
+/* The ring is read as a row of buffers, and a buffer is posted the moment it
+ * FILLS -- not when a later poll notices that it is full.
+ *
+ * This is the one thing audio never does: nothing on its path runs on a timer.
+ * DspAudioDevice::v5 (@0xC01FF3B8) takes two 16 KiB blocks out of the class 6
+ * heap, hands both to the DSP, and registers a completion callback; the buffer
+ * filling IS the event, all the way through to the writer.
+ *
+ * Our producer cannot be told when a buffer fills by hardware -- but it does
+ * not need to be told.  It is the one doing the filling, so it knows at the
+ * instant it happens.  A claim that crosses a boundary posts the buffer it just
+ * completed, right there.  No threshold, no "is there enough yet", no fifty
+ * checks a second that find nothing.
+ *
+ * 1024 records is 8 KiB, the same span the old threshold used, and sixteen of
+ * them fit in the ring.  Audio runs on two buffers of 85 ms each; ours are
+ * 410 ms and there are sixteen. */
+.equ BUF_RECORDS,    1024
+.equ BUF_MASK,       (BUF_RECORDS - 1)
+.equ BUF_BYTES,      (BUF_RECORDS * 8)
+.equ BUF_COUNT,      (RING_RECORDS / BUF_RECORDS)
+
+.if (BUF_RECORDS & BUF_MASK) != 0
+.error "BUF_RECORDS must be a power of two: the producers mask with it"
+.endif
+.if (BUF_COUNT * BUF_RECORDS) != RING_RECORDS
+.error "the buffers must tile the ring exactly"
+.endif
 
 .equ TAG_GYRO,       0
 .equ TAG_ACCEL,      1

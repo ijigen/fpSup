@@ -100,15 +100,18 @@ accel_hook:
     cmp     ip, #0
     beq     3f
 
-    movw    ip, #:lower16:STREAM_INDEX
-    movt    ip, #:upper16:STREAM_INDEX
-1:  ldrex   r0, [ip]
-    add     r1, r0, #1
-    strex   r2, r1, [ip]
-    cmp     r2, #0
-    bne     1b
-
-    ring_slot r0, r1, r2          @ eight bytes a record
+    /* Ask for one, write it, say done.  No index, no mask, no slot arithmetic:
+     * this hook does not know the ring is divided into anything. */
+    mov     r0, #1
+    movw    ip, #:lower16:STREAM_CLAIMFN
+    movt    ip, #:upper16:STREAM_CLAIMFN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    beq     3f
+    blx     ip                          @ r0 = where, r1 = how many
+    cmp     r1, #0
+    beq     3f
+    mov     r1, r0
 
     ldrsh   r0, [r4]
     strh    r0, [r1]
@@ -118,6 +121,13 @@ accel_hook:
     strh    r0, [r1, #6]                @ z sits past the tag, as in the gyro ring
     mov     r0, #TAG_ACCEL
     strh    r0, [r1, #4]                @ last: the tag publishes the record
+
+    mov     r0, #1
+    movw    ip, #:lower16:STREAM_COMMITFN
+    movt    ip, #:upper16:STREAM_COMMITFN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    blxne   ip
 
 3:  pop     {r0, r1, r2, r3, ip, lr}
     ldrsh   r1, [r4]                    @ the displaced instruction

@@ -102,188 +102,51 @@ mpool_init_jobs:
 
 /* --------------------------------------------------------------- posting */
 
-/* Hand the writer everything the producers have added since last time, as jobs.
+/* writer_post(r0 = the first record of the buffer that just filled).
  *
- * This is the audio path's shape exactly: the PRODUCER side works out what is
- * ready, takes a descriptor per contiguous piece, fills in a pointer and a
- * length, and sends it.  The writer never looks at the ring's indices -- it
- * writes what it was handed and frees the descriptor.  A span that runs over
- * the end of the ring is two jobs, which is how audio expresses it too.
- *
- * The pool is the queue.  When it is empty there is nothing to post with, so
- * the records simply stay in the ring and the next call carries a bigger span;
- * mpool counts the refusal, and that count is the back-pressure signal.
- *
- * Called from the gyro producer -- task context, where a syscall is proven
- * safe.  The Vd hook is an interrupt and never comes here.
+ * stream_commit calls this and nothing else does.  There is no span to work
+ * out, no threshold to compare against, no backlog to bound and no wrap to
+ * split: a buffer is a fixed length, it tiles the ring exactly, and it is
+ * whole by the time this runs.  Everything that used to be here -- POSTED, the
+ * chunk cap, the LOST accounting, the second job for the part that ran past the
+ * end -- existed to make a threshold poll behave, and the poll is gone.
  */
     .global writer_post
 writer_post:
-    push    {r4, r5, r6, r7, r8, r9, r10, lr}
+    push    {r4, r5, r6, r7, ip, lr}
+    mov     r4, r0
 
-    movw    r4, #:lower16:STREAM_JPOOL
-    movt    r4, #:upper16:STREAM_JPOOL
-    ldr     r4, [r4]
-    cmp     r4, #0
-    beq     9f                          @ no pool yet
+    movw    r0, #:lower16:T_FOPEN
+    movt    r0, #:upper16:T_FOPEN
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     9f                          @ no file yet: this buffer is dropped,
+                                        @ and J_OFF will leave its hole behind
 
-    /* Nothing to post unless a take is live.  There is no knock job any more:
-     * audio opens the file, then creates the thread, then starts it, so by the
-     * time anything can post there is always a file.  The knock existed only
-     * because our writer used to open the file itself, from inside its own
-     * loop, at priority 6 -- which is the thing this rewrite removes. */
-    movw    ip, #:lower16:T_FOPEN
-    movt    ip, #:upper16:T_FOPEN
-    ldr     ip, [ip]
-    cmp     ip, #0
+    movw    r5, #:lower16:STREAM_RING
+    movt    r5, #:upper16:STREAM_RING
+    ldr     r5, [r5]
+    cmp     r5, #0
     beq     9f
 
-    movw    ip, #:lower16:STREAM_INDEX
-    movt    ip, #:upper16:STREAM_INDEX
-    ldr     r5, [ip]                    @ head
-    movw    ip, #:lower16:STREAM_POSTED
-    movt    ip, #:upper16:STREAM_POSTED
-    ldr     r6, [ip]
-    subs    r7, r5, r6                  @ records not yet handed over
-    beq     8f                          @ nothing to write; still check for stop
+    movw    r6, #:lower16:RING_MASK
+    movt    r6, #:upper16:RING_MASK
+    and     r6, r4, r6
+    add     r1, r5, r6, lsl #3          @ where the buffer starts, in the ring
 
-    /* Cap at the ring: past that the oldest are already overwritten. */
-    movw    r0, #:lower16:RING_RECORDS
-    movt    r0, #:upper16:RING_RECORDS
-    cmp     r7, r0
-    bls     2f
-    sub     r1, r7, r0
-    movw    ip, #:lower16:T_LOST
-    movt    ip, #:upper16:T_LOST
-    ldr     r2, [ip]
-    add     r2, r2, r1
-    str     r2, [ip]
-    sub     r6, r5, r0
-    mov     r7, r0
+    movw    r2, #:lower16:BUF_BYTES
+    movt    r2, #:upper16:BUF_BYTES
 
-    /* One chunk per call, not the whole backlog.
-     *
-     * Posting everything at once and only advancing POSTED when all of it got
-     * a descriptor is a runaway: one empty pool leaves POSTED where it was, so
-     * the next call sees a bigger span, posts harder, and empties the pool
-     * again.  It read back as four thousand refusals and a LOST of four
-     * hundred million -- the same records counted lost on every retry.
-     *
-     * Bounded per call, and POSTED advanced by what actually went, a backlog
-     * drains at eight kilobytes per twenty milliseconds and cannot feed on
-     * itself. */
-2:  movw    r0, #RING_CHUNK
-    cmp     r7, r0
-    movhi   r7, r0
-
-    movw    ip, #:lower16:STREAM_RING
-    movt    ip, #:upper16:STREAM_RING
-    ldr     r8, [ip]
-    cmp     r8, #0
-    beq     9f
-
-    movw    r0, #:lower16:RING_MASK
-    movt    r0, #:upper16:RING_MASK
-    and     r9, r6, r0
-    lsl     r9, r9, #3                  @ first byte
-    lsl     r10, r7, #3                 @ bytes in the span
-
-    movw    r0, #:lower16:RING_BYTES
-    movt    r0, #:upper16:RING_BYTES
-    sub     r0, r0, r9
-    cmp     r10, r0
-    movlo   r0, r10                     @ min(span, to the end of the ring)
-
-    add     r1, r8, r9
-    mov     r2, r0
-    /* Where this belongs in the file.  STREAM_TAIL is the record index the
-     * take started at, latched by the record hook, and it does not move; so the
-     * byte offset of the span starting at POSTED is simply the difference,
-     * times eight.  Without this a refused job would take its time with it and
-     * hand every later record somebody else's. */
     movw    r3, #:lower16:STREAM_TAIL
     movt    r3, #:upper16:STREAM_TAIL
     ldr     r3, [r3]
-    sub     r3, r6, r3
-    lsl     r3, r3, #3
-    mov     r0, #0
+    sub     r3, r4, r3
+    lsl     r3, r3, #3                  @ where it belongs in the file
+
+    mov     r0, #0                      @ not a stop
     bl      writer_make_job
-    cmp     r0, #0
-    beq     9f                          @ the pool is empty: try again next time
 
-    /* Whatever ran past the end of the ring becomes a second job. */
-    movw    r0, #:lower16:RING_BYTES
-    movt    r0, #:upper16:RING_BYTES
-    sub     r0, r0, r9
-    cmp     r10, r0
-    bls     3f
-    sub     r2, r10, r0
-    mov     r1, r8
-    /* The part that ran past the end of the ring picks up where the first job
-     * left off: same base, plus everything the first one carried. */
-    movw    r3, #:lower16:STREAM_TAIL
-    movt    r3, #:upper16:STREAM_TAIL
-    ldr     r3, [r3]
-    sub     r3, r6, r3
-    lsl     r3, r3, #3
-    add     r3, r3, r0                  @ r0 is still the first job's length
-    mov     r0, #0
-    bl      writer_make_job
-    movw    ip, #:lower16:T_WRAPS
-    movt    ip, #:upper16:T_WRAPS
-    ldr     r0, [ip]
-    add     r0, r0, #1
-    str     r0, [ip]
-
-3:  add     r6, r6, r7                  @ only what actually went
-    movw    ip, #:lower16:STREAM_POSTED
-    movt    ip, #:upper16:STREAM_POSTED
-    str     r6, [ip]
-
-    /* The take may be over.  The stop goes through the SAME queue, after every
-     * job above, so the writer cannot see it before it has written them --
-     * ordering by construction, which is the point of doing it this way rather
-     * than with a flag the writer reads on the side. */
-8:  movw    ip, #:lower16:T_WANT
-    movt    ip, #:upper16:T_WANT
-    ldr     r0, [ip]
-    cmp     r0, #0
-    bne     9f
-
-    /* "After every job above" stopped being true when the chunk cap went in.
-     * One call now posts at most 1024 records, so a take that ends with more
-     * than that still waiting would queue its stop AHEAD of the rest and the
-     * writer would close the file on the tail of the take.
-     *
-     * Nothing is lost by waiting: a producer reaches here every 20 ms while the
-     * file is open, and each visit hands over another 1024 against an inflow of
-     * 50, so the backlog closes long before the ring could lap. */
-    movw    ip, #:lower16:STREAM_INDEX
-    movt    ip, #:upper16:STREAM_INDEX
-    ldr     r0, [ip]
-    movw    ip, #:lower16:STREAM_POSTED
-    movt    ip, #:upper16:STREAM_POSTED
-    ldr     r1, [ip]
-    cmp     r0, r1
-    bne     9f                          @ still a backlog: the next call posts it
-
-    movw    ip, #:lower16:T_STOPSENT
-    movt    ip, #:upper16:T_STOPSENT
-    ldr     r0, [ip]
-    cmp     r0, #0
-    bne     9f                          @ already sent one
-    mov     r1, #0
-    mov     r2, #0
-    mov     r0, #1                      @ stop
-    bl      writer_make_job
-    cmp     r0, #0
-    beq     9f                          @ no descriptor; the next call retries
-    movw    ip, #:lower16:T_STOPSENT
-    movt    ip, #:upper16:T_STOPSENT
-    mov     r0, #1
-    str     r0, [ip]
-
-9:  pop     {r4, r5, r6, r7, r8, r9, r10, lr}
+9:  pop     {r4, r5, r6, r7, ip, lr}
     bx      lr
 
 /* writer_make_job(r0 = stop flag, r1 = ptr, r2 = len) -> r0 = 1 posted, 0 not.
