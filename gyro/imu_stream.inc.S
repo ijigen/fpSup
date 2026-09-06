@@ -322,6 +322,7 @@
 
 .equ JOB_COUNT,      32             /* what audio's pool holds                */
 
+.equ T_FOPEN,        0xC072E0FC     /* shared with ring_task.inc.S */
 .equ T_STOPSENT,     0xC072E15C     /* shared with ring_task.inc.S */
 .equ T_WANT,         0xC072E194     /* shared with ring_task.inc.S: 1 = a take
                                      * wants the file.  Declared in both because

@@ -166,12 +166,27 @@ gyro_stream_hook:
     /* Not enough yet -- but a take may have ended, and the stop has to go
      * through the queue behind whatever is still unposted.  Only the producer
      * can post it: this is task context, where a syscall is safe, and the
-     * record hooks are not. */
+     * record hooks are not.
+     *
+     * Three conditions, not one.  Checking only "not recording" called into
+     * the pool fifty times a second for the whole life of the session, with
+     * nothing to do every time -- a firmware callback should not be running
+     * code it does not need. */
+    movw    ip, #:lower16:T_FOPEN
+    movt    ip, #:upper16:T_FOPEN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    beq     9f                      @ no file: nothing to post and none to stop
     movw    ip, #:lower16:T_WANT
     movt    ip, #:upper16:T_WANT
     ldr     ip, [ip]
     cmp     ip, #0
-    bne     9f
+    bne     9f                      @ still recording, and not enough yet
+    movw    ip, #:lower16:T_STOPSENT
+    movt    ip, #:upper16:T_STOPSENT
+    ldr     ip, [ip]
+    cmp     ip, #0
+    bne     9f                      @ the stop has already gone
 7:  movw    ip, #:lower16:STREAM_SIGFN
     movt    ip, #:upper16:STREAM_SIGFN
     ldr     ip, [ip]

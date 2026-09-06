@@ -162,7 +162,22 @@ writer_post:
     sub     r6, r5, r0
     mov     r7, r0
 
-2:  movw    ip, #:lower16:STREAM_RING
+    /* One chunk per call, not the whole backlog.
+     *
+     * Posting everything at once and only advancing POSTED when all of it got
+     * a descriptor is a runaway: one empty pool leaves POSTED where it was, so
+     * the next call sees a bigger span, posts harder, and empties the pool
+     * again.  It read back as four thousand refusals and a LOST of four
+     * hundred million -- the same records counted lost on every retry.
+     *
+     * Bounded per call, and POSTED advanced by what actually went, a backlog
+     * drains at eight kilobytes per twenty milliseconds and cannot feed on
+     * itself. */
+2:  movw    r0, #RING_CHUNK
+    cmp     r7, r0
+    movhi   r7, r0
+
+    movw    ip, #:lower16:STREAM_RING
     movt    ip, #:upper16:STREAM_RING
     ldr     r8, [ip]
     cmp     r8, #0
@@ -203,9 +218,10 @@ writer_post:
     add     r0, r0, #1
     str     r0, [ip]
 
-3:  movw    ip, #:lower16:STREAM_POSTED
+3:  add     r6, r6, r7                  @ only what actually went
+    movw    ip, #:lower16:STREAM_POSTED
     movt    ip, #:upper16:STREAM_POSTED
-    str     r5, [ip]                    @ handed over
+    str     r6, [ip]
 
     /* The take may be over.  The stop goes through the SAME queue, after every
      * job above, so the writer cannot see it before it has written them --
@@ -665,8 +681,14 @@ writer_selftest:
     bx      lr
 
     .align  2
+/* The path.  Reserved long enough for the deployer to write a different name
+ * over it: mode 7 does NOT truncate on this camera whatever the tools say, so
+ * a fixed name accumulates every session's writes on top of each other and the
+ * file stops being one stream.  A take needs its own file -- which the real
+ * logger does per clip anyway. */
 writer_path:
     .asciz  "\\GYRO\\RINGTEST.BIN"
+    .space  12
     .align  2
 
 /* The job pool, in the same blob so the calls resolve without a relocation

@@ -230,7 +230,24 @@ def place_code():
     _setw(T_STAGE, 0, 'the close stage')
     for a in (T_BYTES, T_WRITES, T_WRC, T_LOST, T_WRAPS):
         _setw(a, 0, 'a write counter')
-    print(f'placed; file object 0x{pool + FOBJ_POOL_OFF:08X}, no task yet')
+    # A fresh name each time.  Mode 7 does not truncate here, so reusing one
+    # name layers every session's writes over each other and the file stops
+    # being a single stream -- which cost one whole verification pass.
+    import time as _t
+    # `adr` has to resolve at assembly time, so the label cannot be global;
+    # find the string in the blob instead.  It is a fixed literal, so this is
+    # exact rather than a guess.
+    marker = b'\\GYRO\\RINGTEST.BIN\0'
+    off = code.find(marker)
+    if off < 0:
+        raise SystemExit('the path literal is not in the blob')
+    name = f'\\GYRO\\RT{int(_t.time()) % 100000:05d}.BIN'
+    blob = name.encode() + b'\0'
+    blob += b'\0' * (-len(blob) % 4)
+    if len(blob) > len(marker) + 12:
+        raise SystemExit('the new name does not fit the reserved space')
+    P.put_slow(CODE_AT + off, blob, 'the path')
+    print(f'placed; file object 0x{pool + FOBJ_POOL_OFF:08X}, writing to {name}')
     return at
 
 

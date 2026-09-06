@@ -48,9 +48,9 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 PRODUCERS = {
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
     'gyro':  (0xC072E300, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
-    'start': (0xC072E4B0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
-    'stop':  (0xC072E5F0, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
-    'vd':    (0xC072E6E0, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
+    'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
+    'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
+    'vd':    (0xC072E710, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
 
 
@@ -231,7 +231,10 @@ def resolve_ring():
     return ring
 
 
-def arm():
+def arm(only=None):
+    """Arm the producers.  `only` names a subset -- the record triggers sit
+    INSIDE the firmware's audio teardown and rebuild, so being able to leave
+    them out is how one tells whether they are what broke the audio."""
     _check_header()
     code = _place()
 
@@ -245,6 +248,8 @@ def arm():
                              f'hooked there, refusing')
 
     for name, blob in code.items():
+        if only and name not in only:
+            continue
         P.put_slow(PRODUCERS[name][0], blob, name)
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
     P.put_slow(STREAM_BASE, b'\0' * STREAM_SPAN, 'stream')
@@ -264,6 +269,9 @@ def arm():
     _setw(STREAM_TAIL, 0, 'the ring tail')
 
     for name, (at, _src, _d, site, _orig, thumb) in PRODUCERS.items():
+        if only and name not in only:
+            print(f'skipping {name}')
+            continue
         word = branch_word(site, at, thumb)
         kind = 'blx' if thumb else 'bl '
         print(f'arming {name:6s} 0x{site:08X} -> {kind} 0x{at:08X}  (0x{word:08X})')
@@ -486,6 +494,7 @@ def main():
     g.add_argument('--rate', type=float, metavar='SECONDS')
     ap.add_argument('--rows', type=int, default=24)
     ap.add_argument('--step', type=float, default=30.0)
+    ap.add_argument('--only', help='comma-separated producers to arm')
     a = ap.parse_args()
     if a.restore:
         restore()
@@ -498,7 +507,7 @@ def main():
     elif a.rate:
         rate(a.rate, a.step)
     else:
-        arm()
+        arm(set(a.only.split(',')) if a.only else None)
     return 0
 
 
