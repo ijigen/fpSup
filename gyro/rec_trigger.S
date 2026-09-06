@@ -15,15 +15,21 @@
  * the one I made.  Two takes: an eleven second take put 11.38 s between them,
  * a three second take 4.40 s, and c01fba28 fired first both times.  So:
  *
- *   START  movRec  ->  FUN_c01fb918(recorder), past the "am I recording"
- *          check, immediately before the call that tears the running monitor
- *          audio down:
+ *   START  FUN_c0378a50, the recorder's start step, the instruction right
+ *          after it has built the audio recorder -- file, mailbox, thread,
+ *          and woken it:
  *
- *              c01fba28  ldr r0, [r4, #8]    <- displaced
- *              c01fba2c  ldr r1, [r0, #0xc]
- *              c01fba30  add r1, r1, #0x20
- *              c01fba34  ldr r1, [r1]
- *              c01fba38  blx r1              vtable +0x20
+ *              c0379080  bl   F_MGR
+ *              c0379090  bl   F_VOL
+ *              c03790b4  bl   XC_AudioRecorder::Start   <- AudF_W is built here
+ *              c03790b8  ldrb r2, [r11, #0x5ce]        <- displaced
+ *
+ *          The hook used to sit at 0xC01FBA28, inside FUN_c01fb918 -- movRec
+ *          tearing the monitor audio down, several steps EARLIER in the start
+ *          sequence.  Building a priority 6 thread there froze the camera on
+ *          the spot; opening a file there did not.  Audio builds its thread
+ *          here, so we build ours here, right behind it.  (This branch is the
+ *          one taken when an audio file is recorded, which CinemaDNG does.)
  *
  *   STOP   cDevt_stop @0xC038C3C0, the recorder's device-stop step, at the
  *          instruction right after it has fetched the object that says whether
@@ -61,8 +67,8 @@
 .equ COUNT_WORD,  STREAM_R1_N
 .equ LATCH_WORD,  STREAM_R1_GC
 #else
-.equ SITE,        0xC01FBA28
-.equ SITE_ORIG,   0xE5940008          /* ldr r0, [r4, #8] */
+.equ SITE,        0xC03790B8
+.equ SITE_ORIG,   0xE5DB25CE          /* ldrb r2, [r11, #0x5ce] */
 .equ COUNT_WORD,  STREAM_R0_N
 .equ LATCH_WORD,  STREAM_R0_GC
 #endif
@@ -163,6 +169,7 @@ rec_trigger:
                                         @ object FUN_c0207088 just returned,
                                         @ restored by the pop above
 #else
-    ldr     r0, [r4, #8]                @ the displaced instruction
+    ldrb    r2, [r11, #0x5ce]           @ the displaced instruction; r11 is the
+                                        @ recorder's state and is never touched
 #endif
     bx      lr

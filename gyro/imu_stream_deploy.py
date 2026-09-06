@@ -54,7 +54,7 @@ PRODUCERS = {
     # Not hooks.  Called.
     'drain': (0xC072E300, 'gyro_drain.S',       (),            None,       None,       0),
     'space': (0xC072E900, 'stream_space.S',     (),            None,       None,       0),
-    'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
+    'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC03790B8, 0xE5DB25CE, 0),
     'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC038C45C, 0xE5D030E0, 0),
 }
 
