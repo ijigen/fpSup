@@ -367,6 +367,53 @@ def _ms(samples):
     return samples * GYRO_PERIOD_US / 1000.0
 
 
+STAGES = {
+    0: 'nothing armed',
+    1: 'the accelerometer hook, entered and left',
+    2: '+ the take is built and torn down',
+    3: '+ the space provider: blocks fill, nothing is posted',
+    4: '+ the gyro drain',
+    5: '+ posting and writing',
+}
+
+
+def stage(n):
+    """Turn the flow on one step at a time, by pointer rather than by rebuild.
+
+    Every step is one word.  A stage that freezes has narrowed the trouble to
+    the one thing the step before it did not do, and the camera never has to be
+    reflashed or rebooted to move between them.
+    """
+    if n == 0:
+        restore()
+        return
+
+    import ring_task_deploy as R
+    _code, at = R.place()               # assembles and resolves; writes nothing
+    want = {
+        T_OPENFN:        at['take_open']   if n >= 2 else 0,
+        T_CLOSEFN:       at['take_close']  if n >= 2 else 0,
+        STREAM_CLAIMFN:  None              if n >= 3 else 0,
+        STREAM_COMMITFN: None              if n >= 3 else 0,
+        STREAM_DRAINFN:  None              if n >= 4 else 0,
+        STREAM_SIGFN:    at['writer_post'] if n >= 5 else 0,
+    }
+    syms = _symbols(HERE / 'stream_space.S')
+    base = PRODUCERS['space'][0]
+    real = {STREAM_CLAIMFN: base + syms['stream_claim'],
+            STREAM_COMMITFN: base + syms['stream_commit'],
+            STREAM_DRAINFN: PRODUCERS['drain'][0]
+                            + _symbols(HERE / 'gyro_drain.S')['gyro_drain']}
+    names = {T_OPENFN: 'take_open', T_CLOSEFN: 'take_close',
+             STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
+             STREAM_DRAINFN: 'gyro_drain', STREAM_SIGFN: 'writer_post'}
+    print(f'stage {n}: {STAGES[n]}')
+    for addr, v in want.items():
+        v = real[addr] if v is None else v
+        _setw(addr, v, names[addr])
+        print(f'  {names[addr]:14s} ' + (f'0x{v:08X}' if v else '(off)'))
+
+
 def take():
     """What one take measured.
 
@@ -479,6 +526,8 @@ def main():
     g.add_argument('--reset', action='store_true')
     g.add_argument('--take', action='store_true')
     g.add_argument('--dump', action='store_true')
+    g.add_argument('--stage', type=int, choices=range(6),
+                   help='turn the flow on one step at a time')
     g.add_argument('--accel', action='store_true',
                    help='the accelerometer hook interval, in gyro samples')
     g.add_argument('--rate', type=float, metavar='SECONDS')
@@ -496,6 +545,8 @@ def main():
         take()
     elif a.dump:
         dump(a.rows)
+    elif a.stage is not None:
+        stage(a.stage)
     elif a.accel:
         accel_interval()
     elif a.rate:
