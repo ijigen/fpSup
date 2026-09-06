@@ -115,14 +115,13 @@ STREAM_R0_GC  = 0xC072E1E8
 STREAM_R0_N   = 0xC072E1EC
 STREAM_GHEAD  = 0xC072E1F0
 STREAM_PADBAD = 0xC072E1F4
-STREAM_INDEX  = 0xC072E1F8
 STREAM_GCOUNT = 0xC072E1FC
-STREAM_TAIL   = 0xC072E1A4
 STREAM_SIGFN  = 0xC072E1A8
 STREAM_CLAIMFN  = 0xC072EC38
 STREAM_COMMITFN = 0xC072EC3C
 STREAM_DRAINFN  = 0xC072EC40
 BUF_N, BUF_BYTES = 8, 0x4000
+B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
 POOL_PTR      = 0xC3757A7C
 
 # GHEAD unarmed, everything else zero.
@@ -146,10 +145,9 @@ def _check_header():
         'GYRO_RING_SPAN': GYRO_RING_SPAN,
         'STREAM_R1_GC': STREAM_R1_GC, 'STREAM_R1_N': STREAM_R1_N,
         'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
-        'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
-        'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
+        'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD, 'STREAM_GCOUNT': STREAM_GCOUNT,
         'ACC_STATE': ACC_STATE, 'ACC_WORDS': ACC_WORDS,
-        'ACC_DANGER': ACC_DANGER, 'STREAM_TAIL': STREAM_TAIL,
+        'ACC_DANGER': ACC_DANGER,
         'STREAM_SIGFN': STREAM_SIGFN,
         'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
     }
@@ -298,7 +296,6 @@ def arm(only=None, measure_accel=False):
     # it, so between takes there is no buffer standing around at all.
     print(f'buffers: {BUF_N} x {BUF_BYTES // 1024} KiB from the allocator at '
           f'record start = {BUF_N * BUF_BYTES / 8 / 2500:.1f} s')
-    _setw(STREAM_TAIL, 0, 'the ring tail')
 
     # The producers call these; only the deployer knows where they landed.
     syms = _symbols(HERE / 'stream_space.S')
@@ -352,7 +349,6 @@ def reset():
     # The tail sits outside the block because it is configuration-adjacent, but
     # it MUST be cleared with the index: a zeroed head against a stale tail
     # underflows and rings the doorbell without pause.
-    _setw(STREAM_TAIL, 0, 'the ring tail')
 
     # The producers call these; only the deployer knows where they landed.
     syms = _symbols(HERE / 'stream_space.S')
@@ -384,23 +380,17 @@ def take():
         raise SystemExit('the state words did not read back whole')
     r1_gc, r1_n = w[8], w[9]
     r0_head, r0_gc, r0_n = w[12], w[14], w[15]
-    padbad, index, gcount = w[17], w[18], w[19]
-    done = P.mem_get(STREAM_DONE)[0]
-
-    ring, tail = P.mem_get(STREAM_RING)[0], P.mem_get(STREAM_TAIL)[0]
-    where = f'pool 0x{ring:08X}' if ring else 'the bench ring'
-    print(f'records {index} claimed, {done} written   gyro {gcount}   '
-          f'bad pads {padbad}')
-    print(f'ring {where}   the take started at record {tail}')
+    padbad, gcount = w[17], w[19]
+    handed, drops = P.mem_get(B_HANDED)[0], P.mem_get(B_DROPS)[0]
+    print(f'gyro {gcount}   bad pads {padbad}')
+    print(f'blocks {handed} handed to the writer   {drops} dropped'
+          + ('   <- the writer did not keep up' if drops else ''))
     print(f'starts {r0_n}   stops {r1_n}')
     print()
 
     if not r0_n:
         print('recording never began -- 0xC01FBA28 (movRec) did not fire.')
         return
-    if index != done:
-        print(f'{index - done} records are claimed but not committed -- a '
-              f'producer was interrupted between asking and writing.')
     if r0_n and r1_n:
         d = r1_gc - r0_gc
         print(f'take: gyro {r0_gc} -> {r1_gc} = {d} samples = {_ms(d)/1000:.2f} s')

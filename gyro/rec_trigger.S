@@ -105,15 +105,6 @@ rec_trigger:
     mov     r1, #0
     str     r1, [r0]
 #else
-    /* Where this take starts, in records.  Every job's file offset is measured
-     * from here, so it is latched before anything can be posted. */
-    movw    r0, #:lower16:STREAM_INDEX
-    movt    r0, #:upper16:STREAM_INDEX
-    ldr     r0, [r0]
-    movw    r1, #:lower16:STREAM_TAIL
-    movt    r1, #:upper16:STREAM_TAIL
-    str     r0, [r1]
-
     movw    r0, #:lower16:T_WANT
     movt    r0, #:upper16:T_WANT
     mov     r1, #1

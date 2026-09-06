@@ -101,6 +101,33 @@ class RecordShape(unittest.TestCase):
             self.assertIn('STREAM_CLAIMFN', body)
             self.assertIn('STREAM_COMMITFN', body)
 
+    def test_the_block_state_is_locked(self):
+        """B_CUR, B_FILL and B_DONE are read and written together, and two
+        different tasks reach them: the accelerometer driver, and the recorder
+        when it commits a stop and the tail of the take has to come out before
+        the file closes.  A task switch in between hands the same space out
+        twice.
+
+        Audio needs none of this -- its producer is one DSP callback.  The old
+        design got away with none of it because it claimed a single monotonic
+        word with LDREX; three words need a lock, and masking is what
+        MPoolFixed::v1 uses on its own free list."""
+        for name in ('stream_claim', 'stream_commit'):
+            body = SPACE[SPACE.index(f'{name}:'):]
+            body = body[:body.index('\n    bx      lr')]
+            self.assertIn('st_lock', body, f'{name} touches the state unlocked')
+            self.assertIn('st_unlock', body, f'{name} never lets interrupts back')
+
+    def test_the_post_happens_outside_the_lock(self):
+        """Taking a descriptor and sending a message do not belong in a critical
+        section -- and by then the block is marked busy and B_CUR is cleared, so
+        the state is already consistent."""
+        commit = SPACE[SPACE.index('stream_commit:'):]
+        post = commit.index('STREAM_SIGFN')
+        # the release that precedes the call, not the one on the early exit
+        self.assertLess(commit.index('B_BUSY'), commit.rindex('st_unlock', 0, post))
+        self.assertLess(commit.rindex('st_unlock', 0, post), post)
+
     def test_full_is_the_block_running_out(self):
         """Audio's blocks are separate allocations and "full" is not a number
         anyone computes -- it is that block being used up.  Ours are separate

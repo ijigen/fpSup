@@ -26,8 +26,9 @@
  */
     .global stream_claim
 stream_claim:
-    push    {r2, r3, r4, r5, ip, lr}
+    push    {r2, r3, r4, r5, r6, lr}
     mov     r4, r0                      @ wanted
+    st_lock r6
 
     movw    r5, #:lower16:B_CUR
     movt    r5, #:upper16:B_CUR
@@ -58,7 +59,8 @@ stream_claim:
     str     r3, [r2]
     mov     r0, #0
     mov     r1, #0
-    pop     {r2, r3, r4, r5, ip, lr}
+    st_unlock r6
+    pop     {r2, r3, r4, r5, r6, lr}
     bx      lr
 
 3:  str     r0, [r5]                    @ B_CUR = the block we just took
@@ -87,7 +89,8 @@ stream_claim:
     ldr     r0, [r2, r0, lsl #2]
     add     r0, r0, r3, lsl #3          @ where in the block
 
-    pop     {r2, r3, r4, r5, ip, lr}
+    st_unlock r6
+    pop     {r2, r3, r4, r5, r6, lr}
     bx      lr
 
 
@@ -99,8 +102,9 @@ stream_claim:
  */
     .global stream_commit
 stream_commit:
-    push    {r1, r2, r3, r4, r5, lr}
+    push    {r1, r2, r3, r4, r5, r6, r7, lr}
     mov     r4, r0
+    st_lock r7
 
     movw    r5, #:lower16:B_CUR
     movt    r5, #:upper16:B_CUR
@@ -149,11 +153,19 @@ stream_commit:
     mvn     r4, #0
     str     r4, [ip]                    @ take a fresh one on the next claim
 
+    /* The block is marked busy and B_CUR is already cleared, so the state is
+     * consistent and nobody else can touch this block: let interrupts back in
+     * before calling out.  Posting takes a descriptor and sends a message, and
+     * neither belongs inside a critical section. */
+    st_unlock r7
     movw    ip, #:lower16:STREAM_SIGFN
     movt    ip, #:upper16:STREAM_SIGFN
     ldr     ip, [ip]
     cmp     ip, #0
     blxne   ip                          @ writer_post(ptr, len, offset, block)
+    pop     {r1, r2, r3, r4, r5, r6, r7, lr}
+    bx      lr
 
-9:  pop     {r1, r2, r3, r4, r5, lr}
+9:  st_unlock r7
+    pop     {r1, r2, r3, r4, r5, r6, r7, lr}
     bx      lr

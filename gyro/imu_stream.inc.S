@@ -86,11 +86,9 @@
 .equ STREAM_R0_N,    0xC072E1EC     /* u32, times that has happened            */
 .equ STREAM_GHEAD,   0xC072E1F0     /* u32, gyro ring head we have consumed    */
 .equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
-.equ STREAM_INDEX,   0xC072E1F8     /* u32, monotonic; both producers claim it */
 .equ STREAM_GCOUNT,  0xC072E1FC     /* u32, gyro records only -- the rate ruler */
 .equ STREAM_CLAIMFN, 0xC072EC38     /* -> stream_claim, placed by the deployer */
 .equ STREAM_COMMITFN,0xC072EC3C     /* -> stream_commit                        */     /* u32, gyro records only -- the rate ruler */
-.equ STREAM_TAIL,    0xC072E1A4     /* u32, records the writer has taken      */
 .equ STREAM_SIGFN,   0xC072E1A8     /* u32, writer_signal's address, or 0     */
 
 /* The real ring, out of the pool.  16384 records is 128 KiB and 6.5 seconds at
@@ -148,6 +146,33 @@
                                              * a hand-written call.            */             /* blocks handed to the writer      */
 
 .equ B_NONE,         -1
+
+/* Masking interrupts is how MPoolFixed::v1 and ::v2 protect their free list
+ * (FUN_c001cce0 / XC_INTR__v0), and it is what these need too.
+ *
+ * Audio's producer is one DSP callback and needs nothing.  Ours has two
+ * callers in two different tasks -- the accelerometer driver, and the recorder
+ * when it commits a stop and the tail of the take has to come out of the
+ * coprocessor's ring before the file closes.  B_CUR, B_FILL and B_DONE are read
+ * and written together, so a task switch between them hands out the same space
+ * twice.
+ *
+ * The old design got away with none of this because it claimed a single
+ * monotonic word with LDREX.  Blocks need three words, and three words need a
+ * lock. */
+.macro st_lock saved
+    mrs     \saved, cpsr
+    orr     r12, \saved, #0xC0
+    msr     cpsr_c, r12
+.endm
+
+.macro st_unlock saved
+    mrs     r12, cpsr
+    bic     r12, r12, #0xC0
+    and     \saved, \saved, #0xC0
+    orr     r12, \saved, r12
+    msr     cpsr_c, r12
+.endm
 
 .equ TAG_GYRO,       0
 .equ TAG_ACCEL,      1
