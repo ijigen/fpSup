@@ -95,12 +95,14 @@
 .equ D_DSNAME,       0x14           /* eight bytes                            */
 
 .equ WRITER_PRI,     6              /* what AudF_W and SRecFile run at        */
-.equ WRITER_STKSZ,   0x4000         /* AudF_W asks for 0x2000, but SRecFile --
-                                     * the VIDEO file writer, which pushes far
-                                     * more through the same XC_MediaFile --
-                                     * asks for 0x4000.  The SD path is deep
-                                     * and 8 KiB is the cheaper thing to be
-                                     * wrong about.                          */
+.equ WRITER_STKSZ,   0x2000         /* AudF_W's.  It was 0x4000, on the grounds
+                                     * that SRecFile uses 0x4000 for the same SD
+                                     * path -- but the thread pool asks the
+                                     * kernel for the stack at record start, and
+                                     * the one parameter we passed differently
+                                     * from audio was this one.  Audio's value
+                                     * is the one that is known to work at that
+                                     * moment.                                */
 
 /* XC_Thread.cpp's own thread pool, used as audio uses it rather than
  * reimplemented.  FUN_c036e108 news a 0x14-byte object, creates the completion
