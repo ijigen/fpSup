@@ -236,15 +236,17 @@ class AudioShape(unittest.TestCase):
         capture start and gives them back at stop.  Ours does the same, from
         class 0 -- not 6, which is audio's own, and not 10, which is RAW and is
         what movRec could not allocate the day this project froze the camera."""
-        t = self.body('take_open')
-        self.assertIn('MEM_HEAP', t)
-        self.assertIn('MEM_GET', t)
-        self.assertLess(t.index('MEM_GET'), t.index('bl      writer_openfile'),
-                        'a refusal must cost nothing: ask before opening')
-        c = self.body('take_close')
-        self.assertIn('bl      free_blocks', c, 'the blocks are never given back')
+        b = self.body('blocks_open')
+        self.assertIn('MEM_HEAP', b)
+        self.assertIn('MEM_GET', b)
         self.assertIn('MEM_FREE', self.task)
         self.assertEqual(int(equ('MEM_CLASS', self.inc), 0), 0)
+        # and NOT in the record hook's path: the movie takes its memory at
+        # record start, so ours has to be older than that
+        t = self.body('take_open')
+        self.assertNotIn('MEM_GET', t, 'take_open still asks the allocator')
+        c = self.body('take_close')
+        self.assertNotIn('free_blocks', c, 'take_close still gives them back')
 
     def test_take_open_opens_before_it_starts_anything(self):
         """AudF_W's constructor opens the file, then attaches the body and wakes

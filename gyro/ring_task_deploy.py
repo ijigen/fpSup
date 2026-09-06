@@ -48,6 +48,7 @@ FOBJ_POOL_OFF = 0x42000
 F_CACHE = 0xC000E91C            # what makes freshly written pool code runnable
 POOL_PTR = 0xC3757A7C
 JOB_COUNT = 32
+BUF_N, BUF_BYTES = 8, 0x4000
 JOB_SIZE = 24
 
 T_ID, T_CRE_RC, T_STA_RC = 0xC072E0D0, 0xC072E0D4, 0xC072E0D8
@@ -85,7 +86,7 @@ def symbols(src, defines=()):
         # by type -- an empty map here would place the task at zero.
         end = elf.index(b'\0', strtab[4] + name_off)
         name = elf[strtab[4] + name_off:end].decode()
-        if name in ('writer_body', 'make_writer',
+        if name in ('writer_body', 'make_writer', 'blocks_open', 'blocks_close',
                     'writer_openfile', 'writer_closefile',
                     'writer_selftest', 'writer_post', 'mpool_init_jobs',
                     'take_open', 'take_close'):
@@ -176,7 +177,8 @@ def place():
             raise SystemExit(f'{name} 0x{lo:08X}..0x{hi:08X} overlaps the ring')
         if not (pool + 0x20000 <= lo and hi <= pool + 0x100000):
             raise SystemExit(f'{name} 0x{lo:08X}..0x{hi:08X} leaves the free pool')
-    missing = {'writer_body', 'take_open', 'take_close'} - set(syms)
+    missing = {'writer_body', 'take_open', 'take_close',
+               'blocks_open', 'blocks_close'} - set(syms)
     if missing:
         raise SystemExit(f'the blob has no {sorted(missing)}')
     print(f'  ring_task     0x{CODE_AT:08X}..0x{end:08X}  {len(code)} bytes (pool)'
@@ -234,6 +236,17 @@ def place_code():
     # hooks reach them through a word only the deployer can fill in.
     _setw(T_OPENFN, at['take_open'], 'what the record start calls')
     _setw(T_CLOSEFN, at['take_close'], 'what the record stop calls')
+
+    # The blocks come from the allocator NOW, with the camera idle -- the rule
+    # is that they have to be taken before the movie path takes what it needs,
+    # and the record hook is already on the wrong side of that line.
+    echo_into(at['blocks_open'], 'blocks_open')
+    got = P.mem_get(0xC072EBA0, BUF_N)
+    if not got or any(not x for x in got):
+        raise SystemExit(f'the allocator would not give {BUF_N} blocks: '
+                         + ' '.join('0x%08X' % (x or 0) for x in (got or [])))
+    print(f'  blocks: {BUF_N} x {BUF_BYTES // 1024} KiB, '
+          f'0x{got[0]:08X}..0x{got[-1] + BUF_BYTES:08X}')
     _setw(STREAM_SIGFN, at['writer_post'], 'what the producer calls')
     pool = pool_base()
     _setw(T_FOBJ, pool + FOBJ_POOL_OFF, 'the file object')
@@ -393,6 +406,8 @@ def main():
                    help='open, write from the ring, close -- all in this context')
     g.add_argument('--open', action='store_true', help='open the file')
     g.add_argument('--close', action='store_true', help='drain and close it')
+    g.add_argument('--free-blocks', action='store_true',
+                   help='give the row back to the allocator')
     ap.add_argument('--dry-run', action='store_true',
                     help='build the writer with the card calls stubbed out')
     a = ap.parse_args()
@@ -454,6 +469,11 @@ def main():
         print(f'asked for a file, take starts at record {head}')
         time.sleep(1.0)
         state()
+    elif a.free_blocks:
+        _code, at = place()
+        _verify_placed(_code, at)
+        echo_into(at['blocks_close'], 'blocks_close')
+        print('blocks given back')
     elif a.close:
         _setw(T_WANT, 0, 'the wanted state')
         print('asked for it to be closed; the producer posts a stop job')

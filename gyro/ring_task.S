@@ -379,34 +379,34 @@ free_blocks:
     bx      lr
 
 
-    .global take_open
-take_open:
+/* blocks_open -- ask the allocator for the row, once, with the camera idle.
+ *
+ * Called through the borrowed shell handler at deploy time.  Everything the
+ * take does afterwards assumes these exist; take_open declines if they do not.
+ */
+/* blocks_open -- ask the allocator for the row, once, with the camera idle.
+ *
+ * The rule is not "do not allocate across a recording": it is that the
+ * allocation has to come BEFORE the movie path takes what it needs.  This runs
+ * through the borrowed shell handler at deploy time, which is as far before as
+ * it is possible to be.
+ *
+ * Audio can afford to ask at capture start because it asks class 6, MOVAUDIO,
+ * which is nobody else's.  We ask class 0, the generic one, so we ask early and
+ * hold it for the session.
+ *
+ * All or nothing: a half-built row is a row with a hole in it, and the producer
+ * would drop into that hole for good.
+ */
+    .global blocks_open
+blocks_open:
     push    {r4, r5, r6, r7, ip, lr}
-    movw    r4, #:lower16:W_STAGE
-    movt    r4, #:upper16:W_STAGE
-    mov     r0, #0x01
-    str     r0, [r4]
 
-    movw    r0, #:lower16:T_FOPEN
-    movt    r0, #:upper16:T_FOPEN
+    movw    r0, #:lower16:B_PTR
+    movt    r0, #:upper16:B_PTR
     ldr     r0, [r0]
     cmp     r0, #0
-    bne     9f                          @ a take is already built
-
-    /* The blocks, from the allocator, at capture start -- DspAudioDevice::v5
-     * asks for its two 16 KiB blocks here and gives them back at stop.  Ours
-     * are eight of the same size, because audio's producer can be throttled by
-     * its hardware and ours cannot.
-     *
-     * First, so that a refusal costs nothing: no file has been opened and no
-     * thread exists yet.  All or nothing -- a half-built row of blocks is a row
-     * with a hole in it, and the producer would drop into that hole for the
-     * whole take. */
-    movw    r0, #:lower16:T_BUILD
-    movt    r0, #:upper16:T_BUILD
-    ldr     r7, [r0]                    @ how far to build
-    cmp     r7, #1
-    blo     9f
+    bne     9f                          @ already ours
 
     mov     r0, #MEM_CLASS
     movw    ip, #:lower16:MEM_HEAP
@@ -415,7 +415,7 @@ take_open:
     cmp     r0, #0
     beq     9f
     mov     r5, r0                      @ the channel
-    mov     r6, #0                      @ i
+    mov     r6, #0
 
 1:  mov     r0, r5
     movw    r1, #:lower16:BUF_BYTES
@@ -443,11 +443,9 @@ take_open:
     b       3f
 
 2:  bl      free_blocks
-    mov     r0, #0x06
-    str     r0, [r4]
     b       9f
 
-3:  /* A fresh take starts at byte zero with no block in hand. */
+3:  /* Nothing is filling yet, and the file starts at byte zero. */
     movw    ip, #:lower16:B_CUR
     movt    ip, #:upper16:B_CUR
     mvn     r0, #0
@@ -468,9 +466,57 @@ take_open:
     movw    ip, #:lower16:B_HANDED
     movt    ip, #:upper16:B_HANDED
     str     r0, [ip]
+
+9:  pop     {r4, r5, r6, r7, ip, lr}
+    bx      lr
+
+
+    .global blocks_close
+blocks_close:
+    push    {r4, lr}
+    bl      free_blocks
+    pop     {r4, lr}
+    bx      lr
+
+
+    .global take_open
+take_open:
+    push    {r4, r5, r6, r7, ip, lr}
+    movw    r4, #:lower16:W_STAGE
+    movt    r4, #:upper16:W_STAGE
+    mov     r0, #0x01
+    str     r0, [r4]
+
+    movw    r0, #:lower16:T_FOPEN
+    movt    r0, #:upper16:T_FOPEN
+    ldr     r0, [r0]
+    cmp     r0, #0
+    bne     9f                          @ a take is already built
+
+    /* The blocks are already ours.  Nothing is asked of the allocator here.
+     *
+     * The rule is not "do not allocate across a recording" -- it is that the
+     * allocation has to come BEFORE the movie path takes what it needs.  By the
+     * time this hook runs, movRec is already tearing the monitor audio down and
+     * the recorder is about to ask class 10 (RAW) for its frame buffers, so
+     * this is the wrong side of that line.
+     *
+     * blocks_open does it at deploy time instead, with the camera idle and no
+     * recording anywhere near.  Audio can ask at capture start because it asks
+     * class 6, which is MOVAUDIO and is nobody else's; we ask class 0, which is
+     * the generic one, so we ask early and hold it. */
+    movw    r0, #:lower16:B_PTR
+    movt    r0, #:upper16:B_PTR
+    ldr     r0, [r0]
+    cmp     r0, #0
     mov     r0, #0x06
     str     r0, [r4]
-    cmp     r7, #2
+    beq     9f                          @ blocks_open has not run
+
+    movw    r0, #:lower16:T_BUILD
+    movt    r0, #:upper16:T_BUILD
+    ldr     r7, [r0]
+    cmp     r7, #1
     blo     9f
 
     bl      writer_openfile
@@ -490,7 +536,7 @@ take_open:
     movt    r0, #:upper16:T_SEEKS
     str     r1, [r0]
 
-    cmp     r7, #3
+    cmp     r7, #2
     blo     9f
     bl      make_writer                 @ the mailbox
     movw    r0, #:lower16:T_MBX
@@ -501,7 +547,7 @@ take_open:
     str     r0, [r4]
     ble     9f
 
-    cmp     r7, #4
+    cmp     r7, #3
     blo     9f
 
     /* The object the pool worker will call.  Its whole interface is slot +0xC
@@ -529,7 +575,7 @@ take_open:
     ldr     r1, [r0]
     cmp     r1, #0
     beq     9f                          @ the pool refused: leave it unstarted
-    cmp     r7, #5
+    cmp     r7, #4
     blo     9f
     movw    r1, #:lower16:W_BODYOBJ
     movt    r1, #:upper16:W_BODYOBJ
@@ -549,6 +595,12 @@ take_open:
 9:  pop     {r4, r5, r6, r7, ip, lr}
     bx      lr
 
+
+    .align  2
+writer_name:
+    .asciz  "GYRW"
+    .space  3
+    .align  2
 
 /* Tear a take down, in AudioFileRecordingObserver::v0's order (@0xC01FBB18):
  *
@@ -633,8 +685,8 @@ take_close:
     mov     r0, #0
     str     r0, [r5]
 
-5:  /* Give the blocks back, the way the device's capture stop does. */
-    bl      free_blocks
+5:  /* The blocks stay.  They were taken before the movie path took anything
+     * and they are given back only when the whole thing is torn down.
 
 6:  mov     r0, #0x16
     str     r0, [r4]
@@ -647,11 +699,6 @@ take_close:
 9:  pop     {r4, r5, r6, lr}
     bx      lr
 
-    .align  2
-writer_name:
-    .asciz  "GYRW"
-    .space  3
-    .align  2
 
 
 /* ------------------------------------------------------------- the file */
