@@ -342,8 +342,18 @@ class Assembly(unittest.TestCase):
 
     def test_accel_ends_with_the_displaced_instruction(self):
         w = self.words('accel_hook.S')
-        self.assertEqual(w[-2], 0xE1D410F0, 'ldrsh r1, [r4] is not there')
+        self.assertEqual(w[-2], 0xE3A02000, 'mov r2, #0 is not there')
         self.assertEqual(w[-1], 0xE12FFF1E, 'bx lr is not there')
+
+    def test_the_accel_hook_runs_outside_the_drivers_lock(self):
+        """IMUDev_ACCEL_MMA8452Q::v7 takes a lock on the way in (FUN_c0010298)
+        and releases it at 0xC050D4C4.  Everything this hook does -- a drain, a
+        mailbox send, a priority 6 preemption that may write to the card -- used
+        to happen with that lock held, and whatever else waits on it waited for
+        all of it.  Audio's producer is a DSP completion callback and holds
+        nothing."""
+        self.assertIn('0xC050D4C8', ACCEL)
+        self.assertNotIn('.equ ACCEL_SITE,      0xC050D498', ACCEL)
 
     def test_the_accel_measurement_is_off_by_default(self):
         """A bisect with two variables in it is not a bisect.  Without the flag

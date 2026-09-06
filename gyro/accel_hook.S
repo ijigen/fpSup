@@ -9,9 +9,22 @@
  *     0xC050D47C  strh  r2, [r4]        x
  *     0xC050D488  strh  r2, [r4, #2]    y
  *     0xC050D490  strh  r2, [r4, #4]    z
- *     0xC050D498  ldrsh r1, [r4]        <- displaced; every axis mode lands here
- *     0xC050D49C  mov   r0, r6
- *     0xC050D4A0  bl    0xC050C5D0
+ *     0xC050D498  ldrsh r1, [r4]        every axis mode lands here
+ *     0xC050D4A0  bl    0xC050C5D0        publish x, y, z
+ *     0xC050D4C4  bl    0xC00102D0        <- the driver RELEASES ITS LOCK
+ *     0xC050D4C8  mov   r2, #0            <- displaced; we run outside it
+ *
+ * The hook used to be at 0xC050D498, and that was inside the lock the driver
+ * takes on its way in (FUN_c0010298 at the top, FUN_c00102D0 at the bottom).
+ * Everything this hook does -- drain fifty records, claim, commit, send a job,
+ * and let a priority 6 task preempt and possibly write to the card -- was
+ * happening with that lock held, and anything else waiting on it waited for all
+ * of it.  Audio's producer is a DSP completion callback and holds nothing.
+ *
+ * 0xC050D4C8 is the first instruction after the release on the SUCCESS path --
+ * the failure path rejoins later -- so we fire exactly when there is a new
+ * sample, r4 still points at the cache, and lr is already dead because the
+ * function returns through its own pop.
  *
  * At the hook the cache is complete and r4 already points at it, so the sample
  * costs three loads and no search.  lr is dead -- the instruction after next is
@@ -31,8 +44,8 @@
  * be on an address both of them can name.
  */
 
-.equ ACCEL_SITE,      0xC050D498
-.equ ACCEL_SITE_ORIG, 0xE1D410F0    /* ldrsh r1, [r4] */
+.equ ACCEL_SITE,      0xC050D4C8
+.equ ACCEL_SITE_ORIG, 0xE3A02000    /* mov r2, #0 -- the success return code */
 
     .global accel_hook
 accel_hook:
@@ -147,5 +160,5 @@ accel_hook:
     blxne   ip
 
 3:  pop     {r0, r1, r2, r3, ip, lr}
-    ldrsh   r1, [r4]                    @ the displaced instruction
+    mov     r2, #0                      @ the displaced instruction
     bx      lr

@@ -50,7 +50,7 @@ PRODUCERS = {
     # event this data has, so it is the only hook left that produces anything:
     # it drains the coprocessor's ring and then appends its own record, which is
     # what puts that record in the right place.
-    'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
+    'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D4C8, 0xE3A02000, 0),
     # Not hooks.  Called.
     'drain': (0xC072E300, 'gyro_drain.S',       (),            None,       None,       0),
     'space': (0xC072E900, 'stream_space.S',     (),            None,       None,       0),
