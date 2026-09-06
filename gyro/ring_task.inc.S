@@ -220,6 +220,19 @@
  * the cheap half of that choice: moving the hook instead would have changed
  * which addresses we write, which is exactly the variable a freeze
  * postmortem cannot afford. */
+/* How much of take_open to run.  The build is five steps and they cannot be
+ * told apart from outside once the camera is down -- a full freeze takes USB
+ * with it, so W_STAGE is unreadable afterwards.  This is the same ladder idea
+ * one level in: one word, no rebuild, no reboot between tries.
+ *
+ *   1  the blocks, from the allocator
+ *   2  + the file: F_CTOR, F_OPEN, the stamp
+ *   3  + the mailbox
+ *   4  + the thread, built but not attached
+ *   5  + attached and running        (the whole thing)
+ */
+.equ T_BUILD,        0xC072EC54
+
 .equ T_JSEQ,         0xC072EC48     /* jobs posted, so a dump can see order   */
 .equ T_JOBSLOT,      0xC072EC4C     /* where MBX_RECV leaves the descriptor   */
 .equ T_STAGE,        0xC072E198     /* how far the close got.  A wedge that

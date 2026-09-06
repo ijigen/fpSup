@@ -121,6 +121,7 @@ STREAM_CLAIMFN  = 0xC072EC38
 STREAM_COMMITFN = 0xC072EC3C
 STREAM_DRAINFN  = 0xC072EC40
 T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
+T_BUILD = 0xC072EC54
 BUF_N, BUF_BYTES = 8, 0x4000
 B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
 POOL_PTR      = 0xC3757A7C
@@ -371,17 +372,15 @@ def reset():
     """
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
     P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
-    # The tail sits outside the block because it is configuration-adjacent, but
-    # it MUST be cleared with the index: a zeroed head against a stale tail
-    # underflows and rings the doorbell without pause.
+    # The block bookkeeping too, so a stage that never builds a take still
+    # reads cleanly.  B_CUR must be -1, not 0: zero means "block zero is mine",
+    # and on a fresh boot block zero has no allocation behind it.
+    P.put_slow(0xC072EBA0, struct.pack('<%dI' % (2 * BUF_N), *([0] * 2 * BUF_N))
+               + struct.pack('<6i', -1, 0, 0, 0, 0, 0), 'block state')
 
-    # The producers call these; only the deployer knows where they landed.
-    syms = _symbols(HERE / 'stream_space.S')
-    base = PRODUCERS['space'][0]
-    _setw(STREAM_CLAIMFN, base + syms['stream_claim'], 'stream_claim')
-    _setw(STREAM_COMMITFN, base + syms['stream_commit'], 'stream_commit')
-    syms = _symbols(HERE / 'gyro_drain.S')
-    _setw(STREAM_DRAINFN, PRODUCERS['drain'][0] + syms['gyro_drain'], 'gyro_drain')
+    # NOT the call-throughs.  Clearing counters must not undo --stage: this
+    # block was here by accident and it turned every stage back on, so a run
+    # that looked like stage 1 was really stages 1, 3 and 4 together.
     # Not the stream.  It is a ring that overwrites itself in a hundred
     # milliseconds, so zeroing two kilobytes buys nothing -- and `mem set` drops
     # enough of five hundred writes that the retry pass fails outright.
@@ -432,6 +431,7 @@ def stage(n):
     names = {T_OPENFN: 'take_open', T_CLOSEFN: 'take_close',
              STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
              STREAM_DRAINFN: 'gyro_drain', STREAM_SIGFN: 'writer_post'}
+    _setw(T_BUILD, 5, 'how far take_open builds')
     print(f'stage {n}: {STAGES[n]}')
     for addr, v in want.items():
         v = real[addr] if v is None else v
@@ -553,6 +553,9 @@ def main():
     g.add_argument('--dump', action='store_true')
     g.add_argument('--stage', type=int, choices=range(6),
                    help='turn the flow on one step at a time')
+    g.add_argument('--build', type=int, choices=range(6),
+                   help='how much of take_open to run: 1 blocks, 2 +file, '
+                        '3 +mailbox, 4 +thread, 5 +attached')
     g.add_argument('--accel', action='store_true',
                    help='the accelerometer hook interval, in gyro samples')
     g.add_argument('--rate', type=float, metavar='SECONDS')
@@ -572,6 +575,9 @@ def main():
         dump(a.rows)
     elif a.stage is not None:
         stage(a.stage)
+    elif a.build is not None:
+        _setw(T_BUILD, a.build, 'how far take_open builds')
+        print(f'take_open will build {a.build} of 5 steps')
     elif a.accel:
         accel_interval()
     elif a.rate:

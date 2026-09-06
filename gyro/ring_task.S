@@ -381,7 +381,7 @@ free_blocks:
 
     .global take_open
 take_open:
-    push    {r4, r5, r6, lr}
+    push    {r4, r5, r6, r7, ip, lr}
     movw    r4, #:lower16:W_STAGE
     movt    r4, #:upper16:W_STAGE
     mov     r0, #0x01
@@ -402,6 +402,12 @@ take_open:
      * thread exists yet.  All or nothing -- a half-built row of blocks is a row
      * with a hole in it, and the producer would drop into that hole for the
      * whole take. */
+    movw    r0, #:lower16:T_BUILD
+    movt    r0, #:upper16:T_BUILD
+    ldr     r7, [r0]                    @ how far to build
+    cmp     r7, #1
+    blo     9f
+
     mov     r0, #MEM_CLASS
     movw    ip, #:lower16:MEM_HEAP
     movt    ip, #:upper16:MEM_HEAP
@@ -464,6 +470,8 @@ take_open:
     str     r0, [ip]
     mov     r0, #0x06
     str     r0, [r4]
+    cmp     r7, #2
+    blo     9f
 
     bl      writer_openfile
     movw    r0, #:lower16:T_FOPEN
@@ -482,6 +490,8 @@ take_open:
     movt    r0, #:upper16:T_SEEKS
     str     r1, [r0]
 
+    cmp     r7, #3
+    blo     9f
     bl      make_writer                 @ the mailbox
     movw    r0, #:lower16:T_MBX
     movt    r0, #:upper16:T_MBX
@@ -490,6 +500,9 @@ take_open:
     mov     r0, #0x03
     str     r0, [r4]
     ble     9f
+
+    cmp     r7, #4
+    blo     9f
 
     /* The object the pool worker will call.  Its whole interface is slot +0xC
      * of the vtable its first word points at, so this is the whole class: one
@@ -516,6 +529,8 @@ take_open:
     ldr     r1, [r0]
     cmp     r1, #0
     beq     9f                          @ the pool refused: leave it unstarted
+    cmp     r7, #5
+    blo     9f
     movw    r1, #:lower16:W_BODYOBJ
     movt    r1, #:upper16:W_BODYOBJ
     ldr     r1, [r1]
@@ -531,7 +546,7 @@ take_open:
     add     r1, r1, #1
     str     r1, [r0]
 
-9:  pop     {r4, r5, r6, lr}
+9:  pop     {r4, r5, r6, r7, ip, lr}
     bx      lr
 
 
@@ -554,11 +569,19 @@ take_close:
     mov     r0, #0x11
     str     r0, [r4]
 
-    movw    r0, #:lower16:T_FOPEN
-    movt    r0, #:upper16:T_FOPEN
+    /* Each piece is undone only if it was built: the build is a ladder now and
+     * a half-built take must still give everything back. */
+    movw    r0, #:lower16:T_MBX
+    movt    r0, #:upper16:T_MBX
     ldr     r0, [r0]
     cmp     r0, #0
-    beq     9f
+    ble     4f                          @ no mailbox: no stop job, no join
+
+    movw    r0, #:lower16:W_THREAD
+    movt    r0, #:upper16:W_THREAD
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     4f                          @ no thread: nothing to wait for
 
     mov     r0, #1                      @ J_STOP
     mov     r1, #0
@@ -582,7 +605,7 @@ take_close:
 3:  mov     r0, #0x13
     str     r0, [r4]
 
-    bl      writer_closefile
+4:  bl      writer_closefile
     mov     r0, #0x14
     str     r0, [r4]
 
