@@ -663,7 +663,18 @@ take_close:
 3:  mov     r0, #0x13
     str     r0, [r4]
 
-4:  bl      writer_closefile
+4:  /* Nothing to join at this build.  Audio never reaches its close without
+     * having slept in tk_wai_flg first, giving every other task -- SRecFile
+     * finalising the clip above all -- the card back.  T_YIELD stands in for
+     * that sleep so the two can be told apart. */
+    movw    r0, #:lower16:T_YIELD
+    movt    r0, #:upper16:T_YIELD
+    ldr     r0, [r0]
+    cmp     r0, #0
+    movwne  ip, #:lower16:TK_DLY_TSK
+    movtne  ip, #:upper16:TK_DLY_TSK
+    blxne   ip
+    bl      writer_closefile
     mov     r0, #0x14
     str     r0, [r4]
 
