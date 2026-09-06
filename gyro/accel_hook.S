@@ -100,6 +100,23 @@ accel_hook:
     cmp     ip, #0
     beq     3f
 
+    /* Drain the coprocessor's ring FIRST, then append this record.
+     *
+     * This is the whole point of the drain living here.  Once the drain has
+     * run, every gyro sample that existed before this instant is already in the
+     * stream -- so this record goes in behind them, and its position IS its
+     * time, to 400 us.  There is no offset field, no post-processing, and the
+     * decoder still reads straight through in order.
+     *
+     * It is also the last timer gone.  The drain used to hang off the firmware's
+     * 20 ms gyro callback; it hangs off a real hardware event now, the one this
+     * driver just produced.  Nothing in the path polls anything. */
+    movw    ip, #:lower16:STREAM_DRAINFN
+    movt    ip, #:upper16:STREAM_DRAINFN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    blxne   ip
+
     /* Ask for one, write it, say done.  No index, no mask, no slot arithmetic:
      * this hook does not know the ring is divided into anything. */
     mov     r0, #1

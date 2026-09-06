@@ -53,7 +53,7 @@ JOB_SIZE = 24
 T_ID, T_CRE_RC, T_STA_RC = 0xC072E0D0, 0xC072E0D4, 0xC072E0D8
 T_WAKES, T_SIGNALS, T_ENTRY = 0xC072E0DC, 0xC072E0E0, 0xC072E0E4
 T_RECV_RC, T_MBX_RC = 0xC072E0E8, 0xC072E0EC
-T_DESC, T_PKT, T_DOOR, T_MBX = 0xC072E080, 0xC072E0A0, 0xC072E0C0, 0xC072E0C4
+T_DESC, T_PKT, T_MBX = 0xC072E080, 0xC072E0A0, 0xC072E0C4
 T_DRAINED, T_MAXSPAN = 0xC072E0C8, 0xC072E0CC
 T_FOBJ, T_FOPEN = 0xC072E0F8, 0xC072E0FC
 T_WANT = 0xC072E194
@@ -100,7 +100,7 @@ def _check():
     want = {'T_ID': T_ID, 'T_CRE_RC': T_CRE_RC, 'T_STA_RC': T_STA_RC,
             'T_WAKES': T_WAKES, 'T_SIGNALS': T_SIGNALS, 'T_ENTRY': T_ENTRY,
             'T_RECV_RC': T_RECV_RC, 'T_MBX_RC': T_MBX_RC, 'T_DESC': T_DESC,
-            'T_PKT': T_PKT, 'T_DOOR': T_DOOR, 'T_MBX': T_MBX,
+            'T_PKT': T_PKT, 'T_MBX': T_MBX,
             'T_DRAINED': T_DRAINED, 'T_MAXSPAN': T_MAXSPAN,
             'T_FOBJ': T_FOBJ, 'T_FOPEN': T_FOPEN, 'T_WANT': T_WANT, 'T_STAGE': T_STAGE,
             'T_OPENFN': T_OPENFN, 'T_CLOSEFN': T_CLOSEFN,
@@ -165,9 +165,9 @@ def place():
     CODE_AT = pool + CODE_POOL_OFF
     end = CODE_AT + len(code)
     # The regions this deployer owns, against the ring the stream deployer set.
-    import imu_stream_deploy as D
-    ring_lo = pool + D.RING_POOL_OFF
-    ring_hi = ring_lo + D.RING_BYTES
+    # The stream's ring is not in the pool any more -- take_open asks the
+    # allocator for it -- so there is nothing here to collide with it.
+    ring_lo = ring_hi = 0
     jlo = pool + JPOOL_POOL_OFF
     jhi = jlo + JOB_COUNT * (JOB_SIZE + 8) + 0x14
     flo = pool + FOBJ_POOL_OFF
@@ -315,7 +315,7 @@ def signal(times, at=None):
         _verify_placed(_code, at)
     before = P.mem_get(T_WAKES)[0]
     for _ in range(times):
-        echo_into(at['writer_signal'], 'writer_signal')
+        raise SystemExit('writer_signal is gone: the job IS the wake-up')
     time.sleep(0.5)
     after = P.mem_get(T_WAKES)[0]
     print(f'signalled {times}x   wakes {before} -> {after}')
@@ -328,7 +328,7 @@ def signal(times, at=None):
 
 
 def state():
-    mbx, door = P.mem_get(T_MBX)[0], P.mem_get(T_DOOR)[0]
+    mbx = P.mem_get(T_MBX)[0]
     drained, maxspan = P.mem_get(T_DRAINED)[0], P.mem_get(T_MAXSPAN)[0]
     fopen, wr, by = (P.mem_get(T_FOPEN)[0], P.mem_get(T_WRITES)[0],
                      P.mem_get(T_BYTES)[0])
@@ -338,7 +338,7 @@ def state():
     st = P.mem_get(T_STAGE)[0]
     where = {0x21: 'entered close', 0x22: 'about to drain', 0x23: 'drained, about to close',
              0x24: 'closed, about to destroy', 0x25: 'destroyed, all the way'}.get(st)
-    print(f'  T_MBX      {mbx}   T_DOOR {door}   wanted {want}   file open {fopen}')
+    print(f'  T_MBX      {mbx}   wanted {want}   file open {fopen}')
     if st:
         print(f'  close got to 0x{st:X}' + (f' -- {where}' if where else ''))
     jseq, sent = P.mem_get(T_JSEQ)[0], P.mem_get(T_STOPSENT)[0]

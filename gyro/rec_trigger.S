@@ -82,101 +82,56 @@ rec_trigger:
     movw    r1, #:lower16:LATCH_WORD
     movt    r1, #:upper16:LATCH_WORD
     str     r0, [r1]
-#ifdef REC_STOP
-    /* And how many exposures the take actually had.  Vd free-runs afterwards,
-     * so a count read later would include liveview frames. */
-    movw    r0, #:lower16:STREAM_VCOUNT
-    movt    r0, #:upper16:STREAM_VCOUNT
-    ldr     r0, [r0]
-    movw    r1, #:lower16:STREAM_V1_N
-    movt    r1, #:upper16:STREAM_V1_N
-    str     r0, [r1]
-#endif
 2:
+
 #ifdef REC_STOP
-    /* Freeze the interval tracking -- on EVERY stop, not just the first.
+    /* Drain BEFORE the gate closes.
      *
-     * This used to sit above, inside the first-one-only block, and that is a
-     * different kind of thing from the latches up there: those record what the
-     * first take measured and must not be redefined by a second, but this one
-     * is a GATE.  Left open after the second take, Vd goes on firing at 59.94
-     * in liveview and its 42-sample gaps pour into the census: one run came
-     * back with 40975 "doubled interrupts, longest 42" -- which is not a
-     * doubled interrupt at all, it is liveview, wearing the right shape to be
-     * believed.
-     *
-     * The start side re-arms on every take.  The stop side has to match it. */
-    movw    r0, #:lower16:STREAM_VPREV
-    movt    r0, #:upper16:STREAM_VPREV
-    mvn     r1, #0
-    str     r1, [r0]
-#endif
-#ifdef REC_STOP
-    /* The take is over.  Ask for the file to be closed; the writer does it on
-     * its next wake, after draining what is still in the ring.  Nothing heavy
-     * happens here: this is a firmware callback, and opening or closing a file
-     * from one has never been shown safe. */
+     * The producers stop the moment T_WANT goes to zero, so whatever the
+     * coprocessor wrote since the last accelerometer sample would simply be
+     * left in its ring -- up to one accelerometer interval off the end of every
+     * take.  Audio does not lose that: its capture is torn down, and the
+     * teardown hands over what is in flight.  This is the same idea, and it is
+     * also what makes the stop job honestly last: it goes into the queue behind
+     * ALL of the take's data, not just the part that had already been moved. */
+    movw    ip, #:lower16:STREAM_DRAINFN
+    movt    ip, #:upper16:STREAM_DRAINFN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    blxne   ip
+
     movw    r0, #:lower16:T_WANT
     movt    r0, #:upper16:T_WANT
     mov     r1, #0
     str     r1, [r0]
 #else
-    /* A take begins here.  Two plain stores: where it starts, and that it
-     * wants a file.
-     *
-     * The tail is latched HERE rather than when the file opens, because the
-     * open happens up to a doorbell later -- moving the tail then would throw
-     * away everything recorded in between.  The ring holds 6.6 seconds; a
-     * 400 ms wait for the writer to notice costs nothing. */
+    /* Where this take starts, in records.  Every job's file offset is measured
+     * from here, so it is latched before anything can be posted. */
     movw    r0, #:lower16:STREAM_INDEX
     movt    r0, #:upper16:STREAM_INDEX
     ldr     r0, [r0]
-    movw    r1, #:lower16:STREAM_POSTED
-    movt    r1, #:upper16:STREAM_POSTED
-    str     r0, [r1]                    @ POSTED, not TAIL: the producer reads
-                                        @ this one, and between takes it stops
-                                        @ moving while the head runs on.  Setting
-                                        @ the wrong word left a span of a hundred
-                                        @ and thirty thousand records, all of it
-                                        @ counted lost.
     movw    r1, #:lower16:STREAM_TAIL
     movt    r1, #:upper16:STREAM_TAIL
-    str     r0, [r1]                    @ kept in step, for reading back
-
-    /* Re-arm the stop.  It is a one-shot per take, and nothing else clears it:
-     * left set from the previous take, the second take can never post its stop
-     * job and its file is never closed. */
-    movw    r0, #:lower16:T_STOPSENT
-    movt    r0, #:upper16:T_STOPSENT
-    mov     r1, #0
-    str     r1, [r0]
+    str     r0, [r1]
 
     movw    r0, #:lower16:T_WANT
     movt    r0, #:upper16:T_WANT
     mov     r1, #1
     str     r1, [r0]
 
-#endif
-#ifndef REC_STOP
-    /* Where the ring is, to 400 us.  The batch counter latched beside it can
-     * only say "within one 20 ms callback", which is twelve times coarser than
-     * the thing we are trying to measure. */
+    /* Where the coprocessor's ring is, to 400 us. */
     gyro_head r0, r1
     movw    r1, #:lower16:STREAM_R0_HEAD
     movt    r1, #:upper16:STREAM_R0_HEAD
     str     r0, [r1]
 
-    /* Anchor the gyro cursor to THIS instant.
+    /* Anchor the gyro cursor to THIS instant.  The producers do not drain
+     * while the camera is idle, so the cursor is stale by however long it has
+     * been sitting -- and a stale cursor is a WRAPPED one, indistinguishable
+     * from an ordinary wrap.  Latching the write pointer here is what makes the
+     * take's first record the sample that existed when the recorder committed.
      *
-     * The producers no longer drain while the camera is idle, so GHEAD is stale
-     * by however long it has been sitting -- and a stale cursor is not just a
-     * big number, it is a wrapped one, indistinguishable from a normal wrap.
-     * Latching the coprocessor's write pointer here is what makes the take's
-     * first record the sample that existed when the recorder committed, to
-     * 400 us, instead of wherever the previous batch boundary happened to fall.
-     *
-     * GHEAD holds the ABSOLUTE pointer, which is what the producer compares
-     * against, not the offset gyro_head returns. */
+     * GHEAD holds the ABSOLUTE pointer, not the offset gyro_head returns. */
     movw    r0, #:lower16:GYRO_DESC_PTR
     movt    r0, #:upper16:GYRO_DESC_PTR
     ldr     r0, [r0]
@@ -190,52 +145,10 @@ rec_trigger:
     movt    r1, #:upper16:STREAM_GHEAD
     str     r0, [r1]
 3:
-
-    /* Re-arm the Vd latch.  Vd free-runs in liveview, so "the first Vd" only
-     * means the take's first frame if the take resets the count first.  This
-     * runs before the exposure it is arming for: the recorder commits here,
-     * and no frame of this take has been read out yet. */
-    movw    r0, #:lower16:STREAM_VCOUNT
-    movt    r0, #:upper16:STREAM_VCOUNT
-    mov     r1, #0
-    str     r1, [r0]
-    movw    r0, #:lower16:STREAM_V0_GC
-    movt    r0, #:upper16:STREAM_V0_GC
-    str     r1, [r0]
 #endif
-    /* No record goes into the stream, for the same reason the Vd hook stopped
-     * writing one: a marker appended from outside the gyro producer lands where
-     * the last drain left the write index, not where it belongs.
-     *
-     * Here it also had nothing to say.  The take's file is opened for the take,
-     * and START latches POSTED at this instant, so the first record IN THE FILE
-     * is already the take's beginning and the last is its end -- the two markers
-     * restated a boundary the file itself carries.  Everything these hooks do
-     * that matters is the stores above: POSTED and TAIL, T_WANT, T_STOPSENT,
-     * the gyro-count latches, R0_HEAD from the coprocessor's own head, and the
-     * Vd re-arm.  None of it is a position in the stream.
-     *
-     * Removing the append also removes the last exclusive from this path, and
-     * with it a window: a slot claimed and not yet filled is a slot the writer
-     * could post as whatever was in the ring before. */
 
-    /* Build the take, or tear it down.
-     *
-     * This is the line the rewrite turns on.  XC_AudioRecorder::Start builds
-     * the file, the thread and the mailbox together, in the recorder's own task,
-     * and XC_AudioRecorder::Stop posts the stop, waits for the writer to finish
-     * and closes the file in that same task.  Both hooks run in exactly that
-     * task, so both calls belong here.
-     *
-     * The address is a word rather than a branch because these two live in the
-     * pool and this lives in the cave: only the deployer knows where they
-     * landed.  Zero means the writer was never placed, and then a take runs
-     * with the producers alone -- which is the layer the ladder already
-     * cleared.
-     *
-     * take_close BLOCKS until the writer has drained.  Audio's join does the
-     * same thing in the same place; it is what buys a file closed by a task the
-     * camera can preempt. */
+    /* Build the take, or tear it down.  XC_AudioRecorder::Start and ::Stop do
+     * this, in the recorder's own task; both hooks run in that task. */
 #ifdef REC_STOP
     movw    ip, #:lower16:T_CLOSEFN
     movt    ip, #:upper16:T_CLOSEFN

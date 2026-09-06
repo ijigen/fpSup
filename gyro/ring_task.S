@@ -352,6 +352,36 @@ take_open:
     cmp     r0, #0
     bne     9f                          @ a take is already built
 
+    /* The buffers, from the allocator, at capture start -- DspAudioDevice::v5
+     * asks for its two 16 KiB blocks here and gives them back at stop.  Ours is
+     * one block that the space provider then tiles into sixteen.
+     *
+     * First, so that a refusal costs nothing: no file has been opened and no
+     * thread exists yet. */
+    mov     r0, #MEM_CLASS
+    movw    ip, #:lower16:MEM_HEAP
+    movt    ip, #:upper16:MEM_HEAP
+    blx     ip
+    cmp     r0, #0
+    beq     9f
+    movw    r1, #:lower16:RING_BYTES
+    movt    r1, #:upper16:RING_BYTES
+    mov     r2, #0
+    mov     r3, #0
+    mov     ip, #0
+    push    {ip, lr}                    @ the fifth argument, and the alignment
+    movw    ip, #:lower16:MEM_GET
+    movt    ip, #:upper16:MEM_GET
+    blx     ip
+    add     sp, sp, #8
+    movw    r1, #:lower16:STREAM_RING
+    movt    r1, #:upper16:STREAM_RING
+    str     r0, [r1]
+    cmp     r0, #0
+    mov     r0, #0x06
+    str     r0, [r4]
+    beq     9f                          @ no buffers: build nothing else
+
     bl      writer_openfile
     movw    r0, #:lower16:T_FOPEN
     movt    r0, #:upper16:T_FOPEN
@@ -497,7 +527,26 @@ take_close:
     mov     r0, #0
     str     r0, [r5]
 
-5:  mov     r0, #0x16
+5:  /* Give the buffers back, the way the device's capture stop does. */
+    movw    r5, #:lower16:STREAM_RING
+    movt    r5, #:upper16:STREAM_RING
+    ldr     r6, [r5]
+    cmp     r6, #0
+    beq     6f
+    mov     r0, #MEM_CLASS
+    movw    ip, #:lower16:MEM_HEAP
+    movt    ip, #:upper16:MEM_HEAP
+    blx     ip
+    cmp     r0, #0
+    beq     6f
+    mov     r1, r6
+    movw    ip, #:lower16:MEM_FREE
+    movt    ip, #:upper16:MEM_FREE
+    blx     ip
+    mov     r0, #0
+    str     r0, [r5]
+
+6:  mov     r0, #0x16
     str     r0, [r4]
     movw    r0, #:lower16:W_CLOSES
     movt    r0, #:upper16:W_CLOSES

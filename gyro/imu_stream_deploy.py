@@ -46,21 +46,16 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 
 # name -> (code address, source, defines, hook site, firmware's word, thumb?)
 PRODUCERS = {
-    # 0xC072E100 is where this hook has always been, and the default build
-    # must stay there: the whole cave is inside the release logger's 3860
-    # bytes, so moving a hook moves which of the logger's bytes we overwrite.
-    # Putting it at 0xC072E900 gave a four second freeze with a LENS ERROR,
-    # which is what overwriting something live looks like.  Only the
-    # ACC_MEASURE build, which is 260 bytes and cannot fit under T_BYTES at
-    # 0xC072E180, moves -- and when it does, it moves on its own.
+    # The accelerometer driver publishing a sample is the only real hardware
+    # event this data has, so it is the only hook left that produces anything:
+    # it drains the coprocessor's ring and then appends its own record, which is
+    # what puts that record in the right place.
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
-    # Not a hook: the space provider the producers call.  It is the only thing
-    # in the cave that knows the ring is a row of buffers.
-    'space': (0xC072E900, 'stream_space.S',      (),            None,       None,       0),
-    'gyro':  (0xC072E300, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
+    # Not hooks.  Called.
+    'drain': (0xC072E300, 'gyro_drain.S',       (),            None,       None,       0),
+    'space': (0xC072E900, 'stream_space.S',     (),            None,       None,       0),
     'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
     'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
-    'vd':    (0xC072E710, 'vd_hook.S',          (),            0xC0125480, 0x341DF2CC, 1),
 }
 
 
@@ -78,10 +73,10 @@ def _symbols(src):
             '<IIIBBH', elf, off)
         end = elf.index(b'\0', strtab[4] + name_off)
         name = elf[strtab[4] + name_off:end].decode()
-        if name in ('stream_claim', 'stream_commit'):
+        if name in ('stream_claim', 'stream_commit', 'gyro_drain'):
             out[name] = value
-    if len(out) != 2:
-        raise SystemExit(f'stream_space.S is missing {out}')
+    if not out:
+        raise SystemExit(f'{src.name} exports nothing we can call')
     return out
 
 
@@ -112,18 +107,7 @@ def branch_word(site, target, thumb):
 # Must agree with imu_stream.inc.S; _check_header() proves they do.
 STATE_AT      = 0xC072E1B0
 STATE_WORDS   = 20
-STREAM_VSUM   = 0xC072E1B0
-STREAM_VNF    = 0xC072E1B4
-STREAM_VSHORT = 0xC072E1B8
-STREAM_VOMAX  = 0xC072E1BC
-STREAM_V0_GC  = 0xC072E1C0
-STREAM_VCOUNT = 0xC072E1C4
-STREAM_V1_N   = 0xC072E1C8
-STREAM_VPREV  = 0xC072E1CC
-STREAM_VMIN   = 0xC072E1D8
-STREAM_VMAX   = 0xC072E1DC
 STREAM_R0_HEAD = 0xC072E1E0
-STREAM_V0_HEAD = 0xC072E1E4
 GYRO_RING_SPAN = 0x12C0
 STREAM_R1_GC  = 0xC072E1D0
 STREAM_R1_N   = 0xC072E1D4
@@ -139,6 +123,7 @@ STREAM_SIGFN  = 0xC072E1A8
 STREAM_DONE     = 0xC072EA6C
 STREAM_CLAIMFN  = 0xC072EA70
 STREAM_COMMITFN = 0xC072EA74
+STREAM_DRAINFN  = 0xC072EA78
 STREAM_BASE   = 0xC072E200
 POOL_PTR      = 0xC3757A7C
 RING_POOL_OFF = 0x20000
@@ -150,7 +135,8 @@ STREAM_SPAN   = STREAM_COUNT * 8
 # GHEAD unarmed, everything else zero.
 STATE_INIT = struct.pack('<20I', *([0] * 16 + [0xFFFFFFFF, 0, 0, 0]))
 
-ACC_CODE_AT   = 0xC072E900   # only the measuring build needs the room
+ACC_CODE_AT   = 0xC072EA80   # only the measuring build needs the room;
+                             # 0xC072E900 is the space provider now
 ACC_STATE     = 0xC072E8C0
 ACC_WORDS     = 5
 ACC_DANGER    = 500
@@ -164,14 +150,8 @@ def _check_header():
     """These constants are duplicated from the assembly; prove they match."""
     src = (HERE / 'imu_stream.inc.S').read_text()
     want = {
-        'STREAM_VSUM': STREAM_VSUM, 'STREAM_VNF': STREAM_VNF,
-        'STREAM_VSHORT': STREAM_VSHORT, 'STREAM_VOMAX': STREAM_VOMAX, 'STREAM_V0_GC': STREAM_V0_GC, 'STREAM_VCOUNT': STREAM_VCOUNT,
-        'STREAM_V1_N': STREAM_V1_N, 'STREAM_VPREV': STREAM_VPREV,
-        'STREAM_VMIN': STREAM_VMIN, 'STREAM_VMAX': STREAM_VMAX,
-        'STREAM_R0_HEAD': STREAM_R0_HEAD, 'STREAM_V0_HEAD': STREAM_V0_HEAD,
         'GYRO_RING_SPAN': GYRO_RING_SPAN,
         'STREAM_R1_GC': STREAM_R1_GC, 'STREAM_R1_N': STREAM_R1_N,
-        'TAG_VD': S.TAG_VD,
         'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
         'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD,
         'STREAM_INDEX': STREAM_INDEX, 'STREAM_GCOUNT': STREAM_GCOUNT,
@@ -182,7 +162,6 @@ def _check_header():
         'RING_POOL_OFF': RING_POOL_OFF,
         'STREAM_BASE': STREAM_BASE, 'STREAM_COUNT': STREAM_COUNT,
         'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
-        'TAG_START': S.TAG_START, 'TAG_STOP': S.TAG_STOP,
     }
     for name, value in want.items():
         m = re.search(rf'^\.equ\s+{name},\s*([^\s/@]+)', src, re.M)
@@ -321,14 +300,14 @@ def arm(only=None, measure_accel=False):
     # from the firmware's allocator freezes the camera when held across a
     # recording start; the pool does not, and pool+0x20000 is inside the 896 KB
     # that survived 224 of 224 markers.
-    ring = resolve_ring()
-    if ring:
-        _setw(STREAM_RING, ring, 'the ring base')
-        print(f'ring: 0x{ring:08X}, {RING_RECORDS} records = '
-              f'{RING_RECORDS * 8 // 1024} KiB = {RING_RECORDS / 2500:.1f} s')
-    else:
-        _setw(STREAM_RING, 0, 'the ring base')
-        print(f'staying on the {STREAM_COUNT}-record bench ring in the cave')
+    # The ring is the allocator's now, asked for at record start and given back
+    # at stop, the way DspAudioDevice::v5 asks for its two blocks.  Nothing is
+    # resolved here any more: take_open fills this word in and take_close clears
+    # it, so between takes there is no buffer standing around at all.
+    _setw(STREAM_RING, 0, 'the ring base')
+    print(f'ring: from the allocator at record start, '
+          f'{RING_RECORDS} records = {RING_RECORDS * 8 // 1024} KiB '
+          f'= {RING_RECORDS / 2500:.1f} s')
     _setw(STREAM_TAIL, 0, 'the ring tail')
     _setw(STREAM_DONE, 0, 'the committed count')
 
@@ -337,6 +316,8 @@ def arm(only=None, measure_accel=False):
     base = PRODUCERS['space'][0]
     _setw(STREAM_CLAIMFN, base + syms['stream_claim'], 'stream_claim')
     _setw(STREAM_COMMITFN, base + syms['stream_commit'], 'stream_commit')
+    syms = _symbols(HERE / 'gyro_drain.S')
+    _setw(STREAM_DRAINFN, PRODUCERS['drain'][0] + syms['gyro_drain'], 'gyro_drain')
 
     for name, (at, _src, _d, site, _orig, thumb) in PRODUCERS.items():
         if site is None:
@@ -390,6 +371,8 @@ def reset():
     base = PRODUCERS['space'][0]
     _setw(STREAM_CLAIMFN, base + syms['stream_claim'], 'stream_claim')
     _setw(STREAM_COMMITFN, base + syms['stream_commit'], 'stream_commit')
+    syms = _symbols(HERE / 'gyro_drain.S')
+    _setw(STREAM_DRAINFN, PRODUCERS['drain'][0] + syms['gyro_drain'], 'gyro_drain')
     # Not the stream.  It is a ring that overwrites itself in a hundred
     # milliseconds, so zeroing two kilobytes buys nothing -- and `mem set` drops
     # enough of five hundred writes that the retry pass fails outright.
@@ -401,135 +384,39 @@ def _ms(samples):
 
 
 def take():
-    """What one take measured.  Twelve words, no stream dump."""
+    """What one take measured.
+
+    The frame census went with the Vd hook: it could not put a record in the
+    stream without lying about where it belonged, and everything else it
+    measured -- the frame period, the rate, the doubled-interrupt count -- was
+    finished work.  What is left is what the take itself says.
+    """
     w = P.mem_get(STATE_AT, STATE_WORDS)
     if any(x is None for x in w):
         raise SystemExit('the state words did not read back whole')
-    vsum, vnf, vshort, vomax = w[0], w[1], w[2], w[3]
-    v0_gc, vcount, v1_n = w[4], w[5], w[6]
-    vmin, vmax = w[10], w[11]
     r1_gc, r1_n = w[8], w[9]
-    r0_head, v0_head, r0_gc, r0_n = w[12], w[13], w[14], w[15]
-    _ghead, padbad, index, gcount = w[16], w[17], w[18], w[19]
+    r0_head, r0_gc, r0_n = w[12], w[14], w[15]
+    padbad, index, gcount = w[17], w[18], w[19]
+    done = P.mem_get(STREAM_DONE)[0]
 
     ring, tail = P.mem_get(STREAM_RING)[0], P.mem_get(STREAM_TAIL)[0]
     where = f'pool 0x{ring:08X}' if ring else 'the bench ring'
-    print(f'records {index}   gyro {gcount}   bad pads {padbad}')
-    print(f'ring {where}   tail {tail}   waiting {index - tail} records')
-    print(f'starts {r0_n}   stops {r1_n}   Vd now {vcount}, in the take {v1_n}')
+    print(f'records {index} claimed, {done} written   gyro {gcount}   '
+          f'bad pads {padbad}')
+    print(f'ring {where}   the take started at record {tail}')
+    print(f'starts {r0_n}   stops {r1_n}')
     print()
 
     if not r0_n:
         print('recording never began -- 0xC01FBA28 (movRec) did not fire.')
-    if not vcount:
-        print('no Vd fired -- 0xC0125480 is not the frame interrupt, or the')
-        print('  Thumb BLX did not take.  Vd free-runs in liveview, so a live')
-        print('  hook shows a count even with the camera idle.')
-
+        return
+    if index != done:
+        print(f'{index - done} records are claimed but not committed -- a '
+              f'producer was interrupted between asking and writing.')
     if r0_n and r1_n:
         d = r1_gc - r0_gc
         print(f'take: gyro {r0_gc} -> {r1_gc} = {d} samples = {_ms(d)/1000:.2f} s')
-        print()
-
-    if r0_n and vcount:
-        # The ring head wraps every 240 ms; the gap we are measuring is a small
-        # fraction of that, so the modulo is the whole correction needed.
-        d = ((v0_head - r0_head) % GYRO_RING_SPAN) // 8
-        print(f'ring head at record start   {r0_head} (+{r0_head//8} samples)')
-        print(f'ring head at first exposure {v0_head} (+{v0_head//8} samples)')
-        print(f'  -> the first frame is read out {d} samples = {_ms(d):.1f} ms '
-              f'after the recorder commits')
-        print(f'     (400 us resolution: this comes from the ring the coprocessor')
-        print(f'      writes, not from our 20 ms batch counter)')
-        print()
-        if vnf:
-            mean = vsum / vnf
-            print(f'gaps between exposures: {v1_n - 1} total, '
-                  f'{vnf} long enough to be a frame, {vshort} too short')
-            print(f'  min {vmin}  max {vmax}')
-            print(f'  mean {mean:.4f} gyro samples per frame  '
-                  f'({vsum} samples over {vnf} gaps)')
-            if vshort:
-                print(f'  the {vshort} short ones are doubled interrupts, longest {vomax}')
-                if vomax:
-                    print(f'    the longest was {vomax}, so a doubled interrupt does '
-                          f'not always land')
-                    print('    exactly on top of the previous one.  That costs nothing:'
-                          ' a gap split')
-                    print('    into two short halves drops out of both the sum and the'
-                          ' count, so')
-                    print('    the mean of what remains is untouched.  The threshold'
-                          ' could only')
-                    print('    bias anything by letting a HALF gap in as if it were a'
-                          ' whole one --')
-                    print('    which the minimum below rules out.')
-            # If every long gap was one of two adjacent integers, the counts of
-            # each follow from the sum, and nothing is being assumed.
-            if vmax == vmin + 1:
-                n_hi = vsum - vmin * vnf
-                n_lo = vnf - n_hi
-                if 0 <= n_hi <= vnf:
-                    print(f'  every long gap was {vmin} or {vmax}: '
-                          f'{n_lo} x {vmin} + {n_hi} x {vmax}')
-                    print(f'    nothing between {vmin} and the threshold got in, so no'
-                          f' half gap was')
-                    print('    counted as a whole one.  The mean is exact, not a fit.')
-            elif vmax == vmin:
-                print(f'  every long gap was exactly {vmin}')
-            else:
-                print(f'  long gaps ran from {vmin} to {vmax} -- more than two values,'
-                      f' so the cadence was not steady')
-            print()
-            print('  if the clip is        the gyro rate in the sensor\'s own clock')
-            for label, fps in (('29.97 fps', 30000 / 1001), ('30.00 fps', 30.0),
-                               ('25 fps', 25.0), ('24 fps', 24.0)):
-                hz = mean * fps
-                print(f'  {label:12s}          {hz:9.3f} Hz   ({hz / 2500 - 1:+.4%})')
-            print()
-            print('  or, taking the gyro as exactly 2500 Hz, the frame rate is')
-            print(f'    {2500 / mean:.5f} fps   (29.97 is {30000/1001:.5f})')
-        print()
-
-
-def accel_interval():
-    """Can the accelerometer hook carry the drain on its own?
-
-    One number decides it: the largest gap, in gyro samples, between two
-    accelerometer visits.  The firmware ring holds 600, and a lap is silent --
-    head-minus-cursor reads the same as a wrap -- so the answer has to come with
-    margin, not just "it did not happen this time".
-    """
-    w = P.mem_get(ACC_STATE, ACC_WORDS)
-    if any(x is None for x in w):
-        raise SystemExit('the accel counters did not read back whole')
-    ghead, mx, n, total, over = w
-    if not n:
-        print('the accelerometer hook has not fired twice yet.')
-        print('  ghead 0x%08X -- if that is 0xFFFFFFFF the hook never ran at '
-              'all.' % ghead)
-        return
-    mean = total / n
-    print(f'accelerometer visits {n}   ring head now +{ghead} bytes')
-    print(f'gap between visits, in gyro samples:')
-    print(f'  mean {mean:.2f} = {_ms(mean):.2f} ms  -> {1000.0 / _ms(mean):.2f} Hz')
-    print(f'  max  {mx} = {_ms(mx):.1f} ms')
-    print(f'  gaps at or past {ACC_DANGER} records ({_ms(ACC_DANGER):.0f} ms): {over}')
-    print()
-    print(f'the firmware ring holds {GYRO_RING_SPAN // 8} records = '
-          f'{_ms(GYRO_RING_SPAN // 8):.0f} ms')
-    if mx:
-        print(f'worst gap used {100.0 * mx / (GYRO_RING_SPAN // 8):.1f}% of it, '
-              f'margin {GYRO_RING_SPAN // 8 - mx} records')
-    print()
-    if over or mx >= GYRO_RING_SPAN // 8:
-        print('NO.  Dropping the 20 ms hook would lose samples, silently.')
-    elif mx > (GYRO_RING_SPAN // 8) // 2:
-        print('NOT YET.  The worst gap is past half the ring; that is not margin,')
-        print('  it is luck.  Keep the 20 ms hook.')
-    else:
-        print('So far so good -- but this is a maximum, and a maximum only means')
-        print('  something over a long run that included whatever the camera does')
-        print('  worst (record start, card flush, menu, playback).  Run it long.')
+        print(f'ring head at record start {r0_head} (+{r0_head//8} samples)')
 
 
 def dump(count):

@@ -19,17 +19,19 @@ import imu_stream as S                                         # noqa: E402
 from armasm import assemble                                    # noqa: E402
 
 ACCEL = (HERE / 'accel_hook.S').read_text()
-GYRO = (HERE / 'gyro_stream_hook.S').read_text()
+DRAIN = (HERE / 'gyro_drain.S').read_text()
 TRIG = (HERE / 'rec_trigger.S').read_text()
-VD = (HERE / 'vd_hook.S').read_text()
 INC = (HERE / 'imu_stream.inc.S').read_text()
 SPACE = (HERE / 'stream_space.S').read_text()
 
 # Who may append to the stream, and who may not.  Only a hook that lays
 # samples down in the order the coprocessor made them can claim a position;
 # everything else measures into state words.
-WRITERS = (('accel', ACCEL), ('gyro', GYRO))
-MARKERS = (('vd', VD), ('trigger', TRIG))
+# Only the accelerometer hook appends now: it drains the coprocessor's ring
+# and then puts its own record behind what it just moved, which is the only
+# way that record's position can be its time.
+WRITERS = (('accel', ACCEL),)
+MARKERS = (('trigger', TRIG),)
 
 
 def equ(name, src=INC):
@@ -43,18 +45,18 @@ class Header(unittest.TestCase):
     def test_tags_are_what_the_reader_expects(self):
         self.assertEqual(int(equ('TAG_GYRO'), 0), S.TAG_GYRO)
         self.assertEqual(int(equ('TAG_ACCEL'), 0), S.TAG_ACCEL)
-        self.assertEqual(int(equ('TAG_START'), 0), S.TAG_START)
-        self.assertEqual(int(equ('TAG_STOP'), 0), S.TAG_STOP)
-        self.assertEqual(int(equ('TAG_VD'), 0), S.TAG_VD)
+        # TAG_START, TAG_STOP and TAG_VD are gone from the assembly: nothing
+        # appends them any more.  The decoder still knows them, for files
+        # written before the markers came out.
 
     def test_stream_is_a_power_of_two_of_eight_byte_records(self):
         n = int(equ('STREAM_COUNT'), 0)
         self.assertEqual(n & (n - 1), 0, 'the mask assumes a power of two')
 
     def test_both_producers_take_the_header_rather_than_a_copy(self):
-        for name, src in (('accel_hook.S', ACCEL), ('gyro_stream_hook.S', GYRO),
-                          ('rec_trigger.S', TRIG),
-                          ('vd_hook.S', VD)):
+        for name, src in (('accel_hook.S', ACCEL), ('gyro_drain.S', DRAIN),
+                          ('stream_space.S', SPACE),
+                          ('rec_trigger.S', TRIG),):
             self.assertIn('#include "imu_stream.inc.S"', src, name)
             # A literal stream address in a producer is a second source of truth.
             for bad in ('0xC072E1F8', '0xC072E200'):
@@ -119,37 +121,17 @@ class RecordShape(unittest.TestCase):
         self.assertNotIn('bhs', commit)
         self.assertNotIn('bls', commit)
 
-    def test_the_gate_goes_straight_to_the_exit(self):
-        """It used to have to fall through the hook's tail, because the stop job
-        was posted from down there.  take_close posts it now, so a stopped take
-        needs nothing from this hook at all."""
-        body = GYRO[GYRO.index('push'):]
-        gate = body.index('T_WANT')
-        self.assertIn('beq     9f', body[gate:gate + 200])
-
     def test_record_start_anchors_the_gyro_cursor(self):
         """With no idle drain the cursor is stale by however long the camera
         sat, and a stale cursor is a WRAPPED one -- indistinguishable from a
         normal wrap.  The start hook has to latch the head itself."""
-        # the start half is what #ifndef REC_STOP selects
-        start = TRIG.split('#ifndef REC_STOP')[1].split('#endif')[0]
-        self.assertIn('STREAM_GHEAD', start, 'the start hook does not anchor it')
-        self.assertLess(start.index('STREAM_R0_HEAD'), start.index('STREAM_GHEAD'))
-        self.assertNotIn('STREAM_GHEAD',
-                         TRIG.split('#ifdef REC_STOP')[1].split('#else')[0],
-                         'the stop hook must not move the cursor')
-
-    def test_every_stop_closes_the_exposure_census(self):
-        """VPREV is a gate, not a latch.  The take-scoped latches must not be
-        redefined by a second take, but leaving this one open after one lets
-        liveview Vd -- 59.94 Hz, 42-sample gaps -- pour into the census as
-        'doubled interrupts'.  The start side re-arms every take; so must this."""
-        body = TRIG[TRIG.index('rec_trigger:'):]
-        first_only = body.index('bne     2f')
-        rearm = body.index('\n2:')
-        self.assertGreater(body.index('STREAM_VPREV'), rearm,
-                           'the VPREV freeze is still inside the first-one-only block')
-        self.assertLess(first_only, rearm)
+        self.assertIn('STREAM_GHEAD', TRIG, 'the start hook does not anchor it')
+        self.assertLess(TRIG.index('STREAM_R0_HEAD'), TRIG.index('STREAM_GHEAD'))
+        # it is in an #else arm, so the stop build never assembles it
+        i = TRIG.index('STREAM_GHEAD')
+        opened = TRIG.rindex('#else', 0, i)
+        self.assertLess(TRIG.rindex('#ifdef REC_STOP', 0, i), opened)
+        self.assertLess(i, TRIG.index('#endif', opened))
 
     def test_the_job_leaves_the_kernels_word_alone(self):
         """tk_snd_mbx takes a message beginning with T_MSG -- the kernel's queue
@@ -172,16 +154,14 @@ class RecordShape(unittest.TestCase):
         position.  They may append again when the drain moves into the producers
         and the position becomes true by construction, not before."""
         for name, src in MARKERS:
-            body = src[src.index('push'):]
+            body = src[src.index('rec_trigger:'):]
             self.assertNotIn('ring_slot', body, name)
             self.assertNotIn('ldrex', body, f'{name} still claims a stream slot')
             # \b, because strhi and strlo are conditional word stores and the
             # Vd hook is full of them.
             self.assertIsNone(re.search(r'strh\s+r\d+,\s*\[', body),
                               f'{name} still writes a record')
-        self.assertIn('gyro_head', VD[VD.index('push'):], 'vd stopped measuring')
-        self.assertIn('gyro_head', TRIG[TRIG.index('push'):],
-                      'the record trigger stopped measuring')
+        self.assertIn('gyro_head', TRIG, 'the record trigger stopped measuring')
 
     def test_records_are_indexed_eight_bytes_apart(self):
         """The stride now lives in the ring_slot macro, so check it there -- and
@@ -204,6 +184,7 @@ class AudioShape(unittest.TestCase):
 
     def setUp(self):
         self.task = (HERE / 'ring_task.S').read_text()
+        self.inc = (HERE / 'ring_task.inc.S').read_text()
 
     def body(self, name):
         i = self.task.index(f'\n{name}:')
@@ -252,6 +233,20 @@ class AudioShape(unittest.TestCase):
         for bad in ('writer_openfile', 'writer_closefile', 'writer_reconcile'):
             self.assertNotIn(bad, b, f'writer_body still calls {bad}')
         self.assertNotIn('writer_reconcile', self.task, 'reconcile is still here')
+
+    def test_the_buffers_come_from_the_allocator(self):
+        """DspAudioDevice::v5 asks the class 6 heap for its two blocks at
+        capture start and gives them back at stop.  Ours does the same, from
+        class 0 -- not 6, which is audio's own, and not 10, which is RAW and is
+        what movRec could not allocate the day this project froze the camera."""
+        t = self.body('take_open')
+        self.assertIn('MEM_HEAP', t)
+        self.assertIn('MEM_GET', t)
+        self.assertLess(t.index('MEM_GET'), t.index('bl      writer_openfile'),
+                        'a refusal must cost nothing: ask before opening')
+        c = self.body('take_close')
+        self.assertIn('MEM_FREE', c, 'the buffers are never given back')
+        self.assertEqual(int(equ('MEM_CLASS', self.inc), 0), 0)
 
     def test_take_open_opens_before_it_starts_anything(self):
         """AudF_W's constructor opens the file, then attaches the body and wakes
@@ -338,19 +333,12 @@ class Assembly(unittest.TestCase):
     def test_pushes_are_even(self):
         """An odd push misaligns the stack and the firmware's LDRD takes a data
         abort -- which freezes the camera, not the hook."""
-        for path in ('accel_hook.S', 'gyro_stream_hook.S', 'rec_trigger.S', 'vd_hook.S'):
+        for path in ('accel_hook.S', 'gyro_drain.S', 'stream_space.S',
+                     'rec_trigger.S'):
             for w in self.words(path):
                 if (w & 0x0FFF0000) == 0x092D0000:              # push {reglist}
                     self.assertEqual(bin(w & 0xFFFF).count('1') % 2, 0,
                                      f'{path} pushes an odd number')
-
-    def test_gyro_runs_the_displaced_call_first(self):
-        """The firmware's own blx belongs where the firmware had it, before our
-        copy, not tail-branched after it."""
-        w = self.words('gyro_stream_hook.S')
-        self.assertEqual(w[0] & 0x0FFF0000, 0x092D0000, 'first word is not a push')
-        self.assertEqual(w[3], 0xE12FFF3C, 'the second thing done is not blx ip')
-        self.assertEqual(w[4], 0xE58D0000, 'its result is not saved over r0')
 
     def test_accel_ends_with_the_displaced_instruction(self):
         w = self.words('accel_hook.S')
@@ -368,16 +356,6 @@ class Assembly(unittest.TestCase):
         self.assertEqual(measured[:4], plain[:4], 'the push moved')
         self.assertEqual(measured[-(len(plain) - 4):], plain[4:],
                          'the flag changed the work, not just added to it')
-
-    def test_only_the_accel_hook_writes_its_own_cursor(self):
-        """ACC_GHEAD carries no exclusive, so it is only correct while exactly
-        one producer advances it.  The day the drain moves into this hook, that
-        stops being true of STREAM_GHEAD too -- this test is the tripwire."""
-        for path in ('gyro_stream_hook.S', 'rec_trigger.S', 'vd_hook.S'):
-            src = (HERE / path).read_text()
-            self.assertNotIn('ACC_', src,
-                             f'{path} touches the accel hook\'s private counters')
-        self.assertIn('ACC_O_GHEAD', ACCEL)
 
     def test_the_gap_measurement_cannot_report_a_negative(self):
         """The head is a byte offset that wraps at GYRO_RING_SPAN, so a visit
@@ -459,48 +437,6 @@ class Reader(unittest.TestCase):
     def test_every_hook_declares_the_site_it_is_deployed_to(self):
         import imu_stream_deploy as D
         D._check_header()                # raises if a source and the table drift
-
-    def test_the_thumb_branch_matches_the_firmware_layout(self):
-        """A Thumb BLX splits its immediate over two halfwords with J1/J2 derived
-        from the sign; getting it wrong branches into the middle of something
-        rather than faulting.  So the layout is fixed against a branch the
-        camera itself executes -- the bl at 0xC0125494, which the decompilation
-        names FUN_c0128e50 -- and the encoder is round-tripped through it."""
-        import struct as _s
-        import imu_stream_deploy as D
-        fw = Path('/Users/dido/Developer/SIGMAfp_re/out/MAIN_c0000000.bin')
-        if not fw.exists():
-            self.skipTest('no firmware image')
-        blob = fw.read_bytes()
-
-        def decode(site, hw1, hw2):
-            sgn = (hw1 >> 10) & 1
-            j1, x, j2 = (hw2 >> 13) & 1, (hw2 >> 12) & 1, (hw2 >> 11) & 1
-            i1, i2 = (~(j1 ^ sgn)) & 1, (~(j2 ^ sgn)) & 1
-            off = ((sgn << 24) | (i1 << 23) | (i2 << 22)
-                   | ((hw1 & 0x3FF) << 12) | ((hw2 & 0x7FF) << 1))
-            if sgn:
-                off -= 1 << 25
-            return ('bl' if x else 'blx'), (site + 4 if x else (site + 4) & ~3) + off
-
-        anchor = 0xC0125494
-        hw1, hw2 = _s.unpack_from('<HH', blob, anchor - 0xC0000000)
-        self.assertEqual(decode(anchor, hw1, hw2), ('bl', 0xC0128E50))
-
-        site, target = 0xC0125480, D.PRODUCERS['vd'][0]
-        word = D.branch_word(site, target, 1)
-        got = decode(site, word & 0xFFFF, word >> 16)
-        self.assertEqual(got, ('blx', target))
-
-    def test_the_vd_site_is_what_the_firmware_still_has(self):
-        import struct as _s
-        import imu_stream_deploy as D
-        fw = Path('/Users/dido/Developer/SIGMAfp_re/out/MAIN_c0000000.bin')
-        if not fw.exists():
-            self.skipTest('no firmware image')
-        site, orig = D.PRODUCERS['vd'][3], D.PRODUCERS['vd'][4]
-        have = _s.unpack_from('<I', fw.read_bytes(), site - 0xC0000000)[0]
-        self.assertEqual(have, orig, 'the Vd site is not the word we expect')
 
     def test_the_two_triggers_share_one_source(self):
         """Start and stop differ by four lines; two files would drift."""

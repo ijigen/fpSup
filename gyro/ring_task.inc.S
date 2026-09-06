@@ -169,6 +169,30 @@
  * non-preemptible card lock, so writing from here is writing exactly the way
  * audio does.  F_WRITE(object, source, length) -- the source is a pointer, and
  * ours points straight into the ring.  Nothing is copied. */
+/* The allocator, used the way DspAudioDevice::v5 uses it: ask at capture
+ * start, give it back at capture stop.
+ *
+ * FUN_c001cf78(class) returns the channel; the class list is the name table at
+ * 0xC0727CBC -- 0 USER, 1 OSD, 2 IMAGE, 3 LVIEW, 4 MOVIMAGE, 5 MOVLVIEW,
+ * 6 MOVAUDIO, 7 MOVWORK, 8 MOVSOFT, 9 YUV, 10 RAW, 11 JPEG, 12 FILEINF,
+ * 13 MOVPLAYSOFT, 14 RAW_SUB.
+ *
+ * Two of those names settle which one is ours.  Audio asks for class 6, and 6
+ * is MOVAUDIO.  And the freeze this project spent a week on was movRec's
+ * class 10 allocation failing -- 10 is RAW, the CinemaDNG frame buffer.  So the
+ * rule "do not take a channel the recorder needs" has a number now: not 10.
+ *
+ * USER is the generic one, and it is where AutoRun's `memmgr bufmem get` took
+ * our own megabyte from, so it is a channel we already know tolerates us.
+ *
+ * The fifth argument of the get is the CALLER, not a flag: the allocator
+ * records it, and `memmgr bufchk` prints it as the ld: column.  Passing zero
+ * makes it use the return address, which is what everyone else does. */
+.equ MEM_HEAP,       0xC001CF78     /* f(class) -> channel                    */
+.equ MEM_GET,        0xC001D038     /* f(channel, size, align, &got, caller)  */
+.equ MEM_FREE,       0xC001D2B8     /* f(channel, ptr)                        */
+.equ MEM_CLASS,      0              /* USER                                   */
+
 .equ F_MGR,          0xC0444658
 .equ F_VOL,          0xC0444698
 .equ F_CTOR,         0xC0365E90
