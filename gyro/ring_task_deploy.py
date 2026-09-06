@@ -251,8 +251,32 @@ def place_code():
     return at
 
 
+def _verify_placed(code, at):
+    """Refuse to jump into the pool unless our code is actually there.
+
+    place() assembles and prints a full map without writing a byte -- it reads
+    exactly like a successful placement, and running create() straight after a
+    reboot therefore branches the shell's echo handler into whatever the pool
+    held before.  That is a battery pull, and it cost one.  Two reads turn it
+    into a sentence.
+    """
+    want = struct.unpack_from('<4I', code, 0)
+    got = tuple(P.mem_get(CODE_AT, 4) or ())
+    entry_off = at['make_writer'] - CODE_AT
+    want2 = struct.unpack_from('<4I', code, entry_off)
+    got2 = tuple(P.mem_get(at['make_writer'], 4) or ())
+    if got == want and got2 == want2:
+        return
+    raise SystemExit(
+        'the pool does not hold this blob -- run --place first.\n'
+        f'  0x{CODE_AT:08X} reads ' + ' '.join(f'{w:08X}' for w in got) + '\n'
+        f'  expected           ' + ' '.join(f'{w:08X}' for w in want) + '\n'
+        '  place() only assembles and prints; place_code() is what writes.')
+
+
 def create():
     code, at = place()
+    _verify_placed(code, at)
     have = P.mem_get(T_ID)[0]
     if have and 0 < have < 0x1000:
         raise SystemExit(f'a task id {have} is already recorded; creating a second '
@@ -266,6 +290,7 @@ def create():
 def signal(times, at=None):
     if at is None:
         _code, at = place()
+        _verify_placed(_code, at)
     before = P.mem_get(T_WAKES)[0]
     for _ in range(times):
         echo_into(at['writer_signal'], 'writer_signal')
@@ -358,6 +383,7 @@ def main():
         # which is the \LENS.DAT trap the logger warns about and which then
         # makes every later open fail.
         _code, at = place()
+        _verify_placed(_code, at)
         echo_into(at['writer_closefile'], 'writer_closefile')
         print(f'file open: {P.mem_get(T_FOPEN)[0]}   stage '
               f'0x{(P.mem_get(T_STAGE)[0] or 0):X}')
@@ -368,6 +394,7 @@ def main():
         # which is the \LENS.DAT trap the logger warns about and which then
         # makes every later open fail.
         _code, at = place()
+        _verify_placed(_code, at)
         echo_into(at['writer_selftest'], 'writer_selftest')
         w = P.mem_get(T_WRC)[0]
         stage = {0x11: 'entered', 0x12: 'the open FAILED', 0x13: 'opened, about to write',

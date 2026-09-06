@@ -46,11 +46,14 @@ CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 
 # name -> (code address, source, defines, hook site, firmware's word, thumb?)
 PRODUCERS = {
-    # With ACC_MEASURE it is 260 bytes and no longer fits at 0xC072E100,
-    # where T_BYTES sits 128 bytes above it.  Up here there is room to
-    # 0xC072EC00 either way, so the address does not depend on the flag --
-    # one less thing that differs between two builds being compared.
-    'accel': (0xC072E900, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
+    # 0xC072E100 is where this hook has always been, and the default build
+    # must stay there: the whole cave is inside the release logger's 3860
+    # bytes, so moving a hook moves which of the logger's bytes we overwrite.
+    # Putting it at 0xC072E900 gave a four second freeze with a LENS ERROR,
+    # which is what overwriting something live looks like.  Only the
+    # ACC_MEASURE build, which is 260 bytes and cannot fit under T_BYTES at
+    # 0xC072E180, moves -- and when it does, it moves on its own.
+    'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D498, 0xE1D410F0, 0),
     'gyro':  (0xC072E300, 'gyro_stream_hook.S', (),            0xC00D0794, 0xFA046FD7, 0),
     'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC01FBA28, 0xE5940008, 0),
     'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC01FB880, 0xE1A00004, 0),
@@ -120,6 +123,7 @@ STREAM_SPAN   = STREAM_COUNT * 8
 # GHEAD unarmed, everything else zero.
 STATE_INIT = struct.pack('<20I', *([0] * 16 + [0xFFFFFFFF, 0, 0, 0]))
 
+ACC_CODE_AT   = 0xC072E900   # only the measuring build needs the room
 ACC_STATE     = 0xC072E8C0
 ACC_WORDS     = 5
 ACC_DANGER    = 500
@@ -181,6 +185,11 @@ def _check_header():
 
 def _place(measure_accel=False):
     """Assemble everything and check nothing lands on anything else."""
+    global PRODUCERS
+    if measure_accel:
+        a = PRODUCERS['accel']
+        PRODUCERS = dict(PRODUCERS, accel=(ACC_CODE_AT,) + a[1:])
+
     def defines(name, d):
         # Off by default, and deliberately so: it is the only difference
         # between this build and the one the layered bisection is walking,
