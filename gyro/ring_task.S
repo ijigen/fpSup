@@ -621,6 +621,12 @@ take_close:
     mov     r0, #0x11
     str     r0, [r4]
 
+    movw    r0, #:lower16:T_TEARDOWN
+    movt    r0, #:upper16:T_TEARDOWN
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     9f                          @ leave it all standing; --close later
+
     /* Each piece is undone only if it was built: the build is a ladder now and
      * a half-built take must still give everything back. */
     movw    r0, #:lower16:T_MBX

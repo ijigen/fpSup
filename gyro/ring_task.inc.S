@@ -232,6 +232,12 @@
  *   5  + attached and running        (the whole thing)
  */
 .equ T_BUILD,        0xC072EC54
+.equ T_TEARDOWN,     0xC072EC58     /* 0 = take_close does nothing and leaves
+                                     * the take standing for the shell to
+                                     * dismantle later.  Splits "open at
+                                     * record start" from "close at record
+                                     * stop", which are the two halves of
+                                     * the smallest step and froze together. */
 
 .equ T_JSEQ,         0xC072EC48     /* jobs posted, so a dump can see order   */
 .equ T_JOBSLOT,      0xC072EC4C     /* where MBX_RECV leaves the descriptor   */

@@ -122,6 +122,7 @@ STREAM_COMMITFN = 0xC072EC3C
 STREAM_DRAINFN  = 0xC072EC40
 T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 T_BUILD = 0xC072EC54
+T_TEARDOWN = 0xC072EC58
 BUF_N, BUF_BYTES = 8, 0x4000
 B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
 POOL_PTR      = 0xC3757A7C
@@ -205,7 +206,7 @@ def _place(measure_accel=False):
               # the writer's own words and the four call-throughs.  These
               # used to sit under the space provider, and W_VT sat on top of
               # T_POS: putting them in the map is what stops that happening.
-              ('writer words', 0xC072EC00, 0x58)]
+              ('writer words', 0xC072EC00, 0x5C)]
     for name, at, n in spans:
         if at < CAVE_LO or at + n > CAVE_HI:
             raise SystemExit(f'{name}: 0x{at:08X}..0x{at+n:08X} leaves the cave '
@@ -435,6 +436,7 @@ def stage(n):
              STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
              STREAM_DRAINFN: 'gyro_drain', STREAM_SIGFN: 'writer_post'}
     _setw(T_BUILD, 5, 'how far take_open builds')
+    _setw(T_TEARDOWN, 1, 'whether take_close tears down')
     print(f'stage {n}: {STAGES[n]}')
     for addr, v in want.items():
         v = real[addr] if v is None else v
@@ -556,6 +558,9 @@ def main():
     g.add_argument('--dump', action='store_true')
     g.add_argument('--stage', type=int, choices=range(6),
                    help='turn the flow on one step at a time')
+    g.add_argument('--teardown', type=int, choices=(0, 1),
+                   help='0: take_close leaves the take standing (dismantle with '
+                        'ring_task_deploy --close later); 1: normal')
     g.add_argument('--build', type=int, choices=range(6),
                    help='how much of take_open to run: 1 blocks, 2 +file, '
                         '3 +mailbox, 4 +thread, 5 +attached')
@@ -578,6 +583,9 @@ def main():
         dump(a.rows)
     elif a.stage is not None:
         stage(a.stage)
+    elif a.teardown is not None:
+        _setw(T_TEARDOWN, a.teardown, 'whether take_close tears down')
+        print('take_close will ' + ('tear down' if a.teardown else 'leave the take standing'))
     elif a.build is not None:
         _setw(T_BUILD, a.build, 'how far take_open builds')
         print(f'take_open will build {a.build} of 5 steps')
