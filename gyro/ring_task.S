@@ -628,10 +628,23 @@ take_close:
     mov     r0, #0x11
     str     r0, [r4]
 
+    /* How far to tear down.  The teardown is five steps and only one of them
+     * can hang for ever -- the join is TMO_FEVR, so a worker that never sets
+     * the completion flag stops cDevt_stop where it stands, and SRecFile is
+     * waiting on that task.  A full freeze takes USB with it, so W_STAGE cannot
+     * be read afterwards; the only way to tell the five apart is to run n of
+     * them.
+     *
+     *   1  post the stop job
+     *   2  + join
+     *   3  + close the file
+     *   4  + destroy the thread
+     *   5  + delete the mailbox      (the whole thing)
+     */
     movw    r0, #:lower16:T_TEARDOWN
     movt    r0, #:upper16:T_TEARDOWN
-    ldr     r0, [r0]
-    cmp     r0, #0
+    ldr     r6, [r0]
+    cmp     r6, #0
     beq     9f                          @ leave it all standing; --close later
 
     /* Each piece is undone only if it was built: the build is a ladder now and
@@ -657,6 +670,8 @@ take_close:
     mov     r0, #0x12
     str     r0, [r4]
     beq     9f                          @ never posted: nothing to wait for
+    cmp     r6, #2
+    blo     9f
 
     movw    r5, #:lower16:W_THREAD
     movt    r5, #:upper16:W_THREAD
@@ -669,11 +684,15 @@ take_close:
     blx     ip
 3:  mov     r0, #0x13
     str     r0, [r4]
+    cmp     r6, #3
+    blo     9f
 
 4:  bl      writer_closefile
     mov     r0, #0x14
     str     r0, [r4]
 
+    cmp     r6, #4
+    blo     9f
     ldr     r0, [r5]
     cmp     r0, #0
     beq     4f
@@ -687,6 +706,8 @@ take_close:
 4:  mov     r0, #0x15
     str     r0, [r4]
 
+    cmp     r6, #5
+    blo     9f
     movw    r5, #:lower16:T_MBX
     movt    r5, #:upper16:T_MBX
     ldr     r0, [r5]

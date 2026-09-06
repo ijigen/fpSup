@@ -436,7 +436,7 @@ def stage(n):
              STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
              STREAM_DRAINFN: 'gyro_drain', STREAM_SIGFN: 'writer_post'}
     _setw(T_BUILD, 5, 'how far take_open builds')
-    _setw(T_TEARDOWN, 1, 'whether take_close tears down')
+    _setw(T_TEARDOWN, 5, 'how far take_close tears down')
     print(f'stage {n}: {STAGES[n]}')
     for addr, v in want.items():
         v = real[addr] if v is None else v
@@ -558,9 +558,9 @@ def main():
     g.add_argument('--dump', action='store_true')
     g.add_argument('--stage', type=int, choices=range(6),
                    help='turn the flow on one step at a time')
-    g.add_argument('--teardown', type=int, choices=(0, 1),
-                   help='0: take_close leaves the take standing (dismantle with '
-                        'ring_task_deploy --close later); 1: normal')
+    g.add_argument('--teardown', type=int, choices=range(6),
+                   help='how much of take_close to run: 0 nothing, 1 stop job, '
+                        '2 +join, 3 +close, 4 +destroy thread, 5 +delete mailbox')
     g.add_argument('--build', type=int, choices=range(6),
                    help='how much of take_open to run: 1 blocks, 2 +file, '
                         '3 +mailbox, 4 +thread, 5 +attached')
@@ -584,8 +584,8 @@ def main():
     elif a.stage is not None:
         stage(a.stage)
     elif a.teardown is not None:
-        _setw(T_TEARDOWN, a.teardown, 'whether take_close tears down')
-        print('take_close will ' + ('tear down' if a.teardown else 'leave the take standing'))
+        _setw(T_TEARDOWN, a.teardown, 'how far take_close tears down')
+        print(f'take_close will run {a.teardown} of 5 steps')
     elif a.build is not None:
         _setw(T_BUILD, a.build, 'how far take_open builds')
         print(f'take_open will build {a.build} of 5 steps')
