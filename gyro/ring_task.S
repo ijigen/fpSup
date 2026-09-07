@@ -513,6 +513,24 @@ take_open:
     str     r0, [r4]
     beq     9f                          @ blocks_open has not run
 
+    /* Each take is its own file, so each take starts at the top of one.  The
+     * first sixty-four bytes are the header, and B_OFF is where the first block
+     * will say it belongs -- carrying the last take's B_OFF over is how two
+     * takes used to end up layered into one file.  The drop and hand counts go
+     * with it: they describe this take now, and this take is what the header
+     * reports. */
+    movw    r0, #:lower16:B_OFF
+    movt    r0, #:upper16:B_OFF
+    mov     r1, #HDR_BYTES
+    str     r1, [r0]
+    movw    r0, #:lower16:B_DROPS
+    movt    r0, #:upper16:B_DROPS
+    mov     r1, #0
+    str     r1, [r0]
+    movw    r0, #:lower16:B_HANDED
+    movt    r0, #:upper16:B_HANDED
+    str     r1, [r0]
+
     movw    r0, #:lower16:T_BUILD
     movt    r0, #:upper16:T_BUILD
     ldr     r7, [r0]
@@ -815,14 +833,17 @@ writer_openfile:
     movw    ip, #:lower16:F_VOL
     movt    ip, #:upper16:F_VOL
     blx     ip
-    mov     r1, r0
+    mov     r5, r0                      @ the volume: the ctor's, and the name's
+    bl      take_path
+    mov     r6, r0
+    mov     r1, r5
     mov     r0, r4
     movw    ip, #:lower16:F_CTOR
     movt    ip, #:upper16:F_CTOR
     blx     ip
 
     mov     r0, r4
-    adr     r1, writer_path
+    mov     r1, r6
     mov     r2, #F_MODE_AUD             @ 6, the mode AudF_W opens with
     movw    ip, #:lower16:F_OPEN
     movt    ip, #:upper16:F_OPEN
@@ -841,6 +862,9 @@ writer_openfile:
     movw    ip, #:lower16:F_STAMP
     movt    ip, #:upper16:F_STAMP
     blx     ip
+
+    mov     r0, r5                      @ still the volume
+    bl      take_header
 
     /* The tail is NOT touched here.  Whoever asked for the file to be opened
      * decides where the take starts: the record hook latches it at the instant
@@ -887,6 +911,20 @@ writer_closefile:
      * would write the whole ring a second time. */
     mov     r0, #0x23
     str     r0, [r6]                    @ about to close
+
+    /* What the header could not know at open.  The join is done and the mailbox
+     * and the thread are gone, so the file is ours again. */
+    adr     r0, writer_header
+    movw    r1, #:lower16:B_OFF
+    movt    r1, #:upper16:B_OFF
+    ldr     r1, [r1]
+    sub     r1, r1, #HDR_BYTES
+    str     r1, [r0, #H_PAYLOAD]
+    movw    r1, #:lower16:B_DROPS
+    movt    r1, #:upper16:B_DROPS
+    ldr     r1, [r1]
+    str     r1, [r0, #H_DROPPED]
+    bl      put_header
 
     /* The destructor and nothing else.  AudioFileWriter::v0 calls
      * XC_MediaFile::v0 and never F_CLOSE, because the destructor closes the
@@ -985,9 +1023,196 @@ writer_selftest:
  * a fixed name accumulates every session's writes on top of each other and the
  * file stops being one stream.  A take needs its own file -- which the real
  * logger does per clip anyway. */
+/* take_path -- the name of the take that is starting.  r0 = the volume F_VOL
+ * returned; returns r0 = the path.
+ *
+ * The camera decides what a clip is called, and there is exactly one place it
+ * decides it: RecordFilePathMgrCinema.  This is lifecycle.inc.S's arithmetic
+ * against the same two objects, because a gyro log named anything else is a
+ * log nobody can match to a clip.  The saved maximum at +0x2C only counts when
+ * AutoRstFlg is clear -- with it set the camera restarts numbering and the
+ * remembered high-water mark would name the file after a clip that is not the
+ * one being shot. */
+take_path:
+    push    {r4, r5, r6, lr}
+    cmp     r0, #5
+    beq     1f
+    movw    r4, #:lower16:PATH_MGR_SD
+    movt    r4, #:upper16:PATH_MGR_SD
+    b       2f
+1:  movw    r4, #:lower16:PATH_MGR_SSD
+    movt    r4, #:upper16:PATH_MGR_SSD
+
+2:  ldr     r5, [r4, #0x10]             @ the take the manager is on
+    movw    r0, #:lower16:SETTINGS_PTR
+    movt    r0, #:upper16:SETTINGS_PTR
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     3f
+    ldrb    r0, [r0, #O_AUTORSTFLG]
+    cmp     r0, #0
+    bne     4f                          @ numbering restarts: ignore the maximum
+3:  ldr     r0, [r4, #0x2C]
+    cmp     r0, r5
+    movhi   r5, r0
+4:  add     r5, r5, #1                  @ the one about to be recorded
+
+    adr     r6, writer_path
+    movw    r0, #0x475C
+    movt    r0, #0x5259                 @ "\\GYR"
+    str     r0, [r6]
+    movw    r0, #0x5C4F                 @ "O\\"
+    strh    r0, [r6, #4]
+    ldrb    r0, [r4, #8]                @ the camera letter
+    strb    r0, [r6, #6]
+    add     r0, r6, #7
+    ldr     r1, [r4, #0x0C]             @ the reel
+    bl      put_dec3
+    mov     r0, #'_'
+    strb    r0, [r6, #10]
+    add     r0, r6, #11
+    mov     r1, r5
+    bl      put_dec3
+    mov     r0, #'.'
+    strb    r0, [r6, #14]
+    mov     r0, #'G'
+    strb    r0, [r6, #15]
+    mov     r0, #'Y'
+    strb    r0, [r6, #16]
+    mov     r0, #'R'
+    strb    r0, [r6, #17]
+    mov     r0, #0
+    strb    r0, [r6, #18]
+    mov     r0, r6
+    pop     {r4, r5, r6, lr}
+    bx      lr
+
+/* take_header -- fill in the sixty-four bytes and put them at the front.
+ *
+ * r0 = the volume.  Called from writer_openfile with the file open and no
+ * writer task in existence yet, so the file position is ours alone.
+ *
+ * Sensor mode, exposure and geometry read as nothing while the camera is idle.
+ * Record start is the only moment they can be taken, which is why they are
+ * taken here and not by the shell afterwards.
+ */
+take_header:
+    push    {r4, r5, r6, lr}
+    adr     r4, writer_header
+    mov     r5, r0
+
+    movw    r0, #0x4647
+    movt    r0, #0x3753                 @ "GFS7"
+    str     r0, [r4, #H_MAGIC]
+    mov     r0, #GYR_VERSION
+    str     r0, [r4, #H_VERSION]
+    movw    r0, #:lower16:GYR_PERIOD_PS
+    movt    r0, #:upper16:GYR_PERIOD_PS
+    str     r0, [r4, #H_PERIOD_PS]
+    movw    r0, #:lower16:GYR_GSCALE
+    movt    r0, #:upper16:GYR_GSCALE
+    str     r0, [r4, #H_GSCALE]
+    movw    r0, #:lower16:GYR_ORIENT
+    movt    r0, #:upper16:GYR_ORIENT
+    str     r0, [r4, #H_ORIENT]
+    str     r5, [r4, #H_VOLUME]
+
+    /* The clip id, straight out of the name take_path just built: the two are
+     * the same eight characters by construction, so there is no second place
+     * for them to disagree. */
+    adr     r0, writer_path
+    ldr     r1, [r0, #6]
+    str     r1, [r4, #H_CLIP]
+    ldr     r1, [r0, #10]
+    str     r1, [r4, #H_CLIP + 4]
+
+    mov     r0, #0
+    str     r0, [r4, #H_PAYLOAD]        @ filled in at close
+    str     r0, [r4, #H_DROPPED]
+    str     r0, [r4, #0x38]
+    str     r0, [r4, #0x3C]
+
+    movw    ip, #:lower16:SENSOR_MODE_FN
+    movt    ip, #:upper16:SENSOR_MODE_FN
+    blx     ip
+    str     r0, [r4, #H_MODE]
+    movw    ip, #:lower16:EXPOSURE_FN
+    movt    ip, #:upper16:EXPOSURE_FN
+    blx     ip
+    str     r0, [r4, #H_EXPOSURE]
+    movw    r0, #:lower16:GEOMETRY
+    movt    r0, #:upper16:GEOMETRY
+    ldr     r1, [r0]
+    str     r1, [r4, #H_WIDTH]
+    ldr     r1, [r0, #4]
+    str     r1, [r4, #H_HEIGHT]
+
+    mov     r0, r4
+    bl      put_header
+    pop     {r4, r5, r6, lr}
+    bx      lr
+
+/* put_header -- seek to zero and write the sixty-four bytes.  Nothing else is
+ * touching the file when this runs: at open the writer task does not exist yet,
+ * at close the join has already collected it. */
+put_header:
+    push    {r4, r5, r6, lr}
+    mov     r5, r0
+#ifndef DRY_RUN
+    movw    r4, #:lower16:T_FOBJ
+    movt    r4, #:upper16:T_FOBJ
+    ldr     r4, [r4]
+    mov     r0, r4
+    mov     r1, #0
+    mov     r2, #0
+    movw    ip, #:lower16:F_SEEK
+    movt    ip, #:upper16:F_SEEK
+    blx     ip
+    mov     r0, r4
+    mov     r1, r5
+    mov     r2, #HDR_BYTES
+    movw    ip, #:lower16:F_WRITE
+    movt    ip, #:upper16:F_WRITE
+    blx     ip
+#endif
+    movw    ip, #:lower16:T_POS
+    movt    ip, #:upper16:T_POS
+    mov     r0, #HDR_BYTES
+    str     r0, [ip]                    @ the file is at the end of the header
+    pop     {r4, r5, r6, lr}
+    bx      lr
+
+/* r0 = where to write, r1 = 0..999.  Three digits, no division: the same
+ * routine lifecycle.inc.S uses. */
+put_dec3:
+    mov     r2, #'0'
+1:  cmp     r1, #100
+    blo     2f
+    sub     r1, r1, #100
+    add     r2, r2, #1
+    b       1b
+2:  strb    r2, [r0], #1
+    mov     r2, #'0'
+3:  cmp     r1, #10
+    blo     4f
+    sub     r1, r1, #10
+    add     r2, r2, #1
+    b       3b
+4:  strb    r2, [r0], #1
+    add     r1, r1, #'0'
+    strb    r1, [r0]
+    bx      lr
+
+/* Filled in at every take_open.  Twenty bytes is "\\GYRO\\A001_037.GYR" and
+ * its NUL exactly; the rest is slack so a longer scheme does not have to move
+ * anything. */
 writer_path:
-    .asciz  "\\GYRO\\RINGTEST.BIN"
-    .space  12
+    .space  32
+    .align  2
+
+/* The header, rebuilt at every take_open and rewritten at every close. */
+writer_header:
+    .space  HDR_BYTES
     .align  2
 
 /* The job pool, in the same blob so the calls resolve without a relocation

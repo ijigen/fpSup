@@ -6,8 +6,10 @@ to catch -- a record shape that drifts between the two hooks, a producer that
 keeps its own copy of the index, an odd push -- are all things that assemble
 cleanly and are found on the camera or not at all.
 """
+import pathlib
 import re
 import struct
+import tempfile
 import sys
 import unittest
 from pathlib import Path
@@ -172,6 +174,60 @@ class RecordShape(unittest.TestCase):
         for name, src in WRITERS:
             self.assertNotRegex(src[src.index('push'):], r'lsl\s+#3',
                                 f'{name} is doing address arithmetic')
+class Header(unittest.TestCase):
+    """The .GYR v7 header.  The camera writes it; gyr7.py reads it; the two
+    have to agree field for field, and nothing else checks that."""
+
+    def setUp(self):
+        self.inc = (HERE / 'ring_task.inc.S').read_text()
+        self.task = (HERE / 'ring_task.S').read_text()
+
+    def equ(self, name):
+        m = re.search(rf'^\.equ {name},\s*(\S+?)\s*(?:/\*|$)',
+                      self.inc, re.M)
+        self.assertIsNotNone(m, f'{name} is not defined')
+        return int(m.group(1), 0)
+
+    def test_the_two_sides_lay_the_header_out_the_same(self):
+        import gyr7
+        self.assertEqual(self.equ('HDR_BYTES'), gyr7.HDR_BYTES)
+        self.assertEqual(gyr7.HEADER.size, gyr7.HDR_BYTES)
+        # Field by field, camera offset against host offset.
+        for name, want in (('H_MAGIC', 0), ('H_VERSION', 4), ('H_PERIOD_PS', 8),
+                           ('H_GSCALE', 0x0C), ('H_ORIENT', 0x10),
+                           ('H_CLIP', 0x14), ('H_VOLUME', 0x1C),
+                           ('H_PAYLOAD', 0x20), ('H_DROPPED', 0x24),
+                           ('H_MODE', 0x28), ('H_EXPOSURE', 0x2C),
+                           ('H_WIDTH', 0x30), ('H_HEIGHT', 0x34)):
+            self.assertEqual(self.equ(name), want, name)
+
+    def test_the_period_is_the_measured_one(self):
+        """400 us flat is 0.085 us fast on every sample.  The figure two
+        independent rulers agreed on is 400.0854 us."""
+        self.assertEqual(self.equ('GYR_PERIOD_PS'), 400085400)
+
+    def test_the_payload_starts_after_the_header(self):
+        """B_OFF is where the first block says it belongs.  Starting it at zero
+        would put records under the header; carrying the last take's value over
+        would layer two takes into one file."""
+        c = '\n'.join(l for l in self.task.splitlines()
+                       if 'B_OFF' in l or 'HDR_BYTES' in l)
+        self.assertIn('HDR_BYTES', c)
+
+    def test_the_header_is_written_twice(self):
+        """Once at open so the file always has a magic, once at close for the
+        counts that only exist then."""
+        self.assertIn('bl      take_header', self.task)
+        self.assertEqual(self.task.count('bl      put_header'), 2)
+
+    def test_the_reader_rejects_the_old_container(self):
+        import gyr7
+        bad = pathlib.Path(tempfile.mkdtemp()) / 'x.GYR'
+        bad.write_bytes(b'GFS6' + b'\0' * 60)
+        with self.assertRaises(ValueError):
+            gyr7.read_capture(bad)
+
+
 class BlockComments(unittest.TestCase):
     """A block comment that is never closed swallows the code after it, and the
     assembler says nothing.  One of these ate take_close's own `9:` return
@@ -288,6 +344,30 @@ class AudioShape(unittest.TestCase):
         self.assertNotRegex(window, r'W_BODYOBJ\n\s+ldr\s+r1, \[r1\]',
                             'attach dereferences the body object')
         self.assertNotIn('ldr     r1, [r1]', window[window.rindex('W_BODYOBJ'):])
+
+    def test_every_take_names_its_own_file(self):
+        """A fixed name layers every take's writes into one file.  The camera
+        names clips from RecordFilePathMgrCinema and so must we, or the log
+        cannot be matched to the clip it belongs to."""
+        c = self.whole('take_path')
+        for field in ('#0x10', '#0x2C', '#8', '#0x0C'):
+            self.assertIn(field, c, f'take_path must read the manager\'s {field}')
+        self.assertIn('O_AUTORSTFLG', c,
+                      'the saved maximum only counts when AutoRstFlg is clear')
+        self.assertIn("mov     r0, #'G'", c)
+        self.assertIn("mov     r0, #'Y'", c)
+        self.assertIn("mov     r0, #'R'", c)
+        self.assertIn('bl      take_path', self.whole('writer_openfile'))
+
+    def test_no_fixed_path_is_left_in_the_blob(self):
+        """The deployer used to patch a name into the blob.  If a literal comes
+        back, two takes share a file again and the second overwrites the first
+        from byte zero."""
+        literals = [l for l in self.task.splitlines() if '.asciz' in l]
+        self.assertFalse([l for l in literals if 'GYRO' in l],
+                         f'no path literal belongs in the blob: {literals}')
+        self.assertNotIn('RINGTEST',
+                         (HERE / 'ring_task_deploy.py').read_text())
 
     def test_the_tail_goes_before_the_marker(self):
         """FUN_c01fbc80 copies four words into the stop message and audio's are

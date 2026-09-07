@@ -208,6 +208,67 @@
 .equ F_DTOR,         0xC0365ED0
 .equ F_MODE_RW,      7              /* overwrites; 0x402 fails when it exists */
 .equ F_MODE_AUD,     6              /* what AudF_W opens with                 */
+/* Where the camera keeps the name of the clip it is about to record.
+ * RecordFilePathMgrCinema, one object per volume: +0x08 the camera letter,
+ * +0x0C the reel, +0x10 the take it is on, +0x2C the highest it remembers.
+ * The saved maximum only counts when AutoRstFlg is clear.  lifecycle.inc.S
+ * has been naming the shipping logger's files from these four for months. */
+/* The .GYR header, version 7.  Sixty-four bytes, then nothing but records.
+ *
+ * GFS6 could not carry this stream: it puts a CRC and a count in front of every
+ * block and keeps gyro and accel in separate regions, and both of those mean
+ * touching the payload.  The payload here goes to the card exactly as the
+ * producers left it, so everything the reader needs is in one header at the
+ * front and the records are one flat interleaved array behind it.
+ *
+ *   0x00 "GFS7"      0x04 version     0x08 period_ps    0x0C gscale (float)
+ *   0x10 orientation 0x14 clip id (8) 0x1C volume
+ *   0x20 payload     0x24 dropped     0x28 sensor mode  0x2C exposure_us
+ *   0x30 width       0x34 height      0x38 -            0x3C -
+ */
+.equ HDR_BYTES,      64
+.equ H_MAGIC,        0x00
+.equ H_VERSION,      0x04
+.equ H_PERIOD_PS,    0x08
+.equ H_GSCALE,       0x0C
+.equ H_ORIENT,       0x10
+.equ H_CLIP,         0x14
+.equ H_VOLUME,       0x1C
+.equ H_PAYLOAD,      0x20
+.equ H_DROPPED,      0x24
+.equ H_MODE,         0x28
+.equ H_EXPOSURE,     0x2C
+.equ H_WIDTH,        0x30
+.equ H_HEIGHT,       0x34
+.equ GYR_VERSION,    7
+
+/* 400.0854 us, in picoseconds = 2499.466 Hz.
+ *
+ * Two rulers with nothing in common agreed: a 600 s host-clock count fitted
+ * over 21 points gave 2499.520 +/- 0.018 Hz, and 2863 frame intervals measured
+ * against the camera's OWN sensor gave 2499.466 -- 0.0021% apart.  The frame
+ * ruler is the one written here, because it is the clock the video is on.
+ * (They also pin each other: 2499.520 / 83.3989 samples per frame = 29.9709,
+ * and 29.97 is 29.97003 -- the frame rate is derived, not assumed.)
+ *
+ * The old header carried an integer 400 us, fast by 0.085 us on every sample:
+ * 3.4 ms of drift across a forty-second take, and it keeps growing. */
+.equ GYR_PERIOD_PS,  400085400
+.equ GYR_GSCALE,     0x39109F6C     /* 0.000137923 dps per LSB                */
+.equ GYR_ORIENT,     0x007A7978     /* "xyz", all three axes negated          */
+
+/* What the take was shot in, for the lens profile.  FUN_c032c720() is what
+ * `imager mode_now` prints; FUN_c030c7f0() is the exposure AF consumes.  Both
+ * read as nothing useful when idle, so they can only be taken at record start. */
+.equ SENSOR_MODE_FN, 0xC032C720
+.equ EXPOSURE_FN,    0xC030C7F0
+.equ GEOMETRY,       0xC37CE210     /* {width, height, frame bytes} while recording */
+
+.equ PATH_MGR_SD,    0xC3438400
+.equ PATH_MGR_SSD,   0xC3438398
+.equ SETTINGS_PTR,   0xC3075230
+.equ O_AUTORSTFLG,   0x5D5
+
 .equ F_STAMP,        0xC0369310     /* XC_MediaFileSdCard::v13, vtable +0x3C:
                                      * the call AudF_W makes right after the
                                      * open.  Takes the card lock and stamps  */
