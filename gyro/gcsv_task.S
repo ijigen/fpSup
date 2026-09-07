@@ -20,9 +20,9 @@
  *                     and lets the destructor close the file
  *
  * So no .GYR is produced.  The records still exist -- they are what fills the
- * blocks -- but they never reach the card; the text does, in 16 KiB writes,
- * which is the size audio uses and the size eleven minutes of camera time was
- * measured against.  A block of records is about three of those writes.
+ * blocks -- but they never reach the card; the text does, one write per block.
+ * 16 KiB is the trigger unit, not the write size: it is where "the buffer is
+ * full" happens, and what gets written is whatever that block turned into.
  *
  * Formatting here rather than in a hook is the whole point of it being here at
  * all: this is a task at priority 6 with the entire block in front of it and
@@ -195,9 +195,16 @@ put_str:
 
 /* writer_put -- r4 = the job.  Turn its records into rows and write them.
  *
- * Sixteen kilobytes of text at a time, stopping at a row boundary, so the card
- * sees the same write size Base gives it and audio gives the DSP.  A block of
- * 2048 records is about three of those.
+ * One write, whatever the block turned into -- about 45 KB.  The loop is still
+ * here because the formatter takes a budget, but the budget is a whole block's
+ * worth so it runs once.
+ *
+ * It used to write 16 KiB at a time, which sounded right and was not: 16 KiB is
+ * the size at which a buffer is declared full, not a write size.  Base's block
+ * became one 16 KiB write because a block of records is 16 KiB; a block of rows
+ * is three times that, and writing it in three took the card lock three times
+ * as often.  With that in it a take stopped by itself at 2:18; the camera has
+ * recorded on this card for years without doing that.
  *
  * There is no seek.  Base seeks because a dropped block leaves a hole of known
  * size; a row has no fixed size, so a dropped block here is simply rows that
@@ -220,8 +227,8 @@ writer_put:
 1:  mov     r0, r5
     mov     r1, r6
     mov     r2, r7
-    movw    r3, #:lower16:BUF_BYTES
-    movt    r3, #:upper16:BUF_BYTES
+    movw    r3, #:lower16:TEXT_BYTES
+    movt    r3, #:upper16:TEXT_BYTES
     add     r3, r7, r3                  @ one past the last byte it may use
     bl      gcsv_format
     mov     r8, r0                      @ where the text ended

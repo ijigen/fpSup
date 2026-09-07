@@ -408,6 +408,29 @@ class Editions(unittest.TestCase):
             i = self.R.GSUP_ROUTINES.index(absent)
             self.assertEqual(struct.unpack_from('<I', code, i * 4)[0], 0)
 
+    def test_a_block_becomes_one_write(self):
+        """16 KiB is the trigger unit -- where "the buffer is full" happens --
+        not a write size.  Writing a block's rows in three 16 KiB pieces took
+        the card lock three times as often as Base does, and a take stopped by
+        itself at 2:18 on a camera that has recorded on that card for years.
+        The text buffer holds a whole block's worth so the loop runs once."""
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        text = int(re.search(r'^\.equ TEXT_BYTES,\s*(0x[0-9A-Fa-f]+)',
+                             inc, re.M).group(1), 0)
+        stream = (HERE / 'imu_stream.inc.S').read_text()
+        block = int(re.search(r'^\.equ BUF_BYTES,\s*(0x[0-9A-Fa-f]+)',
+                              stream, re.M).group(1), 0)
+        rows = block // 8                       # at most one row a record
+        rowmax = int(re.search(r'^\.equ ROW_MAX,\s*(\d+)',
+                               (HERE / 'gcsv_rows.S').read_text(), re.M).group(1))
+        self.assertGreaterEqual(text, rows * rowmax + rowmax,
+                                'a block of rows must fit, or it is two writes')
+        put = (HERE / 'gcsv_task.S').read_text()
+        put = put[put.index('\nwriter_put:'):]
+        self.assertIn('TEXT_BYTES', put, 'the budget must be the whole buffer')
+        self.assertNotIn('BUF_BYTES', put[:put.index('9:')],
+                         'the budget is not the block size')
+
     def test_the_gcsv_header_is_the_one_the_camera_wrote(self):
         """Checked against the camera: 249 bytes, and the drop count's six
         digits at NOTE_DROPS_AT so the close can rewrite them without moving a

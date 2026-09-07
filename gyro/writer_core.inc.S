@@ -458,8 +458,8 @@ blocks_open:
      * out of the seventeen megabytes the channel has free, which is cheaper
      * than two allocation paths. */
     mov     r0, r5
-    movw    r1, #:lower16:BUF_BYTES
-    movt    r1, #:upper16:BUF_BYTES
+    movw    r1, #:lower16:TEXT_BYTES
+    movt    r1, #:upper16:TEXT_BYTES
     mov     r2, #0
     mov     r3, #0
     mov     ip, #0

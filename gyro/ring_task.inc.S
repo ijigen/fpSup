@@ -313,7 +313,19 @@
 .equ G_ROW,          0xC072E940
 .equ G_HELD,         0xC072E944     /* 8 bytes, then the flag at +8            */
 .equ G_HELD_OK,      0xC072E94C
-.equ G_TEXT,         0xC072E950     /* the text buffer the block turns into    */
+.equ G_TEXT,         0xC072E950     /* where one block becomes text            */
+
+/* Big enough for a whole block's worth of rows, so a block is one write.
+ *
+ * 16 KiB is the trigger unit -- it decides when "the buffer is full" happens --
+ * and it is not the write size.  Base's block became one 16 KiB write because
+ * that is what a block of records IS; a block of ROWS is about 45 KB, and
+ * splitting it into three writes tripled how often the card lock is taken.
+ * That is the contention this project already has a name for, and a 2:18 take
+ * that stopped by itself is what it looks like from the outside.
+ *
+ * 2048 records, at most one row each, at most ROW_MAX bytes a row. */
+.equ TEXT_BYTES,     0x22000
 /* The fingerprint of the blob the camera actually holds.  place_code writes
  * it; every command that calls into the pool checks it.  See _verify_placed. */
 .equ T_FINGER,       0xC072E954
