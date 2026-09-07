@@ -277,14 +277,23 @@ class Header(unittest.TestCase):
                           'STOP_SITE', 'STOP_AT')})
             self.assertEqual(got, want, f'{equ} disagrees with the deployer')
 
-    def test_a_fresh_volume_gets_its_directory(self):
-        """F_OPEN does not create \\GYRO, and the card builder has always made
-        it on the SD card -- so the first take to a fresh USB SSD wrote nothing
-        and left no trace of why.  The open makes it and tries once more."""
+    def test_the_directory_is_made_at_boot_not_at_record_start(self):
+        """Making a directory writes FAT metadata.  Doing it on the
+        record-start path froze the camera on every take to a USB SSD while
+        the SD card was fine -- one line, not two behaviours: \\GYRO exists on
+        the card so the open succeeds and the mkdir is skipped, and it does not
+        exist on the SSD so the mkdir ran every time.  gsup_boot does it with
+        the camera idle."""
         t = self.task
-        c = self.code(t[t.index('\nwriter_openfile:'):t.index('\nwriter_closefile:')])
-        self.assertIn('bl      make_gyro_dir', c)
-        self.assertEqual(c.count('F_OPEN'), 4, 'open, then open again')
+        openfile = self.code(t[t.index('\nwriter_openfile:'):
+                               t.index('\nwriter_closefile:')])
+        self.assertNotIn('make_gyro_dir', openfile,
+                         'no FAT metadata on the record-start path')
+        self.assertEqual(openfile.count('F_OPEN'), 2, 'one open, no retry')
+        boot = self.code(t[t.index('\ngsup_boot:'):t.index('\ngsup_offsets:', 1)]
+                         if '\ngsup_offsets:' in t[t.index('\ngsup_boot:'):]
+                         else t[t.index('\ngsup_boot:'):])
+        self.assertIn('bl      make_gyro_dir', boot)
         d = self.code(t[t.index('\nmake_gyro_dir:'):
                         t.index('\n', t.index('bx      lr',
                                                t.index('\nmake_gyro_dir:')))])
