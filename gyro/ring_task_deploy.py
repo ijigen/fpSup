@@ -92,7 +92,8 @@ def symbols(src, defines=()):
             '<IIIBBH', elf, off)
         end = elf.index(b'\0', strtab[4] + name_off)
         name = elf[strtab[4] + name_off:end].decode()
-        if name and not name.startswith('$') and shndx not in (0, 0xFFF1):
+        if (name and not name.startswith(('$', '.L'))
+                and shndx not in (0, 0xFFF1)):
             out[name] = value
     return out
 
@@ -162,7 +163,7 @@ DRY_RUN = False   # set by --dry-run: everything except the card
 # blob the card carries and the blob the USB deploy writes are the same bytes.
 GSUP_ROUTINES = ('writer_body', 'take_open', 'take_close', 'writer_post',
                  'mpool_init_jobs', 'blocks_open', 'gsup_boot',
-                 'writer_path', 'writer_header')
+                 'writer_path', 'writer_header', 'gcsv_head1', 'gcsv_head2')
 
 
 def patch_offsets(code, syms):
@@ -175,15 +176,18 @@ def patch_offsets(code, syms):
     """
     out = bytearray(code)
     for i, name in enumerate(GSUP_ROUTINES):
-        struct.pack_into('<I', out, i * 4, syms[name])
+        # An edition fills in what it has: the gcsv header's two halves exist
+        # only in the edition that writes one, and zero is what blob_at reads
+        # as "not here".
+        struct.pack_into('<I', out, i * 4, syms.get(name, 0))
     return bytes(out)
 
 
 def place():
     _check()
     defines = ('DRY_RUN',) if DRY_RUN else ()
-    code = assemble(HERE / 'ring_task.S', defines)
-    syms = symbols(HERE / 'ring_task.S', defines)
+    code = assemble(HERE / SOURCE, defines)
+    syms = symbols(HERE / SOURCE, defines)
     code = patch_offsets(code, syms)
     pool = pool_base()
     global CODE_AT
@@ -313,6 +317,11 @@ def place_code():
           f'each take names its own file')
     return at
 
+
+# Which edition is being placed.  Both include the same core at the same
+# offsets; they differ in the three functions the core calls without looking
+# inside, so nothing else here has to know which one it is holding.
+SOURCE = 'ring_task.S'
 
 T_FINGER = 0xC072E954
 MEM_CLASS = 0            # USER, the class blocks_open asks
@@ -512,11 +521,17 @@ def main():
     g.add_argument('--close', action='store_true', help='drain and close it')
     g.add_argument('--free-blocks', action='store_true',
                    help='give the row back to the allocator')
+    ap.add_argument('--gcsv', action='store_true',
+                    help='place the edition that writes the Gyroflow log itself '
+                         'instead of the .GYR')
     ap.add_argument('--dry-run', action='store_true',
                     help='build the writer with the card calls stubbed out')
     a = ap.parse_args()
-    global DRY_RUN
+    global DRY_RUN, SOURCE
     DRY_RUN = a.dry_run
+    if a.gcsv:
+        SOURCE = 'gcsv_task.S'
+    print(f'  edition: {SOURCE}')
     if a.state:
         state()
     elif a.signal:

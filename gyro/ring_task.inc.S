@@ -329,6 +329,14 @@
 .equ G_OFF_BOOT,     0x18
 .equ G_OFF_PATH,     0x1C
 .equ G_OFF_HEADER,   0x20
+.equ G_OFF_HEAD1,    0x24
+.equ G_OFF_HEAD2,    0x28
+
+/* Where the six fixed-width digits of the drop count sit in the gcsv header.
+ * Everything before them is a constant, so the close can rewrite them in place
+ * without moving a byte -- the same trick the .GYR header uses. */
+.equ NOTE_DROPS_AT,  116
+.equ NOTE_DROPS_N,   6
 
 .equ F_CACHE,        0xC000E91C     /* clean+invalidate, so written code is real */
 

@@ -371,6 +371,60 @@ class Header(unittest.TestCase):
             gyr7.read_capture(bad)
 
 
+class Editions(unittest.TestCase):
+    """Two editions of one writer.  They share a core and differ in the three
+    functions the core calls without looking inside; anything else that differs
+    is a fork, and a fork drifts."""
+
+    def setUp(self):
+        import ring_task_deploy as R
+        self.R = R
+        self.base = R.symbols(HERE / 'ring_task.S', ())
+        self.gcsv = R.symbols(HERE / 'gcsv_task.S', ())
+
+    def test_both_define_the_three(self):
+        for name in ('writer_openfile', 'writer_put', 'writer_closefile'):
+            self.assertIn(name, self.base, f'Base has no {name}')
+            self.assertIn(name, self.gcsv, f'the gcsv edition has no {name}')
+
+    def test_the_shared_core_lands_at_the_same_offsets(self):
+        """Both include it first, so every shared routine is at the same place
+        in both blobs.  If that stops being true, one of them has grown
+        something ahead of the core and the two are no longer the same code."""
+        for name in ('writer_body', 'writer_post', 'take_open', 'take_close',
+                     'blocks_open', 'gsup_boot', 'make_writer', 'take_path'):
+            self.assertEqual(self.base[name], self.gcsv[name], name)
+
+    def test_the_table_tolerates_what_an_edition_does_not_have(self):
+        """gsup_offsets carries entries for both editions' buffers.  Base has no
+        gcsv header and the gcsv edition has no binary one; the missing entry
+        must be zero, which blob_at reads as "not here", not a KeyError at
+        build time or a wild pointer at run time."""
+        for src, absent in (('ring_task.S', 'gcsv_head1'),
+                            ('gcsv_task.S', 'writer_header')):
+            syms = self.R.symbols(HERE / src, ())
+            self.assertNotIn(absent, syms)
+            code = self.R.patch_offsets(assemble(HERE / src, ()), syms)
+            i = self.R.GSUP_ROUTINES.index(absent)
+            self.assertEqual(struct.unpack_from('<I', code, i * 4)[0], 0)
+
+    def test_the_gcsv_header_is_the_one_the_camera_wrote(self):
+        """Checked against the camera: 249 bytes, and the drop count's six
+        digits at NOTE_DROPS_AT so the close can rewrite them without moving a
+        byte after them."""
+        src = (HERE / 'gcsv_task.S').read_text()
+        h1 = src[src.index('gcsv_head1:'):].split('"')[1]
+        h2 = src[src.index('gcsv_head2:'):].split('"')[1]
+        h1 = h1.encode().decode('unicode_escape')
+        h2 = h2.encode().decode('unicode_escape')
+        whole = h1 + 'A001_002' + h2
+        self.assertEqual(len(whole), 249)
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        at = int(re.search(r'^\.equ NOTE_DROPS_AT,\s*(\d+)', inc, re.M).group(1))
+        self.assertEqual(whole[at:at + 6], '000000')
+        self.assertEqual(whole[at - 15:at], 'dropped_blocks=')
+
+
 class BlockComments(unittest.TestCase):
     """A block comment that is never closed swallows the code after it, and the
     assembler says nothing.  One of these ate take_close's own `9:` return

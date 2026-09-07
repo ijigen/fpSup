@@ -53,6 +53,8 @@ gsup_offsets:
     .word   0       @ +0x18  gsup_boot -- the cave trampoline reads this one
     .word   0       @ +0x1C  writer_path
     .word   0       @ +0x20  writer_header
+    .word   0       @ +0x24  the first half of the gcsv header (that edition)
+    .word   0       @ +0x28  the second half (that edition)
 
 /* blob_at -- r0 = a byte offset into gsup_offsets.  Returns that entry as an
  * address in this blob.

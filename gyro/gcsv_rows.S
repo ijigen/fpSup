@@ -1,9 +1,4 @@
-.syntax unified
-.arm
-.text
 
-#include "imu_stream.inc.S"
-#include "ring_task.inc.S"
 
 /* ============================================================================
  * A block of records, as gcsv rows.  Runs in the writer, not in a hook.
@@ -65,6 +60,13 @@ dec_pairs:
     .ascii  "6061626364656667686970717273747576777879"
     .ascii  "8081828384858687888990919293949596979899"
     .balign 4
+
+/* Anyone can have the table's address without being near it: `adr` reaches
+ * only an eight-bit rotated immediate, and put_u32_6 sits far enough away that
+ * it cannot. */
+dec_pairs_at:
+    adr     r0, dec_pairs
+    bx      lr
 
 /* put_u32 -- r0 = value, r1 = destination.  Returns the destination advanced.
  *
@@ -136,6 +138,66 @@ put_i16:
     rsb     r0, r0, #0
 1:  bl      put_u32
     pop     {r4, lr}
+    bx      lr
+
+/* put_u32_6 -- r0 = value, r1 = destination.  Exactly six digits, zero padded.
+ *
+ * The drop count sits in the header's note line and is rewritten when the take
+ * closes.  Fixed width is the whole point: a number that grew a digit would
+ * push the rest of the file along by one byte.
+ *
+ * Bytes, not halfwords, because the destination is wherever the caller's text
+ * happens to be and need not be even.
+ *
+ * The arithmetic was checked against Python over 0..1000001 before it was
+ * written -- the first attempt reconstructed 100q as 80q, which is the same
+ * slip put_u32 nearly shipped with.
+ */
+    .global put_u32_6
+put_u32_6:
+    push    {r4, r5, r6, r7, r8, lr}
+    mov     r4, r1
+    mov     r8, r0
+    bl      dec_pairs_at
+    mov     r5, r0                      @ the table
+    mov     r0, r8
+    movw    r7, #0x851F
+    movt    r7, #0x51EB
+    movw    ip, #0x423F                 @ 999999 and no more
+    cmp     r0, ip
+    movhi   r0, ip
+
+    umull   ip, r6, r0, r7
+    lsr     r6, r6, #5                  @ r6 = value / 100
+    umull   ip, r8, r6, r7
+    lsr     r8, r8, #5                  @ r8 = value / 10000
+
+    add     ip, r5, r8, lsl #1          @ the ten-thousands pair
+    ldrh    ip, [ip]
+    strb    ip, [r4], #1
+    lsr     ip, ip, #8
+    strb    ip, [r4], #1
+
+    add     ip, r8, r8, lsl #2          @ 5q
+    sub     r1, r6, ip, lsl #4          @ -80q  } value/100 - 100*(value/10000)
+    sub     r1, r1, ip, lsl #2          @ -20q  }
+    add     ip, r5, r1, lsl #1
+    ldrh    ip, [ip]
+    strb    ip, [r4], #1
+    lsr     ip, ip, #8
+    strb    ip, [r4], #1
+
+    add     ip, r6, r6, lsl #2
+    sub     r0, r0, ip, lsl #4          @ value - 100*(value/100)
+    sub     r0, r0, ip, lsl #2
+    add     ip, r5, r0, lsl #1
+    ldrh    ip, [ip]
+    strb    ip, [r4], #1
+    lsr     ip, ip, #8
+    strb    ip, [r4], #1
+
+    mov     r0, r4
+    pop     {r4, r5, r6, r7, r8, lr}
     bx      lr
 
 /* ------------------------------------------------------------------- rows */
