@@ -444,6 +444,27 @@ blocks_open:
 2:  bl      free_blocks
     b       9f
 
+    /* One more, and it is not a stream block: the gcsv edition turns a block
+     * of records into text somewhere before it writes it, and that somewhere
+     * has to be asked for at boot like everything else -- record start is the
+     * wrong side of the line.  Base does not use it and pays sixteen kilobytes
+     * out of the seventeen megabytes the channel has free, which is cheaper
+     * than two allocation paths. */
+    mov     r0, r5
+    movw    r1, #:lower16:BUF_BYTES
+    movt    r1, #:upper16:BUF_BYTES
+    mov     r2, #0
+    mov     r3, #0
+    mov     ip, #0
+    push    {ip, lr}
+    movw    ip, #:lower16:MEM_GET
+    movt    ip, #:upper16:MEM_GET
+    blx     ip
+    add     sp, sp, #8
+    movw    ip, #:lower16:G_TEXT
+    movt    ip, #:upper16:G_TEXT
+    str     r0, [ip]
+
 3:  /* Nothing is filling yet, and the file starts at byte zero. */
     movw    ip, #:lower16:B_CUR
     movt    ip, #:upper16:B_CUR

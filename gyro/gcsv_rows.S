@@ -211,11 +211,22 @@ gcsv_emit:
     pop     {r4, r5, r6, r7, r8, lr}
     bx      lr
 
-/* gcsv_format -- r0 = the records, r1 = how many, r2 = destination.
+/* gcsv_format -- r0 = the records, r1 = how many, r2 = destination,
+ *                r3 = one past the last byte that may be written.
  *
- * Returns the destination advanced.  One pass, in order, holding one row back
- * so a reading can land on the sample it followed; whatever is still held when
- * the block runs out stays held for the next one.
+ * Returns r0 = the destination advanced, r1 = how many records are LEFT --
+ * the caller subtracts, which costs it one instruction and costs this a
+ * register it does not have.
+ * One pass, in order, holding one row back so a reading can land on the sample
+ * it followed; whatever is still held when the records run out stays held for
+ * the next call, block boundary or not.
+ *
+ * It stops when fewer than ROW_MAX bytes are left rather than when the buffer
+ * is exactly full, so a row is never cut in half.  The caller writes what it
+ * got, moves along by what was consumed, and comes back -- which is how a
+ * 16 KiB block of records becomes three 16 KiB writes of text without the
+ * write size, the one number audio and eleven minutes of camera agree on,
+ * changing at all.
  */
     .global gcsv_format
 gcsv_format:
@@ -223,11 +234,15 @@ gcsv_format:
     mov     r4, r0
     mov     r5, r1
     mov     r6, r2
+    mov     r7, r3
+    sub     r7, r7, #ROW_MAX            @ the last place a row may start
     movw    r8, #:lower16:G_HELD
     movt    r8, #:upper16:G_HELD
 
 1:  cmp     r5, #0
     beq     9f
+    cmp     r6, r7
+    bhi     9f                          @ no room for another row
     ldrsh   r0, [r4, #4]
     cmp     r0, #TAG_ACCEL
     beq     3f
@@ -276,6 +291,7 @@ gcsv_format:
     bx      lr
 
 9:  mov     r0, r6
+    mov     r1, r5                      @ what is left, not what was taken
     pop     {r4, r5, r6, r7, r8, lr}
     bx      lr
 

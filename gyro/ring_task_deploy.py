@@ -26,6 +26,7 @@ it stays reachable afterwards.
 """
 import argparse
 import re
+import zlib
 import struct
 import sys
 import time
@@ -285,6 +286,7 @@ def place_code():
                          + ' '.join('0x%08X' % (x or 0) for x in (got or [])))
     print(f'  blocks: {BUF_N} x {BUF_BYTES // 1024} KiB, '
           f'0x{got[0]:08X}..0x{got[-1] + BUF_BYTES:08X}')
+    _setw(T_FINGER, fingerprint(code), 'the blob fingerprint')
     _setw(STREAM_SIGFN, at['writer_post'], 'what the producer calls')
     pool = pool_base()
     _setw(T_FOBJ, pool + FOBJ_POOL_OFF, 'the file object')
@@ -312,7 +314,18 @@ def place_code():
     return at
 
 
+T_FINGER = 0xC072E954
 MEM_CLASS = 0            # USER, the class blocks_open asks
+
+
+def fingerprint(code):
+    """One word that changes if any byte of the blob does.
+
+    The sampled checks below say "these three places look right".  This says
+    "this is that blob".  A change of one instruction anywhere -- including one
+    that moves nothing, which the samples would also miss -- changes it.
+    """
+    return zlib.crc32(code) & 0xFFFFFFFF
 
 
 def _require_room():
@@ -357,21 +370,47 @@ def _verify_placed(code, at):
     held before.  That is a battery pull, and it cost one.  Two reads turn it
     into a sentence.
     """
-    # Two samples, both of them code.  The blob's first words are the routine
-    # table now, and a table of six small numbers is not a fingerprint.
-    body_off = at['writer_body'] - CODE_AT
-    want = struct.unpack_from('<4I', code, body_off)
-    got = tuple(P.mem_get(at['writer_body'], 4) or ())
-    entry_off = at['make_writer'] - CODE_AT
-    want2 = struct.unpack_from('<4I', code, entry_off)
-    got2 = tuple(P.mem_get(at['make_writer'], 4) or ())
-    if got == want and got2 == want2:
-        return
-    raise SystemExit(
-        'the pool does not hold this blob -- run --place first.\n'
-        f'  0x{at["writer_body"]:08X} reads ' + ' '.join(f'{w:08X}' for w in got) + '\n'
-        f'  expected           ' + ' '.join(f'{w:08X}' for w in want) + '\n'
-        '  place() only assembles and prints; place_code() is what writes.')
+    # Sample the LAST symbol as well as the first, and check the length.
+    #
+    # It used to sample writer_body and make_writer, which are both near the
+    # top.  I then changed blocks_open -- which sits after both -- and ran an
+    # action command without placing: every routine past it had moved, the two
+    # samples still matched, and echo_into branched into the middle of the old
+    # blob.  A guard that only looks where nothing changed is not a guard.
+    #
+    # The last symbol moves whenever anything before it does, so between the two
+    # ends nothing can shift without being seen.
+    want = fingerprint(code)
+    got = P.mem_get(T_FINGER)[0]
+    if got != want:
+        raise SystemExit(
+            'the pool does not hold this blob -- run --place first.\n'
+            f'  its fingerprint reads 0x{got or 0:08X}, this source is '
+            f'0x{want:08X}\n'
+            '  place() only assembles and prints; place_code() is what writes.')
+
+    # The fingerprint is a word in firmware RAM and a reboot does not clear it,
+    # so it can outlive the pool it describes.  These say the code is really
+    # there; the fingerprint says it is really this code.
+    last = max((v for v in at.values()), default=CODE_AT)
+    checks = [('writer_body', at['writer_body']),
+              ('make_writer', at['make_writer']),
+              ('the end of the blob', last)]
+    for name, addr in checks:
+        off = addr - CODE_AT
+        if off + 16 > len(code):
+            continue
+        want = struct.unpack_from('<4I', code, off)
+        got = tuple(P.mem_get(addr, 4) or ())
+        if got == want:
+            continue
+        raise SystemExit(
+            f'the pool does not hold this blob -- run --place first.\n'
+            f'  {name} at 0x{addr:08X} reads '
+            + ' '.join(f'{w:08X}' for w in got) + '\n'
+            f'  expected                    '
+            + ' '.join(f'{w:08X}' for w in want) + '\n'
+            '  place() only assembles and prints; place_code() is what writes.')
 
 
 def create():

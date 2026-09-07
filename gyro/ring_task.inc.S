@@ -314,7 +314,10 @@
 .equ G_HELD,         0xC072E944     /* 8 bytes, then the flag at +8            */
 .equ G_HELD_OK,      0xC072E94C
 .equ G_TEXT,         0xC072E950     /* the text buffer the block turns into    */
-.equ G_WORDS,        5
+/* The fingerprint of the blob the camera actually holds.  place_code writes
+ * it; every command that calls into the pool checks it.  See _verify_placed. */
+.equ T_FINGER,       0xC072E954
+.equ G_WORDS,        6
 
 /* Where each entry of gsup_offsets is.  blob_at turns one into an address. */
 .equ G_OFF_BODY,     0x00

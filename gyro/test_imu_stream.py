@@ -298,6 +298,25 @@ class Header(unittest.TestCase):
                                        self.task.index('\nwriter_closefile:')])
         self.assertEqual(openfile.count('F_OPEN'), 2, 'one open, no retry')
 
+    def test_the_blob_is_fingerprinted_not_sampled(self):
+        """The old guard read four words from two functions and said "the
+        camera has this blob".  Both were near the top; a change in the middle
+        left them identical, every routine after it moved, and echo_into
+        branched into another function's middle -- the shell died with the
+        handler still redirected.
+
+        A word that changes when any byte does cannot miss that.  The samples
+        stay, because the word is firmware RAM and outlives the pool it
+        describes: they say the code is there, it says the code is this."""
+        import ring_task_deploy as R
+        src = (HERE / 'ring_task_deploy.py').read_text()
+        self.assertIn('def fingerprint(code)', src)
+        self.assertNotEqual(R.fingerprint(b'a' * 64), R.fingerprint(b'a' * 63 + b'b'))
+        verify = src[src.index('def _verify_placed'):]
+        self.assertIn('fingerprint(code)', verify, 'the guard must check it')
+        place = src[src.index('def place_code'):src.index('def _require_room')]
+        self.assertIn('T_FINGER', place, 'placing must write it')
+
     def test_an_argument_is_saved_before_the_first_call(self):
         """blob_at returns in r0, so it destroys whatever r0 held.  take_header
         takes the volume in r0 and used to stash it on the line after the one
