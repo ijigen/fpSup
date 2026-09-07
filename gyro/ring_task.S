@@ -530,12 +530,6 @@ take_open:
     movw    r0, #:lower16:B_HANDED
     movt    r0, #:upper16:B_HANDED
     str     r1, [r0]
-    /* The geometry latch, so each take reports its own and not the last one's.
-     * The accel hook fills it in once, twenty milliseconds from now. */
-    movw    r0, #:lower16:STREAM_GEOM_W
-    movt    r0, #:upper16:STREAM_GEOM_W
-    str     r1, [r0]
-    str     r1, [r0, #4]
 
     movw    r0, #:lower16:T_BUILD
     movt    r0, #:upper16:T_BUILD
@@ -930,12 +924,6 @@ writer_closefile:
     movt    r1, #:upper16:B_DROPS
     ldr     r1, [r1]
     str     r1, [r0, #H_DROPPED]
-    movw    r1, #:lower16:STREAM_GEOM_W
-    movt    r1, #:upper16:STREAM_GEOM_W
-    ldr     r2, [r1]
-    str     r2, [r0, #H_WIDTH]
-    ldr     r2, [r1, #4]
-    str     r2, [r0, #H_HEIGHT]
     bl      put_header
 
     /* The destructor and nothing else.  AudioFileWriter::v0 calls
@@ -1152,12 +1140,33 @@ take_header:
     movt    ip, #:upper16:EXPOSURE_FN
     blx     ip
     str     r0, [r4, #H_EXPOSURE]
-    /* Zero at open -- the accel hook has not run yet.  writer_closefile fills
-     * it in before it rewrites the header, which is the only reason the header
-     * is written twice. */
     mov     r0, #0
     str     r0, [r4, #H_WIDTH]
     str     r0, [r4, #H_HEIGHT]
+    movw    ip, #:lower16:F_CAMSETTING
+    movt    ip, #:upper16:F_CAMSETTING
+    blx     ip
+    cmp     r0, #0
+    beq     1f
+    add     r0, r0, #SETTING_DIMS
+    ldr     r1, [r0]
+    ldr     r2, [r0, #4]
+    /* Refuse anything that is not a plausible frame rather than write a
+     * number the profile would then be built on. */
+    cmp     r1, #640
+    blo     1f
+    cmp     r2, #360
+    blo     1f
+    movw    r0, #0x2000
+    cmp     r1, r0
+    bhi     1f
+    cmp     r2, r0
+    bhi     1f
+    add     r1, r1, #DNG_PAD_W
+    add     r2, r2, #DNG_PAD_H
+    str     r1, [r4, #H_WIDTH]
+    str     r2, [r4, #H_HEIGHT]
+1:
 
     mov     r0, r4
     bl      put_header

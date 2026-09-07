@@ -221,27 +221,24 @@ class Header(unittest.TestCase):
                        if 'B_OFF' in l or 'HDR_BYTES' in l)
         self.assertIn('HDR_BYTES', c)
 
-    def test_the_geometry_is_latched_not_raced(self):
-        """0xC37CE210 reads zero while the camera is idle, and reading it at the
-        record start hook is a race with whoever publishes it -- A001_025 got
-        1936x1090 and A001_001 got zero.  The accel hook runs about twenty
-        milliseconds in, so it latches it; take_open clears the latch so each
-        take reports its own; the close puts it in the header."""
-        accel = self.code((HERE / 'accel_hook.S').read_text())
-        self.assertIn('GEOMETRY_AT', accel)
-        self.assertIn('STREAM_GEOM_W', accel)
-        # take_open clears it, or a take with no geometry inherits the last one's
-        self.assertIn('STREAM_GEOM_W',
-                      self.code(self.task[self.task.index('\ntake_open:'):
-                                          self.task.index('\ntake_close:')]))
-        # and the close is where it reaches the header
-        close = self.code(self.task[self.task.index('\nwriter_closefile:'):])
-        self.assertIn('STREAM_GEOM_W', close)
-        self.assertIn('H_WIDTH', close)
-        # never straight from the hardware at open: that is the race
+    def test_the_geometry_comes_from_the_settings(self):
+        """0xC37CE210 looks like the source and is a trap: {1936,1090,...} at
+        1080p, zero at UHD, and zero right through a 35 s take here.
+        CameraMgrSetting has it while the camera is idle, so there is nothing
+        to race -- and profilegen.S has been reading it that way all along."""
         header = self.code(self.task[self.task.index('\ntake_header:'):
                                      self.task.index('\nput_header:')])
-        self.assertNotIn('GEOMETRY_AT', header)
+        self.assertIn('F_CAMSETTING', header)
+        self.assertIn('SETTING_DIMS', header)
+        self.assertIn('DNG_PAD_W', header)
+        self.assertIn('DNG_PAD_H', header)
+        self.assertNotIn('0xC37CE210', self.code(self.task))
+        self.assertNotIn('0xC37CE210', self.code(self.inc))
+        self.assertEqual(self.equ('F_CAMSETTING'), 0xC0206E98)
+        self.assertEqual(self.equ('SETTING_DIMS'), 0x40)
+        # A CinemaDNG frame is sixteen wider and ten taller than the menu says.
+        self.assertEqual(self.equ('DNG_PAD_W'), 16)
+        self.assertEqual(self.equ('DNG_PAD_H'), 10)
 
     def test_the_header_is_written_twice(self):
         """Once at open so the file always has a magic, once at close for the

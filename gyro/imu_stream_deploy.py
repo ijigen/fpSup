@@ -131,7 +131,6 @@ T_TEARDOWN = 0xC072EC58
 BUF_N, BUF_BYTES = 8, 0x4000
 B_CUR, B_FILL, B_DONE = 0xC072EBE0, 0xC072EBE4, 0xC072EBE8
 B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
-STREAM_GEOM_W = 0xC072E8F8
 POOL_PTR      = 0xC3757A7C
 
 # GHEAD unarmed, everything else zero.
@@ -209,8 +208,7 @@ def _place(measure_accel=False):
               ('accel state', ACC_STATE, ACC_WORDS * 4),
               # ring_task_deploy owns these, but only this script knows
               # where the hooks land -- so the overlap check lives here.
-              # five counters, then the latched recording geometry
-              ('writer counters', 0xC072E8E0, 7 * 4),
+              ('writer counters', 0xC072E8E0, 5 * 4),
               # the blocks are the allocator's; only their bookkeeping is here
               ('block state', 0xC072EBA0, (2 * BUF_N + 7) * 4),
               # the writer's own words and the four call-throughs.  These

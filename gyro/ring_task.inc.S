@@ -262,7 +262,20 @@
  * read as nothing useful when idle, so they can only be taken at record start. */
 .equ SENSOR_MODE_FN, 0xC032C720
 .equ EXPOSURE_FN,    0xC030C7F0
-.equ GEOMETRY,       0xC37CE210     /* {width, height, frame bytes} while recording */
+/* The output size, from the camera's own settings rather than a recording-time
+ * scratch word.  0xC37CE210 was the obvious-looking source and it is a trap:
+ * notes say it holds {1936, 1090, 3244544} at 1080p and reads zero at UHD, and
+ * it read zero right through a 35 s take here.  CameraMgrSetting has it while
+ * the camera is idle, so there is no race to lose -- FUN_c0206e98() returns the
+ * singleton and the live block is at +0x40, .h at +0 and .v at +4.  A
+ * CinemaDNG frame is sixteen wider and ten taller than the menu says.
+ *
+ * This is profilegen.S's pg_setting_dims, bounds and all, because it is the
+ * same question and it already had the right answer. */
+.equ F_CAMSETTING,   0xC0206E98
+.equ SETTING_DIMS,   0x40
+.equ DNG_PAD_W,      16
+.equ DNG_PAD_H,      10
 
 .equ PATH_MGR_SD,    0xC3438400
 .equ PATH_MGR_SSD,   0xC3438398

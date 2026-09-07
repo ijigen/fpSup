@@ -61,18 +61,7 @@
 .equ STREAM_R1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT when recording ended */
 .equ STREAM_R1_N,    0xC072E1D4     /* u32, times that has happened            */
 .equ STREAM_DRAINFN, 0xC072EC40     /* -> gyro_drain, placed by the deployer   */
-.equ STREAM_FLUSHFN, 0xC072EC44
-
-/* The recording geometry, latched by the accelerometer hook.
- *
- * 0xC37CE210 = {width, height, frame bytes} and it reads zero while the camera
- * is idle, so it can only be taken during a take.  Reading it at the record
- * start hook is a RACE with whoever publishes it: one take got 1936x1090 and
- * the next got zero.  The accel hook runs about twenty milliseconds in, by
- * which time it is certainly there, and it only has to win once. */
-.equ STREAM_GEOM_W,  0xC072E8F8
-.equ STREAM_GEOM_H,  0xC072E8FC
-.equ GEOMETRY_AT,    0xC37CE210    /* -> stream_flush, placed by the deployer */
+.equ STREAM_FLUSHFN, 0xC072EC44    /* -> stream_flush, placed by the deployer */
 .equ STREAM_R0_HEAD, 0xC072E1E0     /* u32, ring head offset at record start   */
 .equ STREAM_R0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
                                      * writer was constructed.  Beside F0_GC
