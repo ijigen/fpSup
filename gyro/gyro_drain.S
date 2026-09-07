@@ -86,17 +86,19 @@ gyro_drain:
      *
      * The audio producer is a DMA engine and tests nothing at all.  This is as
      * close to that as software gets. */
-10: mov     r0, r4
+10: lsl     r0, r4, #3                  @ what is left to move, in bytes
     movw    ip, #:lower16:STREAM_CLAIMFN
     movt    ip, #:upper16:STREAM_CLAIMFN
     ldr     ip, [ip]
     cmp     ip, #0
     beq     9f
-    blx     ip                          @ r0 = where, r1 = how many
-    cmp     r1, #0
-    beq     9f
-    mov     r7, r0
-    mov     r8, r1                      @ keep the count for the commit
+    blx     ip                          @ r0 = where, r1 = how many BYTES
+    cmp     r1, #8
+    blo     9f                          @ not even one whole record
+    bic     r1, r1, #7                  @ whole records only: the space provider
+    mov     r7, r0                      @ counts bytes and does not know ours
+    mov     r8, r1                      @ keep the byte count for the commit
+    lsr     r1, r1, #3                  @ and the record count for the loop
     sub     r4, r4, r1
 
 4:  cmp     r6, r9

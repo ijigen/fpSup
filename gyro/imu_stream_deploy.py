@@ -489,7 +489,7 @@ def take():
     # The part-filled block is the evidence that the space provider ran at all:
     # a stage that hands nothing over still leaves its claims here.
     print(f'current block {"none" if cur == 0xFFFFFFFF else cur}   '
-          f'{fill} claimed, {done} committed of {BUF_BYTES // 8}')
+          f'{fill} claimed, {done} committed of {BUF_BYTES} bytes')
     print(f'starts {r0_n}   stops {r1_n}')
     print()
 

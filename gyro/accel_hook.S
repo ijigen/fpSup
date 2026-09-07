@@ -132,15 +132,15 @@ accel_hook:
 
     /* Ask for one, write it, say done.  No index, no mask, no slot arithmetic:
      * this hook does not know the ring is divided into anything. */
-    mov     r0, #1
+    mov     r0, #8                      @ one record, in bytes
     movw    ip, #:lower16:STREAM_CLAIMFN
     movt    ip, #:upper16:STREAM_CLAIMFN
     ldr     ip, [ip]
     cmp     ip, #0
     beq     3f
-    blx     ip                          @ r0 = where, r1 = how many
-    cmp     r1, #0
-    beq     3f
+    blx     ip                          @ r0 = where, r1 = how many BYTES
+    cmp     r1, #8
+    blo     3f                          @ a whole record or nothing
     mov     r1, r0
 
     ldrsh   r0, [r4]
@@ -152,7 +152,7 @@ accel_hook:
     mov     r0, #TAG_ACCEL
     strh    r0, [r1, #4]                @ last: the tag publishes the record
 
-    mov     r0, #1
+    mov     r0, #8
     movw    ip, #:lower16:STREAM_COMMITFN
     movt    ip, #:upper16:STREAM_COMMITFN
     ldr     ip, [ip]

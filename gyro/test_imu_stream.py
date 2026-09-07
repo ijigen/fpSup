@@ -140,11 +140,37 @@ class RecordShape(unittest.TestCase):
         for gone in ('BUF_MASK', 'RING_MASK', 'ring_slot', 'STREAM_INDEX'):
             self.assertNotIn(gone, body, f'{gone} is arithmetic on a tiled ring')
         self.assertIn('B_PTR', body)
-        self.assertIn('BUF_RECORDS', body)
+        self.assertIn('BUF_BYTES', body)
+
+    def test_the_space_provider_counts_bytes(self):
+        """It hands out room, and room is bytes.  It used to count records,
+        which only works while every producer emits the same fixed size -- and
+        a gcsv row does not.  The producers do the dividing now; the provider
+        does not know what a record is."""
+        space = self.code(SPACE) if hasattr(self, 'code') else SPACE
+        self.assertNotIn('BUF_RECORDS', SPACE,
+                         'the provider must not know the record size')
+        for name in ('stream_claim', 'stream_commit', 'stream_flush'):
+            body = SPACE[SPACE.index(name + ':'):]
+            self.assertNotIn('lsl     r1, r4, #3', body,
+                             f'{name} still scales a count into bytes')
+
+    def test_a_producer_asks_in_bytes_and_divides_its_own_records(self):
+        """The accelerometer asks for 8 and refuses less; the drain asks for
+        what is left in bytes, rounds down to whole records, and commits the
+        byte count.  A producer that took a partial record would write half of
+        one at a block boundary."""
+        accel = (HERE / 'accel_hook.S').read_text()
+        self.assertIn('mov     r0, #8', accel)
+        self.assertIn('cmp     r1, #8', accel)
+        drain = (HERE / 'gyro_drain.S').read_text()
+        self.assertIn('lsl     r0, r4, #3', drain)
+        self.assertIn('bic     r1, r1, #7', drain, 'whole records only')
+        self.assertIn('lsr     r1, r1, #3', drain)
 
     def test_a_block_is_handed_over_when_it_is_used_up(self):
         commit = SPACE[SPACE.index('stream_commit:'):]
-        self.assertIn('BUF_RECORDS', commit)
+        self.assertIn('BUF_BYTES', commit)
         self.assertIn('blo     9f', commit, 'the test is not against capacity')
         self.assertIn('B_BUSY', commit, 'the block is not marked as gone')
         self.assertIn('STREAM_SIGFN', commit)
@@ -166,14 +192,22 @@ class RecordShape(unittest.TestCase):
                               f'{name} still writes a record')
         self.assertIn('gyro_head', TRIG, 'the record trigger stopped measuring')
 
-    def test_records_are_eight_bytes_apart(self):
-        """The stride lives in the space provider now, and only there: it is the
-        only thing that turns a record count into an address."""
+    def test_the_stride_belongs_to_the_producer_now(self):
+        """It used to live in the space provider, and only there.  That worked
+        while every producer emitted the same fixed eight bytes; a gcsv row does
+        not, so the provider hands out BYTES and each producer divides its own.
+        The provider must not know the record size at all -- if it does, the
+        next producer with a different one silently gets the wrong room."""
         body = SPACE[SPACE.index('stream_claim:'):]
-        self.assertRegex(body, r'lsl #3')
-        for name, src in WRITERS:
-            self.assertNotRegex(src[src.index('push'):], r'lsl\s+#3',
-                                f'{name} is doing address arithmetic')
+        self.assertNotIn('BUF_RECORDS', SPACE)
+        # Any shift by three anywhere in the provider is the record size
+        # creeping back in.  Shifts by two are the word-indexed B_PTR/B_BUSY
+        # lookups and belong there.
+        self.assertNotRegex(SPACE, r'ls[lr]\s[^\n]*#3\b',
+                            'the provider is scaling by the record size')
+        drain = (HERE / 'gyro_drain.S').read_text()
+        self.assertRegex(drain, r'lsl\s+r0, r4, #3')
+        self.assertIn('bic     r1, r1, #7', drain, 'whole records only')
 class Header(unittest.TestCase):
     """The .GYR v7 header.  The camera writes it; gyr7.py reads it; the two
     have to agree field for field, and nothing else checks that."""
