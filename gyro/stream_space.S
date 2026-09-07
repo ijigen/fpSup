@@ -188,3 +188,83 @@ stream_commit:
 9:  st_unlock r7
     pop     {r1, r2, r3, r4, r5, r6, r7, lr}
     bx      lr
+
+/* ------------------------------------------------------- the last block */
+
+/* stream_flush -- hand over the part-filled block, as an ordinary job.
+ *
+ * The stop message carries no data.  AudioFileWriter::v1 breaks on J_STOP
+ * before it writes anything, and the four words audio copies into that message
+ * (DAT_c07e3dc8) are four zeros -- it is a marker and nothing else.  Audio's
+ * tail arrives ahead of it, as a normal job, because the DSP knows which of its
+ * buffers is the last one and says so.  Nothing tells US that, so the take
+ * itself has to: take_close calls this before it posts the marker, and the
+ * mailbox keeps the order.
+ *
+ * Only COMMITTED records go.  A claim that has not been committed is a producer
+ * halfway through writing its records; interrupts are off here, so B_DONE is
+ * the honest length and B_FILL is not.
+ *
+ * This is not the filler making a judgement -- the filler still only ever says
+ * "the block is full".  This is the end of the take, which is a different event
+ * and has a different caller.
+ */
+    .global stream_flush
+stream_flush:
+    push    {r4, r5, r6, lr}
+    st_lock r6
+
+    movw    r5, #:lower16:B_CUR
+    movt    r5, #:upper16:B_CUR
+    ldr     r5, [r5]
+    cmn     r5, #1
+    beq     9f                          @ no block in hand: nothing to flush
+
+    movw    r4, #:lower16:B_DONE
+    movt    r4, #:upper16:B_DONE
+    ldr     r4, [r4]
+    cmp     r4, #0
+    beq     9f                          @ empty: leave it for the next take
+
+    movw    r1, #:lower16:B_BUSY
+    movt    r1, #:upper16:B_BUSY
+    mov     r2, #1
+    str     r2, [r1, r5, lsl #2]
+
+    movw    r1, #:lower16:B_HANDED
+    movt    r1, #:upper16:B_HANDED
+    ldr     r2, [r1]
+    add     r2, r2, #1
+    str     r2, [r1]
+
+    movw    r1, #:lower16:B_PTR
+    movt    r1, #:upper16:B_PTR
+    ldr     r0, [r1, r5, lsl #2]        @ r0 = the block
+    lsl     r1, r4, #3                  @ r1 = committed records, in bytes
+    movw    r2, #:lower16:B_OFF
+    movt    r2, #:upper16:B_OFF
+    ldr     r3, [r2]
+    add     r4, r3, r1
+    str     r4, [r2]                    @ the next take starts after it
+    mov     r2, r3                      @ r2 = where it belongs in the file
+    mov     r3, r5                      @ r3 = which block, so it can be freed
+
+    movw    ip, #:lower16:B_CUR
+    movt    ip, #:upper16:B_CUR
+    mvn     r4, #0
+    str     r4, [ip]                    @ take a fresh one on the next claim
+
+    /* Busy is set and B_CUR is cleared, so the block is nobody else's: let
+     * interrupts back in before calling out, exactly as stream_commit does. */
+    st_unlock r6
+    movw    ip, #:lower16:STREAM_SIGFN
+    movt    ip, #:upper16:STREAM_SIGFN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    blxne   ip                          @ writer_post(ptr, len, offset, block)
+    pop     {r4, r5, r6, lr}
+    bx      lr
+
+9:  st_unlock r6
+    pop     {r4, r5, r6, lr}
+    bx      lr

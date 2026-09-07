@@ -61,6 +61,7 @@
 .equ STREAM_R1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT when recording ended */
 .equ STREAM_R1_N,    0xC072E1D4     /* u32, times that has happened            */
 .equ STREAM_DRAINFN, 0xC072EC40     /* -> gyro_drain, placed by the deployer   */
+.equ STREAM_FLUSHFN, 0xC072EC44    /* -> stream_flush, placed by the deployer */
 .equ STREAM_R0_HEAD, 0xC072E1E0     /* u32, ring head offset at record start   */
 .equ STREAM_R0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
                                      * writer was constructed.  Beside F0_GC

@@ -664,6 +664,21 @@ take_close:
     cmp     r0, #0
     beq     4f                          @ no thread: nothing to wait for
 
+    /* The tail, before the marker.  The stop message carries no data --
+     * AudioFileWriter::v1 breaks on J_STOP before it writes, and the four
+     * words audio copies into that message (DAT_c07e3dc8) are zeros -- so
+     * the part-filled block has to arrive as an ordinary job ahead of it.
+     * Audio's DSP says which of its buffers is last; nothing says that to
+     * us, so the end of the take says it.  One mailbox, so the order holds.
+     *
+     * Off until the space provider is on: at stage 2 there are no blocks to
+     * flush and the pointer is zero. */
+    movw    ip, #:lower16:STREAM_FLUSHFN
+    movt    ip, #:upper16:STREAM_FLUSHFN
+    ldr     ip, [ip]
+    cmp     ip, #0
+    blxne   ip
+
     mov     r0, #1                      @ J_STOP
     mov     r1, #0
     mov     r2, #0

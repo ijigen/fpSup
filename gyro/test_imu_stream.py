@@ -289,6 +289,38 @@ class AudioShape(unittest.TestCase):
                             'attach dereferences the body object')
         self.assertNotIn('ldr     r1, [r1]', window[window.rindex('W_BODYOBJ'):])
 
+    def test_the_tail_goes_before_the_marker(self):
+        """FUN_c01fbc80 copies four words into the stop message and audio's are
+        DAT_c07e3dc8 = four zeros, so AudioFileWriter::v1 breaks on J_STOP
+        without writing anything.  The last part-filled block therefore has to
+        be posted as an ordinary job BEFORE the marker, or the tail of every
+        take is lost."""
+        c = self.whole('take_close')
+        flush = c.index('STREAM_FLUSHFN')
+        stop = c.index('bl      writer_make_job')
+        self.assertLess(flush, stop,
+                        'the tail must be posted before the stop marker')
+
+    def test_the_stop_message_carries_no_data(self):
+        """Audio's marker is four zero words and a flag.  Ours must be too:
+        a stop job with a length would be written by a body that never looks
+        at it."""
+        c = self.whole('take_close')
+        stop = c.index('mov     r0, #1                      @ J_STOP')
+        args = c[stop:c.index('bl      writer_make_job', stop)]
+        for r in ('r1', 'r2', 'r3'):
+            self.assertIn(f'mov     {r}, #0', args)
+
+    def test_the_flush_writes_only_what_was_committed(self):
+        """B_FILL counts records handed out; B_DONE counts records written.
+        A claim that has not committed is a producer mid-write, so flushing
+        B_FILL would write records that do not exist yet."""
+        f = (HERE / 'stream_space.S').read_text()
+        body = f[f.index('\nstream_flush:'):]
+        self.assertIn('B_DONE', body)
+        self.assertNotIn('B_FILL', body,
+                         'the flush must not trust the claim count')
+
     def test_the_file_is_closed_by_its_destructor_alone(self):
         """AudioFileWriter::v0 calls XC_MediaFile::v0 and never F_CLOSE: the
         destructor's first act is FUN_c0366020, which is F_CLOSE.  Calling it

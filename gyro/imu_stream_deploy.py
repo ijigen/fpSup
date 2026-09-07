@@ -52,7 +52,7 @@ PRODUCERS = {
     'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D4C8, 0xE3A02000, 0),
     # Not hooks.  Called.
     'drain': (0xC072E300, 'gyro_drain.S',       (),            None,       None,       0),
-    'space': (0xC072E900, 'stream_space.S',     (),            None,       None,       0),
+    'space': (0xC072EC60, 'stream_space.S',     (),            None,       None,       0),
     'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC03790B8, 0xE5DB25CE, 0),
     'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC038C484, 0xE3500000, 0),
 }
@@ -119,6 +119,7 @@ STREAM_SIGFN  = 0xC072E1A8
 STREAM_CLAIMFN  = 0xC072EC38
 STREAM_COMMITFN = 0xC072EC3C
 STREAM_DRAINFN  = 0xC072EC40
+STREAM_FLUSHFN  = 0xC072EC44
 T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 T_BUILD = 0xC072EC54
 T_TEARDOWN = 0xC072EC58
@@ -130,8 +131,10 @@ POOL_PTR      = 0xC3757A7C
 # GHEAD unarmed, everything else zero.
 STATE_INIT = struct.pack('<20I', *([0] * 16 + [0xFFFFFFFF, 0, 0, 0]))
 
-ACC_CODE_AT   = 0xC072ECC0   # only the measuring build needs the room;
-                             # 0xC072E900 is the space provider now
+ACC_CODE_AT   = 0xC072E900   # only the measuring build needs the room.  The
+                             # space provider used to be here; stream_flush
+                             # pushed it past the writer words, which freed
+                             # 0xC072E900..0xC072EBA0 for the measuring build
 ACC_STATE     = 0xC072E8C0
 ACC_WORDS     = 5
 ACC_DANGER    = 500
@@ -329,6 +332,7 @@ def arm(only=None, measure_accel=False):
     base = PRODUCERS['space'][0]
     _setw(STREAM_CLAIMFN, base + syms['stream_claim'], 'stream_claim')
     _setw(STREAM_COMMITFN, base + syms['stream_commit'], 'stream_commit')
+    _setw(STREAM_FLUSHFN, base + syms['stream_flush'], 'stream_flush')
     syms = _symbols(HERE / 'gyro_drain.S')
     _setw(STREAM_DRAINFN, PRODUCERS['drain'][0] + syms['gyro_drain'], 'gyro_drain')
 
@@ -423,6 +427,7 @@ def stage(n):
         T_CLOSEFN:       at['take_close']  if n >= 2 else 0,
         STREAM_CLAIMFN:  None              if n >= 3 else 0,
         STREAM_COMMITFN: None              if n >= 3 else 0,
+        STREAM_FLUSHFN:  None              if n >= 3 else 0,
         STREAM_DRAINFN:  None              if n >= 4 else 0,
         STREAM_SIGFN:    at['writer_post'] if n >= 5 else 0,
     }
@@ -430,10 +435,12 @@ def stage(n):
     base = PRODUCERS['space'][0]
     real = {STREAM_CLAIMFN: base + syms['stream_claim'],
             STREAM_COMMITFN: base + syms['stream_commit'],
+            STREAM_FLUSHFN: base + syms['stream_flush'],
             STREAM_DRAINFN: PRODUCERS['drain'][0]
                             + _symbols(HERE / 'gyro_drain.S')['gyro_drain']}
     names = {T_OPENFN: 'take_open', T_CLOSEFN: 'take_close',
              STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
+             STREAM_FLUSHFN: 'stream_flush',
              STREAM_DRAINFN: 'gyro_drain', STREAM_SIGFN: 'writer_post'}
     _setw(T_BUILD, 5, 'how far take_open builds')
     _setw(T_TEARDOWN, 5, 'how far take_close tears down')
