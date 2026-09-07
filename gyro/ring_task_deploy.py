@@ -163,7 +163,8 @@ DRY_RUN = False   # set by --dry-run: everything except the card
 # blob the card carries and the blob the USB deploy writes are the same bytes.
 GSUP_ROUTINES = ('writer_body', 'take_open', 'take_close', 'writer_post',
                  'mpool_init_jobs', 'blocks_open', 'gsup_boot',
-                 'writer_path', 'writer_header', 'gcsv_head1', 'gcsv_head2')
+                 'writer_path', 'writer_header', 'gcsv_head1', 'gcsv_head2',
+                 'writer_clip')
 
 
 def patch_offsets(code, syms):

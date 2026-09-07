@@ -343,6 +343,13 @@
 .equ G_OFF_HEADER,   0x20
 .equ G_OFF_HEAD1,    0x24
 .equ G_OFF_HEAD2,    0x28
+.equ G_OFF_CLIP,     0x2C
+
+/* 0 = CinemaDNG, 1 = MOV, twelve bytes past the frame size in the same block
+ * -- measured by switching the camera over and diffing, and confirmed in the
+ * live block rather than the shell's mirror of it. */
+.equ SETTING_FORMAT, SETTING_DIMS + 0x0C
+.equ FORMAT_CDNG,    0
 
 /* Where the six fixed-width digits of the drop count sit in the gcsv header.
  * Everything before them is a constant, so the close can rewrite them in place

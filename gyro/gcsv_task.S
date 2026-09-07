@@ -64,21 +64,9 @@ writer_openfile:
     blx     ip
     mov     r5, r0                      @ the volume: the ctor's, and the name's
     bl      take_path
-    mov     r6, r0
-
-    /* "\GYRO\A001_037" is fourteen bytes; the extension is ours. */
-    mov     r0, #'.'
-    strb    r0, [r6, #14]
     mov     r0, #'g'
-    strb    r0, [r6, #15]
-    mov     r0, #'c'
-    strb    r0, [r6, #16]
-    mov     r0, #'s'
-    strb    r0, [r6, #17]
-    mov     r0, #'v'
-    strb    r0, [r6, #18]
-    mov     r0, #0
-    strb    r0, [r6, #19]
+    bl      clip_path
+    mov     r6, r0
 
     mov     r1, r5
     mov     r0, r4
@@ -127,6 +115,96 @@ writer_openfile:
     blx     ip
 
 9:  pop     {r4, r5, r6, lr}
+    bx      lr
+
+/* clip_path -- the log's path, beside the clip.  r0 = 'g' for the .gcsv or
+ * 'j' for the .json; returns the path.
+ *
+ *   CinemaDNG   \CINEMA\A001_037\A001_037.gcsv
+ *   MOV         \CINEMA\A001_037.gcsv
+ *
+ * A CinemaDNG take is a folder of frames and the sidecars belong inside it; a
+ * MOV take is one file and they belong beside it.  Which one is happening is
+ * twelve bytes past the frame size in the settings block the dimensions
+ * already come from -- 0 is CinemaDNG, 1 is MOV -- so this costs one load and
+ * needs no new address.
+ *
+ * Nothing is created here.  \CINEMA and the clip's folder are the camera's
+ * own, made before this runs, which is why this edition needs no folder of its
+ * own and no mkdir on the record path.
+ */
+    .global clip_path
+clip_path:
+    push    {r4, r5, r6, r7, r8, lr}
+    mov     r7, r0                      @ 'g' or 'j'
+
+    mov     r0, #G_OFF_PATH
+    bl      blob_at
+    mov     r6, r0
+    movw    r0, #0x435C
+    movt    r0, #0x4E49                 @ "\\CIN"
+    str     r0, [r6]
+    movw    r0, #0x4D45
+    movt    r0, #0x5C41                 @ "EMA\\"
+    str     r0, [r6, #4]
+    add     r6, r6, #8
+
+    mov     r0, #G_OFF_CLIP
+    bl      blob_at
+    mov     r4, r0
+    bl      copy_clip                   @ r6 advances past the eight characters
+
+    /* CinemaDNG puts the frames in a folder of their own; the sidecars go in
+     * with them, so the name appears twice. */
+    movw    ip, #:lower16:F_CAMSETTING
+    movt    ip, #:upper16:F_CAMSETTING
+    blx     ip
+    cmp     r0, #0
+    beq     1f
+    ldr     r0, [r0, #SETTING_FORMAT]
+    cmp     r0, #FORMAT_CDNG
+    bne     1f
+    mov     r0, #'\\'
+    strb    r0, [r6], #1
+    bl      copy_clip
+
+1:  mov     r0, #'.'
+    strb    r0, [r6], #1
+    mov     r0, r7
+    strb    r0, [r6], #1                @ 'g' or 'j'
+    cmp     r7, #'g'
+    bne     2f
+    mov     r0, #'c'
+    strb    r0, [r6], #1
+    mov     r0, #'s'
+    strb    r0, [r6], #1
+    mov     r0, #'v'
+    strb    r0, [r6], #1
+    b       3f
+2:  mov     r0, #'s'
+    strb    r0, [r6], #1
+    mov     r0, #'o'
+    strb    r0, [r6], #1
+    mov     r0, #'n'
+    strb    r0, [r6], #1
+3:  mov     r0, #0
+    strb    r0, [r6]
+    mov     r0, #G_OFF_PATH
+    bl      blob_at
+    pop     {r4, r5, r6, r7, r8, lr}
+    bx      lr
+
+/* copy_clip -- r4 = the clip name, r6 = where it goes.  Advances r6. */
+copy_clip:
+    push    {r0, r1, r2, lr}
+    mov     r1, #0
+1:  ldrb    r0, [r4, r1]
+    cmp     r0, #0
+    beq     2f
+    strb    r0, [r6], #1
+    add     r1, r1, #1
+    b       1b
+2:  pop     {r0, r1, r2, lr}
     bx      lr
 
 /* gcsv_header -- build the header in the text buffer and write it.

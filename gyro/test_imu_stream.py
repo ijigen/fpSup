@@ -408,6 +408,26 @@ class Editions(unittest.TestCase):
             i = self.R.GSUP_ROUTINES.index(absent)
             self.assertEqual(struct.unpack_from('<I', code, i * 4)[0], 0)
 
+    def test_the_sidecars_go_where_the_take_does(self):
+        """A CinemaDNG take is a folder of frames and the sidecars belong in it;
+        a MOV take is one file and they belong beside it.  Which is happening
+        sits twelve bytes past the frame size in the settings block the
+        dimensions already come from -- measured by switching the camera over
+        and diffing, then confirmed against the live block rather than the
+        shell's mirror of it."""
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        self.assertIn('.equ SETTING_FORMAT, SETTING_DIMS + 0x0C', inc)
+        self.assertIn('.equ FORMAT_CDNG,    0', inc)
+        task = (HERE / 'gcsv_task.S').read_text()
+        path = task[task.index('\nclip_path:'):task.index('\ncopy_clip:')]
+        self.assertIn('SETTING_FORMAT', path)
+        self.assertIn('FORMAT_CDNG', path)
+        # the clip name twice for CinemaDNG, once for MOV
+        self.assertEqual(path.count('bl      copy_clip'), 2)
+        # and nothing here creates a directory: they are the camera's own
+        for call in ('F_DIR_MKDIR', 'make_gyro_dir'):
+            self.assertNotIn(call, task)
+
     def test_a_block_becomes_one_write(self):
         """16 KiB is the trigger unit -- where "the buffer is full" happens --
         not a write size.  Writing a block's rows in three 16 KiB pieces took
@@ -577,10 +597,15 @@ class AudioShape(unittest.TestCase):
             self.assertIn(field, c, f'take_path must read the manager\'s {field}')
         self.assertIn('O_AUTORSTFLG', c,
                       'the saved maximum only counts when AutoRstFlg is clear')
-        self.assertIn("mov     r0, #'G'", c)
-        self.assertIn("mov     r0, #'Y'", c)
-        self.assertIn("mov     r0, #'R'", c)
-        self.assertIn('bl      take_path', self.whole('writer_openfile'))
+        # take_path works out the NAME; where the file goes is the edition's.
+        self.assertIn('G_OFF_CLIP', c)
+        self.assertNotIn("mov     r0, #'G'", c, 'the name is not a path')
+        openfile = self.whole('writer_openfile')
+        self.assertIn('bl      take_path', openfile)
+        self.assertIn('bl      base_path', openfile)
+        base = self.whole('base_path')
+        for ch in ("'G'", "'Y'", "'R'"):
+            self.assertIn(f'mov     r0, #{ch}', base)
 
     def test_no_fixed_path_is_left_in_the_blob(self):
         """The deployer used to patch a name into the blob.  If a literal comes

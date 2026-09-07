@@ -55,6 +55,7 @@ gsup_offsets:
     .word   0       @ +0x20  writer_header
     .word   0       @ +0x24  the first half of the gcsv header (that edition)
     .word   0       @ +0x28  the second half (that edition)
+    .word   0       @ +0x2C  writer_clip
 
 /* blob_at -- r0 = a byte offset into gsup_offsets.  Returns that entry as an
  * address in this blob.
@@ -916,34 +917,26 @@ take_path:
     movhi   r5, r0
 4:  add     r5, r5, #1                  @ the one about to be recorded
 
-    mov     r0, #G_OFF_PATH
+    /* The eight characters, and only those.  Where the file goes is the
+     * edition's business -- Base puts it in \\GYRO, the gcsv edition puts it
+     * beside the clip -- and the two agree on nothing except this name, which
+     * is the part that took the manager arithmetic to work out. */
+    mov     r0, #G_OFF_CLIP
     bl      blob_at
     mov     r6, r0
-    movw    r0, #0x475C
-    movt    r0, #0x5259                 @ "\\GYR"
-    str     r0, [r6]
-    movw    r0, #0x5C4F                 @ "O\\"
-    strh    r0, [r6, #4]
     ldrb    r0, [r4, #8]                @ the camera letter
-    strb    r0, [r6, #6]
-    add     r0, r6, #7
+    strb    r0, [r6]
+    mov     r0, r6
+    add     r0, r0, #1
     ldr     r1, [r4, #0x0C]             @ the reel
     bl      put_dec3
     mov     r0, #'_'
-    strb    r0, [r6, #10]
-    add     r0, r6, #11
+    strb    r0, [r6, #4]
+    add     r0, r6, #5
     mov     r1, r5
     bl      put_dec3
-    mov     r0, #'.'
-    strb    r0, [r6, #14]
-    mov     r0, #'G'
-    strb    r0, [r6, #15]
-    mov     r0, #'Y'
-    strb    r0, [r6, #16]
-    mov     r0, #'R'
-    strb    r0, [r6, #17]
     mov     r0, #0
-    strb    r0, [r6, #18]
+    strb    r0, [r6, #8]
     mov     r0, r6
     pop     {r4, r5, r6, lr}
     bx      lr
@@ -973,7 +966,14 @@ put_dec3:
  * its NUL exactly; the rest is slack so a longer scheme does not have to move
  * anything. */
 writer_path:
-    .space  32
+    .space  48
+    .align  2
+
+/* The eight characters the camera calls this take, and a NUL.  take_path fills
+ * it; each edition builds its own path around it. */
+    .global writer_clip
+writer_clip:
+    .space  12
     .align  2
 
 /* The job pool, in the same blob so the calls resolve without a relocation

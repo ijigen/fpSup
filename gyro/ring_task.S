@@ -142,6 +142,7 @@ writer_openfile:
     blx     ip
     mov     r5, r0                      @ the volume: the ctor's, and the name's
     bl      take_path
+    bl      base_path
     mov     r6, r0
     mov     r1, r5
     mov     r0, r4
@@ -407,3 +408,48 @@ put_header:
 writer_header:
     .space  HDR_BYTES
     .align  2
+
+/* base_path -- \GYRO\A001_037.GYR, around the clip name take_path worked out.
+ *
+ * Where a file goes is the edition's business now: the core knows what the take
+ * is called, which is the part that needed the manager arithmetic, and each
+ * edition decides the rest.  Base has always put its log here and the folder
+ * rule in its README is about this directory.
+ */
+base_path:
+    push    {r4, r5, r6, lr}
+    mov     r0, #G_OFF_PATH
+    bl      blob_at
+    mov     r6, r0
+    movw    r0, #0x475C
+    movt    r0, #0x5259                 @ "\\GYR"
+    str     r0, [r6]
+    movw    r0, #0x5C4F                 @ "O\\"
+    strh    r0, [r6, #4]
+    mov     r0, #G_OFF_CLIP
+    bl      blob_at
+    mov     r4, r0
+    mov     r5, #0
+1:  ldrb    r0, [r4, r5]
+    cmp     r0, #0
+    beq     2f
+    add     r1, r6, #6
+    strb    r0, [r1, r5]
+    add     r5, r5, #1
+    b       1b
+2:  add     r6, r6, #6
+    add     r6, r6, r5                  @ past the name
+    mov     r0, #'.'
+    strb    r0, [r6], #1
+    mov     r0, #'G'
+    strb    r0, [r6], #1
+    mov     r0, #'Y'
+    strb    r0, [r6], #1
+    mov     r0, #'R'
+    strb    r0, [r6], #1
+    mov     r0, #0
+    strb    r0, [r6]
+    mov     r0, #G_OFF_PATH
+    bl      blob_at
+    pop     {r4, r5, r6, lr}
+    bx      lr

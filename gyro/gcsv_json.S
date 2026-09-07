@@ -606,21 +606,11 @@ j_open:
     beq     9f
     add     r4, r4, #JSON_FOBJ_OFF
 
-    mov     r0, #G_OFF_PATH
-    bl      blob_at
+    mov     r0, #'j'
+    bl      clip_path                   @ the same path with a different suffix
     cmp     r0, #0
     beq     9f
     mov     r5, r0
-    mov     r0, #'j'
-    strb    r0, [r5, #15]
-    mov     r0, #'s'
-    strb    r0, [r5, #16]
-    mov     r0, #'o'
-    strb    r0, [r5, #17]
-    mov     r0, #'n'
-    strb    r0, [r5, #18]
-    mov     r0, #0
-    strb    r0, [r5, #19]
 
     movw    ip, #:lower16:F_MGR
     movt    ip, #:upper16:F_MGR
@@ -642,16 +632,6 @@ j_open:
     movt    ip, #:upper16:F_OPEN
     blx     ip
     mov     r6, r0
-
-    /* Put the log's name back before anything else uses it. */
-    mov     r0, #'g'
-    strb    r0, [r5, #15]
-    mov     r0, #'c'
-    strb    r0, [r5, #16]
-    mov     r0, #'s'
-    strb    r0, [r5, #17]
-    mov     r0, #'v'
-    strb    r0, [r5, #18]
 
     cmp     r6, #0
     beq     8f
