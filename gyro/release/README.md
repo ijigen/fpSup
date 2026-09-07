@@ -23,6 +23,25 @@ profile carries no distortion), [v1.2](fp-gyro-sup-v1.2.zip) (portrait takes nee
 Gyroflow talked round by hand) and [v1.1](fp-gyro-sup-v1.1.zip) (GYR +
 post-processing transaction; still the one to use for MOV).
 
+### Two editions
+
+|  | **fpGyroSup** v1.4 | **fpGyroSup Base** v1 |
+|---|---|---|
+| The camera writes | `.gcsv` and `.json`, during the take | `.GYR`, one per take |
+| Converting | nothing to do | [in a browser](https://ijigen.github.io/fpSup/gyro/web/), or `gyro/gyr7.py` |
+| Gyro rate in the log | 1250 Hz, decimated | 2499.466 Hz, every sample |
+| Accelerometer | 50 Hz, in the log | 46 Hz, in the file; your choice in the log |
+| Lens profile | the camera's own distortion data | you name the lens; distortion zero |
+| USB SSD | untested | verified: log beside the clip on either disk |
+| Download | [fp-gyro-sup-v1.4.zip](fp-gyro-sup-v1.4.zip) | [fp-gyro-sup-base-v1.zip](fp-gyro-sup-base-v1.zip) |
+
+**Base** is the stream on its own: nothing is computed on the camera and nothing
+is thrown away, so every sample the sensor produced is in the file and the
+conversion happens where you can look at it. Take it if you want the raw
+capture, if you record to a USB SSD, or if you want the full 2500 Hz. Take the
+main release if you want the two files ready beside the clip and nothing to run
+afterwards.
+
 ---
 
 ## English
@@ -214,6 +233,22 @@ the USB shell included. The downloadable package is the no-shell release.
 的對焦距離。大幅度的拉焦不會被追蹤 —— Gyroflow 的鏡頭 profile 沒有辦法表達這件事。
 已在兩顆定焦鏡上驗證;變焦鏡固定在一個焦段應該沒問題,拍攝中變焦則不行。
 相機沒有校正資料的鏡頭,和以前一樣輸出全零。
+
+### 兩個版本
+
+|  | **fpGyroSup** v1.4 | **fpGyroSup Base** v1 |
+|---|---|---|
+| 相機寫出 | 錄影當下寫 `.gcsv` 與 `.json` | 每趟一個 `.GYR` |
+| 轉檔 | 不用做 | [瀏覽器](https://ijigen.github.io/fpSup/gyro/web/) 或 `gyro/gyr7.py` |
+| 記錄檔的陀螺率 | 1250 Hz(抽樣過) | 2499.466 Hz,一筆不漏 |
+| 水平儀 | 50 Hz,寫進記錄檔 | 46 Hz 在檔案裡,要不要進記錄檔由你決定 |
+| 鏡頭 profile | 相機自己的畸變資料 | 你填鏡頭,畸變為零 |
+| USB SSD | 尚未測試 | 已實測:log 跟片段放在同一顆磁碟 |
+| 下載 | [fp-gyro-sup-v1.4.zip](fp-gyro-sup-v1.4.zip) | [fp-gyro-sup-base-v1.zip](fp-gyro-sup-base-v1.zip) |
+
+**Base** 是把串流單獨拿出來:相機不算任何東西、也不丟棄任何東西,所以感測器產生的
+每一筆都在檔案裡,而轉檔發生在你看得見的地方。想要原始資料、要錄到 USB SSD、或
+想要完整 2500 Hz,就用它;想要兩個檔案直接躺在片段旁邊、事後什麼都不用跑,就用主線版。
 
 ### v1.3 帶來、現在仍然成立的
 

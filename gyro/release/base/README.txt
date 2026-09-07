@@ -1,4 +1,4 @@
-gyro_sup_base_v1
+fpGyroSup Base v1 -- SIGMA fp firmware Ver.5.02 only
 
 Put AutoRun.txt and VSHL.BIN in the root of the SD card the camera boots
 from, and make sure there is a folder called
@@ -27,4 +27,9 @@ else is wrong and nothing else needs doing.  Formatting a card removes it,
 so put it back after you format.
 
 This card carries the stream and nothing else: no gcsv on the camera, no
-lens profile, no USB shell.
+lens profile, no USB shell.  If you would rather the camera wrote the .gcsv and
+the .json for you and left no .GYR at all, that is the main fpGyroSup release,
+in the same folder.
+
+    https://ijigen.github.io/fpSup/gyro/web/     convert in a browser
+    ./gyro/gyr7.py                               convert on the command line

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package gyro_sup_base for release.
+"""Package fpGyroSup Base for release.
 
     ./gyro/release_base.py v1
 
@@ -69,12 +69,14 @@ def main():
     print(r.stdout.rstrip().splitlines()[-1].strip())
     check_sections(BASE / 'VSHL.BIN')
 
-    name = f'gyro_sup_base_{a.version}'
+    # Named like the rest of the family: this is an edition of fpGyroSup,
+    # not a separate thing.
+    name = f'fp-gyro-sup-base-{a.version}'
     zpath = HERE / 'release' / f'{name}.zip'
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as z:
         for f in FILES:
             z.write(BASE / f, f'{name}/{f}')
-    sums = HERE / 'release' / f'SHA256SUMS-{name}.txt'
+    sums = HERE / 'release' / f'SHA256SUMS-base-{a.version}.txt'
     lines = [f'{sha(BASE / f)}  {f}' for f in FILES]
     lines.append(f'{sha(zpath)}  {zpath.name}')
     sums.write_text('\n'.join(lines) + '\n')
