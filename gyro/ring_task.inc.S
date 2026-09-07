@@ -302,6 +302,20 @@
 .equ ARM_STOP,  0xEB000000 | (((STOP_AT  - STOP_SITE  - 8) >> 2) & 0xFFFFFF)
 
 .equ W_VT_BODY,      W_VT + W_VT_SLOT   /* the slot the pool worker calls */
+/* The gcsv writer's state, in the gap the space provider left when it moved
+ * above the writer words: 0xC072E8F4..0xC072EBA0 is 684 bytes of nothing.
+ *
+ * G_ROW is `t` -- the sample number, which is the whole of the clock because
+ * tscale is the sample period.  Per take, so take_open clears it.
+ * G_HELD is one row held back by a record, so a reading can land on the sample
+ * it followed; it survives a block boundary because blocks are a card-sized
+ * unit and a row is not. */
+.equ G_ROW,          0xC072E940
+.equ G_HELD,         0xC072E944     /* 8 bytes, then the flag at +8            */
+.equ G_HELD_OK,      0xC072E94C
+.equ G_TEXT,         0xC072E950     /* the text buffer the block turns into    */
+.equ G_WORDS,        5
+
 .equ F_CACHE,        0xC000E91C     /* clean+invalidate, so written code is real */
 
 .equ PATH_MGR_SD,    0xC3438400
