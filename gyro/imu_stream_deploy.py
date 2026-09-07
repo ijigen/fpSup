@@ -123,6 +123,7 @@ T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 T_BUILD = 0xC072EC54
 T_TEARDOWN = 0xC072EC58
 BUF_N, BUF_BYTES = 8, 0x4000
+B_CUR, B_FILL, B_DONE = 0xC072EBE0, 0xC072EBE4, 0xC072EBE8
 B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
 POOL_PTR      = 0xC3757A7C
 
@@ -458,9 +459,15 @@ def take():
     r0_head, r0_gc, r0_n = w[12], w[14], w[15]
     padbad, gcount = w[17], w[19]
     handed, drops = P.mem_get(B_HANDED)[0], P.mem_get(B_DROPS)[0]
+    cur, fill, done = (P.mem_get(B_CUR)[0], P.mem_get(B_FILL)[0],
+                       P.mem_get(B_DONE)[0])
     print(f'gyro {gcount}   bad pads {padbad}')
     print(f'blocks {handed} handed to the writer   {drops} dropped'
           + ('   <- the writer did not keep up' if drops else ''))
+    # The part-filled block is the evidence that the space provider ran at all:
+    # a stage that hands nothing over still leaves its claims here.
+    print(f'current block {"none" if cur == 0xFFFFFFFF else cur}   '
+          f'{fill} claimed, {done} committed of {BUF_BYTES // 8}')
     print(f'starts {r0_n}   stops {r1_n}')
     print()
 
