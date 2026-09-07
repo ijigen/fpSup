@@ -42,6 +42,18 @@ ap.add_argument('--no-shell', action='store_true',
                      'state block. The loader sleeps instead of becoming it. Boots '
                      'faster and leaves one less resident task, at the price of no '
                      'way to look inside if something goes wrong.')
+ap.add_argument('--also-bin', action='append', default=[], metavar='ADDR:FILE',
+                help='place raw bytes at ADDR, repeatable. For a blob that has '
+                     'to be patched after assembly, and for sections that are '
+                     'just words. An ADDR below 0x40000000 is an OFFSET into '
+                     'the camera\'s DMA pool: stage2 adds the base it reads at '
+                     'boot, which is the only way to place code in the pool '
+                     'from a build that cannot know where the pool is.')
+ap.add_argument('--vshl-entry', type=lambda s: int(s, 0), default=None,
+                help='absolute address for the file to name as its entry: '
+                     'stage2 branches there once every section is placed, with '
+                     'lr still pointing back into the loader, so a routine that '
+                     'returns lets the boot carry on')
 ap.add_argument('--loader', action='store_true',
                 help='put the code in VSHL.BIN and have the AutoRun read it')
 args = ap.parse_args()
@@ -355,6 +367,9 @@ if args.loader:
     for spec in args.also:
         addr_s, _, src_s = spec.partition(':')
         secs.append((int(addr_s, 0), assemble(pathlib.Path(src_s))))
+    for spec in args.also_bin:
+        addr_s, _, src_s = spec.partition(':')
+        secs.append((int(addr_s, 0), pathlib.Path(src_s).read_bytes()))
     if args.payload:
         # Point the gyro callback at the payload -- last, so it is written only
         # after the payload itself is in place. A `mem set` in the AutoRun could
@@ -375,7 +390,8 @@ if args.loader:
                      f'copies whole words, so every section must be a multiple of four')
         table += struct.pack('<II', addr, len(blob))
         body += blob + b'\x00' * (-len(blob) % 4)
-    entry = 0 if args.no_shell else LOAD + symbols(WORKER)['serve']
+    entry = (args.vshl_entry if args.vshl_entry is not None else
+             0 if args.no_shell else LOAD + symbols(WORKER)['serve'])
     binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
     binpath = DEST.parent / 'VSHL.BIN'
     BIN_PAD = 8192

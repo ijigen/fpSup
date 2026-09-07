@@ -277,6 +277,33 @@
 .equ DNG_PAD_W,      16
 .equ DNG_PAD_H,      10
 
+/* Where the pool is, and what we put in it.  The pool is the camera's DMA
+ * buffer -- the firmware allocates it at boot, so its address is only knowable
+ * at boot, which is why the release places code there by OFFSET and stage2
+ * adds the base.  The three offsets are the deployer's, unchanged, so the card
+ * build and the USB build put everything in the same places. */
+.equ FRAMEBUF,       0xC3757A7C
+.equ CODE_POOL_OFF,  0x44000
+.equ JPOOL_POOL_OFF, 0x43000
+.equ FOBJ_POOL_OFF,  0x42000
+
+/* The three hook sites and the words that arm them.  Computed here rather than
+ * carried as data: the sites and the cave addresses are both build-time
+ * constants, so the branch and the code it reaches cannot disagree -- which is
+ * exactly how the orientation stub once branched into the middle of the logger. */
+.equ ACCEL_SITE,     0xC050D4C8
+.equ ACCEL_AT,       0xC072E200
+.equ START_SITE,     0xC03790B8
+.equ START_AT,       0xC072E4E0
+.equ STOP_SITE,      0xC038C484
+.equ STOP_AT,        0xC072E620
+.equ ARM_ACCEL, 0xEB000000 | (((ACCEL_AT - ACCEL_SITE - 8) >> 2) & 0xFFFFFF)
+.equ ARM_START, 0xEB000000 | (((START_AT - START_SITE - 8) >> 2) & 0xFFFFFF)
+.equ ARM_STOP,  0xEB000000 | (((STOP_AT  - STOP_SITE  - 8) >> 2) & 0xFFFFFF)
+
+.equ W_VT_BODY,      W_VT + W_VT_SLOT   /* the slot the pool worker calls */
+.equ F_CACHE,        0xC000E91C     /* clean+invalidate, so written code is real */
+
 .equ PATH_MGR_SD,    0xC3438400
 .equ PATH_MGR_SSD,   0xC3438398
 .equ SETTINGS_PTR,   0xC3075230

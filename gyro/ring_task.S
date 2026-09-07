@@ -4,6 +4,29 @@
 #include "ring_task.inc.S"
 #include "imu_stream.inc.S"
 
+/* The routine table, at the top of the blob so its address IS the blob's.
+ *
+ * gsup_boot needs to turn six symbols into addresses, and the blob is
+ * position-independent -- it is placed at pool + 0x44000 and nothing in it
+ * knows that number until boot.  `adr` cannot reach a table six hundred bytes
+ * away (the distance has to be an eight-bit rotated immediate and 0x258 is
+ * not), and the assembler has no `.word <label>`.  At offset zero there is
+ * nothing to reach: the base is already in a register.
+ *
+ * The card builder patches these; zero means it did not, and gsup_boot then
+ * wires everything to the top of the blob, which fails at once rather than
+ * subtly.
+ */
+    .global gsup_offsets
+gsup_offsets:
+    .word   0       @ +0x00  writer_body
+    .word   0       @ +0x04  take_open
+    .word   0       @ +0x08  take_close
+    .word   0       @ +0x0C  writer_post
+    .word   0       @ +0x10  mpool_init_jobs
+    .word   0       @ +0x14  blocks_open
+    .word   0       @ +0x18  gsup_boot -- the cave trampoline reads this one
+
 /* ------------------------------------------------------------------ task */
 
 /* There is no hand-written wrapper any more.
@@ -1241,4 +1264,155 @@ writer_header:
 
 /* The job pool, in the same blob so the calls resolve without a relocation
  * the loader here cannot apply. */
+/* --------------------------------------------------------------- the boot */
+
+/* gsup_boot -- everything the two deploy scripts do, done by the camera.
+ *
+ * Runs once, from the VSHL entry, with the camera idle at the end of boot.  It
+ * is in the POOL rather than the cave because the cave has no room for it and
+ * because it belongs with the code it is wiring up; a forty-byte trampoline in
+ * the cave reads the pool pointer and branches here.
+ *
+ * The order is the deploy scripts' order, and it matters: everything is wired
+ * and every buffer is in hand BEFORE a single hook is armed.  An armed hook
+ * that reaches a word nobody has written yet is a freeze, and the camera at
+ * this moment has no USB shell to be repaired with.
+ *
+ * If the allocator will not give the buffers, nothing is armed at all -- the
+ * camera boots as an ordinary camera and the only sign is that no .GYR appears.
+ * That is the right failure: a card that half-works is worse than one that does
+ * not, because the take is gone either way and only one of them is obvious.
+ *
+ * The offsets it needs are patched into gsup_offsets by the card builder, which
+ * is the only thing that knows where each routine landed in the blob.
+ */
+    .global gsup_boot
+gsup_boot:
+    push    {r4, r5, r6, r7, r8, lr}
+
+    movw    r4, #:lower16:FRAMEBUF
+    movt    r4, #:upper16:FRAMEBUF
+    ldr     r4, [r4]                    @ r4 = the pool
+    cmp     r4, #0
+    beq     9f                          @ no pool: arm nothing
+
+    add     r6, r4, #CODE_POOL_OFF      @ r6 = this blob, and the table is at its
+    mov     r5, r6                      @ top -- see gsup_offsets
+
+    /* The body, in the vtable slot the firmware's pool worker calls, and in a
+     * word so a reader can see what it was given. */
+    ldr     r0, [r5, #0]
+    add     r0, r0, r6
+    movw    r1, #:lower16:W_VT_BODY
+    movt    r1, #:upper16:W_VT_BODY
+    str     r0, [r1]
+    movw    r1, #:lower16:T_ENTRY
+    movt    r1, #:upper16:T_ENTRY
+    str     r0, [r1]
+
+    ldr     r0, [r5, #4]                @ take_open
+    add     r0, r0, r6
+    movw    r1, #:lower16:T_OPENFN
+    movt    r1, #:upper16:T_OPENFN
+    str     r0, [r1]
+
+    ldr     r0, [r5, #8]                @ take_close
+    add     r0, r0, r6
+    movw    r1, #:lower16:T_CLOSEFN
+    movt    r1, #:upper16:T_CLOSEFN
+    str     r0, [r1]
+
+    ldr     r0, [r5, #12]               @ writer_post
+    add     r0, r0, r6
+    movw    r1, #:lower16:STREAM_SIGFN
+    movt    r1, #:upper16:STREAM_SIGFN
+    str     r0, [r1]
+
+    add     r0, r4, #FOBJ_POOL_OFF
+    movw    r1, #:lower16:T_FOBJ
+    movt    r1, #:upper16:T_FOBJ
+    str     r0, [r1]
+    add     r0, r4, #JPOOL_POOL_OFF
+    movw    r1, #:lower16:STREAM_JPOOL
+    movt    r1, #:upper16:STREAM_JPOOL
+    str     r0, [r1]
+
+    /* Every word the deploy scripts clear, cleared here.  A soft power cycle
+     * can leave the cave holding the last session's values. */
+    mov     r0, #0
+    movw    r1, #:lower16:T_FOPEN
+    movt    r1, #:upper16:T_FOPEN
+    str     r0, [r1]
+    movw    r1, #:lower16:T_WANT
+    movt    r1, #:upper16:T_WANT
+    str     r0, [r1]
+    movw    r1, #:lower16:T_STAGE
+    movt    r1, #:upper16:T_STAGE
+    str     r0, [r1]
+    movw    r1, #:lower16:T_POS
+    movt    r1, #:upper16:T_POS
+    str     r0, [r1]
+    movw    r1, #:lower16:T_JSEQ
+    movt    r1, #:upper16:T_JSEQ
+    str     r0, [r1]
+    movw    r1, #:lower16:T_JOBSLOT
+    movt    r1, #:upper16:T_JOBSLOT
+    str     r0, [r1]
+    movw    r1, #:lower16:W_THREAD
+    movt    r1, #:upper16:W_THREAD
+    str     r0, [r1]
+    movw    r1, #:lower16:T_MBX
+    movt    r1, #:upper16:T_MBX
+    str     r0, [r1]
+
+    /* The release builds and tears down the whole take.  The ladders are the
+     * bisection's, and there is nothing left to bisect. */
+    mov     r0, #5
+    movw    r1, #:lower16:T_BUILD
+    movt    r1, #:upper16:T_BUILD
+    str     r0, [r1]
+    movw    r1, #:lower16:T_TEARDOWN
+    movt    r1, #:upper16:T_TEARDOWN
+    str     r0, [r1]
+
+    /* The free list, before anything can take a descriptor from it. */
+    ldr     r0, [r5, #16]               @ mpool_init_jobs
+    add     r0, r0, r6
+    blx     r0
+
+    /* The buffers.  Before the movie path takes what it needs, which is the
+     * whole reason this is at boot and not at record start. */
+    ldr     r0, [r5, #20]               @ blocks_open
+    add     r0, r0, r6
+    blx     r0
+    movw    r0, #:lower16:B_PTR
+    movt    r0, #:upper16:B_PTR
+    ldr     r0, [r0]
+    cmp     r0, #0
+    beq     9f                          @ refused: arm nothing
+
+    /* Only now.  Three words, then the cache, so the firmware fetches the
+     * branches and not what was there before them. */
+    movw    r0, #:lower16:ACCEL_SITE
+    movt    r0, #:upper16:ACCEL_SITE
+    movw    r1, #:lower16:ARM_ACCEL
+    movt    r1, #:upper16:ARM_ACCEL
+    str     r1, [r0]
+    movw    r0, #:lower16:START_SITE
+    movt    r0, #:upper16:START_SITE
+    movw    r1, #:lower16:ARM_START
+    movt    r1, #:upper16:ARM_START
+    str     r1, [r0]
+    movw    r0, #:lower16:STOP_SITE
+    movt    r0, #:upper16:STOP_SITE
+    movw    r1, #:lower16:ARM_STOP
+    movt    r1, #:upper16:ARM_STOP
+    str     r1, [r0]
+    movw    ip, #:lower16:F_CACHE
+    movt    ip, #:upper16:F_CACHE
+    blx     ip
+
+9:  pop     {r4, r5, r6, r7, r8, lr}
+    bx      lr
+
 #include "mpool.S"

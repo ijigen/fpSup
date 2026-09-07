@@ -74,7 +74,14 @@ STREAM_SIGFN = 0xC072E1A8
 
 
 def symbols(src, defines=()):
-    """Offsets of the global symbols inside the assembled blob."""
+    """Offsets of the symbols inside the assembled blob.
+
+    Every symbol the blob defines, not a list somebody keeps up to date: a
+    whitelist silently drops the next routine anyone adds, which is exactly
+    what it did to gsup_boot -- and to stream_flush in the other deployer the
+    same afternoon.  SHN_UNDEF and SHN_ABS are undefined names and .equ
+    constants; `$a`/`$d` are the mapping symbols.
+    """
     elf, sections, by_name = _parse(_compile(src, defines))
     _, symtab = by_name['.symtab']
     _, strtab = by_name['.strtab']
@@ -82,14 +89,9 @@ def symbols(src, defines=()):
     for off in range(symtab[4], symtab[4] + symtab[5], 16):
         name_off, value, _size, info, _other, shndx = struct.unpack_from(
             '<IIIBBH', elf, off)
-        # `.global` alone leaves the symbol STT_NOTYPE, so filter by name, not
-        # by type -- an empty map here would place the task at zero.
         end = elf.index(b'\0', strtab[4] + name_off)
         name = elf[strtab[4] + name_off:end].decode()
-        if name in ('writer_body', 'make_writer', 'blocks_open', 'blocks_close',
-                    'writer_openfile', 'writer_closefile',
-                    'writer_selftest', 'writer_post', 'mpool_init_jobs',
-                    'take_open', 'take_close'):
+        if name and not name.startswith('$') and shndx not in (0, 0xFFF1):
             out[name] = value
     return out
 
@@ -155,11 +157,32 @@ def pool_base():
 DRY_RUN = False   # set by --dry-run: everything except the card
 
 
+# The order gsup_boot reads them in.  Both builds patch the same table, so the
+# blob the card carries and the blob the USB deploy writes are the same bytes.
+GSUP_ROUTINES = ('writer_body', 'take_open', 'take_close', 'writer_post',
+                 'mpool_init_jobs', 'blocks_open', 'gsup_boot')
+
+
+def patch_offsets(code, syms):
+    """Fill in gsup_offsets, at the top of the blob.
+
+    The blob is position independent -- it is placed at pool + 0x44000 and
+    nothing in it knows that number until boot -- so gsup_boot turns these six
+    offsets into addresses by adding the base it reads from the pool pointer.
+    Only whoever assembled the blob knows them.
+    """
+    out = bytearray(code)
+    for i, name in enumerate(GSUP_ROUTINES):
+        struct.pack_into('<I', out, i * 4, syms[name])
+    return bytes(out)
+
+
 def place():
     _check()
     defines = ('DRY_RUN',) if DRY_RUN else ()
     code = assemble(HERE / 'ring_task.S', defines)
     syms = symbols(HERE / 'ring_task.S', defines)
+    code = patch_offsets(code, syms)
     pool = pool_base()
     global CODE_AT
     CODE_AT = pool + CODE_POOL_OFF
@@ -333,8 +356,11 @@ def _verify_placed(code, at):
     held before.  That is a battery pull, and it cost one.  Two reads turn it
     into a sentence.
     """
-    want = struct.unpack_from('<4I', code, 0)
-    got = tuple(P.mem_get(CODE_AT, 4) or ())
+    # Two samples, both of them code.  The blob's first words are the routine
+    # table now, and a table of six small numbers is not a fingerprint.
+    body_off = at['writer_body'] - CODE_AT
+    want = struct.unpack_from('<4I', code, body_off)
+    got = tuple(P.mem_get(at['writer_body'], 4) or ())
     entry_off = at['make_writer'] - CODE_AT
     want2 = struct.unpack_from('<4I', code, entry_off)
     got2 = tuple(P.mem_get(at['make_writer'], 4) or ())
@@ -342,7 +368,7 @@ def _verify_placed(code, at):
         return
     raise SystemExit(
         'the pool does not hold this blob -- run --place first.\n'
-        f'  0x{CODE_AT:08X} reads ' + ' '.join(f'{w:08X}' for w in got) + '\n'
+        f'  0x{at["writer_body"]:08X} reads ' + ' '.join(f'{w:08X}' for w in got) + '\n'
         f'  expected           ' + ' '.join(f'{w:08X}' for w in want) + '\n'
         '  place() only assembles and prints; place_code() is what writes.')
 
