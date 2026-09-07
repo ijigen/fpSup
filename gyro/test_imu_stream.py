@@ -225,6 +225,14 @@ class AudioShape(unittest.TestCase):
                             'attach dereferences the body object')
         self.assertNotIn('ldr     r1, [r1]', window[window.rindex('W_BODYOBJ'):])
 
+    def test_the_file_is_closed_by_its_destructor_alone(self):
+        """AudioFileWriter::v0 calls XC_MediaFile::v0 and never F_CLOSE: the
+        destructor's first act is FUN_c0366020, which is F_CLOSE.  Calling it
+        ourselves first sent us through that path twice."""
+        c = self.body('writer_closefile')
+        self.assertIn('F_DTOR', c)
+        self.assertNotIn('F_CLOSE', c, 'closing twice is not what audio does')
+
     def test_the_thread_is_the_firmwares_own(self):
         """XC_Thread.cpp's pool, used rather than reimplemented: the flag, the
         task, the parking and the wup/ter/del all live inside these four calls,

@@ -869,17 +869,18 @@ writer_closefile:
     mov     r0, #0x23
     str     r0, [r6]                    @ about to close
 
+    /* The destructor and nothing else.  AudioFileWriter::v0 calls
+     * XC_MediaFile::v0 and never F_CLOSE, because the destructor closes the
+     * file itself -- FUN_c0366020 is its first act.  Calling F_CLOSE first put
+     * us through that path twice: once for real, and once as a no-op on an
+     * object whose handle we had already nulled.  Audio goes through it once. */
     movw    r6, #:lower16:T_FOBJ
     movt    r6, #:upper16:T_FOBJ
     ldr     r6, [r6]                    @ r6 stops being T_STAGE here
-    mov     r0, r6
-    movw    ip, #:lower16:F_CLOSE
-    movt    ip, #:upper16:F_CLOSE
-    blx     ip
     movw    ip, #:lower16:T_STAGE
     movt    ip, #:upper16:T_STAGE
     mov     r0, #0x24
-    str     r0, [ip]                    @ closed, about to destroy
+    str     r0, [ip]                    @ about to destroy
     mov     r0, r6
     mov     r1, #2
     movw    ip, #:lower16:F_DTOR
