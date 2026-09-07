@@ -76,9 +76,9 @@ stream_claim:
     movw    r2, #:lower16:B_FILL
     movt    r2, #:upper16:B_FILL
     ldr     r3, [r2]
-    movw    r1, #:lower16:BUF_BYTES
-    movt    r1, #:upper16:BUF_BYTES
-    sub     r1, r1, r3                  @ room, in bytes
+    movw    r1, #:lower16:BUF_RECORDS
+    movt    r1, #:upper16:BUF_RECORDS
+    sub     r1, r1, r3                  @ room
     cmp     r4, r1
     movlo   r1, r4                      @ r1 = min(wanted, room)
     add     ip, r3, r1
@@ -94,7 +94,7 @@ stream_claim:
                                         @ layered test switches it off -- and a
                                         @ producer writing to a null block is a
                                         @ data abort, not a lost sample.
-    add     r0, r0, r3                  @ where in the block
+    add     r0, r0, r3, lsl #3          @ where in the block
 
     st_unlock r6
     pop     {r2, r3, r4, r5, r6, lr}
@@ -113,7 +113,7 @@ stream_claim:
     bx      lr
 
 
-/* stream_commit(r0 = bytes written).
+/* stream_commit(r0 = records written).
  *
  * After the records are in memory, not when the space was reserved: a block
  * that is spoken for is not a block that is full.  When the block is used up it
@@ -137,8 +137,8 @@ stream_commit:
     add     r3, r3, r4
     str     r3, [r2]
 
-    movw    r1, #:lower16:BUF_BYTES
-    movt    r1, #:upper16:BUF_BYTES
+    movw    r1, #:lower16:BUF_RECORDS
+    movt    r1, #:upper16:BUF_RECORDS
     cmp     r3, r1
     blo     9f                          @ this block still has room in it
 
@@ -201,9 +201,9 @@ stream_commit:
  * itself has to: take_close calls this before it posts the marker, and the
  * mailbox keeps the order.
  *
- * Only COMMITTED bytes go.  A claim that has not been committed is a producer
- * halfway through writing; interrupts are off here, so B_DONE is the honest
- * length and B_FILL is not.
+ * Only COMMITTED records go.  A claim that has not been committed is a producer
+ * halfway through writing its records; interrupts are off here, so B_DONE is
+ * the honest length and B_FILL is not.
  *
  * This is not the filler making a judgement -- the filler still only ever says
  * "the block is full".  This is the end of the take, which is a different event
@@ -240,7 +240,7 @@ stream_flush:
     movw    r1, #:lower16:B_PTR
     movt    r1, #:upper16:B_PTR
     ldr     r0, [r1, r5, lsl #2]        @ r0 = the block
-    mov     r1, r4                      @ r1 = what was committed, in bytes
+    lsl     r1, r4, #3                  @ r1 = committed records, in bytes
     movw    r2, #:lower16:B_OFF
     movt    r2, #:upper16:B_OFF
     ldr     r3, [r2]

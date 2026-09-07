@@ -122,7 +122,7 @@
  */
 .equ BUF_N,          8
 .equ BUF_BYTES,      0x4000                 /* what AudF_W's blocks are        */
-
+.equ BUF_RECORDS,    (BUF_BYTES / 8)
 
 .equ B_PTR,          0xC072EBA0             /* BUF_N words: the allocations    */
 .equ B_BUSY,         0xC072EBC0             /* BUF_N words: 0 free, 1 with the
@@ -135,8 +135,8 @@
                                              * refilled: that is a drop, and a
                                              * drop we can count.             */
 .equ B_CUR,          0xC072EBE0             /* which block is filling, -1 none */
-.equ B_FILL,         0xC072EBE4             /* BYTES claimed in it             */
-.equ B_DONE,         0xC072EBE8             /* BYTES written into it           */
+.equ B_FILL,         0xC072EBE4             /* records claimed in it           */
+.equ B_DONE,         0xC072EBE8             /* records written into it         */
 .equ B_OFF,          0xC072EBEC             /* file offset of its first byte    */
 .equ B_DROPS,        0xC072EBF0             /* times no block was free          */
 .equ B_HANDED,       0xC072EBF4             /* blocks handed to the writer      */
