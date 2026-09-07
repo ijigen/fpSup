@@ -160,7 +160,8 @@ DRY_RUN = False   # set by --dry-run: everything except the card
 # The order gsup_boot reads them in.  Both builds patch the same table, so the
 # blob the card carries and the blob the USB deploy writes are the same bytes.
 GSUP_ROUTINES = ('writer_body', 'take_open', 'take_close', 'writer_post',
-                 'mpool_init_jobs', 'blocks_open', 'gsup_boot')
+                 'mpool_init_jobs', 'blocks_open', 'gsup_boot',
+                 'writer_path', 'writer_header')
 
 
 def patch_offsets(code, syms):

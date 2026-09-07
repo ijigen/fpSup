@@ -180,7 +180,10 @@ class Header(unittest.TestCase):
 
     def setUp(self):
         self.inc = (HERE / 'ring_task.inc.S').read_text()
-        self.task = (HERE / 'ring_task.S').read_text()
+        # The writer is an edition file plus the core both editions share, so
+        # a test that reads only one of them is reading half a writer.
+        self.task = ((HERE / 'ring_task.S').read_text() + '\n'
+                     + (HERE / 'writer_core.inc.S').read_text())
 
     @staticmethod
     def code(text):
@@ -295,6 +298,32 @@ class Header(unittest.TestCase):
                                        self.task.index('\nwriter_closefile:')])
         self.assertEqual(openfile.count('F_OPEN'), 2, 'one open, no retry')
 
+    def test_an_argument_is_saved_before_the_first_call(self):
+        """blob_at returns in r0, so it destroys whatever r0 held.  take_header
+        takes the volume in r0 and used to stash it on the line after the one
+        that became `bl blob_at`: the header then carried a pool address where
+        the disk number goes, and the file still opened and still parsed."""
+        body = self.task[self.task.index('\ntake_header:'):]
+        body = body[:body.index('bl      blob_at')]
+        self.assertIn('mov     r5, r0', body,
+                      'the volume must be saved before anything returns in r0')
+
+    def test_nothing_reaches_a_buffer_with_adr(self):
+        """`adr` reaches only as far as an eight-bit rotated immediate allows,
+        so how far apart two things landed decided whether the file assembled.
+        It broke three times in one day -- inserting blocks_open, inserting
+        make_gyro_dir, and splitting the writer -- and each time the fix was to
+        shuffle the file, which is not a fix.  The offsets are in the table the
+        builder patches, and blob_at turns one into an address."""
+        for name in ('writer_path', 'writer_header'):
+            self.assertNotIn(f'adr     r0, {name}', self.task)
+            self.assertNotIn(f'adr     r4, {name}', self.task)
+            self.assertNotIn(f'adr     r6, {name}', self.task)
+        import ring_task_deploy as R
+        for name in ('writer_path', 'writer_header'):
+            self.assertIn(name, R.GSUP_ROUTINES,
+                          f'{name} is reached through the table, so it must be in it')
+
     def test_the_header_is_written_twice(self):
         """Once at open so the file always has a magic, once at close for the
         counts that only exist then."""
@@ -365,7 +394,10 @@ class AudioShape(unittest.TestCase):
     """
 
     def setUp(self):
-        self.task = (HERE / 'ring_task.S').read_text()
+        # The writer is an edition file plus the core both editions share, so
+        # a test that reads only one of them is reading half a writer.
+        self.task = ((HERE / 'ring_task.S').read_text() + '\n'
+                     + (HERE / 'writer_core.inc.S').read_text())
         self.inc = (HERE / 'ring_task.inc.S').read_text()
 
     def body(self, name):

@@ -316,6 +316,17 @@
 .equ G_TEXT,         0xC072E950     /* the text buffer the block turns into    */
 .equ G_WORDS,        5
 
+/* Where each entry of gsup_offsets is.  blob_at turns one into an address. */
+.equ G_OFF_BODY,     0x00
+.equ G_OFF_OPEN,     0x04
+.equ G_OFF_CLOSE,    0x08
+.equ G_OFF_POST,     0x0C
+.equ G_OFF_JOBS,     0x10
+.equ G_OFF_BLOCKS,   0x14
+.equ G_OFF_BOOT,     0x18
+.equ G_OFF_PATH,     0x1C
+.equ G_OFF_HEADER,   0x20
+
 .equ F_CACHE,        0xC000E91C     /* clean+invalidate, so written code is real */
 
 .equ PATH_MGR_SD,    0xC3438400
