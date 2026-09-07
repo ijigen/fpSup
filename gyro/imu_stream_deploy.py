@@ -560,7 +560,7 @@ def main():
                    help='turn the flow on one step at a time')
     g.add_argument('--teardown', type=int, choices=range(6),
                    help='how much of take_close to run: 0 nothing, 1 stop job, '
-                        '2 +join, 3 +close, 4 +destroy thread, 5 +delete mailbox')
+                        '2 +join, 3 +delete mailbox, 4 +destroy thread, 5 +close file')
     g.add_argument('--build', type=int, choices=range(6),
                    help='how much of take_open to run: 1 blocks, 2 +file, '
                         '3 +mailbox, 4 +thread, 5 +attached')

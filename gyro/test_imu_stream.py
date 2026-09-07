@@ -279,8 +279,10 @@ class AudioShape(unittest.TestCase):
         first would close a file the writer is still writing to."""
         t = self.body('take_close')
         self.assertLess(t.index('writer_make_job'), t.index('XT_JOIN'))
-        self.assertLess(t.index('XT_JOIN'), t.index('bl      writer_closefile'))
-        self.assertLess(t.index('bl      writer_closefile'), t.index('XT_DESTROY'))
+        # AudioFileWriter::v0's order: mailbox, thread, and the file LAST
+        self.assertLess(t.index('XT_JOIN'), t.index('MBX_DELETE'))
+        self.assertLess(t.index('MBX_DELETE'), t.index('XT_DESTROY'))
+        self.assertLess(t.index('XT_DESTROY'), t.index('bl      writer_closefile'))
 
     def test_the_record_hooks_are_what_build_and_tear_down(self):
         """XC_AudioRecorder::Start and ::Stop do this, in the recorder's own

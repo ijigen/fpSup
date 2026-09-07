@@ -687,15 +687,40 @@ take_close:
     cmp     r6, #3
     blo     9f
 
-4:  bl      writer_closefile
-    mov     r0, #0x14
-    str     r0, [r4]
-
-    cmp     r6, #4
-    blo     9f
+    /* AudioFileWriter::v0's order, and it is not the one we had:
+     *
+     *     FUN_c036d930(mbx)        delete the mailbox
+     *     FUN_c036e168(thread, 2)  destroy the thread
+     *     XC_MediaFile::v0(file)   and only now the file, whose destructor
+     *                              closes it itself
+     *
+     * We closed first and collected the thread and the mailbox afterwards.
+     * Every teardown that reached the close froze the camera at that
+     * instant; every one that stopped before it ran the take.  Audio takes
+     * the writer out of the system before it touches the file, so nothing
+     * priority 6 is left standing when the volume lock is taken in the task
+     * SRecFile is waiting on. */
+    movw    r5, #:lower16:T_MBX
+    movt    r5, #:upper16:T_MBX
     ldr     r0, [r5]
     cmp     r0, #0
-    beq     4f
+    ble     4f
+    movw    ip, #:lower16:MBX_DELETE
+    movt    ip, #:upper16:MBX_DELETE
+    blx     ip
+    mov     r0, #0
+    str     r0, [r5]
+
+4:  mov     r0, #0x14
+    str     r0, [r4]
+    cmp     r6, #4
+    blo     9f
+
+    movw    r5, #:lower16:W_THREAD
+    movt    r5, #:upper16:W_THREAD
+    ldr     r0, [r5]
+    cmp     r0, #0
+    beq     5f
     mov     r0, r5
     mov     r1, #2                      @ do not delete the holder: it is ours
     movw    ip, #:lower16:XT_DESTROY
@@ -703,23 +728,15 @@ take_close:
     blx     ip
     mov     r0, #0
     str     r0, [r5]
-4:  mov     r0, #0x15
-    str     r0, [r4]
 
+5:  mov     r0, #0x15
+    str     r0, [r4]
     cmp     r6, #5
     blo     9f
-    movw    r5, #:lower16:T_MBX
-    movt    r5, #:upper16:T_MBX
-    ldr     r0, [r5]
-    cmp     r0, #0
-    ble     5f
-    movw    ip, #:lower16:MBX_DELETE
-    movt    ip, #:upper16:MBX_DELETE
-    blx     ip
-    mov     r0, #0
-    str     r0, [r5]
 
-5:  /* The blocks stay.  They were taken before the movie path took anything
+    bl      writer_closefile
+
+    /* The blocks stay.  They were taken before the movie path took anything
      * and they are given back only when the whole thing is torn down.
 
 6:  mov     r0, #0x16
