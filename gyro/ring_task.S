@@ -513,16 +513,9 @@ take_open:
     str     r0, [r4]
     beq     9f                          @ blocks_open has not run
 
-    /* Each take is its own file, so each take starts at the top of one.  The
-     * first sixty-four bytes are the header, and B_OFF is where the first block
-     * will say it belongs -- carrying the last take's B_OFF over is how two
-     * takes used to end up layered into one file.  The drop and hand counts go
-     * with it: they describe this take now, and this take is what the header
-     * reports. */
-    movw    r0, #:lower16:B_OFF
-    movt    r0, #:upper16:B_OFF
-    mov     r1, #HDR_BYTES
-    str     r1, [r0]
+    /* The drop and hand counts describe THIS take, and this take is what the
+     * header reports.  B_OFF is not here: take_header sets it, because opening
+     * the file is what starts one. */
     movw    r0, #:lower16:B_DROPS
     movt    r0, #:upper16:B_DROPS
     mov     r1, #0
@@ -1167,6 +1160,16 @@ take_header:
     str     r1, [r4, #H_WIDTH]
     str     r2, [r4, #H_HEIGHT]
 1:
+
+    /* The first block belongs after the header.  This lives here, not in
+     * take_open, because opening a file is what starts one: --dropfile after a
+     * freeze opens nothing and closes what is already there, and with B_OFF
+     * owned by the record hook that path stamped the PREVIOUS take's length
+     * into the new header.  Whoever opens the file owns where it is. */
+    movw    r0, #:lower16:B_OFF
+    movt    r0, #:upper16:B_OFF
+    mov     r1, #HDR_BYTES
+    str     r1, [r0]
 
     mov     r0, r4
     bl      put_header

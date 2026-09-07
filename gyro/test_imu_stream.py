@@ -213,13 +213,19 @@ class Header(unittest.TestCase):
         independent rulers agreed on is 400.0854 us."""
         self.assertEqual(self.equ('GYR_PERIOD_PS'), 400085400)
 
-    def test_the_payload_starts_after_the_header(self):
-        """B_OFF is where the first block says it belongs.  Starting it at zero
-        would put records under the header; carrying the last take's value over
-        would layer two takes into one file."""
-        c = '\n'.join(l for l in self.task.splitlines()
-                       if 'B_OFF' in l or 'HDR_BYTES' in l)
-        self.assertIn('HDR_BYTES', c)
+    def test_whoever_opens_the_file_owns_where_it_is(self):
+        """B_OFF must be set by take_header, not by take_open.  --dropfile
+        after a freeze opens nothing and closes what is already there; with the
+        record hook owning B_OFF that path stamped the PREVIOUS take's payload
+        length into the new header, which is exactly the case the tool exists
+        for."""
+        header = self.code(self.task[self.task.index('\ntake_header:'):
+                                     self.task.index('\nput_header:')])
+        self.assertIn('B_OFF', header)
+        self.assertIn('HDR_BYTES', header)
+        take_open = self.code(self.task[self.task.index('\ntake_open:'):
+                                        self.task.index('\ntake_close:')])
+        self.assertNotIn('B_OFF', take_open, 'one owner, and it is the open')
 
     def test_the_geometry_comes_from_the_settings(self):
         """0xC37CE210 looks like the source and is a trap: {1936,1090,...} at
