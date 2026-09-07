@@ -864,18 +864,19 @@ writer_openfile:
     movw    ip, #:lower16:F_OPEN
     movt    ip, #:upper16:F_OPEN
     blx     ip
-    /* No mkdir here.  It was here for one card, and that card froze the
-     * camera every time it recorded to the USB SSD while the SD card was
-     * fine -- which is not two behaviours but one line: \GYRO exists on the
-     * SD card, so the open succeeds and the mkdir is skipped; it does not
-     * exist on the SSD, so the mkdir ran on every take.  Making a directory
-     * writes FAT metadata, and doing that on the record-start path, in
-     * SRecFile's thread, is the priority inversion this project already knows
-     * by name.  gsup_boot makes it at boot instead, with the camera idle.
+    /* If it did not open, it did not open.  \GYRO has to already exist on
+     * whatever volume is being recorded to, and putting it there is the
+     * user's business -- makecard.py does it for the SD card and a USB SSD
+     * is the same one folder.
      *
-     * The cost is that a volume attached AFTER boot gets no log until the next
-     * boot.  That is a take without a .GYR; the alternative was a take without
-     * a camera. */
+     * We tried making it ourselves and it was wrong twice over.  On the
+     * record-start path it wrote FAT metadata in SRecFile's thread and froze
+     * the camera on every take to the SSD, while the SD card -- which already
+     * had the folder, so the mkdir was skipped -- stayed fine all session.
+     * Moved to boot it stopped freezing and started guessing: F_VOL returns
+     * the volume the camera is routed to AT THAT MOMENT, which is not
+     * necessarily the one the user records to an hour later.  A wrong folder
+     * on the wrong disk, silently.  Neither is worth a missing folder. */
     movw    ip, #:lower16:T_FOPEN
     movt    ip, #:upper16:T_FOPEN
     str     r0, [ip]
@@ -1269,11 +1270,6 @@ writer_path:
     .space  32
     .align  2
 
-/* "\\GYRO", written here when a volume turns out not to have one. */
-writer_dir:
-    .space  8
-    .align  2
-
 /* The header, rebuilt at every take_open and rewritten at every close. */
 writer_header:
     .space  HDR_BYTES
@@ -1281,50 +1277,6 @@ writer_header:
 
 /* The job pool, in the same blob so the calls resolve without a relocation
  * the loader here cannot apply. */
-/* make_gyro_dir -- r0 = the volume.  Best effort: every return is the same.
- *
- * The three calls recovery.inc.S makes, against a directory object that lives
- * in the page already reserved for the file object.  The name is built in RAM
- * rather than carried as a literal, the way every other path here is built.
- */
-make_gyro_dir:
-    push    {r4, r5, r6, lr}
-    mov     r5, r0
-    movw    r4, #:lower16:T_FOBJ
-    movt    r4, #:upper16:T_FOBJ
-    ldr     r4, [r4]
-    cmp     r4, #0
-    beq     9f
-    add     r4, r4, #DIR_OBJ_OFF
-    mov     r0, r4
-    mov     r1, r5
-    movw    ip, #:lower16:F_DIR_CTOR
-    movt    ip, #:upper16:F_DIR_CTOR
-    blx     ip
-
-    adr     r6, writer_dir
-    movw    r0, #0x475C
-    movt    r0, #0x5259                 @ "\\GYR"
-    str     r0, [r6]
-    movw    r0, #0x004F                 @ "O" and its NUL
-    strh    r0, [r6, #4]
-
-    mov     r0, r4
-    mov     r1, r6
-    mov     r2, #0
-    movw    ip, #:lower16:F_DIR_MKDIR
-    movt    ip, #:upper16:F_DIR_MKDIR
-    blx     ip
-
-    mov     r0, r4
-    mov     r1, #2
-    movw    ip, #:lower16:F_DIR_DTOR
-    movt    ip, #:upper16:F_DIR_DTOR
-    blx     ip
-9:  pop     {r4, r5, r6, lr}
-    bx      lr
-
-
 /* --------------------------------------------------------------- the boot */
 
 /* gsup_boot -- everything the two deploy scripts do, done by the camera.
@@ -1451,20 +1403,6 @@ gsup_boot:
     ldr     r0, [r0]
     cmp     r0, #0
     beq     9f                          @ refused: arm nothing
-
-    /* The log directory, while the camera is idle and nothing is recording.
-     * F_OPEN will not create one, and a volume that has never carried a log
-     * has not got one -- makecard.py has always made it on the SD card, which
-     * is why nothing exposed this until a USB SSD was tried.  Best effort: if
-     * it is already there, or cannot be made, the take simply gets no log. */
-    movw    ip, #:lower16:F_MGR
-    movt    ip, #:upper16:F_MGR
-    blx     ip
-    mov     r1, #0
-    movw    ip, #:lower16:F_VOL
-    movt    ip, #:upper16:F_VOL
-    blx     ip
-    bl      make_gyro_dir
 
     /* Only now.  Three words, then the cache, so the firmware fetches the
      * branches and not what was there before them. */

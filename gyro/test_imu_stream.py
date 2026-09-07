@@ -277,28 +277,23 @@ class Header(unittest.TestCase):
                           'STOP_SITE', 'STOP_AT')})
             self.assertEqual(got, want, f'{equ} disagrees with the deployer')
 
-    def test_the_directory_is_made_at_boot_not_at_record_start(self):
-        """Making a directory writes FAT metadata.  Doing it on the
-        record-start path froze the camera on every take to a USB SSD while
-        the SD card was fine -- one line, not two behaviours: \\GYRO exists on
-        the card so the open succeeds and the mkdir is skipped, and it does not
-        exist on the SSD so the mkdir ran every time.  gsup_boot does it with
-        the camera idle."""
-        t = self.task
-        openfile = self.code(t[t.index('\nwriter_openfile:'):
-                               t.index('\nwriter_closefile:')])
-        self.assertNotIn('make_gyro_dir', openfile,
-                         'no FAT metadata on the record-start path')
+    def test_the_camera_never_makes_the_log_directory(self):
+        """\\GYRO has to already exist on whatever volume is recorded to, and
+        putting it there is the user's business.
+
+        We tried it twice.  On the record-start path the mkdir wrote FAT
+        metadata in SRecFile's thread and froze the camera on every take to the
+        USB SSD, while the SD card -- which already had the folder, so the
+        mkdir was skipped -- ran a whole session clean.  Moved to boot it
+        stopped freezing and started guessing: F_VOL returns the volume the
+        camera is routed to at that instant, not the one the take will use.
+        """
+        code = self.code(self.task)
+        for call in ('F_DIR_CTOR', 'F_DIR_MKDIR', 'F_DIR_DTOR', 'make_gyro_dir'):
+            self.assertNotIn(call, code, 'the camera does not create folders')
+        openfile = self.code(self.task[self.task.index('\nwriter_openfile:'):
+                                       self.task.index('\nwriter_closefile:')])
         self.assertEqual(openfile.count('F_OPEN'), 2, 'one open, no retry')
-        boot = self.code(t[t.index('\ngsup_boot:'):t.index('\ngsup_offsets:', 1)]
-                         if '\ngsup_offsets:' in t[t.index('\ngsup_boot:'):]
-                         else t[t.index('\ngsup_boot:'):])
-        self.assertIn('bl      make_gyro_dir', boot)
-        d = self.code(t[t.index('\nmake_gyro_dir:'):
-                        t.index('\n', t.index('bx      lr',
-                                               t.index('\nmake_gyro_dir:')))])
-        for call in ('F_DIR_CTOR', 'F_DIR_MKDIR', 'F_DIR_DTOR'):
-            self.assertIn(call, d)
 
     def test_the_header_is_written_twice(self):
         """Once at open so the file always has a magic, once at close for the
