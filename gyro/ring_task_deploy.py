@@ -240,6 +240,7 @@ def place_code():
     # The blocks come from the allocator NOW, with the camera idle -- the rule
     # is that they have to be taken before the movie path takes what it needs,
     # and the record hook is already on the wrong side of that line.
+    _require_movie_mode()
     echo_into(at['blocks_open'], 'blocks_open')
     got = P.mem_get(0xC072EBA0, BUF_N)
     if not got or any(not x for x in got):
@@ -272,6 +273,36 @@ def place_code():
     print(f'placed; file object 0x{pool + FOBJ_POOL_OFF:08X}; '
           f'each take names its own file')
     return at
+
+
+# 0 STILL_REC, 1 STILL_REC_HDR, 2 MOVIE_REC_MPEG, 3 MOVIE_REC_DNG -- the
+# firmware's own table, at 0xC2EF7609.
+MOVIE_MODES = ('MOVIE_REC_MPEG', 'MOVIE_REC_DNG')
+
+
+def _require_movie_mode():
+    """Refuse to allocate while the camera is in a stills layout.
+
+    FUN_c001ce88 re-lays out all fifteen channels on a mode change, so class 0
+    is a different size in each.  Booted into STILL_REC the camera has nothing
+    past 0x45126680 -- which is exactly where the blocks live in the movie
+    layout -- and blocks_open comes back with eight zeros.  That used to print
+    a line and carry on arming the hooks, so the next take captured nothing and
+    said nothing about why.
+    """
+    line = ''
+    for l in P.sh('memmgr bufchk', retries=3).splitlines():
+        if 'mem mode' in l:
+            line = l.strip()
+            break
+    if not line:
+        raise SystemExit('could not read the memory mode -- refusing to allocate')
+    if not any(m in line for m in MOVIE_MODES):
+        raise SystemExit(
+            f'{line}\nthe camera is not in a movie memory layout, so class 0 '
+            f'has no room where the blocks go.  Put it in CINE (movie) mode '
+            f'and run this again.')
+    print(f'  {line}')
 
 
 def _verify_placed(code, at):
