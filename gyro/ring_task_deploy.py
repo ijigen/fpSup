@@ -240,11 +240,24 @@ def place_code():
     # The blocks come from the allocator NOW, with the camera idle -- the rule
     # is that they have to be taken before the movie path takes what it needs,
     # and the record hook is already on the wrong side of that line.
-    _require_movie_mode()
-    echo_into(at['blocks_open'], 'blocks_open')
-    got = P.mem_get(0xC072EBA0, BUF_N)
-    if not got or any(not x for x in got):
-        raise SystemExit(f'the allocator would not give {BUF_N} blocks: '
+    _require_room()
+    # The shell drops commands silently, so one call coming back with nothing
+    # is not the same as the allocator refusing.  It cost a wrong diagnosis and
+    # a trip to the mode dial: I read eight zeros, decided the memory layout was
+    # wrong, and sent the user to change modes -- when the very next attempt
+    # allocated fine in the layout I had blamed.  blocks_open is idempotent (it
+    # returns early if B_PTR[0] is already ours), so retrying is free.
+    for attempt in range(3):
+        echo_into(at['blocks_open'], 'blocks_open')
+        got = P.mem_get(0xC072EBA0, BUF_N)
+        if got and all(got):
+            break
+        if attempt < 2:
+            print(f'  blocks_open came back empty; retrying ({attempt + 1}/3)')
+            time.sleep(0.3)
+    else:
+        raise SystemExit(f'the allocator would not give {BUF_N} blocks in three '
+                         f'attempts: '
                          + ' '.join('0x%08X' % (x or 0) for x in (got or [])))
     print(f'  blocks: {BUF_N} x {BUF_BYTES // 1024} KiB, '
           f'0x{got[0]:08X}..0x{got[-1] + BUF_BYTES:08X}')
@@ -275,34 +288,40 @@ def place_code():
     return at
 
 
-# 0 STILL_REC, 1 STILL_REC_HDR, 2 MOVIE_REC_MPEG, 3 MOVIE_REC_DNG -- the
-# firmware's own table, at 0xC2EF7609.
-MOVIE_MODES = ('MOVIE_REC_MPEG', 'MOVIE_REC_DNG')
+MEM_CLASS = 0            # USER, the class blocks_open asks
 
 
-def _require_movie_mode():
-    """Refuse to allocate while the camera is in a stills layout.
+def _require_room():
+    """Refuse to allocate unless the channel we ask actually has the room.
 
-    FUN_c001ce88 re-lays out all fifteen channels on a mode change, so class 0
-    is a different size in each.  Booted into STILL_REC the camera has nothing
-    past 0x45126680 -- which is exactly where the blocks live in the movie
-    layout -- and blocks_open comes back with eight zeros.  That used to print
-    a line and carry on arming the hooks, so the next take captured nothing and
-    said nothing about why.
+    The first version of this checked the memory MODE, on the theory that a
+    stills layout had nowhere to put the blocks.  `memmgr bufuse` says
+    otherwise -- USER has 17.6 MB free in STILL_REC and we want 128 KiB -- so
+    the mode was never the precondition and checking it would have refused
+    perfectly good deploys.  What matters is the number this reads.
+
+    (The mode does matter for a different reason: FUN_c001ce88 re-lays out all
+    fifteen channels on a change, and FUN_c001d470 panics with "Memory %d not
+    released" on any non-preserved channel that still has blocks out.  So do
+    not change modes while these are held -- free them first.  Audio never has
+    that problem because it asks class 6 at capture start and gives it back at
+    stop.)
     """
-    line = ''
-    for l in P.sh('memmgr bufchk', retries=3).splitlines():
+    want = BUF_N * BUF_BYTES
+    mode, room = '', None
+    for l in P.sh('memmgr bufuse', retries=3).splitlines():
         if 'mem mode' in l:
-            line = l.strip()
-            break
-    if not line:
-        raise SystemExit('could not read the memory mode -- refusing to allocate')
-    if not any(m in line for m in MOVIE_MODES):
-        raise SystemExit(
-            f'{line}\nthe camera is not in a movie memory layout, so class 0 '
-            f'has no room where the blocks go.  Put it in CINE (movie) mode '
-            f'and run this again.')
-    print(f'  {line}')
+            mode = l.strip()
+        m = re.search(r'\((\d+)\):.*remaining:\s*(\d+)', l)
+        if m and int(m.group(1)) == MEM_CLASS:
+            room = int(m.group(2))
+    if room is None:
+        raise SystemExit('could not read the channel\'s free space -- '
+                         'refusing to allocate blind')
+    print(f'  {mode}   class {MEM_CLASS} has {room} bytes free, we want {want}')
+    if room < want:
+        raise SystemExit(f'class {MEM_CLASS} has only {room} bytes free and the '
+                         f'blocks need {want}')
 
 
 def _verify_placed(code, at):
