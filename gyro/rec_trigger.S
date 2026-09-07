@@ -31,22 +31,27 @@
  *          here, so we build ours here, right behind it.  (This branch is the
  *          one taken when an audio file is recorded, which CinemaDNG does.)
  *
- *   STOP   cDevt_stop @0xC038C3C0, the recorder's device-stop step, at the
- *          instruction right after it has fetched the object that says whether
- *          an audio file was recorded and right before it acts on that:
+ *   STOP   cDevt_stop @0xC038C3C0, at the point where the two paths rejoin --
+ *          which is AFTER audio has torn its own writer down:
  *
- *              c038c458  bl   FUN_c0207088
- *              c038c45c  ldrb r3, [r0, #0xe0]   <- displaced
- *              c038c464  beq  (no audio file: restart the monitor)
- *              c038c46c  bl   XC_AudioRecorder::Stop   <- audio joins and CLOSES
+ *              c038c45c  ldrb r3, [r0, #0xe0]
+ *              c038c464  beq  ---------------+   no audio file
+ *              c038c46c  bl   XC_AudioRecorder::Stop   join, del mbx,
+ *              c038c470  b    --------------+|   destroy thread, close
+ *              c038c478  bl   FUN_c01fb2f8  ||
+ *              c038c47c  bl   FUN_c01fb918  ||   restart the monitor
+ *              c038c480  bl   FUN_c0399150 <++   both paths arrive here
+ *              c038c484  cmp  r0, #0        <- displaced
  *
- *          This is where audio closes its file, and it is the moment that
- *          matters.  The hook used to sit at 0xC01FB880, inside FUN_c01fb640,
- *          which is the audio capture being restarted -- two steps later in the
- *          same function, after "stop_fin", while that restart is taking the
- *          class 6 heap and programming the DSP.  Closing a file there froze the
- *          camera every time; closing the same file from the shell, idle, was
- *          clean.  Same task, same function, different step.
+ *          The hook sat at 0xC038C45C, which is BEFORE that call: our whole
+ *          teardown -- join, delete the mailbox, destroy the thread, take the
+ *          card lock and close -- ran ahead of audio's, in the one task
+ *          SRecFile is waiting on.  Teardowns that only sent a message and
+ *          waited on a flag were fine there; every one that went further froze
+ *          the camera, whatever order the further steps were in.
+ *
+ *          Here, audio has already collected its writer and closed its file,
+ *          and we do the same thing to ours behind it.
  *
  * Neither site is a function entry, and that is deliberate: both functions save
  * lr in their first instruction, and both have early returns in front of the
@@ -62,8 +67,8 @@
  */
 
 #ifdef REC_STOP
-.equ SITE,        0xC038C45C
-.equ SITE_ORIG,   0xE5D030E0          /* ldrb r3, [r0, #0xe0] */
+.equ SITE,        0xC038C484
+.equ SITE_ORIG,   0xE3500000          /* cmp r0, #0 */
 .equ COUNT_WORD,  STREAM_R1_N
 .equ LATCH_WORD,  STREAM_R1_GC
 #else
@@ -165,9 +170,13 @@ rec_trigger:
 
     pop     {r0, r1, r2, r3, ip, lr}
 #ifdef REC_STOP
-    ldrb    r3, [r0, #0xe0]             @ the displaced instruction: r0 is the
-                                        @ object FUN_c0207088 just returned,
-                                        @ restored by the pop above
+    cmp     r0, #0                      @ the displaced instruction.  It only
+                                        @ sets the flags for the beq that
+                                        @ follows, and r0 -- FUN_c0399150's
+                                        @ result -- is restored by the pop, so
+                                        @ the flags this leaves are the right
+                                        @ ones even though the hook clobbered
+                                        @ them in between.
 #else
     ldrb    r2, [r11, #0x5ce]           @ the displaced instruction; r11 is the
                                         @ recorder's state and is never touched
