@@ -23,7 +23,7 @@ Ordered by how far along each one is.
 |---|---|---|---|
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — [v2.0.0](fp_usb_shell/), verified on hardware |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/) published; one open item |
-| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — [fpGyroSup v1.4](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) · [notes](gyro/release/), GCSV and lens profile written during the take, distortion off the lens itself, portrait too, no computer (CinemaDNG) |
+| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released**, two editions · [notes](gyro/release/) — [fpGyroSup v1.4](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) writes the GCSV and the lens profile during the take, distortion off the lens itself, portrait too, no computer; [fpGyroSup Base v1](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-base-v1.zip) writes a `.GYR` instead — every sample at 2500 Hz, USB SSD too, converted [in a browser](https://ijigen.github.io/fpSup/gyro/web/) |
 | 4 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
 | 5 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, packaging | researched; lossless UHD to card hinges on one unmeasured number |
 | 6 | [**ui sup**](projects/ui-sup.md) | On-screen display, boot animation | text on screen works; colour encoding unsolved |
@@ -90,7 +90,7 @@ Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 |---|---|---|---|
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸工具 | **已釋出** — [v2.0.0](fp_usb_shell/),實機驗證過 |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、gain 與 sensor 控制 | **研究完成** — [互動說明頁](https://ijigen.github.io/fpSup/)已發布;一項未解 |
-| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro、六軸記錄與 Gyroflow 工作流 | **已發布** — [fpGyroSup v1.4 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) · [說明](gyro/release/),錄影中就寫好 GCSV 與鏡頭 profile,畸變直接來自鏡頭,直拿也行,全程不接電腦(CinemaDNG) |
+| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro、六軸記錄與 Gyroflow 工作流 | **已發布**,兩個版本 · [說明](gyro/release/) —— [fpGyroSup v1.4](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) 錄影中就寫好 GCSV 與鏡頭 profile,畸變直接來自鏡頭,直拿也行,全程不接電腦;[fpGyroSup Base v1](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-base-v1.zip) 改寫 `.GYR` —— 2500 Hz 一筆不漏、支援 USB SSD,用[瀏覽器](https://ijigen.github.io/fpSup/gyro/web/)轉檔 |
 | 4 | [**focus sup**](projects/focus-sup.md) | DFD、焦點模型、鏡頭控制與追焦 | AF 已深度反編譯;收集器未建 |
 | 5 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮與封裝 | 研究完成;無損 UHD 寫卡壓在一個沒量過的數字上 |
 | 6 | [**ui sup**](projects/ui-sup.md) | 螢幕 OSD 與開機動畫 | 已能在螢幕上寫字;顏色編碼未解 |

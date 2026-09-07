@@ -2,10 +2,20 @@
 
 [English](#english) | [繁體中文](#繁體中文)
 
-Gyro, six-axis logging and the Gyroflow workflow.
-**Status: released — [fpGyroSup v1.4](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip)** · [release notes](../gyro/release/)
+Gyro, six-axis logging and the Gyroflow workflow. **Status: released**, in two
+editions · [release notes](../gyro/release/)
 
-Gyro、六軸記錄與 Gyroflow 工作流。**狀態：已發布 —— [fpGyroSup v1.4 下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip)** · [說明](../gyro/release/)
+| | The camera writes | Converting |
+|---|---|---|
+| [**fpGyroSup v1.4**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) | `.gcsv` and `.json`, during the take | nothing to do |
+| [**fpGyroSup Base v1**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-base-v1.zip) | `.GYR`, one per take, every sample | [in a browser](https://ijigen.github.io/fpSup/gyro/web/) or `gyro/gyr7.py` |
+
+Gyro、六軸記錄與 Gyroflow 工作流。**狀態：已發布**,有兩個版本 · [說明](../gyro/release/)
+
+| | 相機寫出 | 轉檔 |
+|---|---|---|
+| [**fpGyroSup v1.4**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) | 錄影當下寫 `.gcsv` 與 `.json` | 不用做 |
+| [**fpGyroSup Base v1**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-base-v1.zip) | 每趟一個 `.GYR`,一筆不漏 | [瀏覽器](https://ijigen.github.io/fpSup/gyro/web/) 或 `gyro/gyr7.py` |
 
 ---
 
@@ -48,6 +58,36 @@ recording -> GCSV streamed during the take -> JSON written during the take -> st
 - The AutoRun is 113 commands and the camera reaches `fpSup!` in about nine
   seconds. Timed on the camera against the debug card: 38 ms per command and
   4.7 s of fixed cost, so the command count is the whole story.
+
+### The Base path (v1)
+
+```text
+accelerometer hook -> gyro drain -> block full -> writer task -> card
+```
+
+The same sensors, nothing computed and nothing thrown away. The camera writes
+one `.GYR` per take beside the clip, on whichever disk the take went to, and
+the conversion happens on a computer where you can look at it.
+
+- Every gyro sample at 2499.466 Hz, not a 1250 Hz average, and the
+  accelerometer's 46 Hz interleaved in the order the two actually happened —
+  an accelerometer reading sits beside the gyro samples of its own instant, so
+  its position in the file is its time.
+- Sixty-four bytes of header, then nothing but 8-byte records. The payload
+  reaches the card exactly as the producers left it: no CRC to compute, no
+  sorting into per-sensor regions, no copy.
+- Eight 16 KiB buffers taken from the allocator at boot, 6.6 s of slack against
+  a worst measured accelerometer interval of 35 ms and a 240 ms sensor ring.
+- The card sets itself up: the loader places four kilobytes of writer in the
+  camera's DMA pool by offset, and `gsup_boot` wires every pointer, takes the
+  buffers and only then arms the three hooks. If the allocator refuses, nothing
+  is armed and the camera is an ordinary camera.
+- `tscale` in the log is the sample period itself and `t` counts samples, so
+  nothing rounds and nothing drifts. The old integer 400 µs was 0.085 µs fast on
+  every sample — 21 ms across a 97 s take, and growing.
+- The volume needs a `GYRO` folder in its root. The camera will not make one:
+  writing file-system metadata at record start froze it, and doing it at boot
+  can only guess which disk the take will use.
 
 ### Verified on hardware
 
@@ -120,6 +160,29 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
   全都還開著)。
 - AutoRun 共 113 條命令,相機約九秒到達 `fpSup!`。與 debug 卡對照實測:每條命令 38 ms、
   固定開銷 4.7 秒,所以命令數就是全部。
+
+### Base 流程（v1）
+
+```text
+水平儀 hook -> 陀螺搬運 -> 區塊滿了 -> writer 執行緒 -> 卡片
+```
+
+同樣的感測器,但不算任何東西、也不丟棄任何東西。相機每趟在片段旁邊寫一個
+`.GYR`,錄到哪顆磁碟就寫在哪顆,轉檔放到電腦上、你看得見的地方做。
+
+- 每一筆陀螺資料都在,2499.466 Hz,不是 1250 Hz 的平均;水平儀的 46 Hz
+  **按真實發生順序交錯**在其中 —— 一筆水平儀資料就坐在它那一刻的陀螺資料旁邊,
+  所以它在檔案裡的位置就是它的時間。
+- 64 位元組表頭,之後全是 8 位元組記錄。酬載原封不動落卡:不算 CRC、不分區、不複製。
+- 開機時跟配置器拿 8 個 16 KiB 緩衝,6.6 秒餘裕;實測水平儀最壞間隔 35 ms,
+  感測器 ring 撐 240 ms。
+- 卡片自己佈署:載入器把四千位元組的 writer 以「偏移」放進相機的 DMA 池,
+  `gsup_boot` 把所有指標填好、拿到緩衝,**最後才**裝三個 hook。配置器不給就一個都不裝,
+  相機就是一台普通相機。
+- 記錄檔的 `tscale` 就是取樣週期、`t` 是取樣序號,不捨入也不漂移。舊的整數 400 µs
+  每筆快 0.085 µs —— 97 秒就差 21 ms,而且會一直長。
+- 磁碟根目錄要有 `GYRO` 資料夾。相機不會幫你建:在錄影開始寫檔案系統中繼資料會凍結相機,
+  改在開機做則只能猜你等下要錄到哪一顆。
 
 ### 實機驗證
 
