@@ -864,7 +864,24 @@ writer_openfile:
     movw    ip, #:lower16:F_OPEN
     movt    ip, #:upper16:F_OPEN
     blx     ip
-    movw    ip, #:lower16:T_FOPEN
+    cmp     r0, #0
+    bne     2f
+
+    /* Nothing opened.  The likeliest reason on a volume that has never carried
+     * a log is that \GYRO is not there -- F_OPEN will not make it, and the
+     * first take to a fresh USB SSD therefore wrote nothing and left no trace
+     * of why.  Make it and try once; if that was not the reason, the second
+     * open fails the same way and 8f gives the object back. */
+    mov     r0, r5
+    bl      make_gyro_dir
+    mov     r0, r4
+    mov     r1, r6
+    mov     r2, #F_MODE_AUD
+    movw    ip, #:lower16:F_OPEN
+    movt    ip, #:upper16:F_OPEN
+    blx     ip
+
+2:  movw    ip, #:lower16:T_FOPEN
     movt    ip, #:upper16:T_FOPEN
     str     r0, [ip]
     cmp     r0, #0
@@ -1257,6 +1274,11 @@ writer_path:
     .space  32
     .align  2
 
+/* "\\GYRO", written here when a volume turns out not to have one. */
+writer_dir:
+    .space  8
+    .align  2
+
 /* The header, rebuilt at every take_open and rewritten at every close. */
 writer_header:
     .space  HDR_BYTES
@@ -1264,6 +1286,50 @@ writer_header:
 
 /* The job pool, in the same blob so the calls resolve without a relocation
  * the loader here cannot apply. */
+/* make_gyro_dir -- r0 = the volume.  Best effort: every return is the same.
+ *
+ * The three calls recovery.inc.S makes, against a directory object that lives
+ * in the page already reserved for the file object.  The name is built in RAM
+ * rather than carried as a literal, the way every other path here is built.
+ */
+make_gyro_dir:
+    push    {r4, r5, r6, lr}
+    mov     r5, r0
+    movw    r4, #:lower16:T_FOBJ
+    movt    r4, #:upper16:T_FOBJ
+    ldr     r4, [r4]
+    cmp     r4, #0
+    beq     9f
+    add     r4, r4, #DIR_OBJ_OFF
+    mov     r0, r4
+    mov     r1, r5
+    movw    ip, #:lower16:F_DIR_CTOR
+    movt    ip, #:upper16:F_DIR_CTOR
+    blx     ip
+
+    adr     r6, writer_dir
+    movw    r0, #0x475C
+    movt    r0, #0x5259                 @ "\\GYR"
+    str     r0, [r6]
+    movw    r0, #0x004F                 @ "O" and its NUL
+    strh    r0, [r6, #4]
+
+    mov     r0, r4
+    mov     r1, r6
+    mov     r2, #0
+    movw    ip, #:lower16:F_DIR_MKDIR
+    movt    ip, #:upper16:F_DIR_MKDIR
+    blx     ip
+
+    mov     r0, r4
+    mov     r1, #2
+    movw    ip, #:lower16:F_DIR_DTOR
+    movt    ip, #:upper16:F_DIR_DTOR
+    blx     ip
+9:  pop     {r4, r5, r6, lr}
+    bx      lr
+
+
 /* --------------------------------------------------------------- the boot */
 
 /* gsup_boot -- everything the two deploy scripts do, done by the camera.

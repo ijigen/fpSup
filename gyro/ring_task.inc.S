@@ -309,6 +309,16 @@
 .equ SETTINGS_PTR,   0xC3075230
 .equ O_AUTORSTFLG,   0x5D5
 
+/* Making the directory.  A volume that has never had a gyro log on it has no
+ * \GYRO to open a file in, and F_OPEN does not create one -- which is why the
+ * first take to a fresh USB SSD wrote nothing and left no trace: the card
+ * builder has always made the folder on the SD card, so nothing ever exposed
+ * it.  recovery.inc.S has done this for months; same three calls. */
+.equ F_DIR_CTOR,     0xC0366918     /* (object, volume)                       */
+.equ F_DIR_MKDIR,    0xC03669C0     /* (object, path, 0)                      */
+.equ F_DIR_DTOR,     0xC0366940     /* (object, 2)                            */
+.equ DIR_OBJ_OFF,    0x800          /* inside the file object's own reserved page */
+
 .equ F_STAMP,        0xC0369310     /* XC_MediaFileSdCard::v13, vtable +0x3C:
                                      * the call AudF_W makes right after the
                                      * open.  Takes the card lock and stamps  */

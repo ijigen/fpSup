@@ -246,6 +246,51 @@ class Header(unittest.TestCase):
         self.assertEqual(self.equ('DNG_PAD_W'), 16)
         self.assertEqual(self.equ('DNG_PAD_H'), 10)
 
+    def test_the_named_code_addresses_really_name_that_code(self):
+        """ACCEL_AT/START_AT/STOP_AT are exempted from the words-on-code check
+        because they ARE the code's addresses -- gsup_boot builds the three
+        branch encodings from them.  An exemption that stops being true is a
+        branch into the middle of a hook, so check it."""
+        import imu_stream_deploy as D
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        for equ, producer in (('ACCEL_AT', 'accel'), ('START_AT', 'start'),
+                              ('STOP_AT', 'stop')):
+            m = re.search(rf'^\.equ {equ},\s*(0x[0-9A-Fa-f]+)', inc, re.M)
+            self.assertIsNotNone(m, equ)
+            self.assertEqual(int(m.group(1), 0), D.PRODUCERS[producer][0],
+                             f'{equ} is not where {producer} is placed')
+
+    def test_the_arm_words_match_the_deployer(self):
+        """The card arms the hooks from constants; the USB deploy computes them.
+        If they ever disagree, one of the two branches into nothing."""
+        import imu_stream_deploy as D
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        for equ, producer in (('ARM_ACCEL', 'accel'), ('ARM_START', 'start'),
+                              ('ARM_STOP', 'stop')):
+            at, _src, _d, site, _orig, thumb = D.PRODUCERS[producer]
+            want = D.branch_word(site, at, thumb)
+            m = re.search(rf'^\.equ {equ},\s*(.+?)\s*$', inc, re.M)
+            self.assertIsNotNone(m, equ)
+            got = eval(m.group(1), {}, {n: int(re.search(
+                rf'^\.equ {n},\s*(0x[0-9A-Fa-f]+)', inc, re.M).group(1), 0)
+                for n in ('ACCEL_SITE', 'ACCEL_AT', 'START_SITE', 'START_AT',
+                          'STOP_SITE', 'STOP_AT')})
+            self.assertEqual(got, want, f'{equ} disagrees with the deployer')
+
+    def test_a_fresh_volume_gets_its_directory(self):
+        """F_OPEN does not create \\GYRO, and the card builder has always made
+        it on the SD card -- so the first take to a fresh USB SSD wrote nothing
+        and left no trace of why.  The open makes it and tries once more."""
+        t = self.task
+        c = self.code(t[t.index('\nwriter_openfile:'):t.index('\nwriter_closefile:')])
+        self.assertIn('bl      make_gyro_dir', c)
+        self.assertEqual(c.count('F_OPEN'), 4, 'open, then open again')
+        d = self.code(t[t.index('\nmake_gyro_dir:'):
+                        t.index('\n', t.index('bx      lr',
+                                               t.index('\nmake_gyro_dir:')))])
+        for call in ('F_DIR_CTOR', 'F_DIR_MKDIR', 'F_DIR_DTOR'):
+            self.assertIn(call, d)
+
     def test_the_header_is_written_twice(self):
         """Once at open so the file always has a magic, once at close for the
         counts that only exist then."""
@@ -396,8 +441,8 @@ class AudioShape(unittest.TestCase):
         back, two takes share a file again and the second overwrites the first
         from byte zero."""
         literals = [l for l in self.task.splitlines() if '.asciz' in l]
-        self.assertFalse([l for l in literals if 'GYRO' in l],
-                         f'no path literal belongs in the blob: {literals}')
+        self.assertFalse([l for l in literals if '.GYR' in l],
+                         f'no file path belongs in the blob: {literals}')
         self.assertNotIn('RINGTEST',
                          (HERE / 'ring_task_deploy.py').read_text())
 

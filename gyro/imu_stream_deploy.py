@@ -236,8 +236,18 @@ def _place(measure_accel=False):
                              text, re.M):
             caves[m.group(1)] = int(m.group(2), 16)
     sized = {'T_DESC': 32, 'T_PKT': 32, 'W_VT': 16, 'B_PTR': 32, 'B_BUSY': 32}
+    # Three of the cave equates NAME code rather than reserving a word.
+    # gsup_boot computes the three branch encodings from them at build time, so
+    # they have to be the addresses the hooks are placed at -- being "inside"
+    # the hook is the whole point.  Nothing writes to them.  Named one at a
+    # time rather than by a spelling rule, because a rule would quietly exempt
+    # the next word that really does sit on code, which is the freeze this
+    # check exists to catch.
+    names_code = {'ACCEL_AT', 'START_AT', 'STOP_AT'}
     hit = []
     for wname, wa in sorted(caves.items(), key=lambda kv: kv[1]):
+        if wname in names_code:
+            continue
         wn = sized.get(wname, 4)
         for bn, ba, bl in code_spans:
             if wa < ba + bl and ba < wa + wn:
