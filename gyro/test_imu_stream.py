@@ -189,6 +189,23 @@ class AudioShape(unittest.TestCase):
         j = self.task.index('\n    bx      lr', i)
         return self.task[i:j]
 
+    CALL = re.compile(r'^\s*(?:blx?)\s+(?:ip|r\d+|(\w+))\s*$|'
+                      r'^\s*mov[wt]\s+ip,\s*#:(?:lower|upper)16:(\w+)\s*$', re.M)
+
+    def calls(self, text):
+        """The names a routine actually calls, with comments -- which may
+        mention the very name we are asserting is gone -- stripped out."""
+        code = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+        code = re.sub(r'@.*', '', code)
+        return {a or b for a, b in self.CALL.findall(code)}
+
+    def whole(self, name):
+        """The whole routine, not just up to the first return: a function with
+        an early exit (DRY_RUN) has more than one bx lr."""
+        i = self.task.index(f'\n{name}:')
+        m = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*:', re.M).search(self.task, i + 2 + len(name))
+        return self.task[i:m.start() if m else len(self.task)]
+
     def test_the_writer_body_returns(self):
         """AudioFileWriter::v1 breaks out of its loop on the stop message and
         returns; FUN_c036efe8 catches that and sets the completion flag.  A body
@@ -229,9 +246,10 @@ class AudioShape(unittest.TestCase):
         """AudioFileWriter::v0 calls XC_MediaFile::v0 and never F_CLOSE: the
         destructor's first act is FUN_c0366020, which is F_CLOSE.  Calling it
         ourselves first sent us through that path twice."""
-        c = self.body('writer_closefile')
-        self.assertIn('F_DTOR', c)
-        self.assertNotIn('F_CLOSE', c, 'closing twice is not what audio does')
+        called = self.calls(self.whole('writer_closefile'))
+        self.assertIn('F_DTOR', called)
+        self.assertNotIn('F_CLOSE', called,
+                         'closing twice is not what audio does')
 
     def test_the_thread_is_the_firmwares_own(self):
         """XC_Thread.cpp's pool, used rather than reimplemented: the flag, the
