@@ -374,15 +374,25 @@ free_blocks:
 2:  add     r6, r6, #1
     cmp     r6, #BUF_N
     blo     1b
+
+    /* And the text buffer, which is not in the row and would otherwise be the
+     * one block a free-and-take cycle leaks every time round. */
+    movw    r4, #:lower16:G_TEXT
+    movt    r4, #:upper16:G_TEXT
+    ldr     r1, [r4]
+    cmp     r1, #0
+    beq     9f
+    mov     r0, r5
+    movw    ip, #:lower16:MEM_FREE
+    movt    ip, #:upper16:MEM_FREE
+    blx     ip
+    mov     r0, #0
+    str     r0, [r4]
+
 9:  pop     {r4, r5, r6, lr}
     bx      lr
 
 
-/* blocks_open -- ask the allocator for the row, once, with the camera idle.
- *
- * Called through the borrowed shell handler at deploy time.  Everything the
- * take does afterwards assumes these exist; take_open declines if they do not.
- */
 /* blocks_open -- ask the allocator for the row, once, with the camera idle.
  *
  * The rule is not "do not allocate across a recording": it is that the
@@ -439,11 +449,6 @@ blocks_open:
     add     r6, r6, #1
     cmp     r6, #BUF_N
     blo     1b
-    b       3f
-
-2:  bl      free_blocks
-    b       9f
-
     /* One more, and it is not a stream block: the gcsv edition turns a block
      * of records into text somewhere before it writes it, and that somewhere
      * has to be asked for at boot like everything else -- record start is the
@@ -464,6 +469,11 @@ blocks_open:
     movw    ip, #:lower16:G_TEXT
     movt    ip, #:upper16:G_TEXT
     str     r0, [ip]
+
+    b       3f
+
+2:  bl      free_blocks
+    b       9f
 
 3:  /* Nothing is filling yet, and the file starts at byte zero. */
     movw    ip, #:lower16:B_CUR

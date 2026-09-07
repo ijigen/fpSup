@@ -298,6 +298,20 @@ class Header(unittest.TestCase):
                                        self.task.index('\nwriter_closefile:')])
         self.assertEqual(openfile.count('F_OPEN'), 2, 'one open, no retry')
 
+    def test_the_text_buffer_is_asked_for_on_the_path_that_runs(self):
+        """I put the extra allocation after blocks_open's `b 3f`, which is the
+        branch the successful path takes.  It assembled, it deployed, and it
+        was unreachable: G_TEXT stayed zero and nothing said anything.  It has
+        to come before that branch, and it has to be given back in free_blocks
+        or a free-and-take cycle leaks one block every time round."""
+        core = (HERE / 'writer_core.inc.S').read_text()
+        body = core[core.index('\nblocks_open:'):core.index('\nblocks_close:')]
+        self.assertIn('G_TEXT', body)
+        self.assertLess(body.index('G_TEXT'), body.index('b       3f'),
+                        'the allocation is on the far side of the branch')
+        free = core[core.index('\nfree_blocks:'):core.index('\nblocks_open:')]
+        self.assertIn('G_TEXT', free, 'the text block leaks on every cycle')
+
     def test_the_blob_is_fingerprinted_not_sampled(self):
         """The old guard read four words from two functions and said "the
         camera has this blob".  Both were near the top; a change in the middle
