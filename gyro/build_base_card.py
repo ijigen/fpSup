@@ -122,8 +122,13 @@ def main():
     check(secs)
 
     tmp = pathlib.Path(tempfile.mkdtemp())
+    # Padded, not --no-pad.  The shipping cards are written by a Mac, which
+    # truncates; this one is written over USB by putfile, and build_autorun's
+    # own filler line says why that matters -- "mode 7 overwrites but does not
+    # truncate".  A shorter file would leave the tail of the last AutoRun on
+    # the card, and the tail of the last AutoRun is the USB shell's worker.
     cmd = [sys.executable, str(SHELL / 'build_autorun.py'),
-           '--loader', '--no-shell', '--no-pad',
+           '--loader', '--no-shell',
            '--vshl-entry', f'0x{ENTRY_AT:08X}',
            # A soft power cycle can leave a previous session's diagnostic patch
            # in the F_WRITE prologue.  Every ordinary image puts it back.
