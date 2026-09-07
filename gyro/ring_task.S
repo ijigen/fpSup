@@ -637,9 +637,12 @@ take_close:
      *
      *   1  post the stop job
      *   2  + join
-     *   3  + close the file
+     *   3  + delete the mailbox
      *   4  + destroy the thread
-     *   5  + delete the mailbox      (the whole thing)
+     *   5  + close the file          (the whole thing)
+     *
+     * That is AudioFileWriter::v0's order, not the one this comment used to
+     * claim: the writer leaves the system first, the file goes last.
      */
     movw    r0, #:lower16:T_TEARDOWN
     movt    r0, #:upper16:T_TEARDOWN
@@ -737,7 +740,8 @@ take_close:
     bl      writer_closefile
 
     /* The blocks stay.  They were taken before the movie path took anything
-     * and they are given back only when the whole thing is torn down.
+     * and they are given back only when the whole thing is torn down --
+     * blocks_close, from the shell, never from the stop path. */
 
 6:  mov     r0, #0x16
     str     r0, [r4]

@@ -5,7 +5,6 @@
     ./imu_stream_deploy.py --restore   put the firmware's instructions back
     ./imu_stream_deploy.py --reset     clear the counters before a take
     ./imu_stream_deploy.py --take      read what one take measured (twelve words)
-    ./imu_stream_deploy.py --dump      read the stream itself
     ./imu_stream_deploy.py --rate 600  count gyro against the host clock
 
 Five producers, five hook sites, one 8-byte record shape:
@@ -23,7 +22,7 @@ The Vd interrupt is.
 Nothing writes over live code by accident: placement is checked against the
 injection cave and against every other span before a byte goes out, because the
 last time a probe landed on something that was running it cost four power
-cycles to work out why.  `--dump` and `--take` are `mem read`; they are never
+cycles to work out why.  `--take` is `mem read`; they are never
 issued without being asked for.
 """
 import argparse
@@ -474,38 +473,6 @@ def take():
         print(f'ring head at record start {r0_head} (+{r0_head//8} samples)')
 
 
-def dump(count):
-    take()
-    print()
-    words = P.read_back(STREAM_BASE, STREAM_COUNT * 2)
-    if any(w is None for w in words):
-        raise SystemExit('the stream did not read back whole')
-    recs = S.records(struct.pack(f'<{len(words)}I', *words))
-
-    index = P.mem_get(STREAM_INDEX)[0]
-    live = min(index, STREAM_COUNT)
-    first = index % STREAM_COUNT
-    order = ([(first + i) % STREAM_COUNT for i in range(live)]
-             if index > STREAM_COUNT else list(range(live)))
-    seq = [recs[i] for i in order]
-
-    info = S.summary(seq)
-    print(f"{live} records: {info['gyro']} gyro, {info['accel']} accel, "
-          f"{info['frame']} frame, {info['start']} start, {info['stop']} stop"
-          + (f", unknown tags {info['unknown']}" if info['unknown'] else ''))
-    if info['per_accel']:
-        print(f"one accel every {info['per_accel']:.0f} gyro "
-              f"(2500 Hz against a measured 47.2 Hz is about 53)")
-    gaps, per_frame = S.frame_spacing(seq)
-    if per_frame:
-        print(f"{per_frame:.2f} gyro per frame in the ring; spacings {gaps}")
-    print(f"{info['duration_us'] / 1000:.1f} ms of gyro in the stream")
-    for t, g, a, mark in S.rows(seq)[:count]:
-        extra = f'   accel {a[0]:6d} {a[1]:6d} {a[2]:6d}' if a else ''
-        m = f'   <- {mark[0].upper()} {mark[1]}' if mark else ''
-        print(f'  {t:8.0f} us  {g[0]:7d} {g[1]:7d} {g[2]:7d}{extra}{m}')
-
-
 def rate(total, step):
     """Count gyro records against a long baseline and fit a rate.
 
@@ -555,7 +522,6 @@ def main():
     g.add_argument('--restore', action='store_true')
     g.add_argument('--reset', action='store_true')
     g.add_argument('--take', action='store_true')
-    g.add_argument('--dump', action='store_true')
     g.add_argument('--stage', type=int, choices=range(6),
                    help='turn the flow on one step at a time')
     g.add_argument('--teardown', type=int, choices=range(6),
@@ -567,7 +533,6 @@ def main():
     g.add_argument('--accel', action='store_true',
                    help='the accelerometer hook interval, in gyro samples')
     g.add_argument('--rate', type=float, metavar='SECONDS')
-    ap.add_argument('--rows', type=int, default=24)
     ap.add_argument('--step', type=float, default=30.0)
     ap.add_argument('--only', help='comma-separated producers to arm')
     ap.add_argument('--measure-accel', action='store_true',
@@ -579,8 +544,6 @@ def main():
         reset()
     elif a.take:
         take()
-    elif a.dump:
-        dump(a.rows)
     elif a.stage is not None:
         stage(a.stage)
     elif a.teardown is not None:

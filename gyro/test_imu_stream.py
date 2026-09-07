@@ -172,6 +172,53 @@ class RecordShape(unittest.TestCase):
         for name, src in WRITERS:
             self.assertNotRegex(src[src.index('push'):], r'lsl\s+#3',
                                 f'{name} is doing address arithmetic')
+class BlockComments(unittest.TestCase):
+    """A block comment that is never closed swallows the code after it, and the
+    assembler says nothing.  One of these ate take_close's own `9:` return
+    label: every teardown short of the last branched to the NEXT function's
+    `9:` -- whose pop happened to match, so they looked like passes -- and the
+    full teardown fell straight through into writer_openfile, re-opening the
+    file at record stop.  Three camera freezes and a battery each.
+
+    The house style is that every continuation line of a block comment starts
+    with `*`, so a comment that has swallowed code is one whose interior lines
+    do not.  That is checkable, and eyes are not.
+    """
+
+    CODE = re.compile(
+        r'^[A-Za-z_0-9]+:|'
+        r'^\s+(?:mov[wt]?|ldr|str|add|sub|rsb|cmp|cmn|tst|teq|and|orr|eor|bic'
+        r'|lsl|lsr|asr|mul|mla|adr|nop|push|pop|b|bl|blx|bx|msr|mrs|ldm|stm)'
+        r'(?:eq|ne|cs|cc|hs|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le|al)?s?\s+'
+        r'(?:r\d|ip\b|sp\b|lr\b|pc\b|#|\{|\d+[fb]\b'
+        r"|[A-Za-z_]\w*\s*(?:@.*)?$)")
+
+    def test_no_block_comment_swallows_code(self):
+        for f in sorted(HERE.parent.rglob('*.S')):
+            inside = False
+            for n, line in enumerate(f.read_text().splitlines(), 1):
+                body = line
+                if inside:
+                    self.assertFalse(
+                        self.CODE.match(line),
+                        f'{f.name}:{n} is inside a block comment but is code '
+                        f'-- an unterminated /* above it is eating this '
+                        f'line: {line!r}')
+                    if '*/' not in line:
+                        continue
+                    body = line.split('*/', 1)[1]
+                    inside = False
+                while True:
+                    o = body.find('/*')
+                    if o < 0:
+                        break
+                    c = body.find('*/', o + 2)
+                    if c < 0:
+                        inside = True
+                        break
+                    body = body[c + 2:]
+
+
 class AudioShape(unittest.TestCase):
     """The writer must have the shape AudF_W has, not the shape it grew.
 
