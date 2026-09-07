@@ -457,6 +457,19 @@ def stage(n):
              STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
              STREAM_FLUSHFN: 'stream_flush',
              STREAM_DRAINFN: 'gyro_drain', STREAM_SIGFN: 'writer_post'}
+    # A stage sets pointers; it does not install hooks.  After a reboot the
+    # cave is empty, and a stage on its own then looks exactly like a working
+    # deploy right up until the take produces nothing -- which has now cost two
+    # takes.  Say so here rather than let the counters say it afterwards.
+    unarmed = [n for n, (_a, _s, _d, site, orig, _t) in PRODUCERS.items()
+               if site is not None and P.mem_get(site)[0] == orig]
+    if unarmed:
+        raise SystemExit(
+            f'{", ".join(unarmed)}: the firmware word is still at these sites, '
+            f'so nothing is hooked.\n'
+            f'  run ./gyro/imu_stream_deploy.py with no arguments first -- that '
+            f'is what arms them.')
+
     _setw(T_BUILD, 5, 'how far take_open builds')
     _setw(T_TEARDOWN, 5, 'how far take_close tears down')
     print(f'stage {n}: {STAGES[n]}')
