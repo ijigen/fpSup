@@ -72,7 +72,12 @@ def _symbols(src):
             '<IIIBBH', elf, off)
         end = elf.index(b'\0', strtab[4] + name_off)
         name = elf[strtab[4] + name_off:end].decode()
-        if name in ('stream_claim', 'stream_commit', 'gyro_drain'):
+        # Every real symbol, not a hand-kept list: a whitelist silently
+        # drops the next routine somebody adds, and stream_flush cost a
+        # deploy proving it.  `$a`/`$d` are the mapping symbols.
+        # SHN_UNDEF and SHN_ABS are undefined names and .equ constants; what
+        # is left is code, at an offset into the blob.
+        if name and not name.startswith('$') and _shndx not in (0, 0xFFF1):
             out[name] = value
     if not out:
         raise SystemExit(f'{src.name} exports nothing we can call')
