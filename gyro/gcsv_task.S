@@ -117,6 +117,7 @@ writer_openfile:
     str     r0, [ip]
 
     bl      gcsv_header
+    bl      gcsv_json_write
     b       9f
 
 8:  mov     r0, r4                      @ it did not open: do not leave it built
@@ -397,3 +398,4 @@ gcsv_head2:
     .balign 4
 
 #include "gcsv_rows.S"
+#include "gcsv_json.S"
