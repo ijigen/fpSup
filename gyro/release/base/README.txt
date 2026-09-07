@@ -23,7 +23,8 @@ accelerometer interleaved in the order they happened.  Convert with
     ./gyro/gyr7.py A001_037.GYR --gcsv A001_037.gcsv
 
 If a take produces no .GYR, the folder is missing on that volume.  Nothing
-else is wrong and nothing else needs doing.
+else is wrong and nothing else needs doing.  Formatting a card removes it,
+so put it back after you format.
 
 This card carries the stream and nothing else: no gcsv on the camera, no
 lens profile, no USB shell.
