@@ -79,8 +79,7 @@ ji: push    {r1, lr}
     bx      lr
 
 /* jm -- r0 = thousandths, emitted as "<whole>.<three digits>". */
-jm: push    {r4, r5, lr}
-    push    {r4}
+jm: push    {r4, r5, r6, lr}
     movw    r1, #1000
     mov     r4, r0
     bl      udiv_1000                   @ r0 = whole, r1 = the rest
@@ -92,8 +91,7 @@ jm: push    {r4, r5, lr}
     mov     r1, r9
     bl      put_u32_3
     mov     r9, r0
-    pop     {r4}
-    pop     {r4, r5, lr}
+    pop     {r4, r5, r6, lr}
     bx      lr
 
 /* jhalf -- r0 = a length, emitted as its half: "968.0" or "968.5".
@@ -127,8 +125,7 @@ udiv_1000:
 
 /* put_u32_3 -- r0 = 0..999, r1 = destination.  Three digits, zero padded. */
 put_u32_3:
-    push    {r4, r5, lr}
-    push    {r4}
+    push    {r4, r5, r6, lr}
     mov     r4, r1
     mov     r5, r0
     movw    r1, #0x851F
@@ -143,8 +140,7 @@ put_u32_3:
     mov     r0, r5
     mov     r1, r4
     bl      put_u32_2
-    pop     {r4}
-    pop     {r4, r5, lr}
+    pop     {r4, r5, r6, lr}
     bx      lr
 
 /* put_u32_2 -- r0 = 0..99, r1 = destination.  Two digits, zero padded. */
@@ -427,8 +423,7 @@ j_dims:
  */
     .global gcsv_json_write
 gcsv_json_write:
-    push    {r4, r5, r6, r7, r8, r9, r10, r11, lr}
-    push    {r4}
+    push    {r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}
 
     movw    r4, #:lower16:G_TEXT
     movt    r4, #:upper16:G_TEXT
@@ -453,6 +448,11 @@ gcsv_json_write:
 
     mov     r0, r11
     bl      j_lens
+    /* The focal the correction data was measured at, not the one on the
+     * barrel: a SIGMA 40mm Art says 40.0 and calibrates at 39.4, and the
+     * camera matrix wants the second -- it is the scale that turns a gyro
+     * angle into pixels, so an error there over-corrects every rotation. */
+    bl      pg_dist_focal
     mov     r8, r0                      @ the focal length, tenths of a mm
 
     S "{\n  \"name\": \"SIGMA fp - "
@@ -542,7 +542,10 @@ gcsv_json_write:
     mov     r1, r5
     mov     r2, r8
     bl      j_focal_milli
-    mov     r10, r0
+    mov     r8, r0                      @ focal_px x 1000, which the fit adjusts
+    bl      j_dist_prepare              @ by folding the lens's magnification in
+    mov     r10, r8
+    mov     r0, r10
     bl      jm
     S ", 0.0, "
     mov     r0, r5
@@ -554,9 +557,9 @@ gcsv_json_write:
     mov     r0, r6
     bl      jhalf
     S "], [0.0, 0.0, 1.0]],\n"
-    /* Zero, and said so rather than left out: Gyroflow falls back to its own
-     * telemetry path when the list is short, so all four are given. */
-    S "    \"distortion_coeffs\": [0.0, 0.0, 0.0, 0.0]\n  },\n"
+    S "    \"distortion_coeffs\": ["
+    bl      j_dist_emit
+    S "]\n  },\n"
     S "  \"sync_settings\": {},\n  \"official\": false\n}\n"
 
     sub     r6, r9, r4                  @ how much there is
@@ -576,8 +579,7 @@ gcsv_json_write:
     movt    ip, #:upper16:F_DTOR
     blx     ip
 
-90: pop     {r4}
-    pop     {r4, r5, r6, r7, r8, r9, r10, r11, lr}
+90: pop     {r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}
     bx      lr
 
 /* j_name -- r0 = the NUL-terminated lens name, emitted at the cursor. */

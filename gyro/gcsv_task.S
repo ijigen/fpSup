@@ -399,3 +399,4 @@ gcsv_head2:
 
 #include "gcsv_rows.S"
 #include "gcsv_json.S"
+#include "gcsv_dist.S"
