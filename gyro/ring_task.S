@@ -530,6 +530,12 @@ take_open:
     movw    r0, #:lower16:B_HANDED
     movt    r0, #:upper16:B_HANDED
     str     r1, [r0]
+    /* The geometry latch, so each take reports its own and not the last one's.
+     * The accel hook fills it in once, twenty milliseconds from now. */
+    movw    r0, #:lower16:STREAM_GEOM_W
+    movt    r0, #:upper16:STREAM_GEOM_W
+    str     r1, [r0]
+    str     r1, [r0, #4]
 
     movw    r0, #:lower16:T_BUILD
     movt    r0, #:upper16:T_BUILD
@@ -924,6 +930,12 @@ writer_closefile:
     movt    r1, #:upper16:B_DROPS
     ldr     r1, [r1]
     str     r1, [r0, #H_DROPPED]
+    movw    r1, #:lower16:STREAM_GEOM_W
+    movt    r1, #:upper16:STREAM_GEOM_W
+    ldr     r2, [r1]
+    str     r2, [r0, #H_WIDTH]
+    ldr     r2, [r1, #4]
+    str     r2, [r0, #H_HEIGHT]
     bl      put_header
 
     /* The destructor and nothing else.  AudioFileWriter::v0 calls
@@ -1140,12 +1152,12 @@ take_header:
     movt    ip, #:upper16:EXPOSURE_FN
     blx     ip
     str     r0, [r4, #H_EXPOSURE]
-    movw    r0, #:lower16:GEOMETRY
-    movt    r0, #:upper16:GEOMETRY
-    ldr     r1, [r0]
-    str     r1, [r4, #H_WIDTH]
-    ldr     r1, [r0, #4]
-    str     r1, [r4, #H_HEIGHT]
+    /* Zero at open -- the accel hook has not run yet.  writer_closefile fills
+     * it in before it rewrites the header, which is the only reason the header
+     * is written twice. */
+    mov     r0, #0
+    str     r0, [r4, #H_WIDTH]
+    str     r0, [r4, #H_HEIGHT]
 
     mov     r0, r4
     bl      put_header

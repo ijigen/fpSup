@@ -182,6 +182,13 @@ class Header(unittest.TestCase):
         self.inc = (HERE / 'ring_task.inc.S').read_text()
         self.task = (HERE / 'ring_task.S').read_text()
 
+    @staticmethod
+    def code(text):
+        """Comments mention the very names these tests assert on -- a check
+        that reads them passes on a file whose code says something else."""
+        text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+        return re.sub(r'@.*', '', text)
+
     def equ(self, name):
         m = re.search(rf'^\.equ {name},\s*(\S+?)\s*(?:/\*|$)',
                       self.inc, re.M)
@@ -213,6 +220,28 @@ class Header(unittest.TestCase):
         c = '\n'.join(l for l in self.task.splitlines()
                        if 'B_OFF' in l or 'HDR_BYTES' in l)
         self.assertIn('HDR_BYTES', c)
+
+    def test_the_geometry_is_latched_not_raced(self):
+        """0xC37CE210 reads zero while the camera is idle, and reading it at the
+        record start hook is a race with whoever publishes it -- A001_025 got
+        1936x1090 and A001_001 got zero.  The accel hook runs about twenty
+        milliseconds in, so it latches it; take_open clears the latch so each
+        take reports its own; the close puts it in the header."""
+        accel = self.code((HERE / 'accel_hook.S').read_text())
+        self.assertIn('GEOMETRY_AT', accel)
+        self.assertIn('STREAM_GEOM_W', accel)
+        # take_open clears it, or a take with no geometry inherits the last one's
+        self.assertIn('STREAM_GEOM_W',
+                      self.code(self.task[self.task.index('\ntake_open:'):
+                                          self.task.index('\ntake_close:')]))
+        # and the close is where it reaches the header
+        close = self.code(self.task[self.task.index('\nwriter_closefile:'):])
+        self.assertIn('STREAM_GEOM_W', close)
+        self.assertIn('H_WIDTH', close)
+        # never straight from the hardware at open: that is the race
+        header = self.code(self.task[self.task.index('\ntake_header:'):
+                                     self.task.index('\nput_header:')])
+        self.assertNotIn('GEOMETRY_AT', header)
 
     def test_the_header_is_written_twice(self):
         """Once at open so the file always has a magic, once at close for the

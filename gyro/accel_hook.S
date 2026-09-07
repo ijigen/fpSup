@@ -113,6 +113,26 @@ accel_hook:
     cmp     ip, #0
     beq     3f
 
+    /* The recording geometry, once per take.
+     *
+     * 0xC37CE210 reads zero while the camera is idle, so it can only be taken
+     * during a take -- and taking it at the record START hook is a race with
+     * whoever publishes it: one take got 1936x1090 and the next got zero.  By
+     * the time this hook runs it is there.  take_open clears the latch, so the
+     * first visit of each take pays for it and the rest read one word and go. */
+    movw    ip, #:lower16:STREAM_GEOM_W
+    movt    ip, #:upper16:STREAM_GEOM_W
+    ldr     r0, [ip]
+    cmp     r0, #0
+    bne     1f
+    movw    r1, #:lower16:GEOMETRY_AT
+    movt    r1, #:upper16:GEOMETRY_AT
+    ldr     r2, [r1]
+    ldr     r3, [r1, #4]
+    cmp     r2, #0
+    strne   r3, [ip, #4]
+    strne   r2, [ip]                    @ width last: it is the "have it" flag
+1:
     /* Drain the coprocessor's ring FIRST, then append this record.
      *
      * This is the whole point of the drain living here.  Once the drain has

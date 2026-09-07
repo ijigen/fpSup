@@ -49,7 +49,7 @@ PRODUCERS = {
     # event this data has, so it is the only hook left that produces anything:
     # it drains the coprocessor's ring and then appends its own record, which is
     # what puts that record in the right place.
-    'accel': (0xC072E100, 'accel_hook.S',       (),            0xC050D4C8, 0xE3A02000, 0),
+    'accel': (0xC072E200, 'accel_hook.S',       (),            0xC050D4C8, 0xE3A02000, 0),
     # Not hooks.  Called.
     'drain': (0xC072E300, 'gyro_drain.S',       (),            None,       None,       0),
     'space': (0xC072EC60, 'stream_space.S',     (),            None,       None,       0),
@@ -131,6 +131,7 @@ T_TEARDOWN = 0xC072EC58
 BUF_N, BUF_BYTES = 8, 0x4000
 B_CUR, B_FILL, B_DONE = 0xC072EBE0, 0xC072EBE4, 0xC072EBE8
 B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
+STREAM_GEOM_W = 0xC072E8F8
 POOL_PTR      = 0xC3757A7C
 
 # GHEAD unarmed, everything else zero.
@@ -208,7 +209,8 @@ def _place(measure_accel=False):
               ('accel state', ACC_STATE, ACC_WORDS * 4),
               # ring_task_deploy owns these, but only this script knows
               # where the hooks land -- so the overlap check lives here.
-              ('writer counters', 0xC072E8E0, 5 * 4),
+              # five counters, then the latched recording geometry
+              ('writer counters', 0xC072E8E0, 7 * 4),
               # the blocks are the allocator's; only their bookkeeping is here
               ('block state', 0xC072EBA0, (2 * BUF_N + 7) * 4),
               # the writer's own words and the four call-throughs.  These
