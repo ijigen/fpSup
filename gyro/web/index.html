@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>.GYR converter</title>
+<style>
+:root{
+  --paper:#faf9f7; --card:#ffffff; --ink:#16181c; --dim:#5b6169; --faint:#8b9199;
+  --rule:#e2e1dd; --rule2:#cfcec9; --accent:#1a5f8c; --accent-soft:#e8f0f6;
+  --warn:#8a5a00; --warn-soft:#fdf4e3; --bad:#9b2c2c; --bad-soft:#fbeaea;
+  --ok:#1f6b4a;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#111316; --card:#181b1f; --ink:#e7e8ea; --dim:#9aa1a9; --faint:#6d747c;
+    --rule:#272b30; --rule2:#363b41; --accent:#78b3d8; --accent-soft:#16242e;
+    --warn:#d9a441; --warn-soft:#2a2317; --bad:#e08585; --bad-soft:#2b1a1a;
+    --ok:#68c096;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111316; --card:#181b1f; --ink:#e7e8ea; --dim:#9aa1a9; --faint:#6d747c;
+  --rule:#272b30; --rule2:#363b41; --accent:#78b3d8; --accent-soft:#16242e;
+  --warn:#d9a441; --warn-soft:#2a2317; --bad:#e08585; --bad-soft:#2b1a1a;
+  --ok:#68c096;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums}
+main{max-width:64rem;margin:0 auto;padding:2.5rem 1.25rem 5rem}
+header{border-bottom:1px solid var(--rule);padding-bottom:1.5rem;margin-bottom:2rem}
+h1{margin:0 0 .35rem;font-size:1.6rem;letter-spacing:-.015em;font-weight:640;
+  text-wrap:balance}
+h1 .ext{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent)}
+.sub{margin:0;color:var(--dim);max-width:52ch}
+.sub code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;
+  background:var(--accent-soft);padding:.05em .35em;border-radius:3px}
+
+#drop{
+  border:1.5px dashed var(--rule2); border-radius:10px; background:var(--card);
+  padding:2.25rem 1.5rem; text-align:center; cursor:pointer;
+  transition:border-color .12s, background .12s;
+}
+#drop:hover,#drop:focus-visible{border-color:var(--accent);outline:none}
+#drop.over{border-color:var(--accent);background:var(--accent-soft)}
+#drop b{display:block;font-size:1.05rem;margin-bottom:.2rem}
+#drop span{color:var(--dim);font-size:.9rem}
+input[type=file]{display:none}
+
+.lens{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(13rem,1fr)); gap:1rem;
+  margin:1.75rem 0 0; padding:1.15rem 1.25rem; background:var(--card);
+  border:1px solid var(--rule); border-radius:10px;
+}
+.lens .full{grid-column:1/-1;margin:0;color:var(--dim);font-size:.86rem}
+label{display:block;font-size:.74rem;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--faint);margin-bottom:.3rem;font-weight:600}
+input[type=text],input[type=number]{
+  width:100%;padding:.5rem .6rem;border:1px solid var(--rule2);border-radius:6px;
+  background:var(--paper);color:var(--ink);font-size:.95rem;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+
+.take{
+  background:var(--card); border:1px solid var(--rule); border-radius:10px;
+  margin-top:1.25rem; overflow:hidden;
+}
+.take > h2{
+  margin:0; padding:.85rem 1.25rem; font-size:1rem; font-weight:640;
+  border-bottom:1px solid var(--rule);
+  display:flex; align-items:baseline; gap:.75rem; flex-wrap:wrap;
+}
+.take > h2 .clip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.take > h2 .len{color:var(--dim);font-weight:400;font-size:.86rem}
+.grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));
+  gap:1px; background:var(--rule);
+}
+.cell{background:var(--card);padding:.8rem 1.25rem}
+.cell dt{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--faint);font-weight:600}
+.cell dd{margin:.15rem 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.98rem;font-variant-numeric:tabular-nums}
+.cell dd small{color:var(--dim);font-size:.8em}
+.acts{padding:.9rem 1.25rem;display:flex;gap:.6rem;flex-wrap:wrap;
+  border-top:1px solid var(--rule);align-items:center}
+button{
+  font:inherit;font-size:.9rem;font-weight:560;padding:.45rem .9rem;border-radius:6px;
+  border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;
+}
+button.ghost{background:transparent;color:var(--accent)}
+button:hover{filter:brightness(1.08)}
+button:disabled{opacity:.45;cursor:default;filter:none}
+.note{font-size:.84rem;color:var(--dim);margin-left:auto}
+
+.flag{padding:.6rem 1.25rem;font-size:.87rem;border-top:1px solid var(--rule)}
+.flag.warn{background:var(--warn-soft);color:var(--warn)}
+.flag.bad{background:var(--bad-soft);color:var(--bad)}
+.flag b{font-weight:640}
+
+footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--rule);
+  color:var(--dim);font-size:.87rem}
+footer h3{margin:0 0 .4rem;font-size:.95rem;color:var(--ink);font-weight:620}
+footer p{margin:0 0 1rem;max-width:64ch}
+footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>SIGMA fp <span class="ext">.GYR</span> converter</h1>
+  <p class="sub">Drop the log the camera wrote beside your clip. Everything happens
+  in this page — nothing is uploaded, and it works offline once loaded. Out comes a
+  Gyroflow <code>.gcsv</code>, and a lens profile <code>.json</code> if you name the lens.</p>
+</header>
+
+<div id="drop" tabindex="0" role="button" aria-label="Choose .GYR files">
+  <b>Drop .GYR files here</b>
+  <span>or click to choose &mdash; several at once is fine</span>
+  <input type="file" id="pick" accept=".GYR,.gyr" multiple>
+</div>
+
+<div class="lens">
+  <div>
+    <label for="lensname">Lens</label>
+    <input type="text" id="lensname" placeholder="SIGMA 45mm F2.8 DG DN" autocomplete="off">
+  </div>
+  <div>
+    <label for="focal">Focal length, mm</label>
+    <input type="number" id="focal" placeholder="45" step="0.1" min="1" max="2000">
+  </div>
+  <p class="full">The camera does not record which lens was on it, so the profile
+  needs these two from you. Distortion is left at zero — the profile is still worth
+  having, because what actually matters for rolling shutter is the readout time, and
+  that comes from the sensor mode in the file.</p>
+</div>
+
+<div id="takes"></div>
+
+<footer>
+  <h3>What the file is</h3>
+  <p>Sixty-four bytes of header and then nothing but 8-byte records — gyroscope and
+  accelerometer interleaved in the order they happened, exactly as the camera's
+  buffers reached the card. The gyro runs at 2499.466&nbsp;Hz, so the log sets
+  <code>tscale</code> to the sample period itself and counts samples in
+  <code>t</code>: nothing rounds and nothing drifts.</p>
+  <h3>No .GYR beside a clip?</h3>
+  <p>The volume you recorded to needs a folder called <code>GYRO</code> in its root —
+  the SD card and, if you record to one, the USB SSD as well. The camera will not
+  create it, and formatting removes it.</p>
+  <h3>The accelerometer</h3>
+  <p>It is in the .GYR either way, about forty-six readings a second against the
+  gyro's twenty-five hundred. It is out of the log by default because it made
+  Gyroflow's fusion worse in the test that settled the axis order — but horizon
+  levelling needs gravity, so there is a switch for it on each take.</p>
+</footer>
+</main>
+
+<script src="modes.js"></script>
+<script>
+'use strict';
+
+// The camera's own numbers, so nothing here has to be told them.
+const HDR = 64, REC = 8, TAG_GYRO = 0, TAG_ACCEL = 1;
+const ASCALE = 1 / 1024;          // MMA8452Q at 2 g, 12 bits: 1024 counts to a g
+const SENSOR_ACTIVE_W = 6000, SENSOR_ACTIVE_MM = 35.9, SENSOR_TOTAL_W = 6064;
+
+const $ = s => document.querySelector(s);
+const takes = $('#takes');
+const parsed = [];
+
+function readCapture(buf, filename) {
+  const d = new DataView(buf);
+  if (buf.byteLength < HDR) throw new Error('shorter than a header');
+  const magic = String.fromCharCode(d.getUint8(0), d.getUint8(1), d.getUint8(2), d.getUint8(3));
+  if (magic !== 'GFS7') throw new Error(`not a v7 capture (magic "${magic}")`);
+  const version = d.getUint32(4, true);
+  if (version !== 7) throw new Error(`unsupported version ${version}`);
+  const periodPs = d.getUint32(8, true);
+  if (!periodPs) throw new Error('the header has no sample period');
+
+  let orient = '';
+  for (let i = 0; i < 4; i++) { const c = d.getUint8(16 + i); if (!c) break; orient += String.fromCharCode(c); }
+  let clip = '';
+  for (let i = 0; i < 8; i++) { const c = d.getUint8(20 + i); if (!c) break; clip += String.fromCharCode(c); }
+
+  const c = {
+    file: filename, clip, orientation: orient,
+    periodS: periodPs / 1e12,
+    gscale: d.getFloat32(12, true),
+    volume: d.getUint32(28, true),
+    payload: d.getUint32(32, true),
+    dropped: d.getUint32(36, true),
+    mode: d.getUint32(40, true),
+    exposureUs: d.getUint32(44, true),
+    width: d.getUint32(48, true),
+    height: d.getUint32(52, true),
+    warnings: [],
+  };
+
+  const bodyLen = buf.byteLength - HDR;
+  if (c.payload && c.payload !== bodyLen) {
+    // The header is rewritten when the take closes.  A mismatch means it never
+    // did -- read what is there and say so rather than refusing.
+    c.warnings.push({
+      level: 'warn',
+      text: `the header says ${c.payload.toLocaleString()} payload bytes and the file has `
+          + `${bodyLen.toLocaleString()}. The take did not close cleanly; everything that `
+          + `did reach the card is being read.`});
+  }
+  const whole = bodyLen - (bodyLen % REC);
+  if (bodyLen % REC) c.warnings.push({
+    level: 'warn', text: `${bodyLen % REC} bytes past the last whole record, ignored.`});
+  if (c.dropped) c.warnings.push({
+    level: 'bad',
+    text: `${c.dropped} block${c.dropped > 1 ? 's were' : ' was'} dropped — the writer did not `
+        + `keep up with the card, and that much of the take is missing from the middle.`});
+
+  const n = whole / REC;
+  const gx = new Int16Array(n), gy = new Int16Array(n), gz = new Int16Array(n);
+  // Where each accelerometer reading sits: the index of the gyro sample it
+  // follows.  Its position in the stream IS its moment.
+  const aAt = [], ax = [], ay = [], az = [];
+  let ng = 0, unknown = 0;
+  for (let i = 0; i < n; i++) {
+    const o = HDR + i * REC;
+    const tag = d.getInt16(o + 4, true);
+    if (tag === TAG_GYRO) {
+      gx[ng] = d.getInt16(o, true);
+      gy[ng] = d.getInt16(o + 2, true);
+      gz[ng] = d.getInt16(o + 6, true);
+      ng++;
+    } else if (tag === TAG_ACCEL) {
+      aAt.push(ng); ax.push(d.getInt16(o, true));
+      ay.push(d.getInt16(o + 2, true)); az.push(d.getInt16(o + 6, true));
+    } else unknown++;
+  }
+  if (unknown) c.warnings.push({
+    level: 'bad', text: `${unknown} records carry a tag this reader does not know.`});
+
+  c.n = ng; c.gx = gx; c.gy = gy; c.gz = gz;
+  c.aAt = aAt; c.ax = ax; c.ay = ay; c.az = az;
+  c.durationS = ng * c.periodS;
+  return c;
+}
+
+function gcsv(c, withAccel) {
+  const out = [
+    'GYROFLOW IMU LOG', 'version,1.3',
+    'id,sigma_fp_v502_internal_icm20321',
+    `orientation,${c.orientation}`,
+    `note,GFS7 ${c.clip}; dropped_blocks=${c.dropped}`,
+    'fwversion,SIGMA fp 5.02',
+    `videofilename,${c.clip}`,
+    // t counts samples, so this is the whole of the clock.
+    `tscale,${trim(c.periodS)}`,
+    `gscale,${trim(c.gscale)}`,
+  ];
+  if (withAccel) {
+    out.push(`ascale,${trim(ASCALE)}`, 't,gx,gy,gz,ax,ay,az');
+    // Hold the last reading rather than interpolate, and seed with the first
+    // real one: a row of zero gravity at the head of the file is not a
+    // measurement.  The accelerometer's axes are not the gyro's and gcsv
+    // carries one orientation for both, so a quarter turn goes here.
+    let j = 0, lx = c.ax.length ? c.ax[0] : 0, ly = c.ay.length ? c.ay[0] : 0,
+        lz = c.az.length ? c.az[0] : 0;
+    for (let i = 0; i < c.n; i++) {
+      while (j < c.aAt.length && c.aAt[j] <= i) { lx = c.ax[j]; ly = c.ay[j]; lz = c.az[j]; j++; }
+      out.push(`${i},${c.gx[i]},${c.gy[i]},${c.gz[i]},${ly},${-lx},${lz}`);
+    }
+  } else {
+    out.push('t,gx,gy,gz');
+    for (let i = 0; i < c.n; i++) out.push(`${i},${c.gx[i]},${c.gy[i]},${c.gz[i]}`);
+  }
+  return out.join('\n') + '\n';
+}
+
+function profile(c, lensName, focalMm) {
+  const m = MODES.find(x => x.mode_id === c.mode);
+  if (!m) throw new Error(`sensor mode ${c.mode} is not in the firmware's tables`);
+  const w = c.width, h = c.height;
+  if (!w || !h) throw new Error('this capture has no frame size in its header');
+  const coveredMm = SENSOR_ACTIVE_MM * Math.min(m.covered_w, SENSOR_ACTIVE_W) / SENSOR_ACTIVE_W;
+  const focalPx = w * focalMm / coveredMm;
+  const fullWidth = m.covered_w >= SENSOR_TOTAL_W - 64;
+  const fps = m.fps;
+  return {
+    name: `SIGMA fp - ${lensName} - ${w}x${h} @${fps.toFixed(2)} (mode ${m.mode_id})`,
+    note: `From the firmware's IMX410 tables. Mode ${m.mode_id}: readout `
+        + `${m.readout_w}x${m.readout_h} bin ${m.bin_h}x${m.bin_v}, ${m.covered_w} sensor `
+        + `columns${fullWidth ? '' : ` (${coveredMm.toFixed(1)} mm crop)`}. `
+        + `Distortion unmeasured, left at zero.`,
+    calibrated_by: "firmware IMX410 mode tables (SIGMAfp_re)",
+    camera_brand: "SIGMA", camera_model: "fp", lens_model: lensName,
+    camera_setting: `${w}x${h} @${fps.toFixed(2)} CinemaDNG`,
+    calib_dimension: {w, h}, orig_dimension: {w, h}, output_dimension: {w, h},
+    identifier: `sigma_fp_mode${m.mode_id}_${w}x${h}`,
+    calibrator_version: "1.5.0",
+    compatible_settings: [],
+    frame_readout_time: Math.round(m.readout_ms * 1000) / 1000,
+    frame_readout_direction: "TopToBottom",
+    input_horizontal_stretch: F(1.0), input_vertical_stretch: F(1.0),
+    num_images: 0,
+    fisheye_params: {
+      RMS_error: F(0.0),
+      camera_matrix: [[F(focalPx), F(0.0), F(w / 2)],
+                      [F(0.0), F(focalPx), F(h / 2)],
+                      [F(0.0), F(0.0), F(1.0)]],
+      distortion_coeffs: [F(0.0), F(0.0), F(0.0), F(0.0)],
+    },
+    sync_settings: {}, official: false,
+  };
+}
+
+// 12 significant digits, then the trailing zeros off -- what the Python tools write.
+function trim(x) { return String(Number(x.toPrecision(12))); }
+
+// A float that stays a float.  JSON.stringify writes 0.0 as `0`, and
+// lens_profile.py writes `0.0`; the numbers are the same but the files are not,
+// and two tools that answer the same question should answer it identically.
+// The marker is a NUL, which JSON escapes, so it cannot collide with content.
+const F = v => `\u0000${Number.isInteger(v) ? v.toFixed(1) : String(v)}\u0000`;
+const jsonify = o => JSON.stringify(o, null, 2)
+  .replace(/"\\u0000(.*?)\\u0000"/g, '$1');
+
+function save(name, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type: mime}));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function cell(label, value, sub) {
+  return `<div class="cell"><dt>${label}</dt><dd>${value}`
+       + (sub ? ` <small>${sub}</small>` : '') + `</dd></div>`;
+}
+
+function render(c) {
+  const m = MODES.find(x => x.mode_id === c.mode);
+  const vol = {1: 'SD card', 5: 'USB SSD'}[c.volume] || `volume ${c.volume}`;
+  const el = document.createElement('section');
+  el.className = 'take';
+  el.innerHTML =
+    `<h2><span class="clip">${c.clip || c.file}</span>`
+    + `<span class="len">${fmt(c.durationS)} &middot; ${vol}</span></h2>`
+    + `<dl class="grid">`
+    + cell('Gyro', c.n.toLocaleString(), `@ ${(1 / c.periodS).toFixed(1)} Hz`)
+    + cell('Accel', c.aAt.length.toLocaleString(),
+           c.durationS ? `@ ${(c.aAt.length / c.durationS).toFixed(1)} Hz` : '')
+    + cell('Sensor mode', c.mode || '&mdash;',
+           m ? `${m.readout_ms.toFixed(2)} ms readout` : 'not in the tables')
+    + cell('Frame', c.width ? `${c.width} &times; ${c.height}` : '&mdash;',
+           m ? `${m.fps.toFixed(2)} fps` : '')
+    + cell('Exposure', c.exposureUs ? `1/${Math.round(1e6 / c.exposureUs)}` : '&mdash;',
+           c.exposureUs ? `${c.exposureUs} &micro;s` : '')
+    + cell('Dropped', c.dropped, c.dropped ? 'blocks' : 'nothing lost')
+    + `</dl>`
+    + c.warnings.map(w => `<p class="flag ${w.level}">${w.text}</p>`).join('')
+    + `<div class="acts">`
+    + `<button data-a="gcsv">Download .gcsv</button>`
+    + `<button class="ghost" data-a="gcsva">.gcsv with accelerometer</button>`
+    + `<button class="ghost" data-a="json">Lens profile .json</button>`
+    + `<span class="note"></span></div>`;
+
+  const note = el.querySelector('.note');
+  el.querySelector('[data-a=gcsv]').onclick = () =>
+    save(`${c.clip || c.file}.gcsv`, gcsv(c, false), 'text/csv');
+  el.querySelector('[data-a=gcsva]').onclick = () =>
+    save(`${c.clip || c.file}_accel.gcsv`, gcsv(c, true), 'text/csv');
+  el.querySelector('[data-a=json]').onclick = () => {
+    const lens = $('#lensname').value.trim();
+    const focal = parseFloat($('#focal').value);
+    if (!lens || !(focal > 0)) {
+      note.textContent = 'Name the lens and its focal length above first.';
+      $('#lensname').focus();
+      return;
+    }
+    try {
+      save(`${c.clip || c.file}.json`,
+           jsonify(profile(c, lens, focal)) + '\n', 'application/json');
+      note.textContent = '';
+    } catch (e) { note.textContent = e.message; }
+  };
+  takes.appendChild(el);
+  parsed.push(c);
+}
+
+function fmt(s) {
+  if (s < 60) return `${s.toFixed(2)} s`;
+  const m = Math.floor(s / 60);
+  return `${m}:${(s - m * 60).toFixed(1).padStart(4, '0')}`;
+}
+
+function fail(name, msg) {
+  const el = document.createElement('section');
+  el.className = 'take';
+  el.innerHTML = `<h2><span class="clip">${name}</span></h2>`
+               + `<p class="flag bad">${msg}</p>`;
+  takes.appendChild(el);
+}
+
+async function handle(files) {
+  for (const f of files) {
+    try { render(readCapture(await f.arrayBuffer(), f.name.replace(/\.gyr$/i, ''))); }
+    catch (e) { fail(f.name, e.message); }
+  }
+}
+
+const drop = $('#drop'), pick = $('#pick');
+drop.onclick = () => pick.click();
+drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick.click(); } };
+pick.onchange = () => { handle(pick.files); pick.value = ''; };
+for (const ev of ['dragenter', 'dragover']) drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.add('over');
+});
+for (const ev of ['dragleave', 'drop']) drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.remove('over');
+});
+drop.addEventListener('drop', e => handle(e.dataTransfer.files));
+</script>
+</body>
+</html>
