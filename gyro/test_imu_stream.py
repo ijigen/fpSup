@@ -448,6 +448,34 @@ class Editions(unittest.TestCase):
         # and nothing patches the recording path to do it
         self.assertNotIn('orient_stub', (HERE / 'build_base_card.py').read_text())
 
+    def test_boot_forgets_the_last_power_ons_blocks(self):
+        """blocks_open returns early when B_PTR already holds something, which
+        is right within a boot and wrong across one: the power switch does not
+        clear RAM, so the cave still names the last session's buffers while the
+        allocator has been reinitialised and considers them free.  gsup_boot
+        has to clear them BEFORE it calls blocks_open, or the stream is written
+        into memory the recorder is about to be handed.
+
+        The first take after a warm restart still worked and the second stopped
+        by itself; only a cold boot fixed it.  Nothing about that is visible in
+        a build, so it is checked here."""
+        core = (HERE / 'writer_core.inc.S').read_text()
+        boot = core[core.index('\ngsup_boot:'):]
+        boot = boot[:boot.index('\n9:')]
+        code = re.sub(r'/\*.*?\*/', '', boot, flags=re.S)
+        code = re.sub(r'@.*', '', code)
+        # gsup_boot reaches blocks_open through the routine table, not by name,
+        # so the anchor is the slot: G_OFF_BLOCKS is 0x14.
+        call = code.index('[r5, #20]')
+        for word in ('B_PTR', 'B_BUSY', 'G_TEXT'):
+            self.assertIn(word, code, f'gsup_boot never clears {word}')
+            self.assertLess(code.index(word), call,
+                            f'{word} is cleared after blocks_open, not before')
+        # ...and cleared, not merely mentioned: r0 is the zero the whole block
+        # stores, so the loop has to store r0.
+        i = code.index('B_PTR')
+        self.assertRegex(code[i:i + 200], r'str\s+r0, \[r1\], #4')
+
     def test_the_header_names_the_clip(self):
         """Gyroflow matches a log to a clip by videofilename.  The name came out
         of the path with a fixed skip of six -- the length of Base's "\\GYRO\\" --

@@ -211,6 +211,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', type=pathlib.Path, default=None)
     ap.add_argument('--edition', choices=sorted(EDITIONS), default='base')
+    ap.add_argument('--debug', action='store_true',
+                    help='keep the USB shell in, so the camera can be asked '
+                         'what happened; never for a release')
     ap.add_argument('--version', default='(unreleased)',
                     help='what to call it in README.txt; release_card.py '
                          'passes the real one')
@@ -225,8 +228,12 @@ def main():
     # own filler line says why that matters -- "mode 7 overwrites but does not
     # truncate".  A shorter file would leave the tail of the last AutoRun on
     # the card, and the tail of the last AutoRun is the USB shell's worker.
+    # The release card carries no USB shell, which is also why a fault that only
+    # happens on a card cannot be looked at: there is nothing to ask.  --debug
+    # builds the same code with the shell in, so the state words can be read
+    # after a failure instead of guessed at.
     cmd = [sys.executable, str(SHELL / 'build_autorun.py'),
-           '--loader', '--no-shell',
+           '--loader'] + ([] if a.debug else ['--no-shell']) + [
            '--vshl-entry', f'0x{ENTRY_AT:08X}',
            # A soft power cycle can leave a previous session's diagnostic patch
            # in the F_WRITE prologue.  Every ordinary image puts it back.

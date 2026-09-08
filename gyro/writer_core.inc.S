@@ -1054,6 +1054,38 @@ gsup_boot:
     /* Every word the deploy scripts clear, cleared here.  A soft power cycle
      * can leave the cave holding the last session's values. */
     mov     r0, #0
+
+    /* The blocks first, and this is the one that matters most.  blocks_open
+     * returns early when B_PTR already holds something -- "already ours" --
+     * which is right within a boot and catastrophic across one: the power
+     * switch does not clear RAM, so the cave still names the LAST session's
+     * eight buffers, while the firmware's allocator has been reinitialised and
+     * considers every one of them free.  Skipping the allocation then leaves us
+     * writing the stream into memory the recorder is about to be given.  The
+     * first take after a warm restart still worked; the second was recording
+     * into buffers that had been handed to something else, and stopped by
+     * itself.  Only a cold boot fixed it, because only a cold boot cleared
+     * B_PTR.
+     *
+     * B_BUSY goes with it (a stale one marks a block we no longer own as
+     * in use) and so does G_TEXT, which is a ninth allocation with the same
+     * lifetime. */
+    movw    r1, #:lower16:B_PTR
+    movt    r1, #:upper16:B_PTR
+    mov     r2, #BUF_N
+7:  str     r0, [r1], #4
+    subs    r2, r2, #1
+    bne     7b
+    movw    r1, #:lower16:B_BUSY
+    movt    r1, #:upper16:B_BUSY
+    mov     r2, #BUF_N
+7:  str     r0, [r1], #4
+    subs    r2, r2, #1
+    bne     7b
+    movw    r1, #:lower16:G_TEXT
+    movt    r1, #:upper16:G_TEXT
+    str     r0, [r1]
+
     movw    r1, #:lower16:T_FOPEN
     movt    r1, #:upper16:T_FOPEN
     str     r0, [r1]
