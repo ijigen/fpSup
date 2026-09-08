@@ -32,6 +32,10 @@ ap.add_argument('--boot-call', action='append', default=[], metavar='ADDR:SRC',
                 help='write this routine at ADDR and run it once, by borrowing the '
                      'echo handler; for work the AutoRun cannot express, like '
                      'reading a file into memory')
+ap.add_argument('--banner', default='fpSup!',
+                help='what the screen reads when the load is done.  The bar is '
+                     '19 characters wide and the surface is wiped before this '
+                     'is drawn, so anything up to that length is safe')
 ap.add_argument('--no-pad', action='store_true',
                 help='do not pad to a fixed length. Only safe when whatever writes '
                      'the card removes the old file first -- putfile cannot, the '
@@ -157,7 +161,8 @@ w("# attach, so the patches have to land first; and the patched words sit in cod
 w("# that has not run yet, so no stale instruction-cache line can shadow them.")
 w("#")
 w("# The screen reads fpSup[........]0 through fpSup[########]100 while this runs")
-w("# and fpSup! when it is done.  A bar that stops means the load stopped there.")
+w(f"# and {args.banner} when it is done.  A bar that stops means the load "
+  "stopped there.")
 w("# ============================================================================")
 w("")
 w("# --- screen ------------------------------------------------------------------")
@@ -342,8 +347,14 @@ for spec in args.boot_call:
 w("# --- done --------------------------------------------------------------------")
 for _ in range(3):
     w("display osd 1 0x00000000")
+# The three wipes above clear the surface, so this does not have to be the
+# same length as the bar it replaces -- `display text` leaves standing whatever
+# it does not draw over, and that is what the wipe is for.
+if len(args.banner) > 24:
+    sys.exit(f'--banner is {len(args.banner)} characters; the readout is not '
+             f'that wide')
 for _ in range(3):
-    w("display text fpSup!")
+    w(f"display text {args.banner}")
     w("display osd 1")
 
 if args.loader:

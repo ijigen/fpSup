@@ -1,4 +1,4 @@
-fpGyroSup v1.10a -- SIGMA fp firmware Ver.5.02 only
+fpGyroSup v1.11a -- SIGMA fp firmware Ver.5.02 only
 
 Put AutoRun.txt and VSHL.BIN in the root of the SD card the camera boots
 from, and record CinemaDNG.  Nothing else: no folder to make, no file to
@@ -9,6 +9,12 @@ folder, while it is being recorded:
 
     \CINEMA\A001_037\A001_037.gcsv    the IMU log
     \CINEMA\A001_037\A001_037.json    the lens profile
+
+Load the frames and both files into Gyroflow and run its synchronisation as
+usual.  There is nothing to convert, but the offset still has to be found:
+CinemaDNG carries no timecode, and the log starts about half a second after
+the first frame -- measured between 470 and 570 ms, and different every take --
+so it is not a number you can fill in once and reuse.
 
 The log is every sample the gyro produced -- 2499.466 Hz, nothing averaged and
 nothing dropped -- with each accelerometer reading placed on the row of the

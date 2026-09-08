@@ -143,6 +143,7 @@ EDITIONS = {
     'base': 'ring_task.S',
     'gcsv': 'gcsv_task.S',
 }
+BANNER = {'base': 'Base', 'gcsv': 'Gyro'}
 
 
 def sections(edition='base'):
@@ -214,7 +215,7 @@ def main():
     ap.add_argument('--debug', action='store_true',
                     help='keep the USB shell in, so the camera can be asked '
                          'what happened; never for a release')
-    ap.add_argument('--version', default='(unreleased)',
+    ap.add_argument('--version', default='dev',
                     help='what to call it in README.txt; release_card.py '
                          'passes the real one')
     a = ap.parse_args()
@@ -232,8 +233,14 @@ def main():
     # happens on a card cannot be looked at: there is nothing to ask.  --debug
     # builds the same code with the shell in, so the state words can be read
     # after a failure instead of guessed at.
+    # What the screen reads when the load is done.  It names the edition and
+    # the version because the two cards are indistinguishable once they are in
+    # the camera, and "which build is in there" has been guessed at more than
+    # once.
+    banner = f'fpSup-{BANNER[a.edition]}-{a.version}!'
     cmd = [sys.executable, str(SHELL / 'build_autorun.py'),
-           '--loader'] + ([] if a.debug else ['--no-shell']) + [
+           '--loader', '--banner', banner] + (
+               [] if a.debug else ['--no-shell']) + [
            '--vshl-entry', f'0x{ENTRY_AT:08X}',
            # A soft power cycle can leave a previous session's diagnostic patch
            # in the F_WRITE prologue.  Every ordinary image puts it back.
