@@ -144,8 +144,9 @@ post-processing, and no `.GYR` to convert.
 
 ### Verified on hardware
 
-SIGMA fp Ver.5.02, SD card, CinemaDNG 1936x1090 29.97p, LUMIX S 40/F2. The
-archive above is byte-identical to the card these were shot on.
+SIGMA fp Ver.5.02, SD card. FHD and UHD CinemaDNG; LUMIX S 40/F2 and SIGMA
+40mm F1.4 Art. The archive above is byte-identical to the card these were shot
+on.
 
 - Booted from the release card in CINE, without touching the STILL/CINE switch,
   and recorded a portrait take: every frame `Orientation 1`, both sidecars in
@@ -178,8 +179,9 @@ that also affect ordinary video (#1115, plugins #38, ofx #48), all still open.
 - **MOV:** no sidecars. MOV records through a different path this build does not
   hook. Use [v1.1](fp-gyro-sup-v1.1.zip) if you need a log from MOV.
 - **External SSD:** untested for this edition. Base is verified on both disks.
-- **UHD and zoom lenses:** untested. A zoom held at one focal length should be
-  fine; changing focal length during a take is not.
+- **Zoom lenses:** untested. One held at a single focal length should be fine;
+  changing focal length during a take is not -- the profile is read once, a few
+  seconds in, and the format has no way to express a change.
 
 ### Build from source
 
@@ -318,8 +320,8 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 
 ### 實機驗證
 
-SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1936x1090 29.97p、LUMIX S 40/F2。上面那個
-壓縮檔與拍出以下素材的那張卡逐位元組相同。
+SIGMA fp Ver.5.02、SD 卡。FHD 與 UHD CinemaDNG；LUMIX S 40/F2 與 SIGMA 40mm
+F1.4 Art。上面那個壓縮檔與拍出以下素材的那張卡逐位元組相同。
 
 - 用發布版的卡在 CINE 下開機、全程沒碰 STILL/CINE 開關，直拿錄一段：每一幀都是
   `Orientation 1`，兩個 sidecar 都在 `\CINEMA\A001_013\`，28,089 列，
@@ -346,7 +348,8 @@ SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1936x1090 29.97p、LUMIX S 40/F2。上面
 - **MOV：** 沒有 sidecar。MOV 走的是這一版沒有掛鉤的另一條錄影路徑；需要 MOV 的
   記錄檔請用 [v1.1](fp-gyro-sup-v1.1.zip)。
 - **外接 SSD：** 這一版尚未測試。Base 兩顆磁碟都驗過。
-- **UHD 與變焦鏡：** 尚未測試。變焦鏡固定在一個焦段應該沒問題，拍攝中變焦則不行。
+- **變焦鏡：** 尚未測試。固定在一個焦段應該沒問題，拍攝中變焦則不行 —— profile 是
+  開錄幾秒後讀一次，格式本身也沒有辦法表達變化。
 
 ### 從原始碼建置
 
