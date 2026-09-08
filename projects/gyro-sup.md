@@ -7,14 +7,14 @@ editions · [release notes](../gyro/release/)
 
 | | The camera writes | Converting |
 |---|---|---|
-| [**fpGyroSup v1.4**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) | `.gcsv` and `.json`, during the take | nothing to do |
+| [**fpGyroSup v1.10a**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.10a.zip) | `.gcsv` and `.json`, during the take, every sample | nothing to do |
 | [**fpGyroSup Base v1**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-base-v1.zip) | `.GYR`, one per take, every sample | [in a browser](https://ijigen.github.io/fpSup/gyro/web/) or `gyro/gyr7.py` |
 
 Gyro、六軸記錄與 Gyroflow 工作流。**狀態：已發布**,有兩個版本 · [說明](../gyro/release/)
 
 | | 相機寫出 | 轉檔 |
 |---|---|---|
-| [**fpGyroSup v1.4**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) | 錄影當下寫 `.gcsv` 與 `.json` | 不用做 |
+| [**fpGyroSup v1.10a**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.10a.zip) | 錄影當下寫 `.gcsv` 與 `.json`,一筆不漏 | 不用做 |
 | [**fpGyroSup Base v1**](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-base-v1.zip) | 每趟一個 `.GYR`,一筆不漏 | [瀏覽器](https://ijigen.github.io/fpSup/gyro/web/) 或 `gyro/gyr7.py` |
 
 ---
@@ -27,7 +27,7 @@ Record six-axis data inside the camera and leave a Gyroflow-ready GCSV plus lens
 profile beside every CinemaDNG take, with no computer conversion step and
 nothing left to do after the take.
 
-### Released path (v1.4)
+### Released path (v1.10a)
 
 ```text
 recording -> GCSV streamed during the take -> JSON written during the take -> stop
@@ -118,7 +118,8 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 
 ### Remaining scope
 
-- **MOV:** no sidecars in v1.4 (no `\CINEMA\<clip>\` folder to stream into).
+- **MOV:** no sidecars in v1.10a (it records through a path this build does
+  not hook).
   v1.1 still writes a `.GYR` for MOV.
 - **External SSD, UHD, zoom lenses:** untested.
 - **Horizon lock on a portrait take:** it turns the picture itself, from the
@@ -137,7 +138,7 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 在相機內記錄六軸資料，讓每段 CinemaDNG 旁邊直接留下 Gyroflow 可用的 GCSV 與
 鏡頭 profile，不需要電腦轉檔，停止錄影後也沒有任何事要等。
 
-### 已發布流程（v1.4）
+### 已發布流程（v1.10a）
 
 ```text
 錄影 -> GCSV 錄影中串流 -> JSON 錄影中寫入 -> 停止
@@ -211,7 +212,7 @@ SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1920x1080 29.97p、LUMIX S 40/F2：
 
 ### 後續範圍
 
-- **MOV：** v1.4 沒有 sidecar（沒有可串流寫入的 `\CINEMA\<clip>\`）。v1.1 仍會替
+- **MOV：** v1.10a 沒有 sidecar（MOV 走的是這一版沒有掛鉤的另一條錄影路徑）。v1.1 仍會替
   MOV 寫 `.GYR`。
 - **外接 SSD、UHD、變焦鏡：** 尚未測試。
 - **直拿時的鎖定水平：** 它會依重力自己轉畫面,而那是側躺相機的重力,會跟剪輯時的旋轉打架。

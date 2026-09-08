@@ -1,16 +1,17 @@
-# fpGyroSup v1.4
+# fpGyroSup v1.10a
 
 [![Support fpSup on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/fpsup)
 [![Join the fpSup Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/XeFK5zNZpT)
 
 [English](#english) | [繁體中文](#繁體中文)
 
-### ⬇ [Download fp-gyro-sup-v1.4.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.4.zip)
+### ⬇ [Download fp-gyro-sup-v1.10a.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.10a.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.10a.zip)
 
-Unzip it, copy the three files inside the folder to the root of an SD card, and
-power the camera on.
+Unzip it, copy `AutoRun.txt` and `VSHL.BIN` to the root of an SD card, and power
+the camera on. Two files; there is no `PGEN.BIN` any more.
 
-解壓縮後，把資料夾裡的三個檔案複製到 SD 卡根目錄，再開啟相機。
+解壓縮後，把 `AutoRun.txt` 和 `VSHL.BIN` 複製到 SD 卡根目錄，再開啟相機。兩個檔案，
+不再需要 `PGEN.BIN`。
 
 SIGMA fp, firmware **Ver.5.02** only. This is RAM injection: nothing is flashed,
 and removing the card files or pulling the battery restores the camera.
@@ -18,29 +19,32 @@ and removing the card files or pulling the battery restores the camera.
 僅適用 SIGMA fp 韌體 **Ver.5.02**。這是 RAM 注入，不會刷寫韌體；移除卡上的
 啟動檔或拔電池即可完全復原。
 
-Previous releases: [v1.3](fp-gyro-sup-v1.3.zip) (the same stream, but the lens
-profile carries no distortion), [v1.2](fp-gyro-sup-v1.2.zip) (portrait takes need
-Gyroflow talked round by hand) and [v1.1](fp-gyro-sup-v1.1.zip) (GYR +
-post-processing transaction; still the one to use for MOV).
+Previous releases: [v1.4](fp-gyro-sup-v1.4.zip) (the same two sidecars, but the
+log is decimated to 1250 Hz), [v1.3](fp-gyro-sup-v1.3.zip) (lens profile carries
+no distortion), [v1.2](fp-gyro-sup-v1.2.zip) (portrait takes need Gyroflow talked
+round by hand) and [v1.1](fp-gyro-sup-v1.1.zip) (GYR + post-processing; still the
+only one that does anything for MOV).
 
 ### Two editions
 
-|  | **fpGyroSup** v1.4 | **fpGyroSup Base** v1 |
+|  | **fpGyroSup** v1.10a | **fpGyroSup Base** v1 |
 |---|---|---|
-| The camera writes | `.gcsv` and `.json`, during the take | `.GYR`, one per take |
+| The camera writes | `.gcsv` and `.json`, during the take, inside the clip's folder | `.GYR`, one per take |
 | Converting | nothing to do | [in a browser](https://ijigen.github.io/fpSup/gyro/web/), or `gyro/gyr7.py` |
-| Gyro rate in the log | 1250 Hz, decimated | 2499.466 Hz, every sample |
-| Accelerometer | 50 Hz, in the log | 46 Hz, in the file; your choice in the log |
+| Gyro rate in the log | 2499.466 Hz, every sample | 2499.466 Hz, every sample |
+| Accelerometer | 46 Hz, on the row of the sample it followed | 46 Hz, in the file; your choice in the log |
 | Lens profile | the camera's own distortion data | you name the lens; distortion zero |
+| Portrait takes | recorded landscape upright | the orientation is in the header, and yours to apply |
 | USB SSD | untested | verified: log beside the clip on either disk |
-| Download | [fp-gyro-sup-v1.4.zip](fp-gyro-sup-v1.4.zip) | [fp-gyro-sup-base-v1.zip](fp-gyro-sup-base-v1.zip) |
+| Download | [fp-gyro-sup-v1.10a.zip](fp-gyro-sup-v1.10a.zip) | [fp-gyro-sup-base-v1.zip](fp-gyro-sup-base-v1.zip) |
+
+Neither writes anything for a MOV take. Use [v1.1](fp-gyro-sup-v1.1.zip) if you
+need a log from MOV.
 
 **Base** is the stream on its own: nothing is computed on the camera and nothing
-is thrown away, so every sample the sensor produced is in the file and the
-conversion happens where you can look at it. Take it if you want the raw
-capture, if you record to a USB SSD, or if you want the full 2500 Hz. Take the
-main release if you want the two files ready beside the clip and nothing to run
-afterwards.
+is written but the samples, so the conversion happens where you can look at it.
+The two editions are built from one core and differ in three functions -- the
+capture underneath them is the same code, the same hooks and the same blocks.
 
 ---
 
@@ -49,18 +53,107 @@ afterwards.
 ### What it does
 
 Card in, camera on, shoot CinemaDNG. While the take is being recorded, the
-camera writes both files Gyroflow needs next to it:
+camera writes both files Gyroflow needs into the clip's own folder:
 
 ```text
-\CINEMA\A001_017\A001_017.gcsv     Gyroflow IMU log
-\CINEMA\A001_017\A001_017.json     Gyroflow lens profile
+\CINEMA\A001_013\A001_013.gcsv     Gyroflow IMU log
+\CINEMA\A001_013\A001_013.json     Gyroflow lens profile
 ```
 
-There is no `.GYR` any more. The GCSV streams to the card during the take and
-the JSON is written a few seconds after the take starts. Pressing stop ends the
-take and nothing else: no lock, no wait, no post-processing.
+Pressing stop ends the take and nothing else: no lock, no wait, no
+post-processing, and no `.GYR` to convert.
 
-### What changed in v1.4
+### What changed in v1.10a
+
+- **Every sample.** v1.4 wrote the gyro as 1250 Hz two-tap averages; this writes
+  the stream as it came off the sensor, 2499.466 Hz, nothing averaged and
+  nothing thrown away. A 6.5-minute take is 993,242 rows and every record that
+  went in is accounted for in what came out.
+
+- **The accelerometer rides the gyro's row.** A reading is written into the row
+  of the sample it followed, rather than on a row of its own with the gyro
+  columns left empty. One row per sample, and nothing for Gyroflow to
+  interpolate across.
+
+- **Portrait takes are decided when the camera enters CINE**, not frame by
+  frame. The camera works out a CinemaDNG frame's orientation from its attitude
+  sensor, and in CINE that sensor is taken out of the answer, so every frame of
+  every take is recorded landscape upright. Doing it at the mode change rather
+  than at the take is what makes it work: at record start the answer has already
+  been decided, and holding it down for the length of a take stopped recording
+  by itself after about twenty seconds. Switch to photo and photographs record
+  their orientation and rotate by themselves, exactly as before.
+
+- **The sidecars go where the take does.** A CinemaDNG take is a folder of
+  frames, so the log and the profile go inside it. No `GYRO/` folder to make,
+  on any volume.
+
+- **Two files on the card**, and the writer lives in the camera's DMA pool
+  rather than the injection cave, which is what made room for the whole thing.
+
+### Verified on hardware
+
+SIGMA fp Ver.5.02, SD card, CinemaDNG 1936x1090 29.97p, LUMIX S 40/F2. The
+archive above is byte-identical to the card these were shot on.
+
+- Booted from the release card in CINE, without touching the STILL/CINE switch,
+  and recorded a portrait take: every frame `Orientation 1`, both sidecars in
+  `\CINEMA\A001_013\`, 28,089 rows, `dropped_blocks=000000`.
+- A 6:37 take: 993,242 rows from 494 blocks in 494 card writes, nothing dropped.
+  Records in equals rows plus readings, exactly, on every take.
+- The `.json` matches what the host tool computes for the same lens and mode to
+  the last printed digit, and the distortion curve is within 0.02 px of the
+  camera's own `WarpRectilinear` opcode across the frame.
+
+### Install
+
+```text
+/AutoRun.txt
+/VSHL.BIN
+```
+
+Copy both as one matching set to the root of the card; do not mix them with
+files from another build. Power the camera on and wait for the progress display
+to reach `fpSup!` before recording.
+
+### Portrait takes
+
+Hold the camera upright and it just works. Load the frames and the two sidecars,
+sync, stabilise, and turn the picture ninety degrees at the end of the edit.
+Leave horizon lock off -- it would turn the picture itself, using the gravity of
+a camera that was on its side.
+
+The rotation has to stay out of the frames because of how Gyroflow reads a DNG
+sequence. It takes the size from the frames, which are stored landscape, and
+then rotates the picture by the tag, so the preview is portrait while the
+dimensions, the lens model and the stabilisation maths stay landscape. Autosync
+then returns nonsense offsets -- +2283 ms and +3997 ms measured on a take whose
+true offset is -260 ms -- and no sidecar can reconcile the two, because the
+frame size comes from the image files rather than from the `.gcsv` or the
+`.json`. Gyroflow tracks this as issue #1117, one of a family of rotation bugs
+that also affect ordinary video (#1115, plugins #38, ofx #48), all still open.
+
+### Not covered by v1.10a
+
+- **MOV:** no sidecars. MOV records through a different path this build does not
+  hook. Use [v1.1](fp-gyro-sup-v1.1.zip) if you need a log from MOV.
+- **External SSD:** untested for this edition. Base is verified on both disks.
+- **UHD and zoom lenses:** untested. A zoom held at one focal length should be
+  fine; changing focal length during a take is not.
+
+### Build from source
+
+```sh
+gyro/release_card.py gcsv v1.10a
+gyro/release_card.py base v1
+```
+
+The archive is the no-shell release. `gyro/build_base_card.py --edition gcsv`
+builds the card without packaging it.
+
+### Earlier releases in this line
+
+#### What changed in v1.4
 
 - **The lens profile carries real distortion.** Until now `distortion_coeffs`
   was `[0, 0, 0, 0]`, which is not "no correction": Gyroflow's fisheye model
@@ -95,7 +188,7 @@ Verified on two primes; a zoom held at one focal length should be fine, changing
 focal length during a take is not. A lens the camera has no calibration data for
 falls back to zeros, as before.
 
-### What v1.3 changed, and still holds
+#### What v1.3 changed, and still holds
 
 - **Portrait takes work without being talked round.** See below.
 - **Boots in about nine seconds**, from about eleven. The AutoRun is 113 commands
@@ -104,7 +197,7 @@ falls back to zeros, as before.
   bar is sent twice rather than three times. Measured on the camera: 38 ms per
   command and 4.7 s of fixed cost, so the count is the whole story.
 
-### What v1.2 changed, and still holds
+#### What v1.2 changed, and still holds
 
 ```text
 recording -> GCSV streamed during the take -> JSON written during the take -> stop
@@ -128,7 +221,7 @@ recording -> GCSV streamed during the take -> JSON written during the take -> st
   objects depending on an internal selector; v1.1 read only one of them and
   could miss whole takes. v1.2 reads the same one the firmware wrote.
 
-### Verified on hardware
+#### Verified on hardware, v1.4
 
 SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 
@@ -139,77 +232,97 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 - every JSON byte-identical to the profile the v1.1 converter produced for the
   same lens and mode.
 
-### Install
-
-Copy these as one matching set to the root of the card. Do not mix files from
-v1, v1.1, a debug build, or an earlier test build.
-
-```text
-/AutoRun.txt
-/VSHL.BIN
-/PGEN.BIN
-```
-
-Power the camera on and wait until the progress display reaches `fpSup!` before
-recording. A `GYRO/` folder is no longer needed.
-
-### Portrait takes
-
-Hold the camera upright and it just works. While a clip is being written the
-camera stores its CinemaDNG frames without the rotation tag, so Gyroflow reads
-a portrait take exactly as it reads a landscape one: load the sequence and both
-sidecars, sync, stabilise, and turn the picture ninety degrees at the end of
-the edit. Leave horizon lock off -- it would turn the picture itself, using the
-gravity of a camera that was on its side. Photographs are untouched: they still
-record their orientation and still rotate by themselves.
-
-The tag has to go because of how Gyroflow reads a DNG sequence. It takes the
-size from the frames, which are stored landscape, and then rotates the picture
-by the tag, so the preview is portrait while the dimensions, the lens model and
-the stabilisation maths stay landscape. Autosync then returns nonsense offsets
--- +2283 ms and +3997 ms measured on a take whose true offset is -260 ms -- and
-no sidecar can reconcile the two, because the frame size comes from the image
-files rather than from the `.gcsv` or the `.json`. Gyroflow tracks this as
-issue #1117, one of a family of rotation bugs that also affect ordinary video
-(#1115, plugins #38, ofx #48), all still open. Leaving the tag out sidesteps
-all of it.
-
-### Not covered by v1.3
-
-- **MOV:** no sidecars. MOV has no `\CINEMA\<clip>\` folder for the stream to
-  write into. Use v1.1 if you need a `.GYR` from MOV.
-- **External SSD, UHD, zoom lenses:** untested. UHD frame size follows the same
-  rule as FHD (setting + CinemaDNG border) but has not been recorded; the focal
-  length is read from the firmware's lens object and has only been checked
-  against a prime lens.
-
-### Build from source
-
-```sh
-gyro/makecard.py release --gcsv-stream
-```
-
-`gyro/makecard.py debug --gcsv-stream` builds the same logger and pool code with
-the USB shell included. The downloadable package is the no-shell release.
-
 ---
 
 ## 繁體中文
 
 ### 功能
 
-插卡、開機、錄 CinemaDNG。錄影進行中，相機就把 Gyroflow 需要的兩個檔案寫在片段
-旁邊：
+插卡、開機、錄 CinemaDNG。錄影進行中，相機就把 Gyroflow 需要的兩個檔案寫進片段
+自己的資料夾裡：
 
 ```text
-\CINEMA\A001_017\A001_017.gcsv     Gyroflow IMU 記錄
-\CINEMA\A001_017\A001_017.json     Gyroflow 鏡頭 profile
+\CINEMA\A001_013\A001_013.gcsv     Gyroflow IMU 記錄
+\CINEMA\A001_013\A001_013.json     Gyroflow 鏡頭 profile
 ```
 
-沒有 `.GYR` 了。GCSV 在錄影期間持續串流寫卡，JSON 在開錄幾秒後就寫好。按下停止
-只是結束錄影，沒有鎖、沒有等待、沒有後處理。
+按下停止只是結束錄影，沒有鎖、沒有等待、沒有後處理，也沒有 `.GYR` 要轉。
 
-### v1.4 更新
+### v1.10a 更新
+
+- **一筆不漏。** v1.4 把陀螺以 1250 Hz 兩點平均寫出；這一版直接寫感測器產生的原始
+  串流，2499.466 Hz，不平均、不丟棄。一段 6.5 分鐘的錄影是 993,242 列，進去的每
+  一筆記錄都在出來的東西裡對得上。
+
+- **水平儀併進陀螺那一列。** 一筆讀數會寫進它後面那個取樣所在的列，而不是自己
+  獨占一列、把陀螺欄位留空。一個取樣一列，Gyroflow 不需要跨空列內插。
+
+- **直拿片段在切到 CINE 時就決定好**，不是逐幀處理。相機是用姿態感測器算出
+  CinemaDNG 的方向的，在 CINE 時把那個感測器排除掉，錄出來的每一幀就都是橫版正向。
+  時機必須是切換模式而不是開始錄影：開錄時答案早就決定了，而且把它整段壓著會讓
+  錄影在約二十秒後自己停下來。切回拍照，照片照常記錄方向、照常自動旋轉。
+
+- **sidecar 跟著片段走。** CinemaDNG 一趟是一個資料夾，記錄檔和 profile 就放進去。
+  任何磁碟都不必再建 `GYRO/` 資料夾。
+
+- **卡上只要兩個檔案**，而且寫入器住在相機的 DMA pool 而不是注入區 —— 這就是塞得
+  下整套東西的原因。
+
+### 實機驗證
+
+SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1936x1090 29.97p、LUMIX S 40/F2。上面那個
+壓縮檔與拍出以下素材的那張卡逐位元組相同。
+
+- 用發布版的卡在 CINE 下開機、全程沒碰 STILL/CINE 開關，直拿錄一段：每一幀都是
+  `Orientation 1`，兩個 sidecar 都在 `\CINEMA\A001_013\`，28,089 列，
+  `dropped_blocks=000000`。
+- 一段 6:37 的錄影：494 個區塊、494 次寫卡、993,242 列，零掉樣。每一趟的帳都剛好
+  平：進去的記錄數等於列數加讀數。
+- `.json` 與主機工具對同一顆鏡頭、同一模式算出的結果逐位相同（到印出的最後一位），
+  畸變曲線與相機自己的 `WarpRectilinear` 在整個畫面上差距在 0.02 像素以內。
+
+### 安裝
+
+```text
+/AutoRun.txt
+/VSHL.BIN
+```
+
+兩個檔案要當成同一組複製到卡片根目錄，不要跟其他版本的檔案混用。開機後等進度顯示
+到 `fpSup!` 再開始錄影。
+
+### 直拿的片段
+
+直拿就直接可用。載入序列與兩個 sidecar、同步、穩定，最後在剪輯時把畫面轉九十度。
+鎖定水平請保持關閉 —— 它會依重力自己轉畫面，而那是一台側躺的相機的重力。
+
+之所以不能讓旋轉留在畫格裡，是因為 Gyroflow 讀 DNG 序列的方式：尺寸取自影像檔
+（儲存方向是橫的），卻又照旋轉標籤把畫面轉成直的，於是預覽是直的、尺寸與鏡頭模型
+和穩定運算卻還是橫的。自動同步因此給出離譜的偏移（實測 +2283 ms 與 +3997 ms，真值
+是 −260 ms），而且沒有任何 sidecar 救得了 —— 畫格尺寸的來源是影像檔，不是 `.gcsv`
+或 `.json`。Gyroflow 把它記在 issue #1117，同族的旋轉問題也出現在一般影片上
+（#1115、plugins #38、ofx #48），全都還開著。
+
+### v1.10a 未涵蓋
+
+- **MOV：** 沒有 sidecar。MOV 走的是這一版沒有掛鉤的另一條錄影路徑；需要 MOV 的
+  記錄檔請用 [v1.1](fp-gyro-sup-v1.1.zip)。
+- **外接 SSD：** 這一版尚未測試。Base 兩顆磁碟都驗過。
+- **UHD 與變焦鏡：** 尚未測試。變焦鏡固定在一個焦段應該沒問題，拍攝中變焦則不行。
+
+### 從原始碼建置
+
+```sh
+gyro/release_card.py gcsv v1.10a
+gyro/release_card.py base v1
+```
+
+下載包是無 USB shell 的 release 版。只想建卡不想打包的話用
+`gyro/build_base_card.py --edition gcsv`。
+
+### 這條線的舊版本
+
+#### v1.4 更新
 
 - **鏡頭 profile 有真正的畸變資料了。** 以前 `distortion_coeffs` 是 `[0, 0, 0, 0]`,
   那不是「不校正」—— Gyroflow 的 fisheye 模型把全零當成**等距魚眼**,而 40 mm 這種
@@ -234,30 +347,14 @@ the USB shell included. The downloadable package is the no-shell release.
 已在兩顆定焦鏡上驗證;變焦鏡固定在一個焦段應該沒問題,拍攝中變焦則不行。
 相機沒有校正資料的鏡頭,和以前一樣輸出全零。
 
-### 兩個版本
-
-|  | **fpGyroSup** v1.4 | **fpGyroSup Base** v1 |
-|---|---|---|
-| 相機寫出 | 錄影當下寫 `.gcsv` 與 `.json` | 每趟一個 `.GYR` |
-| 轉檔 | 不用做 | [瀏覽器](https://ijigen.github.io/fpSup/gyro/web/) 或 `gyro/gyr7.py` |
-| 記錄檔的陀螺率 | 1250 Hz(抽樣過) | 2499.466 Hz,一筆不漏 |
-| 水平儀 | 50 Hz,寫進記錄檔 | 46 Hz 在檔案裡,要不要進記錄檔由你決定 |
-| 鏡頭 profile | 相機自己的畸變資料 | 你填鏡頭,畸變為零 |
-| USB SSD | 尚未測試 | 已實測:log 跟片段放在同一顆磁碟 |
-| 下載 | [fp-gyro-sup-v1.4.zip](fp-gyro-sup-v1.4.zip) | [fp-gyro-sup-base-v1.zip](fp-gyro-sup-base-v1.zip) |
-
-**Base** 是把串流單獨拿出來:相機不算任何東西、也不丟棄任何東西,所以感測器產生的
-每一筆都在檔案裡,而轉檔發生在你看得見的地方。想要原始資料、要錄到 USB SSD、或
-想要完整 2500 Hz,就用它;想要兩個檔案直接躺在片段旁邊、事後什麼都不用跑,就用主線版。
-
-### v1.3 帶來、現在仍然成立的
+#### v1.3 帶來、現在仍然成立的
 
 - **直拿片段不必再跟 Gyroflow 周旋**,見下方說明。
 - **開機約九秒**(原約十一秒)。AutoRun 從 160 條命令降到 113 條:載入器的後半段
   改成隨 `VSHL.BIN` 走、就地執行,韌體呼叫從三個字變一個字,進度條送兩次而非三次。
   實測每條命令 38 ms、固定開銷 4.7 秒,所以命令數就是全部。
 
-### v1.2 帶來、現在仍然成立的
+#### v1.2 帶來、現在仍然成立的
 
 ```text
 錄影 -> GCSV 錄影中串流 -> JSON 錄影中寫入 -> 停止
@@ -276,7 +373,7 @@ the USB shell included. The downloadable package is the no-shell release.
 - **修正掛載問題。** 韌體的錄影旗標會依內部選擇器寫到兩個物件之一；v1.1 只讀其中
   一個，可能整段沒錄到。v1.2 讀韌體實際寫入的那一個。
 
-### 實機驗證
+#### 實機驗證（v1.4）
 
 SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1920x1080 29.97p、LUMIX S 40/F2：
 
@@ -284,45 +381,3 @@ SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1920x1080 29.97p、LUMIX S 40/F2：
 - 冷開機、畫面一出來就錄一段，再隔 6 秒錄兩段：三段都有記錄，三份 JSON 都在
   錄影中寫入；
 - 每份 JSON 都與 v1.1 轉換器對同一顆鏡頭、同一模式產出的 profile 逐位元組相同。
-
-### 安裝
-
-把以下三個檔案當成同一組複製到 SD 卡根目錄。不要混用 v1、v1.1、v1.2、debug 版或先前測試版的檔案。
-
-```text
-/AutoRun.txt
-/VSHL.BIN
-/PGEN.BIN
-```
-
-開機後等進度顯示到 `fpSup!` 再開始錄影。不再需要 `GYRO/` 資料夾。
-
-### 直拿的片段
-
-直拿就直接可用。相機在寫入片段期間,讓 CinemaDNG 不帶旋轉標籤,所以 Gyroflow 讀直拿
-片段就跟讀橫拿一樣:載入序列與兩個 sidecar、同步、穩定,最後在剪輯時把畫面轉九十度。
-鎖定水平請保持關閉 —— 它會依重力自己轉畫面,而那是一台側躺的相機的重力。照片完全
-不受影響,方向照常記錄、自動旋轉照常。
-
-之所以要拿掉標籤,是因為 Gyroflow 讀 DNG 序列的方式:尺寸取自影像檔(儲存方向是橫的),
-卻又照旋轉標籤把畫面轉成直的,於是預覽是直的、尺寸與鏡頭模型和穩定運算卻還是橫的。
-自動同步因此給出離譜的偏移(實測 +2283 ms 與 +3997 ms,真值是 −260 ms),而且沒有任何
-sidecar 救得了 —— 畫格尺寸的來源是影像檔,不是 `.gcsv` 或 `.json`。Gyroflow 把它記在
-issue #1117,同族的旋轉問題也出現在一般影片上(#1115、plugins #38、ofx #48),全都還開著。
-不寫那個標籤就完全繞開了。
-
-### v1.3 未涵蓋
-
-- **MOV：** 沒有 sidecar。MOV 沒有可供串流寫入的 `\CINEMA\<clip>\` 資料夾；需要
-  MOV 的 `.GYR` 請用 v1.1。
-- **外接 SSD、UHD、變焦鏡：** 尚未測試。UHD 的畫格尺寸沿用 FHD 的規則（設定值加
-  CinemaDNG 邊界）但沒有實錄過；焦距讀自韌體鏡頭物件，只用定焦鏡核對過。
-
-### 從原始碼建置
-
-```sh
-gyro/makecard.py release --gcsv-stream
-```
-
-`gyro/makecard.py debug --gcsv-stream` 使用同一份 logger 與 pool 程式碼，但會包含
-USB shell。下載包是無 USB shell 的 release 版。
