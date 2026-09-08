@@ -23,7 +23,11 @@ Each take leaves both files Gyroflow wants inside the clip's own folder:
 \CINEMA\A001_013\A001_013.json
 ```
 
-Load the frames and those two files into Gyroflow. There is nothing to convert.
+Load the frames and those two files into Gyroflow, then **run its
+synchronisation** as usual. There is nothing to convert, but the offset still
+has to be found: CinemaDNG carries no timecode, and the log starts about half a
+second after the first frame -- measured between 470 and 570 ms, and different
+on every take -- so it is not a number you can fill in once and reuse.
 
 **To remove it:** delete `AutoRun.txt` and `VSHL.BIN` from the card. Nothing was
 flashed -- this runs from RAM, so pulling the battery undoes it too.
@@ -45,7 +49,9 @@ SIGMA fp, firmware **Ver.5.02** only.
 \CINEMA\A001_013\A001_013.json
 ```
 
-把影格序列和這兩個檔案丟進 Gyroflow 就好，不需要轉檔。
+把影格序列和這兩個檔案丟進 Gyroflow，然後照常**跑一次同步**。不需要轉檔，但偏移量
+還是得讓它自己找出來：CinemaDNG 不帶 timecode，而記錄檔的起點比第一幀晚大約半秒
+（實測 470～570 ms，而且每一趟都不一樣），所以那不是一個填一次就能重複用的數字。
 
 **要移除：** 把卡上的 `AutoRun.txt` 和 `VSHL.BIN` 刪掉。沒有刷寫任何韌體 —— 這是在
 RAM 裡跑的，拔電池一樣復原。
