@@ -7,17 +7,50 @@
 
 ### ⬇ [Download fp-gyro-sup-v1.10a.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.10a.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.10a.zip)
 
-Unzip it, copy `AutoRun.txt` and `VSHL.BIN` to the root of an SD card, and power
-the camera on. Two files; there is no `PGEN.BIN` any more.
+### Install
 
-解壓縮後，把 `AutoRun.txt` 和 `VSHL.BIN` 複製到 SD 卡根目錄，再開啟相機。兩個檔案，
-不再需要 `PGEN.BIN`。
+1. **Unzip the download.** Two files matter: `AutoRun.txt` and `VSHL.BIN`.
+2. **Copy both to the root of the SD card** -- the top level, not inside a
+   folder, and not mixed with files from any other build.
+3. **Put the card in the camera and switch it on.** A progress bar appears on
+   the screen; wait until it reads `fpSup!` before recording.
+4. **Shoot CinemaDNG.** Nothing else to press, and nothing to do afterwards.
 
-SIGMA fp, firmware **Ver.5.02** only. This is RAM injection: nothing is flashed,
-and removing the card files or pulling the battery restores the camera.
+Each take leaves both files Gyroflow wants inside the clip's own folder:
 
-僅適用 SIGMA fp 韌體 **Ver.5.02**。這是 RAM 注入，不會刷寫韌體；移除卡上的
-啟動檔或拔電池即可完全復原。
+```text
+\CINEMA\A001_013\A001_013.gcsv
+\CINEMA\A001_013\A001_013.json
+```
+
+Load the frames and those two files into Gyroflow. There is nothing to convert.
+
+**To remove it:** delete `AutoRun.txt` and `VSHL.BIN` from the card. Nothing was
+flashed -- this runs from RAM, so pulling the battery undoes it too.
+
+SIGMA fp, firmware **Ver.5.02** only.
+
+### 安裝
+
+1. **解壓縮。** 需要的是兩個檔案：`AutoRun.txt` 和 `VSHL.BIN`。
+2. **兩個都複製到 SD 卡根目錄** —— 最上層，不要放進資料夾，也不要跟其他版本的
+   檔案混在一起。
+3. **插卡、開機。** 畫面上會跑進度條，等到顯示 `fpSup!` 再開始錄。
+4. **開始錄 CinemaDNG。** 沒有別的按鈕要按，事後也不用做任何事。
+
+每一趟錄影都會把 Gyroflow 要的兩個檔案留在片段自己的資料夾裡：
+
+```text
+\CINEMA\A001_013\A001_013.gcsv
+\CINEMA\A001_013\A001_013.json
+```
+
+把影格序列和這兩個檔案丟進 Gyroflow 就好，不需要轉檔。
+
+**要移除：** 把卡上的 `AutoRun.txt` 和 `VSHL.BIN` 刪掉。沒有刷寫任何韌體 —— 這是在
+RAM 裡跑的，拔電池一樣復原。
+
+僅適用 SIGMA fp 韌體 **Ver.5.02**。
 
 Previous releases: [v1.4](fp-gyro-sup-v1.4.zip) (the same two sidecars, but the
 log is decimated to 1250 Hz), [v1.3](fp-gyro-sup-v1.3.zip) (lens profile carries
@@ -104,17 +137,6 @@ archive above is byte-identical to the card these were shot on.
 - The `.json` matches what the host tool computes for the same lens and mode to
   the last printed digit, and the distortion curve is within 0.02 px of the
   camera's own `WarpRectilinear` opcode across the frame.
-
-### Install
-
-```text
-/AutoRun.txt
-/VSHL.BIN
-```
-
-Copy both as one matching set to the root of the card; do not mix them with
-files from another build. Power the camera on and wait for the progress display
-to reach `fpSup!` before recording.
 
 ### Portrait takes
 
@@ -280,16 +302,6 @@ SIGMA fp Ver.5.02、SD 卡、CinemaDNG 1936x1090 29.97p、LUMIX S 40/F2。上面
   平：進去的記錄數等於列數加讀數。
 - `.json` 與主機工具對同一顆鏡頭、同一模式算出的結果逐位相同（到印出的最後一位），
   畸變曲線與相機自己的 `WarpRectilinear` 在整個畫面上差距在 0.02 像素以內。
-
-### 安裝
-
-```text
-/AutoRun.txt
-/VSHL.BIN
-```
-
-兩個檔案要當成同一組複製到卡片根目錄，不要跟其他版本的檔案混用。開機後等進度顯示
-到 `fpSup!` 再開始錄影。
 
 ### 直拿的片段
 
