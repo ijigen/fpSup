@@ -55,6 +55,10 @@ PRODUCERS = {
     'space': (0xC072EC60, 'stream_space.S',     (),            None,       None,       0),
     'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC03790B8, 0xE5DB25CE, 0),
     'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC038C484, 0xE3500000, 0),
+    # The STILL/CINE mode being set.  Not part of the stream at all: it decides
+    # which way up a take's frames say they are, which has to happen long
+    # before the take.  Base does not arm it -- see mode_hook.S.
+    'mode':  (0xC072E6A0, 'mode_hook.S',         (),            0xC0058310, 0xE1A05001, 0),
 }
 
 
@@ -243,7 +247,7 @@ def _place(measure_accel=False):
     # time rather than by a spelling rule, because a rule would quietly exempt
     # the next word that really does sit on code, which is the freeze this
     # check exists to catch.
-    names_code = {'ACCEL_AT', 'START_AT', 'STOP_AT'}
+    names_code = {'ACCEL_AT', 'START_AT', 'STOP_AT', 'MODE_AT'}
     hit = []
     for wname, wa in sorted(caves.items(), key=lambda kv: kv[1]):
         if wname in names_code:

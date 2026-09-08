@@ -1078,6 +1078,13 @@ gsup_boot:
     movw    r1, #:lower16:T_MBX
     movt    r1, #:upper16:T_MBX
     str     r0, [r1]
+#ifdef WANT_MODE_HOOK
+    /* The cave outlives a re-place, so a stale count from the last blob would
+     * read as "the hook fired" when it did not.  Zero is never fired. */
+    movw    r1, #:lower16:G_MODE_N
+    movt    r1, #:upper16:G_MODE_N
+    str     r0, [r1]
+#endif
 
     /* The release builds and tears down the whole take.  The ladders are the
      * bisection's, and there is nothing left to bisect. */
@@ -1105,8 +1112,8 @@ gsup_boot:
     cmp     r0, #0
     beq     9f                          @ refused: arm nothing
 
-    /* Only now.  Three words, then the cache, so the firmware fetches the
-     * branches and not what was there before them. */
+    /* Only now.  The arming words, then the cache, so the firmware fetches
+     * the branches and not what was there before them. */
     movw    r0, #:lower16:ACCEL_SITE
     movt    r0, #:upper16:ACCEL_SITE
     movw    r1, #:lower16:ARM_ACCEL
@@ -1122,9 +1129,61 @@ gsup_boot:
     movw    r1, #:lower16:ARM_STOP
     movt    r1, #:upper16:ARM_STOP
     str     r1, [r0]
+#ifdef WANT_MODE_HOOK
+    movw    r0, #:lower16:MODE_SITE
+    movt    r0, #:upper16:MODE_SITE
+    movw    r1, #:lower16:ARM_MODE
+    movt    r1, #:upper16:ARM_MODE
+    str     r1, [r0]
+#endif
     movw    ip, #:lower16:F_CACHE
     movt    ip, #:upper16:F_CACHE
     blx     ip
+
+#ifdef WANT_MODE_HOOK
+    /* And the mode we were loaded INTO.  The hook fires when the mode is set,
+     * and a camera that booted from this card straight into cine has already
+     * had it set -- so without this, its takes are portrait until somebody
+     * flips the switch and back.
+     *
+     * Two things this deliberately does not do.  It does not call FUN_c0057ae8
+     * to find the object, because that CONSTRUCTS it when it is missing and
+     * whether its subsystem is up this early is not known; it names the object
+     * and first checks that what the object points at is a plausible address
+     * at all.  An object that has not been built yet is zeroed memory, so a
+     * zero is the reading that means "too early"; measured live, it is
+     * 0xC31AC59C, which is RAM and not ROM -- an earlier version of this check
+     * insisted on ROM and refused every time.  And it only ever writes a zero:
+     * FUN_c0365328 starts the level gauge only when this byte is still clear,
+     * so a one written here before that runs would turn the gauge off for
+     * good.
+     *
+     * The call itself was run on the camera on its own, by hand, before it was
+     * put in a boot path -- a fault here is a camera that will not start with
+     * the card in the slot. */
+    movw    r0, #:lower16:MODE_OBJ
+    movt    r0, #:upper16:MODE_OBJ
+    ldr     r1, [r0]
+    cmp     r1, #0
+    beq     9f
+    lsr     r1, r1, #28
+    cmp     r1, #0xC
+    bne     9f
+    movw    ip, #:lower16:F_MODE_GET
+    movt    ip, #:upper16:F_MODE_GET
+    blx     ip
+    movw    r1, #:lower16:G_MODE
+    movt    r1, #:upper16:G_MODE
+    str     r0, [r1]                    @ readable afterwards, like the hook's
+    mov     r2, #1
+    str     r2, [r1, #4]
+    cmp     r0, #MODE_CINE
+    bne     9f                          @ stills: leave the camera's own value
+    mov     r0, #0
+    movw    r1, #:lower16:LEVEL_GATE
+    movt    r1, #:upper16:LEVEL_GATE
+    strb    r0, [r1]
+#endif
 
 9:  pop     {r4, r5, r6, r7, r8, lr}
     bx      lr

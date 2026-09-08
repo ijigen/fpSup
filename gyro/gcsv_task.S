@@ -29,6 +29,11 @@
  * the stream in order.  A hook is an interrupt that sees one sample.
  * ========================================================================== */
 
+/* Base is the stream and nothing else, so the mode hook -- and with it the
+ * orientation of what gets recorded -- belongs to this edition only.  The
+ * core arms it if this is defined and does not know what it is for. */
+#define WANT_MODE_HOOK 1
+
 #include "writer_core.inc.S"
 
 /* --------------------------------------------------------------- the file */
@@ -103,6 +108,12 @@ writer_openfile:
     movw    ip, #:lower16:G_HELD_OK
     movt    ip, #:upper16:G_HELD_OK
     str     r0, [ip]
+
+    /* Orientation is not decided here.  Clearing the attitude gate at record
+     * start was tried and the first frame of a portrait take still read
+     * Orientation 8 with this code demonstrably run, so whatever consumes it
+     * has consumed it by now.  mode_hook.S does it at the STILL/CINE switch
+     * instead, which is minutes earlier. */
 
     bl      gcsv_header
     bl      gcsv_json_write
@@ -228,9 +239,16 @@ gcsv_header:
     bl      put_str
     mov     r5, r0
 
-    mov     r0, #G_OFF_PATH
+    /* The eight characters of the clip, from the buffer take_path built them
+     * in -- not from the path.  This used to skip six bytes into the path,
+     * which is the length of Base's "\GYRO\"; this edition's path is
+     * "\CINEMA\A001_011\A001_011.gcsv" and six bytes in is "A\A001_0",
+     * which is what every take of this edition has written.  Gyroflow matches
+     * a log to a clip by this name.  The clip buffer is the same in both
+     * editions, so nothing can skip the wrong distance into it. */
+    mov     r0, #G_OFF_CLIP
     bl      blob_at
-    add     r6, r0, #6                  @ past "\GYRO\"
+    mov     r6, r0
     mov     r1, #8
 1:  ldrb    r0, [r6], #1
     strb    r0, [r5], #1
@@ -377,6 +395,7 @@ writer_closefile:
     movt    r6, #:upper16:T_STAGE
     mov     r0, #0x21
     str     r0, [r6]
+
 
     movw    r4, #:lower16:T_FOPEN
     movt    r4, #:upper16:T_FOPEN

@@ -428,6 +428,39 @@ class Editions(unittest.TestCase):
         for call in ('F_DIR_MKDIR', 'make_gyro_dir'):
             self.assertNotIn(call, task)
 
+    def test_the_take_is_recorded_landscape_upright(self):
+        """FUN_c00c9b48 works out a DNG's EXIF Orientation from the Level
+        object, and its first line is `if (gate == 0) return 1`.  So clearing
+        that byte makes every frame landscape upright, which is what lets
+        Gyroflow agree with itself about a portrait take -- it takes the size
+        from the frames and then rotates by the tag, so with the tag in, the
+        preview is portrait and the maths is landscape.
+
+        WHERE it is cleared is the whole question, and the take is the wrong
+        place: a portrait take's first frame still read Orientation 8 with the
+        record hook demonstrably run.  It happens at the STILL/CINE switch now
+        -- see ModeHook -- so what this asserts is that the record path has
+        been left out of it."""
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        self.assertIn('.equ LEVEL_OBJ,      0xC3498DFC', inc)
+        self.assertIn('.equ LEVEL_GATE,     LEVEL_OBJ + 0x30', inc)
+        self.assertIn('LEVEL_GATE', (HERE / 'mode_hook.S').read_text())
+        # and nothing patches the recording path to do it
+        self.assertNotIn('orient_stub', (HERE / 'build_base_card.py').read_text())
+
+    def test_the_header_names_the_clip(self):
+        """Gyroflow matches a log to a clip by videofilename.  The name came out
+        of the path with a fixed skip of six -- the length of Base's "\\GYRO\\" --
+        and this edition's path starts "\\CINEMA\\", so every take wrote
+        "A\\A001_0".  It comes from the clip buffer now, which is the same
+        eight bytes in both editions."""
+        task = (HERE / 'gcsv_task.S').read_text()
+        head = task[task.index('\ngcsv_header:'):task.index('\nput_str:')]
+        code = re.sub(r'/\*.*?\*/', '', head, flags=re.S)
+        code = re.sub(r'@.*', '', code)
+        self.assertIn('G_OFF_CLIP', code)
+        self.assertNotIn('G_OFF_PATH', code, 'the name still comes from the path')
+
     def test_a_block_becomes_one_write(self):
         """16 KiB is the trigger unit -- where "the buffer is full" happens --
         not a write size.  Writing a block's rows in three 16 KiB pieces took
@@ -913,6 +946,127 @@ class Reader(unittest.TestCase):
         self.assertEqual((s['gyro'], s['accel'], s['frame']), (53, 1, 0))
         self.assertEqual((s['start'], s['stop']), (0, 0))
         self.assertAlmostEqual(s['duration_us'], 53 * 400)
+
+
+class ModeHook(unittest.TestCase):
+    """The STILL/CINE hook, which is what decides a take's orientation.
+
+    Everything here is a thing that assembles cleanly and is wrong on the
+    camera: a site that no longer holds the instruction the stub re-executes,
+    a Base card that arms a hook it did not place, and a build that still
+    thinks it is only watching when we believe it is armed."""
+
+    FW = HERE.parent.parent / 'out' / 'MAIN_c0000000.bin'
+    SRC = (HERE / 'mode_hook.S').read_text()
+
+    def setUp(self):
+        import imu_stream_deploy as D
+        self.at, self.src, self.defines, self.site, self.orig, _ = D.PRODUCERS['mode']
+
+    def test_the_site_still_holds_the_instruction_we_displace(self):
+        """The stub ends by running `mov r4, r0` itself.  If the firmware word
+        there is anything else, arming replaces an instruction we do not put
+        back -- silently, and inside a function that is running."""
+        if not self.FW.exists():
+            self.skipTest(f'no firmware image at {self.FW}')
+        d = self.FW.read_bytes()
+        got = struct.unpack_from('<I', d, self.site - 0xC0000000)[0]
+        self.assertEqual(got, self.orig,
+                         f'0x{self.site:08X} is 0x{got:08X}, not '
+                         f'0x{self.orig:08X}')
+
+    def test_the_stub_puts_the_displaced_instruction_back(self):
+        """Assembled, not read: the last two instructions must be `mov r4, r0`
+        then `bx lr`.  A comment saying so is not the same thing."""
+        blob = assemble(HERE / 'mode_hook.S', self.defines)
+        tail = struct.unpack_from('<II', blob, len(blob) - 8)
+        self.assertEqual(tail, (self.orig, 0xE12FFF1E),
+                         'the stub does not end with the displaced '
+                         'instruction and bx lr')
+
+    def test_the_push_is_even(self):
+        """Eight-byte alignment, which an interrupt's STRD needs even in a leaf.
+        Six registers, in one push."""
+        pushes = re.findall(r'^\s*push\s+\{([^}]*)\}', self.SRC, re.M)
+        self.assertEqual(len(pushes), 1)
+        self.assertEqual(len(pushes[0].split(',')) % 2, 0, pushes[0])
+
+    def test_base_neither_places_it_nor_arms_it(self):
+        """Base is the stream and nothing else.  Placing without arming would
+        be dead cave; arming without placing would branch into whatever is
+        there -- which is how the orientation stub once froze a take."""
+        import build_base_card as B
+        for edition, want in (('base', False), ('gcsv', True)):
+            names = [w for _a, _b, w in B.sections(edition)]
+            self.assertEqual('mode' in names, want, edition)
+        core = (HERE / 'writer_core.inc.S').read_text()
+        self.assertIn('#ifdef WANT_MODE_HOOK', core)
+        self.assertIn('ARM_MODE', core)
+        self.assertNotIn('WANT_MODE_HOOK', (HERE / 'ring_task.S').read_text())
+        self.assertIn('#define WANT_MODE_HOOK', (HERE / 'gcsv_task.S').read_text())
+
+    def test_the_take_does_not_touch_the_attitude_gate(self):
+        """It was tried there and the first frame of a portrait take still read
+        Orientation 8.  Leaving the record path able to write that byte is what
+        made a take stop by itself at twenty seconds."""
+        for f in ('gcsv_task.S', 'ring_task.S'):
+            code = re.sub(r'/\*.*?\*/', '', (HERE / f).read_text(), flags=re.S)
+            code = re.sub(r'@.*', '', code)
+            self.assertNotIn('LEVEL_GATE', code, f)
+        # The core touches it in exactly one place: gsup_boot, which asks once
+        # what mode the card was loaded into, because the hook has nothing to
+        # fire on for a camera that booted straight into cine.
+        core = re.sub(r'/\*.*?\*/', '', (HERE / 'writer_core.inc.S').read_text(),
+                      flags=re.S)
+        core = re.sub(r'@.*', '', core)
+        self.assertEqual(core.count('LEVEL_GATE'), 2, 'lower16 and upper16, once')
+        boot = core[core.index('\ngsup_boot:'):]
+        self.assertIn('LEVEL_GATE', boot, 'not in gsup_boot')
+        # and it may only ever clear it -- FUN_c0365328 starts the level gauge
+        # only while the byte is zero, so writing a one here would turn the
+        # gauge off for the life of the boot.
+        i = boot.index('LEVEL_GATE')
+        lines = [l.strip() for l in boot[:i].splitlines() if l.strip()]
+        self.assertEqual(lines[-2:], ['mov     r0, #0', 'movw    r1, #:lower16:'],
+                         'the boot check does not load a zero to store')
+        self.assertRegex(boot[i:i + 200], r'strb\s+r0, \[r1\]')
+
+    def test_armed_means_it_writes_the_gate(self):
+        """MODE_CINE is filled in from what the hook recorded on the camera.
+        Once it is not negative the build must actually store the byte -- a
+        build that still only watches, believed armed, is a take spent."""
+        cine = int(equ('MODE_CINE', (HERE / 'ring_task.inc.S').read_text()), 0)
+        blob = assemble(HERE / 'mode_hook.S', self.defines)
+        words = struct.unpack(f'<{len(blob) // 4}I', blob)
+        armed = 0xE5C23000 in words             # strb r3, [r2]
+        self.assertEqual(armed, cine >= 0,
+                         f'MODE_CINE = {cine} but the stub '
+                         f'{"stores" if armed else "does not store"} the gate')
+
+    def test_it_records_what_it_saw_and_how_often(self):
+        """Which of 0 and 1 is CINE is not in the decompilation.  The count is
+        the only thing that separates "encoded the other way round" from "never
+        fired", and that distinction cost two takes at the record hook."""
+        self.assertIn('G_MODE', self.SRC)
+        # The count is reached as [r2, #4], so the two equates have to be
+        # adjacent -- moving one without the other would have the hook
+        # counting into whatever came next.
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        self.assertEqual(int(equ('G_MODE_N', inc), 0),
+                         int(equ('G_MODE', inc), 0) + 4)
+        self.assertRegex(self.SRC, r'str\s+r3, \[r2, #4\]')
+        self.assertIn('G_MODE_N', (HERE / 'writer_core.inc.S').read_text())
+
+    def test_the_branch_reaches_the_stub(self):
+        """ARM_MODE and MODE_AT come from the same two constants, so they
+        cannot disagree -- but the displacement still has to fit."""
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        site = int(equ('MODE_SITE', inc), 0)
+        at = int(equ('MODE_AT', inc), 0)
+        self.assertEqual(site, self.site)
+        self.assertEqual(at, self.at)
+        disp = (at - site - 8) >> 2
+        self.assertEqual(disp, ((disp << 8) >> 8), 'the bl does not reach')
 
 
 if __name__ == '__main__':

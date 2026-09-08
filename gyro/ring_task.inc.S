@@ -297,9 +297,16 @@
 .equ START_AT,       0xC072E4E0
 .equ STOP_SITE,      0xC038C484
 .equ STOP_AT,        0xC072E620
+/* The fourth site is the mode being set, and only the gcsv edition arms it:
+ * base is the stream and nothing else.  FUN_c0058308's `mov r5, r1`
+ * (0xE1A05001), after a prologue that has already pushed lr.  0xC072E6A0 is in
+ * the 576 bytes between the stop hook's end and the counters at 0xC072E8E0. */
+.equ MODE_SITE,      0xC0058310
+.equ MODE_AT,        0xC072E6A0
 .equ ARM_ACCEL, 0xEB000000 | (((ACCEL_AT - ACCEL_SITE - 8) >> 2) & 0xFFFFFF)
 .equ ARM_START, 0xEB000000 | (((START_AT - START_SITE - 8) >> 2) & 0xFFFFFF)
 .equ ARM_STOP,  0xEB000000 | (((STOP_AT  - STOP_SITE  - 8) >> 2) & 0xFFFFFF)
+.equ ARM_MODE,  0xEB000000 | (((MODE_AT  - MODE_SITE  - 8) >> 2) & 0xFFFFFF)
 
 .equ W_VT_BODY,      W_VT + W_VT_SLOT   /* the slot the pool worker calls */
 /* The gcsv writer's state, in the gap the space provider left when it moved
@@ -329,7 +336,24 @@
 /* The fingerprint of the blob the camera actually holds.  place_code writes
  * it; every command that calls into the pool checks it.  See _verify_placed. */
 .equ T_FINGER,       0xC072E954
-.equ G_WORDS,        6
+.equ G_LEVEL,        0xC072E958     /* what the attitude gate was before the take */
+/* What the mode hook saw, and how many times it ran.  The count is the only
+ * way to tell "the switch is encoded the other way round" from "the hook never
+ * fired", which is the distinction that cost two takes at the record hook. */
+.equ G_MODE,         0xC072E95C
+.equ G_MODE_N,       0xC072E960
+.equ G_WORDS,        9
+
+/* Which value means CINE.  Every use of that value in the firmware is
+ * symmetric, so this is not readable from the decompilation: it was measured,
+ * on the camera, by arming the hook to record what it saw and flipping the
+ * switch each way -- STILL left G_MODE at 0, CINE at 1.  Negative would put
+ * the hook back to only watching.
+ *
+ * The count went up by three per flip, so the firmware sets the mode more than
+ * once per change: FUN_c04b5748 and FUN_c04b57d8 are a save-and-restore pair
+ * that force a mode and put it back.  It settles on the real one. */
+.equ MODE_CINE,      1
 
 /* Where each entry of gsup_offsets is.  blob_at turns one into an address. */
 .equ G_OFF_BODY,     0x00
@@ -356,6 +380,36 @@
  * without moving a byte -- the same trick the .GYR header uses. */
 .equ NOTE_DROPS_AT,  116
 .equ NOTE_DROPS_N,   6
+
+/* The Level object -- the camera's own attitude sensor -- and the byte that
+ * says whether anything should listen to it.
+ *
+ * FUN_c00c9b48 works out a DNG's EXIF Orientation from it, and its first line
+ * is `if (that byte == 0) return 1`, which is landscape upright.  So clearing
+ * it for the length of a take makes every frame of the take landscape upright,
+ * with no patch anywhere in the recording path.
+ *
+ * Why that matters: Gyroflow takes a DNG sequence's size from the frames, which
+ * are stored landscape, and then rotates the picture by the tag -- so a
+ * portrait take previews portrait while its dimensions, its lens model and its
+ * stabilisation maths stay landscape, autosync returns nonsense (+2283 ms on a
+ * take whose true offset is -260) and no sidecar can reconcile them.
+ *
+ * Cleared at record start and put back at record stop, so photographs still
+ * record their orientation and still rotate by themselves -- and because the
+ * camera rewrites this byte when the mode changes, doing it per take is what
+ * makes it stick. */
+.equ LEVEL_OBJ,      0xC3498DFC
+.equ LEVEL_GATE,     LEVEL_OBJ + 0x30
+
+/* The still/cine state, for the one question the hook cannot answer: what mode
+ * the camera was already in when we were loaded.  MODE_OBJ is what
+ * FUN_c0057ae8 returns, named directly so that asking never CONSTRUCTS it --
+ * at boot we do not know whether its subsystem is up yet, and building it
+ * early is a freeze with the card in the slot.  F_MODE_GET is FUN_c0058340,
+ * the getter paired with the setter the hook sits in. */
+.equ MODE_OBJ,       0xC31AC530
+.equ F_MODE_GET,     0xC0058340
 
 .equ F_CACHE,        0xC000E91C     /* clean+invalidate, so written code is real */
 

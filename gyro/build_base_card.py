@@ -61,7 +61,9 @@ F_WRITE_AT = 0xC03660E8    # a previous session's diagnostic patch, restored
 OUT = HERE / 'release' / 'base'
 
 
-README = """fpGyroSup Base v1 -- SIGMA fp firmware Ver.5.02 only
+READMES = {}
+
+READMES['base'] = """fpGyroSup Base {version} -- SIGMA fp firmware Ver.5.02 only
 
 Put AutoRun.txt and VSHL.BIN in the root of the SD card the camera boots
 from, and make sure there is a folder called
@@ -98,8 +100,46 @@ in the same folder.
     ./gyro/gyr7.py                               convert on the command line
 """
 
+READMES['gcsv'] = """fpGyroSup {version} -- SIGMA fp firmware Ver.5.02 only
 
-def sections():
+Put AutoRun.txt and VSHL.BIN in the root of the SD card the camera boots
+from, and record CinemaDNG.  Nothing else: no folder to make, no file to
+convert, no step after the take.
+
+Each take writes both of the files Gyroflow wants, inside the clip's own
+folder, while it is being recorded:
+
+    \\CINEMA\\A001_037\\A001_037.gcsv    the IMU log
+    \\CINEMA\\A001_037\\A001_037.json    the lens profile
+
+The log is every sample the gyro produced -- 2499.466 Hz, nothing averaged and
+nothing dropped -- with each accelerometer reading placed on the row of the
+sample it followed.  The profile carries the lens's own distortion, read out
+of the camera's calibration data for whatever is mounted, so it is the same
+curve the camera puts in a DNG's WarpRectilinear opcode.
+
+Portrait takes need nothing done to them.  In CINE the camera records every
+frame landscape upright, so Gyroflow reads a portrait take exactly as it
+reads a landscape one: load the frames and the two sidecars, sync, stabilise,
+and turn the picture at the end of the edit.  Leave horizon lock off.
+Photographs are untouched and still rotate by themselves.
+
+CinemaDNG only.  A MOV take gets no sidecars: MOV records through a different
+path this build does not hook.  Use fpGyroSup Base for MOV -- it writes a .GYR
+beside any take -- or v1.1 of this line.
+
+This card carries no USB shell.  Nothing is flashed: take the two files off
+the card, or pull the battery, and the camera is exactly as it was.
+"""
+
+
+EDITIONS = {
+    'base': 'ring_task.S',
+    'gcsv': 'gcsv_task.S',
+}
+
+
+def sections(edition='base'):
     """Every section, with where it goes and why.
 
     The cave addresses are read out of imu_stream_deploy's PRODUCERS rather
@@ -109,6 +149,12 @@ def sections():
     """
     out = []
     for name, (at, src, defines, _site, _orig, _thumb) in S.PRODUCERS.items():
+        # The mode hook belongs to the editions that write their own log: it
+        # is what makes a take's frames landscape upright, and Base's readers
+        # get the orientation out of the .GYR header instead.  Placing it
+        # unarmed would only be sixty bytes of cave nobody branches to.
+        if name == 'mode' and edition == 'base':
+            continue
         blob = assemble(HERE / src, defines)
         out.append((at, blob, name))
 
@@ -127,9 +173,10 @@ def sections():
 
     # The writer, in the pool, by offset.  Patched with its own routine table:
     # the same function the USB deploy uses, so the two blobs are the same bytes.
-    code = assemble(HERE / 'ring_task.S', ())
-    code = R.patch_offsets(code, symbols(HERE / 'ring_task.S', ()))
-    out.append((R.CODE_POOL_OFF, code, 'ring_task (pool)'))
+    src = EDITIONS[edition]
+    code = assemble(HERE / src, ())
+    code = R.patch_offsets(code, symbols(HERE / src, ()))
+    out.append((R.CODE_POOL_OFF, code, f'{src[:-2]} (pool)'))
 
     out.append((ENTRY_AT, assemble(HERE / 'gsup_entry.S', ()), 'gsup_entry'))
     return out
@@ -145,6 +192,8 @@ def check(secs):
     for lo, hi, w in spans:
         if lo < 0x40000000:
             continue                    # pool-relative
+        if not (0xC072D000 <= lo < 0xC0730000):
+            continue                    # a patch in the firmware, not the cave
         if lo < ENTRY_AT:
             raise SystemExit(f'{w} at 0x{lo:08X} is inside the loader')
         if hi > PARK_AT:
@@ -154,9 +203,14 @@ def check(secs):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--out', type=pathlib.Path, default=OUT)
+    ap.add_argument('--out', type=pathlib.Path, default=None)
+    ap.add_argument('--edition', choices=sorted(EDITIONS), default='base')
+    ap.add_argument('--version', default='(unreleased)',
+                    help='what to call it in README.txt; release_card.py '
+                         'passes the real one')
     a = ap.parse_args()
-    secs = sections()
+    out = a.out or (HERE / 'release' / a.edition)
+    secs = sections(a.edition)
     check(secs)
 
     tmp = pathlib.Path(tempfile.mkdtemp())
@@ -172,12 +226,12 @@ def main():
            # in the F_WRITE prologue.  Every ordinary image puts it back.
            '--also', f'0x{F_WRITE_AT:08X}:{HERE / "phase_fwrite_restore.S"}',
            '--also', f'0x{PARK_AT:08X}:{SHELL / "templates" / "park.S"}',
-           '--out', str(a.out / 'AutoRun.txt')]
+           '--out', str(out / 'AutoRun.txt')]
     for at, blob, why in secs:
         f = tmp / f'{at:08x}.bin'
         f.write_bytes(blob)
         cmd += ['--also-bin', f'0x{at:08X}:{f}']
-    a.out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     r = subprocess.run(cmd, capture_output=True, text=True)
     sys.stdout.write(r.stdout)
     if r.returncode:
@@ -189,9 +243,10 @@ def main():
     for at, blob, why in sorted(secs):
         where = ('pool + 0x%05X' % at) if at < 0x40000000 else '0x%08X' % at
         print(f'  {where:>16s}  {len(blob):5d}  {why}')
-    (a.out / 'README.txt').write_text(README)
-    vshl = a.out / 'VSHL.BIN'
-    autorun = a.out / 'AutoRun.txt'
+    (out / 'README.txt').write_text(
+        READMES[a.edition].format(version=a.version))
+    vshl = out / 'VSHL.BIN'
+    autorun = out / 'AutoRun.txt'
     print(f'\n  {autorun}  {len(autorun.read_text().splitlines())} commands')
     print(f'  {vshl}  {vshl.stat().st_size} bytes')
     return 0

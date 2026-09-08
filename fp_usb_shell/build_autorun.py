@@ -394,7 +394,12 @@ if args.loader:
              0 if args.no_shell else LOAD + symbols(WORKER)['serve'])
     binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
     binpath = DEST.parent / 'VSHL.BIN'
-    BIN_PAD = 8192
+    # Padded to a fixed size for the same reason AutoRun.txt is: putfile writes
+    # over USB and cannot shorten a file, so a smaller binary would leave the
+    # tail of the last one behind.  Thirty-two kilobytes because an edition that
+    # carries its own writer needs more than eight, and the loader reads up to
+    # MAXLEN (128 KB) into pool+0x8000, which is clear until pool+0x42000.
+    BIN_PAD = 32768
     if len(binblob) > BIN_PAD:
         sys.exit(f'binary is {len(binblob)} bytes, past the {BIN_PAD} it pads to')
     binblob += b'\x00' * (BIN_PAD - len(binblob))
