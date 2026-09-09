@@ -41,6 +41,7 @@ the release cannot drift from the thing that was tested over USB.
 import argparse
 import pathlib
 import shutil
+import re
 import struct
 import subprocess
 import sys
@@ -189,16 +190,46 @@ def sections(edition='base'):
     return out
 
 
+def loader_window():
+    """The pool bytes the loader is using while stage2 places sections.
+
+    Read out of loader.S rather than written down here.  stage2 runs from the
+    read buffer and reads the remaining sections out of it, so a pool-relative
+    section landing inside this window overwrites the code that is copying it:
+    a freeze at boot with nothing printed and nothing on the card.  Nothing
+    does today -- the writer blob sits at 0x44000, clear by 112 KB -- and this
+    exists so that stays true when something moves.
+    """
+    source = (SHELL / 'templates' / 'loader.S').read_text()
+    equs = dict(re.findall(r'^\.equ\s+(\w+),\s*(0x[0-9A-Fa-f]+)', source, re.M))
+    missing = {'O_FOBJ', 'O_BUF', 'MAXLEN'} - equs.keys()
+    if missing:
+        raise SystemExit(f'loader.S no longer defines {sorted(missing)}; the '
+                         f'pool window this checks against cannot be derived')
+    lo = int(equs['O_FOBJ'], 0)         # the file object scratch sits below it
+    hi = int(equs['O_BUF'], 0) + int(equs['MAXLEN'], 0)
+    return lo, hi
+
+
 def check(secs):
-    """Nothing overlaps, and nothing in the cave reaches the park stub."""
+    """Nothing overlaps, nothing in the cave reaches the park stub, and nothing
+    in the pool lands on the loader while it is still reading."""
     spans = [(a, a + len(b), w) for a, b, w in secs]
     for i, (alo, ahi, aw) in enumerate(spans):
         for blo, bhi, bw in spans[i + 1:]:
             if alo < bhi and blo < ahi:
                 raise SystemExit(f'{aw} and {bw} overlap')
+    win_lo, win_hi = loader_window()
     for lo, hi, w in spans:
-        if lo < 0x40000000:
-            continue                    # pool-relative
+        if lo < 0x40000000:             # pool-relative: an offset, not an address
+            if lo < win_hi and win_lo < hi:
+                raise SystemExit(
+                    f'{w} at pool+0x{lo:X}..0x{hi:X} lands in the loader\'s read '
+                    f'window (pool+0x{win_lo:X}..0x{win_hi:X}).  stage2 executes '
+                    f'from there and reads the other sections out of it, so this '
+                    f'would overwrite itself mid-copy: the camera freezes at boot '
+                    f'with nothing to show for it.')
+            continue
         if not (0xC072D000 <= lo < 0xC0730000):
             continue                    # a patch in the firmware, not the cave
         if lo < ENTRY_AT:
