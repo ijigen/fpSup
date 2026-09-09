@@ -22,13 +22,23 @@ cd fpSup-v1/fp_usb_shell
 `ModuleNotFoundError: putfile` means the cwd moved; the tool resets it between
 calls more often than you expect.
 
+**Check for a daemon before starting one.** They do not replace each other --
+they compete for interface 0, and the loser gets `LIBUSB_ERROR_ACCESS`. Kill by
+PID; `pkill -f './fpshd'` has silently matched nothing and left two running
+while a third was started on top:
+
+```sh
+pgrep -fl fpshd                      # expect nothing, or exactly one
+for p in $(pgrep -f fpshd); do kill -9 $p; done
+```
+
 Reading the state of play:
 
 | what you see | what it means |
 |---|---|
 | `ERR shl open ... failed` | the camera is not on USB (off, cable out, or wedged) |
 | `ERR shl frame0 ... TIMEOUT` | enumerated but nothing answers — usually no shell in that build |
-| `LIBUSB_ERROR_ACCESS` | macOS claimed the interface; replug |
+| `LIBUSB_ERROR_ACCESS` | someone else holds interface 0. Check `pgrep -fl fpshd` **first** -- a second daemon is the usual cause. If there is only one, it is the host's PTP stack (`ptpcamerad`, `mscamerad-xpc`), which claims the interface whenever it still declares class `06/01/01`. `./lsdesc` says which: `ff/ff/ff` means the interface patch is in and the daemon is the culprit |
 | `./lsdesc` shows no device | gone entirely, not just deaf |
 
 ## What is known, and how
@@ -74,6 +84,11 @@ understood.
   `menu dump`.
 
 ## Deploying over USB (RAM — dies on power off)
+
+For *writing* camera-side code rather than deploying what already exists — which
+call site to borrow, the ARM traps that freeze the camera, the host tools, the
+cave layout — see the **fp-usb-shell** skill. fpGyroSup is released and in
+maintenance; new work starts there.
 
 ```sh
 cd fpSup-v1/gyro
@@ -137,10 +152,11 @@ Before writing plumbing, check whether the shell already has the command.
 
 ## What this was written against
 
-The camera side is firmware Ver.5.02. The host side is `fpshd` **3.0.0**
-(`fp_usb_shell/host/fpshd.c`) — note the last tag is `fp-usb-shell-v2.0.0`, so
-the daemon has moved without a version boundary since. Everything below about
-commands and behaviour was observed against that.
+The camera side is firmware Ver.5.02. The host side is `fpshd` **3.0.0**, and
+that is accurate — the daemon is unchanged since the tag `fp-usb-shell-v3.0.0`.
+The camera side and build tooling have moved a long way since without a version
+of their own, so `FPSHD_VERSION` tells you about the daemon and nothing else.
+The newest shell is local only.
 
 If the shell changes, this can go stale without anything failing loudly. Check
 `FPSHD_VERSION` against this line when something here does not match what the

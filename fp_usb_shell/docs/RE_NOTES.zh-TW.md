@@ -1,5 +1,10 @@
 # USB shell — 挾持 PTP gadget 的端點 (2026-08-25 實機驗證通過)
 
+<!-- index-stamp -->
+> 這是正本。`notes/USB_SHELL.md` 是同一份的副本(2026-09-09 前逐位元組相同),改這裡不會動到那邊。
+> shell 筆記的總索引在 `notes/USB_SHELL_INDEX.md`。
+
+
 程式在 `codex/usbshell/`,不相依舊樹。舊的傳輸層在 `codex/_retired_2026-08-25/`。
 
 ## 結果
