@@ -121,6 +121,13 @@ sensor is wasted effort.
 
 ### The canvas: what is known and what is eliminated
 
+> **Corrected 2026-09-10: this is correlation, not the chain.** With the enum ->
+> (w,h) conversion patched, the settings block held 3032×2012 through an entire
+> take — record start no longer puts it back — and the DNG stayed 1936×1090,
+> 3,244,544 bytes across all 82 frames. `+16/+10` happens to hold for the two
+> shipping sizes and nothing reads the block to get there. **The whole settings
+> block is eliminated.** See `notes/CANVAS_IS_NOT_THE_SETTINGS_BLOCK.md`.
+
 The recorded DNG dimensions are the settings block's `+0x00` / `+0x04` plus 16 and
 10. That block exists in three copies — master `*(0xC3075230)`, mirror `0xC3758B98`
 (what `setting get/set` edits), and CameraMgr `FUN_c0206e98()+0x40`. Writing a legal
@@ -295,6 +302,18 @@ measured there. The two projects meet at that point.
 
 ### The next step
 
+> **Updated 2026-09-10. The observer was never needed, and the settings block is
+> out.** The enum -> (w,h) conversion is a table in the property's own metadata:
+> `MenuItemMovieRecSize` at `0xC0742204`, with enum 2 -> 1920×1080 and enum 3 ->
+> 3840×2160 at `0xC0742228`, and "Invalid MovSize" for everything else — which is
+> also why sweeping SetMovRecSize looked like it had two answers. Patch it and the
+> settings block follows, through record start.
+>
+> And the DNG does not. So the question is no longer the canvas in the abstract:
+> **what writes `0xC37CE210`** — {1936, 1090, 3244544}, the triple whose third
+> word is the actual file size on the card. It is not the settings block, not the
+> CINE menu list, not `0xC0BE4474`, not `0xC096F580`.
+
 Find the observer of the `+0x1A0` property on `0xC31AC530`. Everything else about
 this problem is either solved or eliminated.
 
@@ -396,6 +415,12 @@ FUN_c03212e0:  sensorObj+4 = 模式             (0xC343B58C)
 **所以缺的是畫布,不是模式。** 再往感光元件那邊試都是白費力氣。
 
 ### 畫布:已知的與已排除的
+
+> **2026-09-10 訂正:這是相關,不是那條鏈。** 把「列舉 →(寬,高)」的轉換表改掉之後,
+> 設定 block **整場錄影都維持 3032×2012 —— record-start 不再把它刷回去** ——
+> 而 DNG 仍然是 1936×1090,82 幀全部 3,244,544 bytes。`+16/+10` 只是在那兩個出貨
+> 尺寸上剛好成立,沒有任何東西讀這個 block 去得到它。**整個設定 block 排除。**
+> 見 `notes/CANVAS_IS_NOT_THE_SETTINGS_BLOCK.md`。
 
 錄下來的 DNG 尺寸 = 設定 block 的 `+0x00` / `+0x04` 再加 16 與 10。那個 block 有三份
 複本 —— 主本 `*(0xC3075230)`、鏡像 `0xC3758B98`(`setting get/set` 改的是這份)、
@@ -547,5 +572,16 @@ ISP 照畫布的長寬比裁,而畫布由一個我們還沒找到的東西決定
 - 用 shell 卡、USB 連著錄 UHD 時出現過**一次**花屏,之後兩次都乾淨。**那不是證據。**
 
 ### 下一步
+
+> **2026-09-10 更新。觀察者根本不需要找,而且設定 block 出局了。**
+> 「列舉 →(寬,高)」的轉換是一張表,就在屬性自己的中繼資料裡:
+> `MenuItemMovieRecSize` 在 `0xC0742204`,`0xC0742228` 起是
+> 列舉 2 → 1920×1080、列舉 3 → 3840×2160,其餘一律「Invalid MovSize」——
+> 這也解釋了為什麼掃 `SetMovRecSize` 看起來只有兩個答案。改它,設定 block 就跟著走,
+> 而且撐得過 record-start。
+>
+> 但 DNG 不跟。所以問題不再是抽象的「畫布」,而是:
+> **是什麼寫 `0xC37CE210`** —— `{1936, 1090, 3244544}`,第三個字就是卡上的實際檔案大小。
+> 已知不是設定 block、不是 CINE 選單表、不是 `0xC0BE4474`、不是 `0xC096F580`。
 
 找出 `0xC31AC530` 的 `+0x1A0` 屬性有誰在觀察。這個問題其他部分不是已解就是已排除。
