@@ -107,20 +107,14 @@ post-processing, and no `.GYR` to convert.
 
 ### What changed in v1.11b
 
-- **An external SSD plugged in before the camera is switched on no longer
-  costs you the whole session.** The loader reads `VSHL.BIN` from the volume
-  the camera is currently pointed at, and with an SSD attached that is the SSD
-  -- which has no `VSHL.BIN` on it. Nothing was loaded, so there was no logger
-  at all, and every take until the next reboot was missing both sidecars with
-  no sign that anything was wrong. It tries the card as well now. Attaching the
-  SSD after the banner was always fine, which is what made this look
-  intermittent for a day.
-
-- **The sidecars have somewhere to go when the clip has no folder.** They are
-  written beside the clip as before; if that cannot be opened they go to the
-  root of the same disk, and failing that to the root of the card. An HDMI
-  recorder writes nothing to a camera volume at all, and that last rung is what
-  gives the log somewhere to land.
+- **Fixed: an external SSD connected before you switch the camera on meant no
+  `.gcsv` and no `.json`, for every take until you switched it off again.**
+  There was no sign anything was wrong. Connecting the SSD after the `fpSup!`
+  banner always worked, which is why it looked random.
+- **Added: if the two files cannot be written beside the clip, they go to the
+  root of the disk instead** -- the same disk you recorded to, or the card.
+  This is what makes an HDMI recorder work: the camera writes no clip of its
+  own then, so there is no folder to put them beside.
 
 ### What v1.11a brought, and still holds
 
@@ -311,15 +305,12 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 
 ### v1.11b 更新
 
-- **開機前就插上外接 SSD,不再賠掉整個 session。** 載入器是從「相機目前指向
-  的那顆磁碟」讀 `VSHL.BIN` 的,而接著 SSD 時那顆就是 SSD —— 上面沒有
-  `VSHL.BIN`。於是什麼都沒載入,**記錄器根本沒上場**,直到下次重開為止每一趟
-  錄影都少了兩個 sidecar,而且相機沒有任何異狀。現在找不到就改從卡片讀。
-  開機之後才插 SSD 一直都是好的,這也是為什麼它看起來像間歇性故障。
-
-- **片段沒有資料夾時,sidecar 也有地方去。** 一樣優先寫在片段旁邊;開不了就寫
-  同一顆磁碟的根目錄,再不行就寫卡片的根目錄。HDMI 外錄時相機不會在任何一顆
-  磁碟上寫片段,最後那一段就是記錄檔唯一的去處。
+- **修正:開機前就接上外接 SSD,錄影不會產生 `.gcsv` 和 `.json`** —— 而且是那次
+  開機之後每一趟都沒有,相機也不會有任何提示。開機、等到 `fpSup!` 之後才接 SSD
+  一直都是好的,所以它看起來才像隨機發生。
+- **新增:兩個檔案放不進片段資料夾時,改放到磁碟根目錄** —— 你錄到哪顆就放哪顆,
+  再不行就放記憶卡。HDMI 外錄要的就是這個:那種情況相機自己不會產生片段,
+  沒有資料夾可以放。
 
 ### v1.11a 帶來、現在仍然成立的
 
