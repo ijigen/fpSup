@@ -129,8 +129,14 @@ combination into **all three** and pressing record put all three back to 3840×2
 > **Settings are an output, not an input.** Four approaches were reversed this way,
 > including the last with a legal pair (6064×4042 + 25p).
 
-The load-bearing observation: **`+0x48` never changes** (FHD 0, UHD 4) and the
-geometry always agrees with it. `+0x48`, or whatever drives it, is upstream.
+> **Corrected 2026-09-10.** This section used to name `+0x48` as the load-bearing
+> observation — "it never changes (FHD 0, UHD 4) and the geometry always agrees
+> with it". **`+0x48` reads 0 in both FHD and UHD.** The field that holds 0/4 is
+> **`+0x08`**, and it tracks the *frame rate*, not the resolution (fps enum 4 → 0,
+> fps enum 3 → 4). The original diff changed resolution and frame rate together, so
+> the two were confounded. A controlled diff — FHD 29.97 against UHD 29.97, same
+> frame rate — shows **only `+0x00` and `+0x04` differ** in the first 0x80 bytes.
+> There is no hidden resolution field in this block. See `notes/FRAME_RATE_IS_VMAX.md`.
 
 Eliminated by patching and re-testing — none of these move the recorded size:
 
@@ -202,10 +208,20 @@ only frame rate that mode offers is four times higher:
 Within half a percent of each other. For scale, today's UHD CinemaDNG frame is
 3856×2170, which is 2.9× fewer pixels than the full sensor.
 
-**Open, not measured:** whether mode 117 can be *read* at 100 and *recorded* at 25.
-That would be 229 MB/s and is the only version of the 3K route that is actually
-cheaper. Nothing in the picker suggests readout rate and record rate can be
-decoupled, but nothing has been tried either.
+> **Superseded 2026-09-10. The 3K route is the cheap one after all, and it needed
+> no decoupling.** The premise above — "the only frame rate that mode offers is
+> four times higher" — was wrong: a mode's frame rate is not a property of the
+> mode. It is `vmax`, one u16 in the timing table at `0xC0B59500`, and the table
+> is directly writable. `hmax` is untouched, so the rolling shutter does not move.
+>
+> Mode 117 with `vmax 2184 → 7280` is **3032×2012 3:2 at 29.97003 fps, rolling
+> shutter 9.221 ms**, and the camera's own `imager mode_list` reports it. A real
+> take read **117** back from `0xC343B590`. That is **274.2 MB/s uncompressed —
+> 27% below the UHD 29.97 the camera already writes** (mode 7, 376.2 MB/s), so it
+> needs no compression engine and no measurement of one.
+>
+> Read rate and record rate never had to be decoupled. Set the rate you want.
+> See `notes/FRAME_RATE_IS_VMAX.md`.
 
 ### Rolling shutter, which nobody has asked for yet
 
@@ -217,7 +233,7 @@ corrects for it. Measured, from `hmax × height ÷ 72`:
 | 8 | live view | 6.160 ms |
 | 106 | FHD CinemaDNG | 10.556 ms |
 | 123 | UHD CinemaDNG | **21.325 ms** |
-| **121** | **6K open gate** | **not asked** |
+| **121** | **6K open gate** | **24.981 ms** — asked, see below |
 
 121 reads 4042 rows where 123 reads 3412. If `hmax` is unchanged between them
 the answer is about 25 ms, but that is arithmetic on an assumption, not a
@@ -389,8 +405,13 @@ CameraMgr `FUN_c0206e98()+0x40`。**三份同時**寫進合法組合再按錄影
 > **設定是輸出,不是輸入。** 四種做法都這樣被刷回去,包括最後一次用合法組合
 > (6064×4042 + 25p)。
 
-關鍵觀察:**`+0x48` 從頭到尾沒變過**(FHD=0、UHD=4),而幾何永遠跟它一致。
-`+0x48`(或驅動它的東西)在更上游。
+> **2026-09-10 訂正。** 這裡原本把 `+0x48` 當成關鍵觀察 ——「從頭到尾沒變過
+> (FHD=0、UHD=4),而幾何永遠跟它一致」。**實測 `+0x48` 在 FHD 和 UHD 都是 0。**
+> 拿 0/4 的是 **`+0x08`**,而且它**跟著幀率走**,不是解析度(fps enum 4 → 0、
+> fps enum 3 → 4)。原本那個 diff 同時動了解析度與幀率,兩個變因混在一起。
+> 控制良好的對照(FHD 29.97 對 UHD 29.97,同幀率)顯示 **0x80 bytes 內只有
+> `+0x00` 與 `+0x04` 不同**。這個 block 裡沒有隱藏的解析度欄位。
+> 見 `notes/FRAME_RATE_IS_VMAX.md`。
 
 改了再測、確定**不會**改變錄影尺寸的:
 
@@ -455,9 +476,17 @@ UHD 25 ↔ 模式 123 的 25.0)。動態幀率是列舉,`FUN_c00c9bd0`(`0xC00C9B
 兩者相差不到半個百分點。對照:現在 UHD CinemaDNG 的畫格是 3856×2170,像素數是全感光
 元件的 1/2.9。
 
-**沒量過、還開著的:** 模式 117 能不能**以 100 讀出、以 25 錄下**。那會是 229 MB/s,
-是 3K 路線唯一真的比較便宜的版本。選擇器裡沒有任何跡象顯示讀出率與記錄率可以脫鉤,
-但也從來沒有試過。
+> **2026-09-10 取代。3K 那條路其實才是便宜的,而且根本不需要脫鉤。**
+> 上面那個前提 ——「那個模式唯一提供的幀率高了四倍」—— 是錯的:**幀率不是模式的
+> 固有屬性**,而是時序表 `0xC0B59500` 裡的一個 u16 `vmax`,而且那張表直接寫得進去。
+> `hmax` 不動,所以捲簾不變。
+>
+> 模式 117 把 `vmax 2184 → 7280`,就是 **3032×2012 3:2 @29.97003 fps,捲簾 9.221 ms**,
+> 相機自己的 `imager mode_list` 也這樣報。實錄一段後 `0xC343B590` 讀回 **117**。
+> 位元率 **274.2 MB/s 未壓縮 —— 比相機每天在寫的 UHD 29.97(模式 7,376.2 MB/s)
+> 還低 27%**,所以不需要壓縮引擎,也不需要去量它。
+>
+> 讀出率與記錄率從來不必脫鉤,想要幾格就設幾格。見 `notes/FRAME_RATE_IS_VMAX.md`。
 
 ### 捲簾,而且還沒有人問過
 
@@ -469,7 +498,7 @@ UHD 25 ↔ 模式 123 的 25.0)。動態幀率是列舉,`FUN_c00c9bd0`(`0xC00C9B
 | 8 | 即時取景 | 6.160 ms |
 | 106 | FHD CinemaDNG | 10.556 ms |
 | 123 | UHD CinemaDNG | **21.325 ms** |
-| **121** | **6K Open Gate** | **沒問過** |
+| **121** | **6K Open Gate** | **24.981 ms** —— 問過了,見下 |
 
 121 讀 4042 列,123 讀 3412 列。如果兩者的 `hmax` 相同,答案大約是 25 ms ——
 但那是建立在一個假設上的算術,不是量測。而**相機一個呼叫就能回答,不用錄影**:
