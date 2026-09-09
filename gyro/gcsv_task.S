@@ -60,6 +60,19 @@ writer_openfile:
     cmp     r4, #0
     beq     9f
 
+    /* Start at the top of the ladder, and record what happens on each rung:
+     * an SSD take cannot be watched from the host, because the camera has one
+     * USB socket and the SSD is in it. */
+    mov     r0, #0
+    movw    ip, #:lower16:G_FALLBACK
+    movt    ip, #:upper16:G_FALLBACK
+    str     r0, [ip]
+    movw    ip, #:lower16:D_OPEN1
+    movt    ip, #:upper16:D_OPEN1
+    str     r0, [ip]
+    str     r0, [ip, #4]                @ D_OPEN2
+    str     r0, [ip, #8]                @ D_OPEN3
+
     movw    ip, #:lower16:F_MGR
     movt    ip, #:upper16:F_MGR
     blx     ip
@@ -68,28 +81,59 @@ writer_openfile:
     movt    ip, #:upper16:F_VOL
     blx     ip
     mov     r5, r0                      @ the volume: the ctor's, and the name's
+    movw    ip, #:lower16:D_VOL
+    movt    ip, #:upper16:D_VOL
+    str     r0, [ip]
     bl      take_path
+
+    /* Rung 0: beside the clip, on the volume being recorded to. */
     mov     r0, #'g'
     bl      clip_path
     mov     r6, r0
-
+    bl      dbg_path                    @ keep it; the next attempt overwrites
     mov     r1, r5
-    mov     r0, r4
-    movw    ip, #:lower16:F_CTOR
-    movt    ip, #:upper16:F_CTOR
-    blx     ip
+    bl      try_open
+    movw    ip, #:lower16:D_OPEN1
+    movt    ip, #:upper16:D_OPEN1
+    str     r0, [ip]
+    cmp     r0, #0
+    bne     7f
 
-    mov     r0, r4
-    mov     r1, r6
-    mov     r2, #F_MODE_AUD
-    movw    ip, #:lower16:F_OPEN
-    movt    ip, #:upper16:F_OPEN
-    blx     ip
-    /* If it did not open, it did not open: \GYRO has to already exist on the
-     * volume being recorded to, and putting it there is the user's business.
-     * See Base's copy of this for the two ways we tried doing it ourselves and
-     * what each of them cost. */
-    movw    ip, #:lower16:T_FOPEN
+    /* Rung 1: \fpSupGYRO on the same volume -- an SSD take's log belongs with
+     * the SSD's footage, not on whatever card happens to be in the slot. */
+    mov     r0, #1
+    movw    ip, #:lower16:G_FALLBACK
+    movt    ip, #:upper16:G_FALLBACK
+    str     r0, [ip]
+    mov     r0, #'g'
+    bl      clip_path
+    mov     r6, r0
+    mov     r1, r5
+    bl      try_open
+    movw    ip, #:lower16:D_OPEN2
+    movt    ip, #:upper16:D_OPEN2
+    str     r0, [ip]
+    cmp     r0, #0
+    bne     7f
+
+    /* Rung 2: \fpSupGYRO on the SD card.  Nothing of the take is written to a
+     * camera volume when an HDMI recorder has it, and this is the rung that
+     * still gives the log somewhere to go. */
+    mov     r0, #2
+    movw    ip, #:lower16:G_FALLBACK
+    movt    ip, #:upper16:G_FALLBACK
+    str     r0, [ip]
+    mov     r5, #VOL_SD
+    mov     r0, #'g'
+    bl      clip_path
+    mov     r6, r0
+    mov     r1, r5
+    bl      try_open
+    movw    ip, #:lower16:D_OPEN3
+    movt    ip, #:upper16:D_OPEN3
+    str     r0, [ip]
+
+7:  movw    ip, #:lower16:T_FOPEN
     movt    ip, #:upper16:T_FOPEN
     str     r0, [ip]
     cmp     r0, #0
@@ -119,13 +163,57 @@ writer_openfile:
     bl      gcsv_json_write
     b       9f
 
-8:  mov     r0, r4                      @ it did not open: do not leave it built
+8:  /* Nothing is built: try_open gives the object back on every rung it
+     * fails, so there is nothing left to destroy here. */
+
+9:  pop     {r4, r5, r6, lr}
+    bx      lr
+
+
+/* try_open -- r4 = the file object, r6 = the path, r1 = the volume.  Returns
+ * the open result in r0, and leaves NOTHING built when it fails, so the next
+ * rung can construct again.  A file object left constructed after a failed
+ * open is the \LENS.DAT trap: every later open fails too. */
+try_open:
+    push    {r7, lr}
+    mov     r0, r4
+    movw    ip, #:lower16:F_CTOR
+    movt    ip, #:upper16:F_CTOR
+    blx     ip
+    mov     r0, r4
+    mov     r1, r6
+    mov     r2, #F_MODE_AUD
+    movw    ip, #:lower16:F_OPEN
+    movt    ip, #:upper16:F_OPEN
+    blx     ip
+    mov     r7, r0
+    cmp     r7, #0
+    bne     1f
+    mov     r0, r4
     mov     r1, #2
     movw    ip, #:lower16:F_DTOR
     movt    ip, #:upper16:F_DTOR
     blx     ip
+1:  mov     r0, r7
+    pop     {r7, lr}
+    bx      lr
 
-9:  pop     {r4, r5, r6, lr}
+
+/* dbg_path -- keep the first path we tried, because the next rung overwrites
+ * the buffer and an SSD take cannot be watched while it happens. */
+dbg_path:
+    push    {r0, lr}
+    movw    r1, #:lower16:D_PATH
+    movt    r1, #:upper16:D_PATH
+    mov     r2, r6
+    mov     r3, #48
+1:  ldrb    r0, [r2], #1
+    strb    r0, [r1], #1
+    subs    r3, r3, #1
+    beq     2f
+    cmp     r0, #0
+    bne     1b
+2:  pop     {r0, lr}
     bx      lr
 
 /* clip_path -- the log's path, beside the clip.  r0 = 'g' for the .gcsv or
@@ -152,7 +240,20 @@ clip_path:
     mov     r0, #G_OFF_PATH
     bl      blob_at
     mov     r6, r0
-    movw    r0, #0x435C
+
+    /* The fallback is the root of the volume: one character, no folder to
+     * make, and no second copy of the name.  Making a directory at record
+     * start is what froze the camera on every SSD take. */
+    movw    r8, #:lower16:G_FALLBACK
+    movt    r8, #:upper16:G_FALLBACK
+    ldr     r8, [r8]
+    cmp     r8, #0
+    beq     0f
+    mov     r0, #'\\'
+    strb    r0, [r6], #1
+    b       1f
+
+0:  movw    r0, #0x435C
     movt    r0, #0x4E49                 @ "\\CIN"
     str     r0, [r6]
     movw    r0, #0x4D45
@@ -160,10 +261,12 @@ clip_path:
     str     r0, [r6, #4]
     add     r6, r6, #8
 
-    mov     r0, #G_OFF_CLIP
+1:  mov     r0, #G_OFF_CLIP
     bl      blob_at
     mov     r4, r0
     bl      copy_clip                   @ r6 advances past the eight characters
+    cmp     r8, #0
+    bne     2f                          @ the fallback has no folder of its own
 
     /* CinemaDNG puts the frames in a folder of their own; the sidecars go in
      * with them, so the name appears twice. */
@@ -171,20 +274,20 @@ clip_path:
     movt    ip, #:upper16:F_CAMSETTING
     blx     ip
     cmp     r0, #0
-    beq     1f
+    beq     2f
     ldr     r0, [r0, #SETTING_FORMAT]
     cmp     r0, #FORMAT_CDNG
-    bne     1f
+    bne     2f
     mov     r0, #'\\'
     strb    r0, [r6], #1
     bl      copy_clip
 
-1:  mov     r0, #'.'
+2:  mov     r0, #'.'
     strb    r0, [r6], #1
     mov     r0, r7
     strb    r0, [r6], #1                @ 'g' or 'j'
     cmp     r7, #'g'
-    bne     2f
+    bne     4f
     mov     r0, #'c'
     strb    r0, [r6], #1
     mov     r0, #'s'
@@ -192,7 +295,7 @@ clip_path:
     mov     r0, #'v'
     strb    r0, [r6], #1
     b       3f
-2:  mov     r0, #'s'
+4:  mov     r0, #'s'
     strb    r0, [r6], #1
     mov     r0, #'o'
     strb    r0, [r6], #1

@@ -342,6 +342,31 @@
  * fired", which is the distinction that cost two takes at the record hook. */
 .equ G_MODE,         0xC072E95C
 .equ G_MODE_N,       0xC072E960
+/* How the sidecars were opened.  Both files read it, so they always land
+ * together, and where the file ended up says which rung it took.
+ *
+ *   0  \CINEMA\A001_037\A001_037.gcsv   beside the clip, recording volume
+ *   1  \A001_037.gcsv                     the root of the same volume
+ *   2  \A001_037.gcsv                     the root of the SD card
+ *
+ * The root, not a folder of our own: making a directory at record start froze
+ * the camera on every SSD take, and a folder made at boot cannot know about a
+ * disk plugged in afterwards.  A root that already exists needs neither.
+ *
+ * Rung 1 keeps an SSD take's sidecars on the SSD, which is where they belong.
+ * Rung 2 is what makes an HDMI recorder work at all: nothing of the take is
+ * written to a camera volume then, but the log still has somewhere to go. */
+.equ G_FALLBACK,     0xC072E964
+.equ VOL_SD,         1              /* FUN_c0444698: 1 = SD, 5 = the SSD */
+
+/* What the open actually did, for a fault that can only be looked at after the
+ * fact: the camera has one USB socket and the SSD is in it. */
+.equ D_VOL,          0xC072E968     /* what F_VOL returned                    */
+.equ D_OPEN1,        0xC072E96C     /* beside the clip                        */
+.equ D_OPEN2,        0xC072E970     /* \fpSupGYRO on the recording volume     */
+.equ D_OPEN3,        0xC072E974     /* \fpSupGYRO on the SD                   */
+.equ D_PATH,         0xC072E978     /* the first path we tried, 48 bytes      */
+
 .equ G_WORDS,        9
 
 /* Which value means CINE.  Every use of that value in the firmware is
