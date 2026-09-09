@@ -44,6 +44,64 @@ Patching all three (`0xC0BE5828` / `0xC0BE59C8` / `0xC0BE5B68`) to 121 made the 
 answer 121 immediately, and a real take afterwards read **121** back — the camera
 recorded with a full-frame 6064×4042 1×1 readout.
 
+### How a mode actually gets set, end to end
+
+Measured and confirmed against the machine code, not read off the decompiler —
+the last time this was traced from the C alone it produced a wrong answer that
+survived several readings:
+
+```
+master settings *(0xC3075230)      +0x00 width  +0x04 height  +0x14 fps enum
+    ↓
+FUN_c0437078(kind, 0, block, 3)                  the picker, 0xC0437078
+    ↓
+capture request +0x60                            written by FUN_c0374268
+    ↓
+acquisition struct +0x14        FUN_c0378a50 single / FUN_c0379b68 continuous,
+                                both under XC_StillCreateRaw__v4
+    ↓
+message +0x1c                   0x1C0 bytes, payload from +8
+    ↓
+SetImgMode_s → FUN_c0314708:  str r7,[r6]  at 0xC0314750
+    ↓
+FUN_c03212e0:  sensorObj+4 = mode            (0xC343B58C)
+```
+
+`kind`: **2 = movie/monitor** (answers 123, matching a real UHD 25p take),
+3 = still (97), 4 = continuous (142).
+
+### What the picker answers when you ask it
+
+`FUN_c0437078` is a pure function of the settings, so the whole table can be
+read off with nothing recording. `kind=2`, rows are the requested output size,
+columns the frame-rate enum:
+
+```
+size            23.976  24.000  25.000  29.970    100   119.88
+1920x1080          109     218     125     106     89      58
+3840x2160          101     151     123       7      7       7
+4096x2160            7       7       7       7      7       7
+3032x2012          109     218     125     106     89      58
+6064x4042          109     218     125     106     89      58
+```
+
+Two things fall out of it:
+
+- **3032×2012 and 6064×4042 answer identically to 1920×1080.** The picker does
+  not recognise them; they fall through to the default row. Width and height are
+  not being compared against a size table at all.
+- **Every mode it returns is 16:9** — 3032×1708 or 6064×3412. It has never once
+  returned a 3:2 full-height mode (121 / 11 / 117 / 98 / 143).
+
+So the nights spent watching settings get "put back" were not about illegal
+combinations. Those modes **do not exist for the recording path**, and that is a
+table, not a rule.
+
+The other branch of the picker has not been exercised: `kind=2` with
+`query+0x24 == 0` goes to `FUN_c043b988` and five tables (default `0xC0BE4D50`,
+0x300 = 48 entries) instead of the three 26-entry ones. The camera takes the
+three-table branch in practice.
+
 ### The result that decides the shape of the problem
 
 **The field of view did not change.**
@@ -149,6 +207,55 @@ That would be 229 MB/s and is the only version of the 3K route that is actually
 cheaper. Nothing in the picker suggests readout rate and record rate can be
 decoupled, but nothing has been tried either.
 
+### Rolling shutter, which nobody has asked for yet
+
+This matters more here than in most projects, because the whole gyro product
+corrects for it. Measured, from `hmax × height ÷ 72`:
+
+| mode | | rolling shutter |
+|---|---|---|
+| 8 | live view | 6.160 ms |
+| 106 | FHD CinemaDNG | 10.556 ms |
+| 123 | UHD CinemaDNG | **21.325 ms** |
+| **121** | **6K open gate** | **not asked** |
+
+121 reads 4042 rows where 123 reads 3412. If `hmax` is unchanged between them
+the answer is about 25 ms, but that is arithmetic on an assumption, not a
+measurement — and the camera can be asked directly, in one call, with nothing
+recording: `FUN_c0320FC8(obj, 121)` for hmax, `FUN_c0321028(obj, 121)` for the
+height. **Ask before designing around a guess.**
+
+### The second lead, and the experiment that would settle +0x48
+
+Two threads were left open before the canvas became the obvious target, and
+neither is dead:
+
+**Who fills message `+0x1c` with 123?** The chain above ends at
+`ContSet_Adr1`: `if (*(param_2+0x1c) != *request) SetImgMode_s(request,
+*(param_2+0x1c))`. During recording that descriptor is built by the movie
+recorder, so the question is what `movRec` (`0xC038A3E8`) /
+`MovRecFuncStateTHR` puts there. This is the mode side, which is solved, so it
+is only worth following if the canvas turns out to be chosen in the same place.
+
+**What drives `+0x48`?** It never moves, and the geometry always agrees with it,
+so it is upstream of everything we can write. Rather than guessing at another
+table: switch the menu to FHD, `setting read`, dump all 178 named parameters;
+switch to UHD, dump again; **diff**. Whatever changed is the source. This has
+not been run.
+
+`SetMovBiningSupport` (`0xC03FDB90`) is a boolean, currently 0, and clamps a 2
+to 1. It does nothing to the canvas or the mode while idle. It may only be
+consulted when the mode is chosen at record start — untested.
+
+### If the canvas cannot be moved
+
+The ISP crops to the canvas aspect, and the canvas is set by something we have
+not found. If it turns out to be unreachable, the alternative is not a better
+patch — it is not using the recording branch at all: take the Bayer data from
+the sensor path and write the container ourselves. That is `raw-sup.md`'s
+territory, and its own blocker (the compression throughput needed for UHD) is
+measured there. The two projects meet at that point.
+
 ### Tools that make this cheap to work on
 
 - **Ask the picker without touching the camera.** `FUN_c0437078` is a pure function
@@ -204,6 +311,59 @@ IMX410 是 6064×4042、3:2。但相機會選的每一個動態模式都是 16:9
 `0xC0BE59B0` / `0xC0BE5B50`,每筆 16 位元組,**`+0x08` 就是感光元件模式**。UHD 25p
 在每張表的第一筆。三個都改成 121(`0xC0BE5828` / `0xC0BE59C8` / `0xC0BE5B68`)之後,
 探針立刻回 121,實錄一段之後讀回 **121** —— 相機真的用 6064×4042 1×1 全片幅讀出錄了。
+
+### 模式是怎麼被設定的,從頭到尾
+
+這條鏈是對著機器碼確認的,不是從反編譯的 C 讀的 —— 上一次只讀 C 就推論,得到一個
+錯誤答案,而且我讀過好幾次都沒發現:
+
+```
+主設定 *(0xC3075230)        +0x00 寬  +0x04 高  +0x14 幀率列舉
+    ↓
+FUN_c0437078(kind, 0, block, 3)              選擇器,0xC0437078
+    ↓
+擷取請求 +0x60                                FUN_c0374268 寫的
+    ↓
+取像結構 +0x14              FUN_c0378a50 單張 / FUN_c0379b68 連續,
+                            都在 XC_StillCreateRaw__v4 底下
+    ↓
+訊息 +0x1c                  0x1C0 位元組,payload 從 +8 起
+    ↓
+SetImgMode_s → FUN_c0314708:  str r7,[r6]  於 0xC0314750
+    ↓
+FUN_c03212e0:  sensorObj+4 = 模式             (0xC343B58C)
+```
+
+`kind`:**2 = 動態/監看**(回 123,與 UHD 25p 實錄一致)、3 = 靜態(回 97)、
+4 = 連拍(回 142)。
+
+### 直接問選擇器,它會怎麼回答
+
+`FUN_c0437078` 是設定的純函式,所以整張表可以在完全不錄影的情況下問出來。
+`kind=2`,橫列是要求的輸出尺寸,直行是幀率列舉:
+
+```
+尺寸            23.976  24.000  25.000  29.970    100   119.88
+1920x1080          109     218     125     106     89      58
+3840x2160          101     151     123       7      7       7
+4096x2160            7       7       7       7      7       7
+3032x2012          109     218     125     106     89      58
+6064x4042          109     218     125     106     89      58
+```
+
+兩件事直接掉出來:
+
+- **3032×2012 與 6064×4042 的答案跟 1920×1080 完全相同。** 選擇器不認得它們,
+  落到預設列。**寬高根本沒有被拿去比對任何尺寸表。**
+- **它回傳的每一個模式都是 16:9** —— 3032×1708 或 6064×3412。**從來沒有回過**
+  3:2 全高模式(121 / 11 / 117 / 98 / 143)。
+
+所以那些夜裡看著設定被「刷回去」,不是組合不合法。那些模式**對錄影路徑不存在**,
+而那是一張表,不是一條規則。
+
+選擇器的另一個分支還沒被走過:`kind=2` 且 `query+0x24 == 0` 會走 `FUN_c043b988`
+與五張表(預設 `0xC0BE4D50`,0x300 = 48 筆),而不是那三張 26 筆的。實機走的是
+三張表那一支。
 
 ### 決定問題形狀的那個結果
 
@@ -298,6 +458,47 @@ UHD 25 ↔ 模式 123 的 25.0)。動態幀率是列舉,`FUN_c00c9bd0`(`0xC00C9B
 **沒量過、還開著的:** 模式 117 能不能**以 100 讀出、以 25 錄下**。那會是 229 MB/s,
 是 3K 路線唯一真的比較便宜的版本。選擇器裡沒有任何跡象顯示讀出率與記錄率可以脫鉤,
 但也從來沒有試過。
+
+### 捲簾,而且還沒有人問過
+
+這一項在這個題目上比在別的題目重要,因為整個陀螺產品就是在修正它。實測值,
+由 `hmax × 高 ÷ 72` 算出:
+
+| 模式 | | 捲簾 |
+|---|---|---|
+| 8 | 即時取景 | 6.160 ms |
+| 106 | FHD CinemaDNG | 10.556 ms |
+| 123 | UHD CinemaDNG | **21.325 ms** |
+| **121** | **6K Open Gate** | **沒問過** |
+
+121 讀 4042 列,123 讀 3412 列。如果兩者的 `hmax` 相同,答案大約是 25 ms ——
+但那是建立在一個假設上的算術,不是量測。而**相機一個呼叫就能回答,不用錄影**:
+`FUN_c0320FC8(obj, 121)` 拿 hmax、`FUN_c0321028(obj, 121)` 拿高度。
+**先問再設計,不要照著猜出來的數字做。**
+
+### 第二條線索,以及能定案 +0x48 的那個實驗
+
+在畫布成為明顯目標之前有兩條線被擱著,兩條都還沒死:
+
+**誰把訊息 `+0x1c` 填成 123?** 上面那條鏈的終點是 `ContSet_Adr1`:
+`if (*(param_2+0x1c) != *request) SetImgMode_s(request, *(param_2+0x1c))`。
+錄影時那個描述元由電影錄影器建,所以問題是 `movRec`(`0xC038A3E8`)/
+`MovRecFuncStateTHR` 往裡面填了什麼。這是模式那一側,已經解了,所以只有在
+「畫布也是在同一個地方決定的」時才值得追。
+
+**是什麼在驅動 `+0x48`?** 它從來不動,而幾何永遠跟它一致,所以它在我們能寫的
+一切之上游。與其再猜一張表:**選單切 FHD → `setting read` → 把 178 個具名參數
+全部 dump;切 UHD → 再 dump;逐項 diff。** 變了的那一項就是來源。這個還沒跑過。
+
+`SetMovBiningSupport`(`0xC03FDB90`)是布林,現值 0,給 2 會夾成 1。閒置時它不影響
+畫布也不影響模式。它可能只在錄影開始選模式的那一刻才被讀 —— 沒測過。
+
+### 如果畫布動不了
+
+ISP 照畫布的長寬比裁,而畫布由一個我們還沒找到的東西決定。萬一它真的碰不到,
+替代方案不是更好的補丁 —— 是**完全不走錄影分支**:從感光元件路徑把 Bayer 拿下來,
+容器自己寫。那是 `raw-sup.md` 的地盤,而它自己的瓶頸(UHD 需要的壓縮吞吐)也在那裡
+量過了。兩個專案在這一點會合。
 
 ### 讓這件事變便宜的工具
 
