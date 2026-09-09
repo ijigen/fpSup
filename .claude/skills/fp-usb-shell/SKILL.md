@@ -102,6 +102,72 @@ Template scratch is separate: `0xC072F700` parameters/results (256 B),
 `build_base_card.py` refuses to write a card whose sections reach `PARK_AT`.
 Trust that guard over any arithmetic written down somewhere else.
 
+## How the camera learns a command arrived
+
+Not like the gyro. The gyro is a periodic callback with a ring you copy out of;
+EP 0x01 OUT is interrupt-driven with no polling anywhere:
+
+```
+host sends bulk OUT
+  → DWC3 writes the event ring
+  → IRQ 0x34            FUN_c01e3660, registered at USB init
+  → ISR decodes DEPEVT  type 1 = XferComplete
+  → sets bit 1<<(ep+0x11)
+  → tk_set_flg          flag id at 0xC31E3210
+  → the task blocked in tk_wai_flg wakes
+```
+
+EP 0x01 OUT is physical endpoint 2, so its completion bit is `1<<0x13`. The
+worker's `FN_WAIT` (`0xC01E4E81`) is the firmware's own wait and ends in
+`tk_wai_flg` on exactly the bits the ISR sets.
+
+One round of the worker:
+
+```
+① count the round   ② check the two SWAP words
+③ DALEPENA has physical 2|5?      no → hold (50 ms, round again)
+④ USB_STATE == 4 (suspended)?     yes → hold
+⑤ arm_out           arm the OUT TRB
+⑥ FN_WAIT(logical 1, 50000 ms)    ← blocks here, woken by IRQ 0x34
+⑦ read the frame, check "shl ", run it, reply
+```
+
+**Arm before you wait.** An unarmed TRB has nothing to complete, so the wait
+just runs its 50 s out. On timeout it goes to `fault` and arms again. The only
+polling is `hold`, for when the endpoints do not exist yet — there is no event
+to wait for then.
+
+For streaming later: `StartTransfer` registers **no completion callback** —
+no semaphore, no function pointer. Bulk (mode 1) and the shell's mode 2 detect
+completion only through that shared flag. A real callback exists only in mode 3
+(native UVC/isoc), in IRQ context. So a pump is either a task blocked on the
+flag, or mode 3.
+
+## Reading the worker
+
+The state block at `0xC072F000` is the only view from outside. It is a
+`mem read`, so ask first.
+
+| offset | |
+|---|---|
+| `+0x0C` | **rounds** — every pass of the loop |
+| `+0x20` | **served** — every complete reply |
+| `+0x24` | **faults** — mostly idle timeouts, not errors |
+| `+0x28` | **holds** — rounds skipped because USB was not up |
+| `+0x10`/`+0x14` | `arm_out` / `wait(OUT)` return |
+| `+0x18`/`+0x1C` | `arm_in` / `wait(IN)` return |
+| `+0x2C`/`+0x30` | last `USB_STATE` / `DALEPENA` |
+
+How to read it:
+
+- `served` should equal the commands you have sent. **rounds and served moving
+  together** means one round per command — the loop is blocking, not spinning.
+- `rounds` frozen → the loop is stuck. **`rounds` at zero → the task has never
+  run an instruction**, which is a scheduling problem, not a shell problem.
+- `holds` climbing → waiting on USB, not on you.
+
+`serve` does not clear this block, so the counters survive a hot swap.
+
 ## Host tools
 
 ```sh
@@ -153,6 +219,15 @@ reads the address — a half-written pair can never send it somewhere arbitrary.
 
 The endpoints are unattended while the file is read, so **the first command
 after a swap is expected to be slow**; `swapworker.py` retries for ten seconds.
+Measured: 0.5 s, byte for byte.
+
+`--force` swaps even when the bytes already match. Without it the tool returns
+early with "the worker in memory is already this one", which is correct and is
+also why this path rotted unnoticed: it assembled `loader.S` **without
+`LOADER_BASE`**, so the file did not assemble at all, and the line that did it
+sat *after* the early return. Reachable only on the day you need it, and broken
+on that day. The defines must also be the right ones — `NOTASK` and
+`HOOK_RESTORE` change the size of `boot`, and `load` sits after it.
 
 Note what this does *not* touch: the gyro-callback bootstrap at the top of
 `loader.S` is the power-on path only. A swap enters at `load`, from the
@@ -219,8 +294,29 @@ current and which were overturned.
 
 The AutoRun spells out a small loader; the loader reads `\VSHL.BIN` off the
 card and becomes it. That is why command count stopped growing with payload
-size. `--debug` builds the same code plus the shell, which works because the
-loader hands `0xC00D0794` back to the worker once everything is placed.
+size — 38 ms per command, so every word the AutoRun does not have to spell out
+is real boot time.
+
+```
+AutoRun  patches → memmgr bufmem get → write the loader → point `echo` at it
+         → echo → restore the handler ×3 → banner
+loader   (in the dispatcher's task) open \VSHL.BIN, else the card; read; "VBIN"?
+stage2   (runs in place in the read buffer) place every section, clean the cache
+entry    card: gsup_entry, which RETURNS -- so the loader reaches load_stop and
+         hands 0xC00D0794 to the worker
+         shell-only: the worker's serve loop, which does not return -- that task
+         simply becomes the worker
+```
+
+A destination below `0x40000000` in the section table is a **pool offset**, not
+an address: the pool is decided at boot, so a build can only name the offset.
+
+**Three patch sets, and they are not the same thing.** The interface-class
+patch (`0xC0CF3740`) is what stops the host's own PTP stack claiming interface
+0; without it every command is `LIBUSB_ERROR_ACCESS` and a card carrying a
+shell cannot be talked to. The six `0xC0CF378x/379x` shape EP 0x83 for
+hook-push, which a card never does. `--no-ep-patches` drops only the six; the
+interface patch travels with the shell.
 
 The loader tries `F_VOL`'s volume, then falls back to the card — an SSD
 attached before power-on *is* what `F_VOL` names, and without the fallback
@@ -228,6 +324,30 @@ nothing loads and the whole session silently has no logger.
 
 **A release card has no shell; you cannot ask it anything.** If a fault only
 shows on a release card, put the debug card on — it is the same code.
+
+## Bring a card up in the right order
+
+A shell-only card has two sections and one suspect per link. A gcsv debug card
+has sixteen, plus the logger, `gsup_entry`, `HOOK_RESTORE` and the sleeper. Put
+the small one on first: if it answers, everything the big one adds is the only
+thing left to blame.
+
+```sh
+python3 build_autorun.py --loader --banner 'fpShell-dbg1!' --out DIR
+```
+
+I did this the other way round once. The card did not answer, and because three
+changes were on it at once I had to go through git to work out which of them
+could even have been responsible — work a baseline would have made unnecessary.
+The project's own note says it: one change at a time.
+
+Two failures that both look like "the shell is dead", and how to tell them
+apart:
+
+| | |
+|---|---|
+| `ERR shl claim iface 0 ... ACCESS` | someone holds interface 0. `pgrep -fl fpshd` **first** — a second daemon is the usual cause. If there is one daemon, check `./lsdesc`: class `06/01/01` means the interface patch is missing and the host PTP stack took it |
+| `ERR shl frame0 ... TIMEOUT moved=0/64` | it enumerated and nothing answers. The worker is not serving — which is not the same as absent. On the first debug card the worker was placed, started, and never scheduled: its task and the loader's were both priority 28, and the loader's ended in `b .`. TK-OS does not preempt between equals. `rounds` at 0 says this in one read |
 
 ## Adding a template
 
@@ -251,7 +371,23 @@ the build tooling are ~540 lines and 8 files further on (`build_autorun.py`,
 added since), with no version of their own. `README.md`'s "v3" means the whole
 package; `FPSHD_VERSION` means only the daemon. Do not read one as the other.
 
-The newest shell is local only.
+Two remotes: `origin` (GitHub, serves the downloads) and `local`
+(`git@git:bei/sigma_fp_re_usbshell.git`, Forgejo on `git.lan`, SSH). **Every
+test build is committed and pushed to `local` before the card goes in**, so a
+result can be attached to a commit rather than to a working tree.
+
+Verified on the camera, shell-only card, 2026-09-09:
+
+- the `echo` bootstrap, end to end — `shl echo hello world` and
+  `imager mode_now` both answer
+- the worker's counters move one round per command
+- a hot swap, 0.5 s, byte for byte
+- `putfile`/`getfile` round trip, 3000 bytes identical, buffer from the
+  firmware allocator and handed back
+
+**Not yet verified:** anything on the card path — the sleeper, `HOOK_RESTORE`,
+and whether the logger still records under the `echo` bootstrap. A shell-only
+build's entry never returns, so none of it is on that route.
 
 ## Keeping this file honest
 
