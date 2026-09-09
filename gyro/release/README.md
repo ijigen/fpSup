@@ -1,11 +1,11 @@
-# fpGyroSup v1.11a
+# fpGyroSup v1.11b
 
 [![Support fpSup on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/fpsup)
 [![Join the fpSup Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/XeFK5zNZpT)
 
 [English](#english) | [繁體中文](#繁體中文)
 
-### ⬇ [Download fp-gyro-sup-v1.11a.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.11a.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.11a.zip)
+### ⬇ [Download fp-gyro-sup-v1.11b.zip](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.11b.zip) · [下載](https://github.com/ijigen/fpSup/raw/main/gyro/release/fp-gyro-sup-v1.11b.zip)
 
 ### Install
 
@@ -13,7 +13,7 @@
 2. **Copy both to the root of the SD card** -- the top level, not inside a
    folder, and not mixed with files from any other build.
 3. **Put the card in the camera and switch it on.** A progress bar appears on
-   the screen; wait until it reads `fpSup-Gyro-v1.11a!` before recording.
+   the screen; wait until it reads `fpSup-Gyro-v1.11b!` before recording.
 4. **Shoot CinemaDNG.** Nothing else to press, and nothing to do afterwards.
 
 Each take leaves both files Gyroflow wants inside the clip's own folder:
@@ -39,7 +39,7 @@ SIGMA fp, firmware **Ver.5.02** only.
 1. **解壓縮。** 需要的是兩個檔案：`AutoRun.txt` 和 `VSHL.BIN`。
 2. **兩個都複製到 SD 卡根目錄** —— 最上層，不要放進資料夾，也不要跟其他版本的
    檔案混在一起。
-3. **插卡、開機。** 畫面上會跑進度條，等到顯示 `fpSup-Gyro-v1.11a!` 再開始錄。
+3. **插卡、開機。** 畫面上會跑進度條，等到顯示 `fpSup-Gyro-v1.11b!` 再開始錄。
 4. **開始錄 CinemaDNG。** 沒有別的按鈕要按，事後也不用做任何事。
 
 每一趟錄影都會把 Gyroflow 要的兩個檔案留在片段自己的資料夾裡：
@@ -58,8 +58,10 @@ RAM 裡跑的，拔電池一樣復原。
 
 僅適用 SIGMA fp 韌體 **Ver.5.02**。
 
-Previous releases: [v1.10a](fp-gyro-sup-v1.10a.zip) (**do not use** -- see
-below), [v1.4](fp-gyro-sup-v1.4.zip) (the same two sidecars, but the
+Previous releases: [v1.11a](fp-gyro-sup-v1.11a.zip) (loses both sidecars for a
+whole session if an SSD was plugged in before the camera was switched on),
+[v1.10a](fp-gyro-sup-v1.10a.zip) (**do not use** -- see below),
+[v1.4](fp-gyro-sup-v1.4.zip) (the same two sidecars, but the
 log is decimated to 1250 Hz), [v1.3](fp-gyro-sup-v1.3.zip) (lens profile carries
 no distortion), [v1.2](fp-gyro-sup-v1.2.zip) (portrait takes need Gyroflow talked
 round by hand) and [v1.1](fp-gyro-sup-v1.1.zip) (GYR + post-processing; still the
@@ -67,7 +69,7 @@ only one that does anything for MOV).
 
 ### Two editions
 
-|  | **fpGyroSup** v1.11a | **fpGyroSup Base** v1 |
+|  | **fpGyroSup** v1.11b | **fpGyroSup Base** v1 |
 |---|---|---|
 | The camera writes | `.gcsv` and `.json`, during the take, inside the clip's folder | `.GYR`, one per take |
 | Converting | nothing to do | [in a browser](https://ijigen.github.io/fpSup/gyro/web/), or `gyro/gyr7.py` |
@@ -76,7 +78,7 @@ only one that does anything for MOV).
 | Lens profile | the camera's own distortion data | you name the lens; distortion zero |
 | Portrait takes | recorded landscape upright | the orientation is in the header, and yours to apply |
 | USB SSD | untested | verified: log beside the clip on either disk |
-| Download | [fp-gyro-sup-v1.11a.zip](fp-gyro-sup-v1.11a.zip) | [fp-gyro-sup-base-v1.zip](fp-gyro-sup-base-v1.zip) |
+| Download | [fp-gyro-sup-v1.11b.zip](fp-gyro-sup-v1.11b.zip) | [fp-gyro-sup-base-v1.zip](fp-gyro-sup-base-v1.zip) |
 
 Neither writes anything for a MOV take. Use [v1.1](fp-gyro-sup-v1.1.zip) if you
 need a log from MOV.
@@ -103,7 +105,24 @@ camera writes both files Gyroflow needs into the clip's own folder:
 Pressing stop ends the take and nothing else: no lock, no wait, no
 post-processing, and no `.GYR` to convert.
 
-### What changed in v1.11a
+### What changed in v1.11b
+
+- **An external SSD plugged in before the camera is switched on no longer
+  costs you the whole session.** The loader reads `VSHL.BIN` from the volume
+  the camera is currently pointed at, and with an SSD attached that is the SSD
+  -- which has no `VSHL.BIN` on it. Nothing was loaded, so there was no logger
+  at all, and every take until the next reboot was missing both sidecars with
+  no sign that anything was wrong. It tries the card as well now. Attaching the
+  SSD after the banner was always fine, which is what made this look
+  intermittent for a day.
+
+- **The sidecars have somewhere to go when the clip has no folder.** They are
+  written beside the clip as before; if that cannot be opened they go to the
+  root of the same disk, and failing that to the root of the card. An HDMI
+  recorder writes nothing to a camera volume at all, and that last rung is what
+  gives the log somewhere to land.
+
+### What v1.11a brought, and still holds
 
 - **The second take after a warm restart works.** Switching the camera off at
   the power switch and on again does not clear its RAM, so v1.10a came back
@@ -174,7 +193,7 @@ frame size comes from the image files rather than from the `.gcsv` or the
 `.json`. Gyroflow tracks this as issue #1117, one of a family of rotation bugs
 that also affect ordinary video (#1115, plugins #38, ofx #48), all still open.
 
-### Not covered by v1.11a
+### Not covered by v1.11b
 
 - **MOV:** no sidecars. MOV records through a different path this build does not
   hook. Use [v1.1](fp-gyro-sup-v1.1.zip) if you need a log from MOV.
@@ -186,7 +205,7 @@ that also affect ordinary video (#1115, plugins #38, ofx #48), all still open.
 ### Build from source
 
 ```sh
-gyro/release_card.py gcsv v1.11a
+gyro/release_card.py gcsv v1.11b
 gyro/release_card.py base v1
 ```
 
@@ -290,7 +309,19 @@ SIGMA fp Ver.5.02, SD card, CinemaDNG 1920x1080 29.97p, LUMIX S 40/F2:
 
 按下停止只是結束錄影，沒有鎖、沒有等待、沒有後處理，也沒有 `.GYR` 要轉。
 
-### v1.11a 更新
+### v1.11b 更新
+
+- **開機前就插上外接 SSD,不再賠掉整個 session。** 載入器是從「相機目前指向
+  的那顆磁碟」讀 `VSHL.BIN` 的,而接著 SSD 時那顆就是 SSD —— 上面沒有
+  `VSHL.BIN`。於是什麼都沒載入,**記錄器根本沒上場**,直到下次重開為止每一趟
+  錄影都少了兩個 sidecar,而且相機沒有任何異狀。現在找不到就改從卡片讀。
+  開機之後才插 SSD 一直都是好的,這也是為什麼它看起來像間歇性故障。
+
+- **片段沒有資料夾時,sidecar 也有地方去。** 一樣優先寫在片段旁邊;開不了就寫
+  同一顆磁碟的根目錄,再不行就寫卡片的根目錄。HDMI 外錄時相機不會在任何一顆
+  磁碟上寫片段,最後那一段就是記錄檔唯一的去處。
+
+### v1.11a 帶來、現在仍然成立的
 
 - **暖重開之後的第二段錄影正常了。** 用電源開關關機再開並不會清掉相機的 RAM，
   所以 v1.10a 開機後會以為自己還握著上一次跟配置器要來的八塊緩衝區 —— 而配置器
@@ -343,7 +374,7 @@ F1.4 Art。上面那個壓縮檔與拍出以下素材的那張卡逐位元組相
 或 `.json`。Gyroflow 把它記在 issue #1117，同族的旋轉問題也出現在一般影片上
 （#1115、plugins #38、ofx #48），全都還開著。
 
-### v1.11a 未涵蓋
+### v1.11b 未涵蓋
 
 - **MOV：** 沒有 sidecar。MOV 走的是這一版沒有掛鉤的另一條錄影路徑；需要 MOV 的
   記錄檔請用 [v1.1](fp-gyro-sup-v1.1.zip)。
@@ -354,7 +385,7 @@ F1.4 Art。上面那個壓縮檔與拍出以下素材的那張卡逐位元組相
 ### 從原始碼建置
 
 ```sh
-gyro/release_card.py gcsv v1.11a
+gyro/release_card.py gcsv v1.11b
 gyro/release_card.py base v1
 ```
 

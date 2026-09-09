@@ -1,4 +1,4 @@
-fpGyroSup v1.11a -- SIGMA fp firmware Ver.5.02 only
+fpGyroSup v1.11b -- SIGMA fp firmware Ver.5.02 only
 
 Put AutoRun.txt and VSHL.BIN in the root of the SD card the camera boots
 from, and record CinemaDNG.  Nothing else: no folder to make, no file to

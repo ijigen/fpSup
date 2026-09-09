@@ -18,7 +18,7 @@
 # that has not run yet, so no stale instruction-cache line can shadow them.
 #
 # The screen reads fpSup[........]0 through fpSup[########]100 while this runs
-# and fpSup-Gyro-v1.11a! when it is done.  A bar that stops means the load stopped there.
+# and fpSup-Gyro-v1.11b! when it is done.  A bar that stops means the load stopped there.
 # ============================================================================
 
 # --- screen ------------------------------------------------------------------
@@ -81,29 +81,29 @@ display osd 1
 display text fpSup[##......]030
 display osd 1
 
-# --- loader @0xC072DE64..0xC072DF74, 272 bytes --------------
+# --- loader @0xC072DE64..0xC072DF94, 304 bytes --------------
 # Reads \VSHL.BIN and places what it says. The worker itself is in there.
 mem set 0xC072DE64 0xE92D4070
 mem set 0xC072DE68 0xE30CC6F9
 mem set 0xC072DE6C 0xE34CC01E
 mem set 0xC072DE70 0xE12FFF3C
 mem set 0xC072DE74 0xE1A04000
-mem set 0xC072DE78 0xE28F50E4
+mem set 0xC072DE78 0xE28F5F41
 mem set 0xC072DE7C 0xE5950000
 mem set 0xC072DE80 0xE304124C
 mem set 0xC072DE84 0xE3441E49
 mem set 0xC072DE88 0xE1500001
 mem set 0xC072DE8C 0x0A000007
 mem set 0xC072DE90 0xE5851000
-
-display text fpSup[###.....]040
-display osd 1
-display text fpSup[###.....]040
-display osd 1
-display text fpSup[###.....]040
-display osd 1
-
 mem set 0xC072DE94 0xE3000794
+
+display text fpSup[###.....]040
+display osd 1
+display text fpSup[###.....]040
+display osd 1
+display text fpSup[###.....]040
+display osd 1
+
 mem set 0xC072DE98 0xE34C000D
 mem set 0xC072DE9C 0xE3061FD7
 mem set 0xC072DEA0 0xE34F1A04
@@ -115,26 +115,29 @@ mem set 0xC072DEB4 0xE8BD8070
 mem set 0xC072DEB8 0xE92D41F0
 mem set 0xC072DEBC 0xE3070A7C
 mem set 0xC072DEC0 0xE34C0375
-
-display text fpSup[####....]050
-display osd 1
-display text fpSup[####....]050
-display osd 1
-display text fpSup[####....]050
-display osd 1
-
 mem set 0xC072DEC4 0xE5904000
 mem set 0xC072DEC8 0xE3070000
+
+display text fpSup[####....]050
+display osd 1
+display text fpSup[####....]050
+display osd 1
+display text fpSup[####....]050
+display osd 1
+
 mem set 0xC072DECC 0xE0845000
 mem set 0xC072DED0 0xE3080000
 mem set 0xC072DED4 0xE0846000
 mem set 0xC072DED8 0xEBF459DE
 mem set 0xC072DEDC 0xE3A01000
 mem set 0xC072DEE0 0xEBF459EC
-mem set 0xC072DEE4 0xE1A01000
-mem set 0xC072DEE8 0xE1A00005
-mem set 0xC072DEEC 0xEBF0DFE7
-mem set 0xC072DEF0 0xE1A00005
+mem set 0xC072DEE4 0xE1A07000
+mem set 0xC072DEE8 0xE1A01007
+mem set 0xC072DEEC 0xE1A00005
+mem set 0xC072DEF0 0xEBF0DFE6
+mem set 0xC072DEF4 0xE1A00005
+mem set 0xC072DEF8 0xE28F1088
+mem set 0xC072DEFC 0xE3A02001
 
 display text fpSup[#####...]060
 display osd 1
@@ -143,38 +146,40 @@ display osd 1
 display text fpSup[#####...]060
 display osd 1
 
-mem set 0xC072DEF4 0xE28F106C
-mem set 0xC072DEF8 0xE3A02001
-mem set 0xC072DEFC 0xEBF0E02B
-mem set 0xC072DF00 0xE3500000
-mem set 0xC072DF04 0x0A000007
-mem set 0xC072DF08 0xE1A00005
-mem set 0xC072DF0C 0xE1A01006
-mem set 0xC072DF10 0xE3002000
-mem set 0xC072DF14 0xE3402002
-mem set 0xC072DF18 0xE3A03000
-mem set 0xC072DF1C 0xEBF0E04F
-mem set 0xC072DF20 0xE1A00005
-
-display text fpSup[######..]070
-display osd 1
-display text fpSup[######..]070
-display osd 1
-display text fpSup[######..]070
-display osd 1
-
-mem set 0xC072DF24 0xEBF0E03D
+mem set 0xC072DF00 0xEBF0E02A
+mem set 0xC072DF04 0xE3500000
+mem set 0xC072DF08 0x1A000006
+mem set 0xC072DF0C 0xE1A00005
+mem set 0xC072DF10 0xE3A01002
+mem set 0xC072DF14 0xEBF0DFED
+mem set 0xC072DF18 0xE3570001
+mem set 0xC072DF1C 0x0A000017
+mem set 0xC072DF20 0xE3A07001
+mem set 0xC072DF24 0xEAFFFFEF
 mem set 0xC072DF28 0xE1A00005
-mem set 0xC072DF2C 0xE3A01002
-mem set 0xC072DF30 0xEBF0DFE6
-mem set 0xC072DF34 0xE5960000
-mem set 0xC072DF38 0xE3041256
-mem set 0xC072DF3C 0xE3441E49
-mem set 0xC072DF40 0xE1500001
-mem set 0xC072DF44 0x1A000005
-mem set 0xC072DF48 0xEBE38273
-mem set 0xC072DF4C 0xE5961004
-mem set 0xC072DF50 0xE0861181
+mem set 0xC072DF2C 0xE1A01006
+mem set 0xC072DF30 0xE3002000
+
+display text fpSup[######..]070
+display osd 1
+display text fpSup[######..]070
+display osd 1
+display text fpSup[######..]070
+display osd 1
+
+mem set 0xC072DF34 0xE3402002
+mem set 0xC072DF38 0xE3A03000
+mem set 0xC072DF3C 0xEBF0E047
+mem set 0xC072DF40 0xE1A00005
+mem set 0xC072DF44 0xEBF0E035
+mem set 0xC072DF48 0xE1A00005
+mem set 0xC072DF4C 0xE3A01002
+mem set 0xC072DF50 0xEBF0DFDE
+mem set 0xC072DF54 0xE5960000
+mem set 0xC072DF58 0xE3041256
+mem set 0xC072DF5C 0xE3441E49
+mem set 0xC072DF60 0xE1500001
+mem set 0xC072DF64 0x1A000005
 
 display text fpSup[######..]080
 display osd 1
@@ -183,14 +188,17 @@ display osd 1
 display text fpSup[######..]080
 display osd 1
 
-mem set 0xC072DF54 0xE2811010
-mem set 0xC072DF58 0xE1A00006
-mem set 0xC072DF5C 0xE12FFF31
-mem set 0xC072DF60 0xE8BD81F0
-mem set 0xC072DF64 0x00000000
-mem set 0xC072DF68 0x4853565C
-mem set 0xC072DF6C 0x49422E4C
-mem set 0xC072DF70 0x0000004E
+mem set 0xC072DF68 0xEBE3826B
+mem set 0xC072DF6C 0xE5961004
+mem set 0xC072DF70 0xE0861181
+mem set 0xC072DF74 0xE2811010
+mem set 0xC072DF78 0xE1A00006
+mem set 0xC072DF7C 0xE12FFF31
+mem set 0xC072DF80 0xE8BD81F0
+mem set 0xC072DF84 0x00000000
+mem set 0xC072DF88 0x4853565C
+mem set 0xC072DF8C 0x49422E4C
+mem set 0xC072DF90 0x0000004E
 
 display text fpSup[#######.]090
 display osd 1
@@ -208,11 +216,11 @@ mem set 0xC00D0794 0xEB1975B2
 display osd 1 0x00000000
 display osd 1 0x00000000
 display osd 1 0x00000000
-display text fpSup-Gyro-v1.11a!
+display text fpSup-Gyro-v1.11b!
 display osd 1
-display text fpSup-Gyro-v1.11a!
+display text fpSup-Gyro-v1.11b!
 display osd 1
-display text fpSup-Gyro-v1.11a!
+display text fpSup-Gyro-v1.11b!
 display osd 1
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
@@ -626,8 +634,4 @@ display osd 1
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
-# pad -- see PAD_TO: mode 7 overwrites but does not truncate
-# pad -- see PAD_TO: mode 7 overwrites but does not truncate
-# pad -- see PAD_TO: mode 7 overwrites but does not truncate
-# pad -- see PAD_TO: mode 7 overwrites but does not truncate
-########
+############
