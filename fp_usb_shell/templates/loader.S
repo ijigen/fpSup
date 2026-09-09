@@ -16,8 +16,8 @@
  * small that does the asking, and that is this: about ninety commands, and the
  * count no longer grows with what is being loaded.
  *
- * Runs in place of the worker's own bootstrap, from the same borrowed callback,
- * and after loading it does not start the worker in a new task -- it becomes
+ * Runs in place of the worker's own bootstrap, called once from the borrowed
+ * `echo` handler, and after loading it does not start the worker in a new task -- it becomes
  * the worker, by branching to the entry the file names. One task, and nothing
  * left parked with nowhere to return to.
  *
@@ -35,11 +35,7 @@
  * repair it with. That is the price of two files instead of one.
  * ========================================================================== */
 
-.equ CLAIM,       0x4E49424C    /* "LBIN" */
-
 .equ HOOK_SITE,   0xC00D0794
-.equ HOOK_ORIG,   0xFA046FD7
-.equ HOOK_TARGET, 0xC01EC6F9
 
 .equ FRAMEBUF,    0xC3757A7C    /* [0] = the DMA pool */
 .equ O_FOBJ,      0x7000        /* clear of the frame and capture buffers */
@@ -57,6 +53,7 @@
 
 .equ FN_CRETSK,   0xC0016A58
 .equ FN_STATSK,   0xC0016BC0
+.equ FN_DLYTSK,   0xC03705D8    /* dly_tsk(ms) -- yields; see sleeper.S */
 .equ VOL_SD,      1             /* FUN_c0444698: 1 = the card, 5 = an SSD */
 .equ TASK_PRIO,   28
 .equ TASK_STACK,  0x2000
@@ -84,37 +81,38 @@
 9:  .word 0xEB000000 + ((((\target) - (LOADER_BASE + (9b - _lstart)) - 8) >> 2) & 0xFFFFFF)
 .endm
 
-/* --- the hook site: run once, make a task, put the callback back ----------- */
+/* --- the borrowed echo handler: called once, by the AutoRun ----------------
+ *
+ * This used to sit in the gyro callback at 0xC00D0794, and everything odd about
+ * the block below was that address's doing: the site holds a BLX, so the first
+ * thing here had to be a call to the routine it displaced and a place to keep
+ * that routine's return value; the callback fires at 50-90 Hz, so a word had to
+ * be spent proving this had not already run; and because the file read takes
+ * longer than the gap between two callbacks, the firmware's word had to go back
+ * before the read rather than after it.  Three mechanisms, all of them paying
+ * for the choice of site rather than doing any work.
+ *
+ * The AutoRun cannot call -- but it can point the `echo` handler at an address,
+ * say `echo`, and put the handler back, which is what --boot-call has done for
+ * one-shot routines all along.  That gives this: called once because the
+ * AutoRun says so, in the shell dispatcher's own task where a file read is an
+ * ordinary thing to do, at a point in the boot the AutoRun chooses rather than
+ * whenever the IMU next ticks.
+ *
+ * The gyro callback is the logger's now, and only the logger's.
+ *
+ * Handler signature is (ctx, argc, argv) and [ctx] is a printf; nothing here
+ * uses it, and the return value is ignored, so this returns zero. */
 .global boot
 _lstart:
 boot:
-    push    {r4, r5, r6, lr}
-    LDA     r12, HOOK_TARGET
-    blx     r12
-    mov     r4, r0                      @ the displaced call's return value
-
-    /* Run once. The word is the loader's own, not a spare one in the worker's
-     * state block -- the first attempt borrowed 0xC072F03C, which the worker
-     * clears on every successful reply, so the guard was gone within a
-     * millisecond of the worker starting and a second callback would have run
-     * the whole thing again. */
-    adr     r5, claim
-    ldr     r0, [r5]
-    LDA     r1, CLAIM
-    cmp     r0, r1
-    beq     boot_done
-    str     r1, [r5]
-
-    LDA     r0, HOOK_SITE               @ and put the callback back straight
-    LDA     r1, HOOK_ORIG               @ away: the file read below takes long
-    str     r1, [r0]                    @ enough for this to fire again
+    push    {r4, r5, r6, lr}            @ an even count: the firmware LDRDs
 
 #ifdef NOTASK
-    /* No task. The read below happens inside the gyro callback, once, at boot,
-     * with nothing recording -- the only cost is that one drain of the sample
-     * ring arrives late, and the ring holds 240 ms. A task here would cost 26
-     * words of loader, which is 26 `mem set` commands the AutoRun has to spend
-     * before the camera is usable. */
+    /* No task. The read happens in the dispatcher's task, once, at boot, with
+     * nothing recording -- blocking is what this context is for. A task here
+     * would cost 26 words of loader, which is 26 `mem set` commands the AutoRun
+     * has to spend before the camera is usable. */
     bl      load
     b       boot_done
 #else
@@ -145,7 +143,7 @@ boot:
 #endif
 
 boot_done:
-    mov     r0, r4
+    mov     r0, #0
     pop     {r4, r5, r6, pc}
 
 /* --- the task: read the file, place what it says, become it ---------------- */
@@ -241,18 +239,23 @@ load_shut:
  * sits still instead. */
 load_stop:
 #ifdef HOOK_RESTORE
-    /* Hand the callback to the worker, now that everything is placed.
+    /* Hand the gyro callback to the worker, now that everything is placed.
      *
-     * The loader and the USB shell both start themselves from this one word,
-     * and for a long time that meant a card could have a logger or a shell but
-     * never both -- the loader's branch was the one written, so the worker sat
-     * at its address with nothing ever calling it.  A card that records and
-     * cannot be asked anything is exactly the card you want when a fault only
-     * happens on a card.
+     * This is the shell's last remaining use of that word, and it is a real
+     * one: on a card the file names gsup_entry as its entry, so stage2 comes
+     * back here rather than becoming the worker, and something has to start
+     * the worker afterwards.  A card that records and cannot be asked anything
+     * is exactly the card you want when a fault only happens on a card.
      *
-     * Here, not at the early restore above: the worker must not start while
-     * the file is still being read.  Both exits pass through, so a load that
-     * placed nothing still leaves a shell to find out why with. */
+     * It used to be a conflict as well -- the loader started from this same
+     * word, so a card could have a logger or a shell but never both, and this
+     * store was the truce.  The loader starts from `echo` now, so what is left
+     * here is only the worker.
+     *
+     * Placed here rather than earlier: the worker must not start while the
+     * file is still being read.  Note stage2 reaches this only when it returns;
+     * a file whose entry never comes back (the shell-only build, where the
+     * entry is the worker's own serve loop) does not need it to. */
     LDA     r0, HOOK_SITE
     LDA     r1, HOOK_RESTORE
     str     r1, [r0]
@@ -260,11 +263,24 @@ load_stop:
 #ifdef NOTASK
     pop     {r4, r5, r6, r7, r8, pc}
 #else
-1:  b       1b
+    /* Sleep, do not spin.  A task entry cannot return -- tk_ext_tsk is not in
+     * the syscall table -- so this task has to stay somewhere, and where it
+     * stayed was `b .`, at priority 28.
+     *
+     * The worker's task is priority 28 as well, and TK-OS does not preempt
+     * between equals: a spinning 28 means the worker is created, started, and
+     * never scheduled.  Everything looked right from outside -- the card boots,
+     * the banner draws, the descriptors are patched, the device enumerates --
+     * and every command timed out with `frame0 moved=0/64`, because the task
+     * that would have answered had never run an instruction.
+     *
+     * sleeper.S has said exactly this since it was written ("a task that spins
+     * would burn a core at priority 28 for the life of the camera, so it sleeps
+     * instead"); it was simply never wired into this path. */
+1:  mov     r0, #1000
+    CALL    FN_DLYTSK
+    b       1b
 #endif
-
-claim:
-    .word   0
 
 path:
     .asciz  "\\VSHL.BIN"

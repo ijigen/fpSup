@@ -33,10 +33,11 @@ ap.add_argument('--boot-call', action='append', default=[], metavar='ADDR:SRC',
                      'echo handler; for work the AutoRun cannot express, like '
                      'reading a file into memory')
 ap.add_argument('--no-ep-patches', action='store_true',
-                help='keep the shell but leave the USB descriptors alone.  The '
-                     'seven patches exist for hook-push on EP 0x83, which a '
-                     'card never does; a card that only needs to be asked '
-                     'questions does not need them')
+                help='leave EP 0x83 alone.  Those six patches exist for '
+                     'hook-push, which a card never does.  The interface-class '
+                     'patch is NOT one of them and is applied whenever the '
+                     'shell is in: it is what stops the host PTP stack taking '
+                     'interface 0, and without it the shell cannot be reached')
 ap.add_argument('--banner', default='fpSup!',
                 help='what the screen reads when the load is done.  The bar is '
                      '19 characters wide and the surface is wiped before this '
@@ -79,7 +80,7 @@ ECHO_SLOT = 0xC0BAC2F8  # command table entry 17, echo's handler pointer
 ECHO_ORIG = 0xC03D99A0
 HOOK   = 0xC00D0794   # gyro callback, borrowed once to create the task
 
-from patches import PATCHES, SCREEN, BAR_WIDTH
+from patches import IFACE, PUSH, SCREEN, BAR_WIDTH
 
 # The on-screen readout.  `display text` draws into the OSD surface and
 # `display osd 1` composites it; with a colour argument it fills the layer
@@ -179,6 +180,7 @@ for addr, value, why in SCREEN:
 w("")
 progress(out, 0)
 w("")
+fw_patches = []
 if args.no_shell:
     w("# --- no shell ----------------------------------------------------------------")
     w("# The endpoint patches and the worker's state block are the USB shell's, and")
@@ -187,7 +189,13 @@ if args.no_shell:
     w("# worker: the loader reads the file from the callback and returns.")
 else:
     w("# --- patches -----------------------------------------------------------------")
-    for patch in ([] if args.no_ep_patches else PATCHES):
+    # The interface patch travels with the shell, not with hook-push: without it
+    # the interface still says PTP, the host's own PTP stack claims interface 0
+    # first, and every command comes back LIBUSB_ERROR_ACCESS.  A card that
+    # carries a shell you cannot talk to is not a debug card.
+    fw_patches = ([] if args.no_shell else IFACE) + \
+                 ([] if args.no_ep_patches else PUSH)
+    for patch in fw_patches:
         addr, value, *why = patch
         for line in why:
             w(f"# {line}")
@@ -283,10 +291,30 @@ if args.loader:
         progress(out, 30 + round((c + 1) * 60 / CHUNKS))
         w("")
 
-w("# --- start the worker --------------------------------------------------------")
-w("# A one-shot branch from the gyro callback: bootstrap calls the routine it")
-w("# displaced, creates the task, and restores this word.")
-w(f"mem set 0x{HOOK:08X} 0x{hook_bl:08X}")
+w("# --- start ------------------------------------------------------------------")
+if args.loader:
+    # Borrow the echo handler, the way --boot-call does. The loader used to be
+    # reached from the gyro callback, which cost it three mechanisms that did no
+    # work: a call to the routine that site displaces, a word proving it had not
+    # already run at 50-90 Hz, and putting the firmware's word back before the
+    # file read rather than after. None of them survive the move.
+    #
+    # It also removes a race this file used to warn about in --boot-call's own
+    # comment: the loader fired "whenever it likes", so anything it needed had
+    # to be spelled out before it, not merely before the command that runs it.
+    # Called from `echo`, it runs where the AutoRun says and nowhere else.
+    w("# The loader runs here, once, in the shell dispatcher's task -- where a file")
+    w("# read is an ordinary thing to do. The gyro callback is the logger's alone.")
+    w(f"mem set 0x{ECHO_SLOT:08X} 0x{lboot:08X}")
+    w("echo")
+    for _ in range(3):
+        # `mem set` drops commands, and a handler left pointing at the loader
+        # turns the next `echo` into a branch into it.
+        w(f"mem set 0x{ECHO_SLOT:08X} 0x{ECHO_ORIG:08X}")
+else:
+    w("# A one-shot branch from the gyro callback: bootstrap calls the routine it")
+    w("# displaced, creates the task, and restores this word.")
+    w(f"mem set 0x{HOOK:08X} 0x{hook_bl:08X}")
 w("")
 if args.payload and not args.loader:
     if not args.entry:
@@ -419,8 +447,15 @@ if args.loader:
     # Padded to a fixed size for the same reason AutoRun.txt is: putfile writes
     # over USB and cannot shorten a file, so a smaller binary would leave the
     # tail of the last one behind.  Thirty-two kilobytes because an edition that
-    # carries its own writer needs more than eight, and the loader reads up to
-    # MAXLEN (128 KB) into pool+0x8000, which is clear until pool+0x42000.
+    # carries its own writer needs more than eight.
+    #
+    # The ceiling is the pool, not this number: the loader reads up to MAXLEN
+    # (0x20000) into pool+0x8000, so pool+0x7000..0x28000 is spoken for while
+    # stage2 runs -- it executes from that buffer and reads the other sections
+    # out of it.  The first pool user above it is the writer blob at 0x44000.
+    # build_base_card.check() derives the window from loader.S and refuses a
+    # pool-relative section that lands in it; an earlier comment here put the
+    # edge at 0x42000, which was neither the buffer's end nor the blob's start.
     BIN_PAD = 32768
     if len(binblob) > BIN_PAD:
         sys.exit(f'binary is {len(binblob)} bytes, past the {BIN_PAD} it pads to')
@@ -455,7 +490,9 @@ if args.no_shell:
     print("worker : none -- no task either, the loader runs in the callback")
 else:
     print(f"worker : {len(code)} bytes, {len(words)} words, 0x{LOAD:08X}..0x{end:08X}")
-print(f"start  : 0x{HOOK:08X} = 0x{hook_bl:08X} -> 0x{LOAD:08X}")
+print(f"start  : echo handler 0x{ECHO_SLOT:08X} -> 0x{lboot:08X} (loader)"
+      if args.loader else
+      f"start  : 0x{HOOK:08X} = 0x{hook_bl:08X} -> 0x{LOAD:08X}")
 if args.payload:
     # In loader mode the payload is a section of the binary, not a run of `mem
     # set`, so the sizes come from there rather than from the emitting branch.
@@ -465,8 +502,14 @@ if args.payload:
     print(f"payload: {psrc.name}, {len(pcode)} bytes, 0x{args.payload_addr:08X}.."
           f"0x{args.payload_addr + len(pcode):08X}, entry 0x{pentry:08X}"
           + (" (armed by the binary's last section)" if args.loader else ""))
-print(f"patches: {0 if args.no_shell or args.no_ep_patches else len(PATCHES)} endpoint, {len(SCREEN)} screen")
-print(f"wrote  : {DEST_DEFAULT.relative_to(HERE)}  {len(out)} lines  "
+# Counted from the list that was actually emitted, not recomputed from the
+# flags -- the old line recomputed, and said "0 endpoint" for builds that wrote
+# seven of them.  A summary that can disagree with the file is worse than none.
+print(f"patches: {len(fw_patches) if not args.no_shell else 0} firmware "
+      f"({'iface' if not args.no_shell else '-'}"
+      f"{'+push' if not args.no_shell and not args.no_ep_patches else ''}), "
+      f"{len(SCREEN)} screen")
+print(f"wrote  : {DEST}  {len(out)} lines  "
       f"sha256={hashlib.sha256(text.encode()).hexdigest()[:16]}")
 commands = [l for l in out if l and not l.startswith('#')]
 for bad in ("mem save", "ctrl sleep", "display colorbar"):
