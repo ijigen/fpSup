@@ -85,6 +85,52 @@ Verification matters *more* there — a lost chunk is a 240-byte hole.
 
 Freshly written code is data to the caches until `0xC000E91C` runs.
 
+## Reading the wrong thing and believing it
+
+Neither of these fails loudly. Both cost a wrong conclusion that survived
+several readings.
+
+**A pointer chain walked from the host is not a pointer chain.** Every `mem get`
+is a separate round trip, so two hops read two different moments. Walking
+`obj → *(obj+8) → *(that+4)` by hand gave `0x217808` — not an address at all —
+because `*(obj+8)` points into a buffer the firmware rotates between calls. The
+same walk done inside one payload returns `0xC375E654`, three runs identical.
+Reading it by hand produced a confident "the decompiler must be wrong about this
+struct", which was the opposite of true. **More than one hop: do the whole walk
+on the camera, in one routine, and copy the answer out.**
+
+**`mem set` into the firmware image region works.** `0xC0Bxxxxx` looks like ROM
+and is not: the sensor timing table at `0xC0B59500` and the mode picker's arrays
+at `0xC0BE5810` take writes and read back changed, and the camera's own
+`imager mode_list` reports the new values. There is no separate "patch the
+image" mechanism to look for. Read back anyway — trap 4 applies everywhere.
+
+## A probe that answers with a struct
+
+The recipe behind both of those. `shellcmd.S` gives task context, so the routine
+may call a firmware function that allocates — which is the whole difficulty with
+anything that builds a config object.
+
+```
+put(0xC072F800, code)              write, verified
+mem set 0xC0BAC2F8 → 0xC072F800    borrow echo's handler
+fpsh echo                          runs synchronously, in the dispatcher's task
+mem set 0xC0BAC2F8 → 0xC03D99A0    restore, in a `finally`
+mem get 0xC072FA00                 read what it left
+```
+
+Leave results at **`0xC072FA00`**, not `0xC072F700` — the parameter block is
+shared by every template (trap 5), and `0xC072FA00`–`0xC0730000` is free.
+`callfn.py` is the version of this for a function whose answer fits in `r0`;
+write a payload when you want a structure, several calls in one pass, or a
+pointer walk that must not be interrupted.
+
+Print one line back through `[r0]` so a run that did nothing is distinguishable
+from a command that never fired. Restoring the handler belongs in a `finally`:
+a handler left pointing into the cave is a command that jumps into whatever is
+injected there next.
+
+
 ## Two bases, and they are not the same
 
 This one cost two weeks of a red test suite reading like a real overrun:
@@ -384,6 +430,14 @@ Verified on the camera, shell-only card, 2026-09-09:
 - a hot swap, 0.5 s, byte for byte
 - `putfile`/`getfile` round trip, 3000 bytes identical, buffer from the
   firmware allocator and handed back
+
+Added 2026-09-10, same card:
+
+- a `shellcmd` probe borrowing `echo` — calls `FUN_c0436590` / `FUN_c04370e8` /
+  `FUN_c022edb0`, copies a 0xC0 byte struct to `0xC072FA00`, handler restored;
+  run four times, no residue
+- `mem set` into `0xC0B59500` and `0xC0BE5810` holds, and `imager mode_list`
+  reports the change
 
 **Not yet verified:** anything on the card path — the sleeper, `HOOK_RESTORE`,
 and whether the logger still records under the `echo` bootstrap. A shell-only

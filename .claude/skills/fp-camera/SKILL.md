@@ -81,7 +81,9 @@ understood.
   be wary of command families that change state (`movrec`, `rec`, `still`,
   `play`) and prefer reading them in the decompilation first. Read-only
   families have never done this: `setting`, `imager mode_list`, `help`,
-  `menu dump`.
+  `menu dump`. `menu <Setter>` **with no argument** reads and has been safe
+  across several dozen calls in one session; with an argument it changes camera state, so it
+  belongs with the state-changing families above.
 
 ## Deploying over USB (RAM — dies on power off)
 
@@ -130,8 +132,20 @@ families. The ones that keep earning their keep:
 
 - `imager mode_now` / `imager mode_list` — the sensor's own mode table, names
   and all. Better than anything derived from the firmware image.
-- `setting` — 178 named parameters; `setting get/set <name>`. Note `setting
-  get` reads a **mirror** that is empty until `setting readcam`.
+- `setting` — 178 named parameters; `setting get/set <name>`. The mirror it
+  reads answered live values with no `setting readcam` first (2026-09-10), so
+  "empty until readcam" is not always true. **`setting set` is the trap:** it
+  writes only that mirror. `cam_movie_imagesize.h` accepted 3840 and read back
+  3840 while the master settings block stayed 1920 — a set that reads back
+  correctly and changed nothing. Check the thing you meant to move, not the
+  parameter.
+- `menu <SetterName>` **with no argument is a getter** — it prints the current
+  value; with one it sets. Both forms go through the property system, and the
+  getter tracks what the setter last wrote. The size/format cluster is
+  `SetCropMode`, `SetStillImageSize`, `SetAspectRatio`, `SetMovRecFormat`,
+  `SetMovCinemaDNGQuality`, `SetMovQuality`, `SetMovRecSize`, `SetMovFramerate`,
+  `SetMovBiningSupport`. Unlike `setting set`, these **do** move the master
+  block — `menu SetMovRecSize` is the only path found so far that does.
 - `menu dump` — the UI's setting store as hex; diff it across a menu change to
   find the byte that moved.
 - `dir`, and `getfile.py <remote> <local> --size N` for anything on a card.
