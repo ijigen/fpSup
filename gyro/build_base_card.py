@@ -240,7 +240,7 @@ def main():
     banner = f'fpSup-{BANNER[a.edition]}-{a.version}!'
     cmd = [sys.executable, str(SHELL / 'build_autorun.py'),
            '--loader', '--banner', banner] + (
-               [] if a.debug else ['--no-shell']) + [
+               ['--no-ep-patches'] if a.debug else ['--no-shell']) + [
            '--vshl-entry', f'0x{ENTRY_AT:08X}',
            # A soft power cycle can leave a previous session's diagnostic patch
            # in the F_WRITE prologue.  Every ordinary image puts it back.

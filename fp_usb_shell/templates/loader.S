@@ -57,6 +57,7 @@
 
 .equ FN_CRETSK,   0xC0016A58
 .equ FN_STATSK,   0xC0016BC0
+.equ VOL_SD,      1             /* FUN_c0444698: 1 = the card, 5 = an SSD */
 .equ TASK_PRIO,   28
 .equ TASK_STACK,  0x2000
 
@@ -158,14 +159,30 @@ load:
     movw    r0, #O_BUF
     add     r6, r4, r0                  @ where the file lands
 
-    /* Keep the firmware's normal media-manager initialisation in the boot
-     * path.  Direct volume 1 is valid for F_CTOR, but skipping these calls was
-     * the only loader-side change in the first native test that froze at 90%.
-     * SSD boot routing will be reintroduced only after this known path passes. */
+    /* Keep the firmware's normal media-manager initialisation in the boot path:
+     * skipping these calls was the only loader-side change in the first native
+     * test that froze at 90%.
+     *
+     * But F_VOL names the volume the camera is CURRENTLY pointed at, and with
+     * an external SSD plugged in that is the SSD -- which does not have
+     * \VSHL.BIN on it.  The card boots, the AutoRun runs, the loader opens
+     * nothing, and the camera ends up with no logger at all: every take that
+     * session is missing its sidecars, with no sign that anything is wrong.
+     * With a shell in the build it is worse -- load_stop spins and the progress
+     * bar stops at 90.
+     *
+     * That is the whole of the "intermittent" SSD fault: an SSD attached BEFORE
+     * boot, every time; attached after the banner, never.  Reproduced on cold
+     * boots repeatedly.
+     *
+     * So: whatever F_VOL says first, then the card.  The card is where AutoRun
+     * was read from, so it is where VSHL.BIN is. */
     CALL    F_MGR
     mov     r1, #0
     CALL    F_VOL
-    mov     r1, r0
+    mov     r7, r0
+
+1:  mov     r1, r7
     mov     r0, r5
     CALL    F_CTOR
 
@@ -174,9 +191,19 @@ load:
     mov     r2, #1
     CALL    F_OPEN
     cmp     r0, #0
-    beq     load_shut
+    bne     2f
 
+    /* Give the object back before trying again: a file object left constructed
+     * after a failed open makes every later open fail too. */
     mov     r0, r5
+    mov     r1, #2
+    CALL    F_DTOR
+    cmp     r7, #VOL_SD
+    beq     load_stop                   @ that was the card: there is no file
+    mov     r7, #VOL_SD
+    b       1b
+
+2:  mov     r0, r5
     mov     r1, r6
     LDA     r2, MAXLEN
     mov     r3, #0
@@ -213,10 +240,27 @@ load_shut:
  * entry is undefined here -- tk_ext_tsk is not in the syscall table -- so it
  * sits still instead. */
 load_stop:
+#ifdef HOOK_RESTORE
+    /* Hand the callback to the worker, now that everything is placed.
+     *
+     * The loader and the USB shell both start themselves from this one word,
+     * and for a long time that meant a card could have a logger or a shell but
+     * never both -- the loader's branch was the one written, so the worker sat
+     * at its address with nothing ever calling it.  A card that records and
+     * cannot be asked anything is exactly the card you want when a fault only
+     * happens on a card.
+     *
+     * Here, not at the early restore above: the worker must not start while
+     * the file is still being read.  Both exits pass through, so a load that
+     * placed nothing still leaves a shell to find out why with. */
+    LDA     r0, HOOK_SITE
+    LDA     r1, HOOK_RESTORE
+    str     r1, [r0]
+#endif
 #ifdef NOTASK
     pop     {r4, r5, r6, r7, r8, pc}
 #else
-    b       load_stop
+1:  b       1b
 #endif
 
 claim:

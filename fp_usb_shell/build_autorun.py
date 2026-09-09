@@ -32,6 +32,11 @@ ap.add_argument('--boot-call', action='append', default=[], metavar='ADDR:SRC',
                 help='write this routine at ADDR and run it once, by borrowing the '
                      'echo handler; for work the AutoRun cannot express, like '
                      'reading a file into memory')
+ap.add_argument('--no-ep-patches', action='store_true',
+                help='keep the shell but leave the USB descriptors alone.  The '
+                     'seven patches exist for hook-push on EP 0x83, which a '
+                     'card never does; a card that only needs to be asked '
+                     'questions does not need them')
 ap.add_argument('--banner', default='fpSup!',
                 help='what the screen reads when the load is done.  The bar is '
                      '19 characters wide and the surface is wiped before this '
@@ -138,6 +143,7 @@ disp = (LOAD - (HOOK + 8)) >> 2
 if not -(1 << 23) <= disp < (1 << 23):
     raise SystemExit('bootstrap branch out of range')
 hook_bl = 0xEB000000 | (disp & 0xFFFFFF)
+WORKER_BL = hook_bl             # kept: --loader overwrites hook_bl with its own
 
 out = []
 w = out.append
@@ -181,7 +187,7 @@ if args.no_shell:
     w("# worker: the loader reads the file from the callback and returns.")
 else:
     w("# --- patches -----------------------------------------------------------------")
-    for patch in PATCHES:
+    for patch in ([] if args.no_ep_patches else PATCHES):
         addr, value, *why = patch
         for line in why:
             w(f"# {line}")
@@ -247,6 +253,11 @@ if args.loader:
     # CALL in the loader needs to know where the loader will be copied to,
     # because the assembler lays it out at zero.
     ldef = [f'LOADER_BASE={CAVE_LOW}'] + (['NOTASK=1'] if args.no_shell else [])
+    # With a shell in the build the loader hands the callback on to the worker
+    # when it is done, instead of putting the firmware's word back.  Only one
+    # of them can own that address, and until this the loader always won.
+    if not args.no_shell:
+        ldef.append(f'HOOK_RESTORE=0x{WORKER_BL:08X}')
     lcode = assemble(lsrc, ldef)
     lwords = to_words(lcode)
     # Not at LOAD. The loader's whole job is to write to LOAD, and putting it
@@ -454,7 +465,7 @@ if args.payload:
     print(f"payload: {psrc.name}, {len(pcode)} bytes, 0x{args.payload_addr:08X}.."
           f"0x{args.payload_addr + len(pcode):08X}, entry 0x{pentry:08X}"
           + (" (armed by the binary's last section)" if args.loader else ""))
-print(f"patches: {0 if args.no_shell else len(PATCHES)} endpoint, {len(SCREEN)} screen")
+print(f"patches: {0 if args.no_shell or args.no_ep_patches else len(PATCHES)} endpoint, {len(SCREEN)} screen")
 print(f"wrote  : {DEST_DEFAULT.relative_to(HERE)}  {len(out)} lines  "
       f"sha256={hashlib.sha256(text.encode()).hexdigest()[:16]}")
 commands = [l for l in out if l and not l.startswith('#')]
