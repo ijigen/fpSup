@@ -59,7 +59,32 @@ Two audiences, and the page is for the second one:
 Both languages, and keep the previous release listed with what it does wrong
 written next to it — people do find old links.
 
-## Push
+## Two remotes, and they are for different things
+
+| | | |
+|---|---|---|
+| `origin` | `git@github.com:ijigen/fpSup.git` | public. Serves the download links and Pages |
+| `local` | `git@git:bei/sigma_fp_re_usbshell.git` | Forgejo on `git.lan`, SSH key auth as `bei` |
+
+**Standing (the user's): every test build gets committed and pushed to
+`local`.** Not only releases -- a card that goes into the camera exists on the
+server before it is tested, so a result can be attached to a commit rather than
+to a working tree nobody else can see. This exists because the newest shell was
+local-only for weeks while the public tag stood at an older version.
+
+```sh
+git push local HEAD:main
+```
+
+Its history is unrelated to this repo's (it began as a separate USB-shell repo
+and its old `main` was `29d207e`, kept locally as `refs/remotes/probe/main`), so
+the first push was forced. Ordinary pushes after that.
+
+Commit the build **before** the card goes in, and say in the message what is
+verified and what is not -- "offline checks pass, untested on the camera" is a
+useful thing for a commit to say, and a later commit can say it ran.
+
+## Push a release
 
 ```sh
 git push origin <branch> && git push origin <branch>:main
