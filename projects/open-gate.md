@@ -1,0 +1,321 @@
+# open gate
+
+[English](#english) | [繁體中文](#繁體中文)
+
+Recording the sensor's full 3:2 area instead of the 16:9 window the camera crops to.
+**Status: the sensor side is solved and was never the obstacle. The output canvas is
+the wall, and it has one unfound conversion in it.**
+
+用感光元件完整的 3:2 面積錄影,而不是相機裁出來的 16:9 視窗。
+**狀態:感光元件那一側已解,而且從來就不是障礙。牆在輸出畫布,缺一個還沒找到的轉換。**
+
+---
+
+## English
+
+### What "open gate" means here
+
+The IMX410 is 6064×4042, 3:2. Every movie mode the camera will select is 16:9 —
+either 6064×3412 (1×1) or 3032×1708 (2×2 binning). Open gate means getting the
+full 4042 rows into a CinemaDNG.
+
+### The sensor side is done
+
+This was the surprise: the full-frame readout already exists, already runs, and
+is not what stops us.
+
+| | mode | readout | note |
+|---|---|---|---|
+| boot / live view | 3 | 6064×4042 1×1 @29.97 | **full 3:2, running at power-on** |
+| UHD CinemaDNG | 123 | 6064×3412 1×1 | full width, no downsampling |
+| FHD CinemaDNG | 106 | 3032×1708 2×2 | rolling shutter 10.556 ms |
+| 3K candidate | 117 | 3032×2012 2×2 @100 | **full width binning, not a centre crop** |
+| 6K candidate | 121 | 6064×4042 1×1 @24.9997 | full sensor |
+
+Measured, not read off a datasheet: the recording mode is recoverable after a take
+from `0xC343B590` (the sensor object's *previous* mode — `0xC343B588`+8). FHD read
+106, UHD read 123.
+
+**And the mode can be changed.** The picker `FUN_c0437078` resolves through
+`XC_LiveViewConfiguratorW71c1::v3` (`0xC043BE68`, vtable `0xC0BE44D0`+0x14) into one
+of three 26-entry tables — `0xC0BE5810` / `0xC0BE59B0` / `0xC0BE5B50`, sixteen bytes
+per entry, **`+0x08` is the sensor mode**. UHD 25p sits in the first entry of each.
+Patching all three (`0xC0BE5828` / `0xC0BE59C8` / `0xC0BE5B68`) to 121 made the probe
+answer 121 immediately, and a real take afterwards read **121** back — the camera
+recorded with a full-frame 6064×4042 1×1 readout.
+
+### The result that decides the shape of the problem
+
+**The field of view did not change.**
+
+Two independent checks, by numerical comparison — best scale 1.00, mean absolute
+difference 0.04:
+
+- UHD: mode 121 (6064×4042 3:2) against mode 123 (6064×3412 16:9) — identical framing
+- FHD: mode 3 (6064×4042 3:2) against mode 106 (3032×1708 16:9) — identical framing
+
+The ISP crops to the canvas aspect regardless of what the sensor hands it. And the
+live view was *seen* to widen mid-recording, so the wider data is genuinely in the
+pipe — only the recording branch throws it away.
+
+**So what is missing is the canvas, not the mode.** Every further attempt at the
+sensor is wasted effort.
+
+### The canvas: what is known and what is eliminated
+
+The recorded DNG dimensions are the settings block's `+0x00` / `+0x04` plus 16 and
+10. That block exists in three copies — master `*(0xC3075230)`, mirror `0xC3758B98`
+(what `setting get/set` edits), and CameraMgr `FUN_c0206e98()+0x40`. Writing a legal
+combination into **all three** and pressing record put all three back to 3840×2160.
+
+> **Settings are an output, not an input.** Four approaches were reversed this way,
+> including the last with a legal pair (6064×4042 + 25p).
+
+The load-bearing observation: **`+0x48` never changes** (FHD 0, UHD 4) and the
+geometry always agrees with it. `+0x48`, or whatever drives it, is upstream.
+
+Eliminated by patching and re-testing — none of these move the recorded size:
+
+| address | what it is | result |
+|---|---|---|
+| `0xC0B51044` | 14 rows `{w,h,fps_idx,x}` — the CINE menu list | height changed, DNG unchanged |
+| `0xC0BE4474` | 5 rows `{1920,1080,3840,2160,"UHD"}` | UHD height changed, master still 2160 |
+| `0xC096F580` | the CinemaDNG frame-size table (3856×2170 / 1936×1090 / 6064×4042 / 3968×2640) — the only one in the firmware | 2170→2570, DNG still 2170 |
+
+Found instead, by diffing `menu dump` (UI store `0xC31B32BC`, 2496 bytes) across a
+resolution change: **the UI enum is one byte at `0xC31B3A4C`** (2 = FHD, 3 = UHD).
+Writing it does not propagate; a menu action has to trigger the conversion.
+
+The menu command table is at `0xC0BBB5E8`, three words per entry `{name, help,
+handler}`:
+
+```
+SetMovRecSize     -> 0xC03FDAB0   with an argument: FUN_c005c020(0xC31AC530, v, 1)
+SetMovFramerate   -> 0xC03FDB20   property system, vtable slot +0x1A0
+SetMovBiningSupport -> 0xC03FDB90  boolean, currently 0, clamps to 1
+```
+
+`menu SetMovRecSize <n>` is the **one path that actually updates the master block** —
+everything written directly into RAM was downstream of it. But sweeping 0–7 gives
+only two answers: 2 → 1920×1080, everything else → 3840×2160 (and it sets the frame
+rate as a side effect: 3 → fps enum 3, else 4). There is no hidden 3:2 size.
+
+**So the enum → (width, height) conversion lives in an observer of the `+0x1A0`
+property on `0xC31AC530`, and that observer has not been located.** This is the next
+thing to find, and `menu SetMovRecSize` is a reliable trigger for it: set it and the
+conversion runs once, on demand.
+
+### Frame rate, and a correction
+
+The recording frame rate matches the sensor mode's exactly (FHD 29.97 ↔ mode 106's
+29.97; UHD 25 ↔ mode 123's 25.0). The movie frame rate is an enum;
+`FUN_c00c9bd0` (`0xC00C9BD0`) is its table:
+
+```
+1 = 23.976   2 = 24.000   3 = 25.000   4 = 29.970   6 = 48.000
+7 = 50.000   8 = 59.940   9 = 100.000  10 = 119.880
+```
+
+Against the two full-sensor modes:
+
+- **6064×4042 = mode 121 @ 24.9997** ≈ enum 3 (25p). Legal.
+- **3032×2012 = mode 117 @ 100** — enum 9 is 100.000. Also legal.
+
+> **Correction.** 3032×2012 was ruled out once on the grounds that its frame rate was
+> 99.9001 and matched no enum. That figure came from a CSV derived from the firmware
+> image; the camera's own `imager mode_list` says `042 MONIT1_100 / 0117 /
+> 3032x2012 / 100 fps / 3:2 full`. **3K open gate is not blocked by frame rate.** The
+> older note that concluded "the only legal combination is 121" predates this and
+> should not be relied on.
+
+The user reports 100 fps is not selectable on the SD card path — a separate
+constraint on the 3K route, not yet traced.
+
+### The 3K route is not cheaper
+
+The premise "do 3032×2012 first, it is a quarter of the data" is false, because the
+only frame rate that mode offers is four times higher:
+
+```
+6064×4042 × 12 bit × 25 fps   = 24,510,688 px  →  919 MB/s
+3032×2012 × 12 bit × 100 fps  =  6,100,384 px  →  915 MB/s
+```
+
+Within half a percent of each other. For scale, today's UHD CinemaDNG frame is
+3856×2170, which is 2.9× fewer pixels than the full sensor.
+
+**Open, not measured:** whether mode 117 can be *read* at 100 and *recorded* at 25.
+That would be 229 MB/s and is the only version of the 3K route that is actually
+cheaper. Nothing in the picker suggests readout rate and record rate can be
+decoupled, but nothing has been tried either.
+
+### Tools that make this cheap to work on
+
+- **Ask the picker without touching the camera.** `FUN_c0437078` is a pure function
+  of the settings. A stub that calls it with your *own* copy of the settings block
+  returns the whole settings→mode table with nothing recording. Verify a patch this
+  way before spending a take on it.
+- **`imager mode_list`** prints the camera's own 70-entry mode table — names, enum,
+  bit depth, size, fps, aspect, crop. More reliable than anything derived from the
+  image. **`imager mode_now`** for the current one.
+- **After a take, read `0xC343B590`** for the mode that was actually used.
+- **Per-mode geometry and timing at runtime**: `FUN_c0321028(obj, mode)` for the
+  geometry row (`+4` width, `+8` height), `FUN_c0320FC8` for timing (`+4` hmax).
+  Rolling shutter = hmax × height ÷ 72 µs.
+
+### Do not
+
+- **Do not hook `FUN_c03212e0`.** It runs ten times taking a photo with no trouble,
+  and freezes the camera the instant record is pressed. Cause never established.
+- One garbled UHD frame was seen once with a shell card attached over USB, and did
+  not reproduce on either of the next two attempts. **Not evidence.**
+
+### The next step
+
+Find the observer of the `+0x1A0` property on `0xC31AC530`. Everything else about
+this problem is either solved or eliminated.
+
+---
+
+## 繁體中文
+
+### 這裡的「Open Gate」指什麼
+
+IMX410 是 6064×4042、3:2。但相機會選的每一個動態模式都是 16:9 —— 不是 6064×3412
+(1×1)就是 3032×1708(2×2 binning)。Open Gate 就是把完整的 4042 列錄進 CinemaDNG。
+
+### 感光元件那一側已經解完了
+
+這是意外的部分:**全片幅讀出本來就存在、本來就在跑**,不是擋住我們的東西。
+
+| | 模式 | 讀出 | |
+|---|---|---|---|
+| 開機 / 即時取景 | 3 | 6064×4042 1×1 @29.97 | **完整 3:2,開機就在跑** |
+| UHD CinemaDNG | 123 | 6064×3412 1×1 | 全寬、不降採 |
+| FHD CinemaDNG | 106 | 3032×1708 2×2 | 捲簾 10.556 ms |
+| 3K 候選 | 117 | 3032×2012 2×2 @100 | **全寬 binning,不是中央裁切** |
+| 6K 候選 | 121 | 6064×4042 1×1 @24.9997 | 完整感光元件 |
+
+這些是量出來的,不是從規格書抄的:錄完之後讀 `0xC343B590`(感光元件物件
+`0xC343B588` 的 +8,存的是**前一個**模式)就拿得到。FHD 讀到 106,UHD 讀到 123。
+
+**而且模式改得動。** 選擇器 `FUN_c0437078` 經 `XC_LiveViewConfiguratorW71c1::v3`
+(`0xC043BE68`,vtable `0xC0BE44D0`+0x14)落到三張 26 筆的表之一 —— `0xC0BE5810` /
+`0xC0BE59B0` / `0xC0BE5B50`,每筆 16 位元組,**`+0x08` 就是感光元件模式**。UHD 25p
+在每張表的第一筆。三個都改成 121(`0xC0BE5828` / `0xC0BE59C8` / `0xC0BE5B68`)之後,
+探針立刻回 121,實錄一段之後讀回 **121** —— 相機真的用 6064×4042 1×1 全片幅讀出錄了。
+
+### 決定問題形狀的那個結果
+
+**視野沒有變。**
+
+兩次獨立驗證,數值比對 —— 最佳縮放 1.00、平均絕對差 0.04:
+
+- UHD:模式 121(6064×4042 3:2)對模式 123(6064×3412 16:9)—— 構圖完全相同
+- FHD:模式 3(6064×4042 3:2)對模式 106(3032×1708 16:9)—— 構圖完全相同
+
+不管感光元件交出什麼,ISP 都照畫布的長寬比裁。而且**使用者親眼看到即時預覽在錄影中
+變寬了**,所以更寬的資料確實流進了管線,只有錄影分支把它丟掉。
+
+**所以缺的是畫布,不是模式。** 再往感光元件那邊試都是白費力氣。
+
+### 畫布:已知的與已排除的
+
+錄下來的 DNG 尺寸 = 設定 block 的 `+0x00` / `+0x04` 再加 16 與 10。那個 block 有三份
+複本 —— 主本 `*(0xC3075230)`、鏡像 `0xC3758B98`(`setting get/set` 改的是這份)、
+CameraMgr `FUN_c0206e98()+0x40`。**三份同時**寫進合法組合再按錄影,三份全被改回
+3840×2160。
+
+> **設定是輸出,不是輸入。** 四種做法都這樣被刷回去,包括最後一次用合法組合
+> (6064×4042 + 25p)。
+
+關鍵觀察:**`+0x48` 從頭到尾沒變過**(FHD=0、UHD=4),而幾何永遠跟它一致。
+`+0x48`(或驅動它的東西)在更上游。
+
+改了再測、確定**不會**改變錄影尺寸的:
+
+| 位址 | 是什麼 | 結果 |
+|---|---|---|
+| `0xC0B51044` | 14 筆 `{w,h,fps_idx,x}`,CINE 選單清單 | 改了高度,DNG 不變 |
+| `0xC0BE4474` | 5 筆 `{1920,1080,3840,2160,"UHD"}` | 改了 UHD 高度,主設定仍 2160 |
+| `0xC096F580` | CinemaDNG 畫格尺寸表(3856×2170 / 1936×1090 / 6064×4042 / 3968×2640),全韌體唯一一處 | 2170→2570,DNG 仍 2170 |
+
+反過來找到的:用 `menu dump`(UI 設定區 `0xC31B32BC`,2496 bytes)在切換解析度前後
+逐位元組比對 —— **UI 的解析度列舉是 `0xC31B3A4C` 的單一位元組**(2 = FHD、3 = UHD)。
+直接寫它不會傳播,要有選單動作才觸發轉換。
+
+選單指令表在 `0xC0BBB5E8`,每筆三個字 `{名稱, 說明, 處理函式}`:
+
+```
+SetMovRecSize       -> 0xC03FDAB0   有參數時:FUN_c005c020(0xC31AC530, 值, 1)
+SetMovFramerate     -> 0xC03FDB20   都走屬性系統的 vtable slot +0x1A0
+SetMovBiningSupport -> 0xC03FDB90   布林,現值 0,給 2 會夾成 1
+```
+
+`menu SetMovRecSize <n>` 是**唯一真的會更新主設定的路徑** —— 我們之前直接寫 RAM 都
+在它下游。但掃過 0–7 只有兩個結果:2 → 1920×1080,其餘 → 3840×2160(順帶決定幀率:
+3 → fps 列舉 3,其餘 → 4)。**沒有藏起來的 3:2 尺寸。**
+
+**所以列舉 →(寬,高)的轉換在 `0xC31AC530` 那個 `+0x1A0` 屬性的某個觀察者裡,
+而那個觀察者還沒被定位。** 這是下一件要找的事,而 `menu SetMovRecSize` 是個可靠的
+觸發器:設一次它就跑一次。
+
+### 幀率,以及一個訂正
+
+錄影幀率跟感光元件模式的幀率是**精確匹配**的(FHD 29.97 ↔ 模式 106 的 29.97;
+UHD 25 ↔ 模式 123 的 25.0)。動態幀率是列舉,`FUN_c00c9bd0`(`0xC00C9BD0`)就是它的表:
+
+```
+1 = 23.976   2 = 24.000   3 = 25.000   4 = 29.970   6 = 48.000
+7 = 50.000   8 = 59.940   9 = 100.000  10 = 119.880
+```
+
+對到兩個覆蓋全感光元件的模式:
+
+- **6064×4042 = 模式 121 @ 24.9997** ≈ 列舉 3(25p)。合法。
+- **3032×2012 = 模式 117 @ 100** —— 列舉 9 就是 100.000。也合法。
+
+> **訂正。** 3032×2012 曾經被判出局,理由是它的幀率 99.9001 配不上任何列舉。那個數字
+> 來自從韌體影像推出來的 CSV;**相機自己的 `imager mode_list` 寫的是**
+> `042 MONIT1_100 / 0117 / 3032x2012 / 100 fps / 3:2 full`。**3K Open Gate 沒有被幀率
+> 封死。** 舊筆記裡「唯一合法的組合是 121」那句寫在這個訂正之前,不要再引用。
+
+使用者回報 SD 卡路徑下選不到 100 fps —— 那是 3K 路線上另一道限制,還沒追。
+
+### 3K 那條路並沒有比較便宜
+
+「先做 3032×2012,資料量只有四分之一」這個前提是錯的,因為那個模式唯一提供的幀率
+高了四倍:
+
+```
+6064×4042 × 12 bit × 25 fps   = 24,510,688 px  →  919 MB/s
+3032×2012 × 12 bit × 100 fps  =  6,100,384 px  →  915 MB/s
+```
+
+兩者相差不到半個百分點。對照:現在 UHD CinemaDNG 的畫格是 3856×2170,像素數是全感光
+元件的 1/2.9。
+
+**沒量過、還開著的:** 模式 117 能不能**以 100 讀出、以 25 錄下**。那會是 229 MB/s,
+是 3K 路線唯一真的比較便宜的版本。選擇器裡沒有任何跡象顯示讀出率與記錄率可以脫鉤,
+但也從來沒有試過。
+
+### 讓這件事變便宜的工具
+
+- **不碰相機就能問選擇器。** `FUN_c0437078` 是設定的純函式。寫一段 stub,用**自己準備
+  的一份設定副本**呼叫它,就能在完全不錄影的情況下把整張「設定 → 模式」表問出來。
+  任何補丁先這樣驗,回傳對了再去花一段錄影。
+- **`imager mode_list`** 會印相機自己的 70 筆模式表(名稱、列舉、位元深度、尺寸、fps、
+  長寬比、crop),比從影像推的可靠。**`imager mode_now`** 印目前的。
+- **錄完讀 `0xC343B590`** 就知道剛才用的是哪個模式。
+- **執行期查每個模式的幾何與時序**:`FUN_c0321028(obj, mode)` 幾何列(`+4` 寬、
+  `+8` 高)、`FUN_c0320FC8` 時序列(`+4` hmax)。捲簾 = hmax × 高 ÷ 72 µs。
+
+### 不要做的
+
+- **不要在 `FUN_c03212e0` 掛 hook。** 拍照時它跑十次都沒事,但**按下錄影的瞬間相機
+  凍結**。原因從來沒查明。
+- 用 shell 卡、USB 連著錄 UHD 時出現過**一次**花屏,之後兩次都乾淨。**那不是證據。**
+
+### 下一步
+
+找出 `0xC31AC530` 的 `+0x1A0` 屬性有誰在觀察。這個問題其他部分不是已解就是已排除。
