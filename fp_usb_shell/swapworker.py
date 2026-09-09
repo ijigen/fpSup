@@ -28,8 +28,11 @@ from armasm import assemble, symbols
 from putfile import sh, mem_set, mem_get, read_bulk, HERE
 
 SWAP_MAGIC, SWAP_ADDR = 0xC072F044, 0xC072F048
+HOOK = 0xC00D0794
+
 SWAP_WORD = 0x50415753          # "SWAP"
 CAVE_LOW, LOAD = 0xC072DE64, 0xC072F050
+WORKER_BL = 0xEB000000 | (((LOAD - HOOK - 8) >> 2) & 0xFFFFFF)
 
 
 def main():
@@ -38,12 +41,25 @@ def main():
     if not binpath.exists():
         raise SystemExit('build it first: python3 build_autorun.py --loader')
 
+    force = '--force' in sys.argv
     live = read_bulk(LOAD, len(worker), 'before')
-    if live == worker:
+    if live == worker and not force:
         print('  the worker in memory is already this one; nothing to swap')
+        print('  (--force swaps anyway -- the only way to exercise this path'
+              ' when the source has not changed)')
         return 0
 
-    where = CAVE_LOW + symbols(HERE / 'templates' / 'loader.S')['load']
+    # The same defines build_autorun.py uses for a build that carries the shell.
+    # Without LOADER_BASE the CALL macro cannot fold its offsets and loader.S
+    # will not assemble at all -- which is what this line did for however long
+    # it has been here, unnoticed, because it sits after the early return above
+    # and only runs when worker.S has actually changed.
+    #
+    # They also have to be the *right* defines: NOTASK and HOOK_RESTORE change
+    # the size of `boot`, and `load` sits after it. A swap that jumps to the
+    # wrong offset lands in the middle of the loader.
+    ldef = (f'LOADER_BASE={CAVE_LOW}', f'HOOK_RESTORE=0x{WORKER_BL:08X}')
+    where = CAVE_LOW + symbols(HERE / 'templates' / 'loader.S', ldef)['load']
     print(f'  loader load at 0x{where:08X}')
 
     # Address first, magic second. The worker checks the magic and only then
