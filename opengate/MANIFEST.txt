@@ -10,6 +10,7 @@ mode=117 size=3032x2012 fps=29.97003
 recording preset=FHD 29.97 CinemaDNG
 causal_data_patches=8; downstream movie/still size tables omitted
 diagnostic_hooks=none
-USB while active=direct mem get/set only; never getfile/putfile/inject/callfn
+USB=idle pre-record direct mem get only; disconnect before recording
+never=getfile/putfile/inject/callfn while hook is active
 capture retrieval=fully power off, then use a card reader
 restore=remove or rename AutoRun.txt, then fully power-cycle

@@ -3,11 +3,23 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Recording the sensor's full 3:2 area instead of the 16:9 window the camera crops to.
-**Status: the sensor side is solved and was never the obstacle. The output canvas is
-the wall, and it has one unfound conversion in it.**
+**Status, 2026-09-10: the `0xC043A19C` hook now produces a correct 3032×2012 DNG
+envelope, header, and allocation. The last recorded test still carried about
+1936×1288 of valid content in its upper-left. Changing the four profile-122 RWZM
+cells to unity changes the hardware policy; the next test is whether that makes
+the Bayer producer fill the envelope. See [`fpsup-opengate-test`](../opengate/).**
+
+The test has no menu yet and temporarily occupies CinemaDNG 12-bit FHD 29.97p.
+Live view flickers, and in-camera playback does not display the result correctly.
 
 用感光元件完整的 3:2 面積錄影,而不是相機裁出來的 16:9 視窗。
-**狀態:感光元件那一側已解,而且從來就不是障礙。牆在輸出畫布,缺一個還沒找到的轉換。**
+**狀態,2026-09-10:`0xC043A19C` hook 已產生正確的 3032×2012 DNG envelope、檔頭與
+配置;上一個實錄檔的有效內容仍只有左上角約 1936×1288。把 profile 122 的四個 RWZM
+值改成 unity 已使硬體 policy 切換;下一個測試是 Bayer producer 是否因此填滿整個
+envelope。見 [`fpsup-opengate-test`](../opengate/)。**
+
+目前沒有獨立選單,暫時寄生在 CinemaDNG 12-bit FHD 29.97p。live view 會閃爍,
+機身回放也無法正常顯示結果。
 
 ---
 
@@ -128,13 +140,11 @@ sensor is wasted effort.
 > shipping sizes and nothing reads the block to get there. **The whole settings
 > block is eliminated.** See `notes/CANVAS_IS_NOT_THE_SETTINGS_BLOCK.md`.
 
-The recorded DNG dimensions are the settings block's `+0x00` / `+0x04` plus 16 and
-10. That block exists in three copies — master `*(0xC3075230)`, mirror `0xC3758B98`
-(what `setting get/set` edits), and CameraMgr `FUN_c0206e98()+0x40`. Writing a legal
-combination into **all three** and pressing record put all three back to 3840×2160.
-
-> **Settings are an output, not an input.** Four approaches were reversed this way,
-> including the last with a legal pair (6064×4042 + 25p).
+An early correlation suggested that the recorded dimensions were the settings
+block's `+0x00` / `+0x04` plus 16 and 10. Testing eliminated it. The block has three
+copies — master `*(0xC3075230)`, mirror `0xC3758B98` (what `setting get/set` edits),
+and CameraMgr `FUN_c0206e98()+0x40`. Even when all three held 3032×2012 through a
+take, the DNG stayed 1936×1090. **Settings are an output, not the canvas input.**
 
 > **Corrected 2026-09-10.** This section used to name `+0x48` as the load-bearing
 > observation — "it never changes (FHD 0, UHD 4) and the geometry always agrees
@@ -171,10 +181,10 @@ everything written directly into RAM was downstream of it. But sweeping 0–7 gi
 only two answers: 2 → 1920×1080, everything else → 3840×2160 (and it sets the frame
 rate as a side effect: 3 → fps enum 3, else 4). There is no hidden 3:2 size.
 
-**So the enum → (width, height) conversion lives in an observer of the `+0x1A0`
-property on `0xC31AC530`, and that observer has not been located.** This is the next
-thing to find, and `menu SetMovRecSize` is a reliable trigger for it: set it and the
-conversion runs once, on demand.
+Later tracing found the enum → (width, height) conversion in
+`MenuItemMovieRecSize` metadata at `0xC0742204` / `0xC0742228`. Patching it moves
+the master settings block through record start, but not the DNG. This entire
+settings path is downstream of the canvas and no longer an open lead.
 
 ### Frame rate, and a correction
 
@@ -248,36 +258,21 @@ measurement — and the camera can be asked directly, in one call, with nothing
 recording: `FUN_c0320FC8(obj, 121)` for hmax, `FUN_c0321028(obj, 121)` for the
 height. **Ask before designing around a guess.**
 
-### The second lead, and the experiment that would settle +0x48
+### Retired leads
 
-Two threads were left open before the canvas became the obvious target, and
-neither is dead:
+Two earlier leads are closed. Message `+0x1c` belongs to the sensor-mode side,
+which is solved. The claim that settings `+0x48` tracked FHD/UHD came from a
+comparison confounded by frame rate: `+0x48` is 0 in both, while `+0x08` follows
+frame rate. A controlled FHD/UHD comparison at the same frame rate found no
+hidden resolution field. Neither lead determines the DNG canvas or the remaining
+producer shape.
 
-**Who fills message `+0x1c` with 123?** The chain above ends at
-`ContSet_Adr1`: `if (*(param_2+0x1c) != *request) SetImgMode_s(request,
-*(param_2+0x1c))`. During recording that descriptor is built by the movie
-recorder, so the question is what `movRec` (`0xC038A3E8`) /
-`MovRecFuncStateTHR` puts there. This is the mode side, which is solved, so it
-is only worth following if the canvas turns out to be chosen in the same place.
+### Superseded fallback
 
-**What drives `+0x48`?** It never moves, and the geometry always agrees with it,
-so it is upstream of everything we can write. Rather than guessing at another
-table: switch the menu to FHD, `setting read`, dump all 178 named parameters;
-switch to UHD, dump again; **diff**. Whatever changed is the source. This has
-not been run.
-
-`SetMovBiningSupport` (`0xC03FDB90`) is a boolean, currently 0, and clamps a 2
-to 1. It does nothing to the canvas or the mode while idle. It may only be
-consulted when the mode is chosen at record start — untested.
-
-### If the canvas cannot be moved
-
-The ISP crops to the canvas aspect, and the canvas is set by something we have
-not found. If it turns out to be unreachable, the alternative is not a better
-patch — it is not using the recording branch at all: take the Bayer data from
-the sensor path and write the container ourselves. That is `raw-sup.md`'s
-territory, and its own blocker (the compression throughput needed for UHD) is
-measured there. The two projects meet at that point.
+Before the canvas hook was found, the fallback was to bypass the recording branch,
+take Bayer data from the sensor path, and write a container independently. The
+`0xC043A19C` result makes that unnecessary for the current 3K test; it remains only
+historical context shared with `raw-sup.md`.
 
 ### Tools that make this cheap to work on
 
@@ -302,20 +297,18 @@ measured there. The two projects meet at that point.
 
 ### The next step
 
-> **Updated 2026-09-10. The observer was never needed, and the settings block is
-> out.** The enum -> (w,h) conversion is a table in the property's own metadata:
-> `MenuItemMovieRecSize` at `0xC0742204`, with enum 2 -> 1920×1080 and enum 3 ->
-> 3840×2160 at `0xC0742228`, and "Invalid MovSize" for everything else — which is
-> also why sweeping SetMovRecSize looked like it had two answers. Patch it and the
-> settings block follows, through record start.
->
-> And the DNG does not. So the question is no longer the canvas in the abstract:
-> **what writes `0xC37CE210`** — {1936, 1090, 3244544}, the triple whose third
-> word is the actual file size on the card. It is not the settings block, not the
-> CINE menu list, not `0xC0BE4474`, not `0xC096F580`.
+The canvas question is solved: one hook at `0xC043A19C` changes the real DNG
+allocation and header to 3032×2012. A two-column log then showed that the producer
+still supplied about 1936×1288 of valid pixels. The remaining live input was the
+profile-122 RWZM ratio: record/live H/V were all `0x640`.
 
-Find the observer of the `+0x1A0` property on `0xC31AC530`. Everything else about
-this problem is either solved or eliminated.
+Changing those four cells to unity (`0x400`) made the hardware path leave Hbin2,
+select Crmf, and disable RWZM. What has **not** yet been established is the final
+DNG content after that transition. Run [`fpsup-opengate-test`](../opengate/), record
+only a short take, and measure whether valid Bayer data now fills 3032×2012.
+
+Integration work remains after that result: remove live-view flicker, add a real
+menu instead of occupying FHD 29.97p, and restore in-camera playback.
 
 ---
 
@@ -422,13 +415,10 @@ FUN_c03212e0:  sensorObj+4 = 模式             (0xC343B58C)
 > 尺寸上剛好成立,沒有任何東西讀這個 block 去得到它。**整個設定 block 排除。**
 > 見 `notes/CANVAS_IS_NOT_THE_SETTINGS_BLOCK.md`。
 
-錄下來的 DNG 尺寸 = 設定 block 的 `+0x00` / `+0x04` 再加 16 與 10。那個 block 有三份
-複本 —— 主本 `*(0xC3075230)`、鏡像 `0xC3758B98`(`setting get/set` 改的是這份)、
-CameraMgr `FUN_c0206e98()+0x40`。**三份同時**寫進合法組合再按錄影,三份全被改回
-3840×2160。
-
-> **設定是輸出,不是輸入。** 四種做法都這樣被刷回去,包括最後一次用合法組合
-> (6064×4042 + 25p)。
+早期相關性曾讓人以為錄下來的 DNG 尺寸 = 設定 block 的 `+0x00` / `+0x04` 再加 16 與
+10;實測已排除。那個 block 有三份複本 —— 主本 `*(0xC3075230)`、鏡像
+`0xC3758B98`(`setting get/set` 改的是這份)、CameraMgr `FUN_c0206e98()+0x40`。
+三份在整段錄影中都維持 3032×2012 時,DNG 仍是 1936×1090。**設定是輸出,不是畫布輸入。**
 
 > **2026-09-10 訂正。** 這裡原本把 `+0x48` 當成關鍵觀察 ——「從頭到尾沒變過
 > (FHD=0、UHD=4),而幾何永遠跟它一致」。**實測 `+0x48` 在 FHD 和 UHD 都是 0。**
@@ -462,9 +452,9 @@ SetMovBiningSupport -> 0xC03FDB90   布林,現值 0,給 2 會夾成 1
 在它下游。但掃過 0–7 只有兩個結果:2 → 1920×1080,其餘 → 3840×2160(順帶決定幀率:
 3 → fps 列舉 3,其餘 → 4)。**沒有藏起來的 3:2 尺寸。**
 
-**所以列舉 →(寬,高)的轉換在 `0xC31AC530` 那個 `+0x1A0` 屬性的某個觀察者裡,
-而那個觀察者還沒被定位。** 這是下一件要找的事,而 `menu SetMovRecSize` 是個可靠的
-觸發器:設一次它就跑一次。
+後續已找到列舉 →(寬,高)的轉換:`MenuItemMovieRecSize` 的 metadata 位於
+`0xC0742204` / `0xC0742228`。改它會讓主設定 block 撐過 record start,但 DNG 不跟。
+因此整條設定路徑都在畫布下游,不再是未解線索。
 
 ### 幀率,以及一個訂正
 
@@ -530,29 +520,18 @@ UHD 25 ↔ 模式 123 的 25.0)。動態幀率是列舉,`FUN_c00c9bd0`(`0xC00C9B
 `FUN_c0320FC8(obj, 121)` 拿 hmax、`FUN_c0321028(obj, 121)` 拿高度。
 **先問再設計,不要照著猜出來的數字做。**
 
-### 第二條線索,以及能定案 +0x48 的那個實驗
+### 已關閉的線索
 
-在畫布成為明顯目標之前有兩條線被擱著,兩條都還沒死:
+早期兩條線索都已關閉。訊息 `+0x1c` 屬於已解的 sensor mode 路徑。設定 `+0x48`
+跟著 FHD/UHD 的說法來自混了幀率的比較:`+0x48` 在兩邊都是 0,實際變成 0/4 的
+`+0x08` 跟著幀率。同幀率的 FHD/UHD 對照沒有找到隱藏解析度欄位。兩者都不決定
+DNG 畫布或剩下的 producer 形狀。
 
-**誰把訊息 `+0x1c` 填成 123?** 上面那條鏈的終點是 `ContSet_Adr1`:
-`if (*(param_2+0x1c) != *request) SetImgMode_s(request, *(param_2+0x1c))`。
-錄影時那個描述元由電影錄影器建,所以問題是 `movRec`(`0xC038A3E8`)/
-`MovRecFuncStateTHR` 往裡面填了什麼。這是模式那一側,已經解了,所以只有在
-「畫布也是在同一個地方決定的」時才值得追。
+### 已被取代的備案
 
-**是什麼在驅動 `+0x48`?** 它從來不動,而幾何永遠跟它一致,所以它在我們能寫的
-一切之上游。與其再猜一張表:**選單切 FHD → `setting read` → 把 178 個具名參數
-全部 dump;切 UHD → 再 dump;逐項 diff。** 變了的那一項就是來源。這個還沒跑過。
-
-`SetMovBiningSupport`(`0xC03FDB90`)是布林,現值 0,給 2 會夾成 1。閒置時它不影響
-畫布也不影響模式。它可能只在錄影開始選模式的那一刻才被讀 —— 沒測過。
-
-### 如果畫布動不了
-
-ISP 照畫布的長寬比裁,而畫布由一個我們還沒找到的東西決定。萬一它真的碰不到,
-替代方案不是更好的補丁 —— 是**完全不走錄影分支**:從感光元件路徑把 Bayer 拿下來,
-容器自己寫。那是 `raw-sup.md` 的地盤,而它自己的瓶頸(UHD 需要的壓縮吞吐)也在那裡
-量過了。兩個專案在這一點會合。
+找到畫布 hook 之前,備案是完全繞過錄影分支,從感光元件路徑取得 Bayer 並自行寫容器。
+`0xC043A19C` 的結果讓目前 3K 測試不再需要這條路;它只保留為與 `raw-sup.md` 共用的
+歷史脈絡。
 
 ### 讓這件事變便宜的工具
 
@@ -573,15 +552,13 @@ ISP 照畫布的長寬比裁,而畫布由一個我們還沒找到的東西決定
 
 ### 下一步
 
-> **2026-09-10 更新。觀察者根本不需要找,而且設定 block 出局了。**
-> 「列舉 →(寬,高)」的轉換是一張表,就在屬性自己的中繼資料裡:
-> `MenuItemMovieRecSize` 在 `0xC0742204`,`0xC0742228` 起是
-> 列舉 2 → 1920×1080、列舉 3 → 3840×2160,其餘一律「Invalid MovSize」——
-> 這也解釋了為什麼掃 `SetMovRecSize` 看起來只有兩個答案。改它,設定 block 就跟著走,
-> 而且撐得過 record-start。
->
-> 但 DNG 不跟。所以問題不再是抽象的「畫布」,而是:
-> **是什麼寫 `0xC37CE210`** —— `{1936, 1090, 3244544}`,第三個字就是卡上的實際檔案大小。
-> 已知不是設定 block、不是 CINE 選單表、不是 `0xC0BE4474`、不是 `0xC096F580`。
+畫布問題已解:`0xC043A19C` 的單一 hook 會把真正的 DNG 配置與檔頭改成 3032×2012。
+兩欄 log 隨後證明 producer 仍只交出約 1936×1288 的有效像素。剩下的 live input 是
+profile 122 的 RWZM 比率:record/live 的 H/V 四格都是 `0x640`。
 
-找出 `0xC31AC530` 的 `+0x1A0` 屬性有誰在觀察。這個問題其他部分不是已解就是已排除。
+把四格改成 unity (`0x400`) 後,硬體路徑已離開 Hbin2、改選 Crmf 並停用 RWZM。
+**尚未定案的是這個切換之後的最終 DNG 內容。** 執行
+[`fpsup-opengate-test`](../opengate/),只錄一小段,量有效 Bayer 是否已填滿 3032×2012。
+
+結果確認之後仍有整合工作:消除 live view 閃爍、加入真正的選單而不是占用 FHD 29.97p,
+以及恢復機身回放。

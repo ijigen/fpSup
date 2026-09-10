@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Build a cold-boot USB-shell AutoRun for the 3032x2012 open-gate test.
 
-The output combines the current canonical fp USB shell with only the patches
-already verified on the live camera:
+The output combines the current canonical fp USB shell with the minimal patch
+set for the current hardware test:
 
 * mode 117 selected in all three FHD/29.97 picker tables;
 * mode 117 VMAX changed from 2184 to 7280 (29.97003 fps);
 * the proven C043A19C v4 canvas hook;
 * profile-122 record/live H/V RWZM cells changed from 0x640 to unity 0x400.
+
+The timing, picker, v4 envelope, and the RWZM-triggered hardware policy change
+have been observed live.  Whether the resulting Bayer content fills the complete
+3032x2012 envelope is the purpose of this test build, not a claimed result.
 
 The hook is emitted last.  No diagnostic hook is included.
 """
@@ -64,7 +68,7 @@ DIAGNOSTIC_HOOKS = (
     0xC01BE5E4,  # retired producer logger
 )
 
-# Minimal causal set proven by the live experiment.  The movie/still menu-size
+# Minimal test set supported by the live observations.  The movie/still menu-size
 # tables are intentionally absent: earlier tests proved that they are downstream
 # metadata/settings copies and do not control either the DNG canvas or producer.
 #
@@ -241,6 +245,8 @@ def validate_output(output: str, section: str, blob: bytes) -> None:
         raise SystemExit("open-gate hook must be armed exactly once")
     if output.find(hook_line) > output.find("# --- done "):
         raise SystemExit("open-gate hook is not armed before the done banner")
+    if parse_mem_sets(output)[-1] != (HOOK, HOOK_BRANCH):
+        raise SystemExit("open-gate hook must be the final mem set in AutoRun")
 
     prefix = output[:output.find(section)]
     for address, _ in parse_mem_sets(prefix):
@@ -348,7 +354,8 @@ def main() -> int:
         "recording preset=FHD 29.97 CinemaDNG",
         f"causal_data_patches={len(DATA_PATCHES)}; downstream movie/still size tables omitted",
         "diagnostic_hooks=none",
-        "USB while active=direct mem get/set only; never getfile/putfile/inject/callfn",
+        "USB=idle pre-record direct mem get only; disconnect before recording",
+        "never=getfile/putfile/inject/callfn while hook is active",
         "capture retrieval=fully power off, then use a card reader",
         "restore=remove or rename AutoRun.txt, then fully power-cycle",
         "",
