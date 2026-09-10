@@ -49,12 +49,24 @@ The two variants hold the same hue and almost always the same saturation. Only
 the value multiplier differs, in 54 of 408 bins in Ver 5.02. What selects the
 variant is not known.
 
-Bin `i` covers hue angle `15 * i` degrees, with bin 0 at red. *That axis is
-inferred, not proven.* It comes from Teal and Orange, whose rotations pull
-colours toward two points about 180 degrees apart, near 15 and near 200 degrees
-under this axis. Forest Green and Warm Gold then land on green and on yellow,
-which agrees. The code that consumes the table has not been found, so the zero
-point could still be off.
+Bin `i` covers hue angle `15 * i` degrees, with bin 0 at red. **Bin 0 is now
+measured, not inferred.**
+
+The measurement does not need the firmware. One frame was processed in the
+camera by every mode in turn, which gives a set of JPEGs of the same scene with
+the same geometry and only the look between them. Comparing each mode's JPEG
+against Standard's, per bin of the Cb/Cr angle, gives the rotation and the
+chroma gain that the camera really applied. Cross-correlating those gains
+against the table, over all 24 possible offsets, has one peak. The mild looks
+agree on it on their own: Vivid at 0.94, Landscape at 0.85, Neutral at 0.75.
+
+The peak puts bin 0 at red, as inferred before, but half a turn from where a
+Rec.601 `atan2(Cr, Cb)` puts red. **The camera carries Cb and Cr with the
+opposite sign.** So a reader that computes the angle as `atan2(Cr, Cb)` must
+subtract `288.65` degrees, not `108.65`.
+
+The code that consumes the table still has not been found, so the sign is read
+off the camera's behaviour rather than off an instruction.
 
 ## 2. The colour matrix — 24 bytes per mode
 
@@ -80,11 +92,19 @@ Rows usually sum to 512, so the matrix keeps white neutral. Three modes break
 that by more than 2 percent and shift the white balance: Warm Gold (red gain
 1.188, blue 0.846), Sunset Red (red 1.127) and Cinematic (blue 0.748).
 
-**Several parallel matrix tables sit next to each other**, with the same ids and
-different values. One of them is identity for every mode. They are most likely
-per output path — the firmware names eight of those (`Jpg`, `Dng`, `HdmiRaw`,
-`Mov`, `UpdateMov`, `Cdng`, `UpdateCdng`, `JpgScreen`) in the table at
-`0xC0B38A6C`. The tool reports the first table, the one that starts with mode 0.
+**There is one matrix table, not several.** An earlier version of this file said
+parallel tables sat next to each other, one per output path. That was wrong.
+Searching the whole image for Standard's own 18 bytes finds exactly two
+occurrences, `0xC0B3A344` and `0xC0B3A464`, and the second is the same table
+further on: its records are ids 35, 1, 16, 22, 2, 17, which is the Monochrome
+and DuoTone section. Standard simply carries the same matrix as id 35.
+
+Every matrix here desaturates. They are written for the camera's own internal
+RGB, not for a signal that a raw converter has already brought to Rec.709. A
+converter that applies them as they stand desaturates twice. Applying each mode
+as its difference from Standard instead — `M_mode * inverse(M_Standard)` — scores
+about 0.3 dE better against the camera's own JPEGs, and makes Standard the
+identity.
 
 ## 3. The tone curve — 1028 bytes per mode
 
@@ -103,6 +123,52 @@ point. Standard is a strong lift:
 ```
 
 The x spacing is not uniform. It starts at 1/81 and gets finer near 1.0.
+
+## 4. The gamma curves — one per mode, eleven per contrast step
+
+The tone curve in section 3 is not what renders a JPEG. The camera has a large
+bank of gamma curves at `0xC096CF34`, each `0x1000` bytes, each 2048 `u16`
+samples with 8190 as full scale. They take linear in and give display-referred
+out, so a curve is the mode's base gamma and its tone rendering in one step.
+
+Which curve a mode uses is a table of `(mode id, group)` pairs at `0xC0B3D670`,
+36 pairs long. A group is the first of a run of 11 curves, one per contrast
+step, and `group + 5` is the `contrast 0` step in the middle:
+
+| mode | group | mode | group |
+|---|---|---|---|
+| Standard | 5 | Powder Blue | 49 |
+| Vivid, Landscape, Cinematic, Teal and Orange, Sunset Red, Forest Green, FOV Classic Blue, FOV Classic Yellow | 16 | Monochrome and its filter variants | 71 |
+| Neutral | 27 | OFF | 82 |
+| Portrait | 38 | Warm Gold | 433 |
+
+The eight modes that share group 16 really do share it — the map says so.
+
+Two entries are worth care. **Warm Gold is 433, near the end of the map**, not
+60: group 60 belongs to id 35, which has no menu entry. And the bank is much
+larger than the 88 curves that the first eight groups cover, because each
+DuoTone id takes 33: ids 24 to 33 run 103, 136, 169, 202, 235, 268, 301, 334,
+367, 400, and id 34 is at 451.
+
+Only OFF's curve is a plain sRGB encode. Every other one is the camera's own
+rendering.
+
+## The looks are also a DNG camera profile
+
+The 72-bin table below is not a 72-bin table. **Its first 36 entries are the DNG
+`ProfileHueSatMap` that the camera writes into every DNG it takes**, float for
+float, hue and saturation alike, with no offset and no resampling. The 128-point
+tone curve in section 3 is that same DNG's `ProfileToneCurve`, point for point.
+
+That settles what those two blocks mean, because the DNG specification defines
+them: 36 hue divisions of 10 degrees, division 0 at HSV hue 0, applied in linear
+ProPhoto RGB converted to HSV. No inference needed.
+
+It does **not** settle the 24-bin table. Applying the 24-bin table as a DNG
+`HueSatMap` in ProPhoto HSV makes every mode worse, and its saturation column
+runs 1.2 to 2.0 where the DNG map's runs 0.92 to 1.30. The two blocks are for
+two different engines: the 36-bin one is what Sigma exports for a raw converter,
+and the 24-bin one is what the camera's own hardware reads.
 
 ## The internal mode enum
 
@@ -212,15 +278,47 @@ saturation by about 1.4 to 1.8 on average.
 ## Also in the same blob
 
 - A 72-bin version of the hue table, 1732 bytes per record, at `0xC0B42760`
-  (Ver 5.02). Same layout, 5 degrees per bin. Only Standard and OFF have one.
+  (Ver 5.02). Only Standard and OFF have one. Its first 36 entries are the DNG
+  `ProfileHueSatMap`, as above.
 - Per-mode entries for the Monochrome variants (ids 1, 2, 16-23) and for the ten
   DuoTone colours (ids 24-33). All ten DuoTone matrices are luma matrices with
   slightly different weights.
 
+## How close this gets
+
+One frame, processed in the camera by 14 modes, against the same frame rendered
+from its DNG with the tables here. Scored as mean CIE Lab dE, on flat parts of
+the picture only: the RAW has no barrel correction and the JPEG does, so the two
+frames do not lie on top of each other, and any pixel on an edge is a different
+subject in each.
+
+For scale, the camera's own modes sit a median 8.16 dE apart from each other.
+
+| mode | dE | mode | dE |
+|---|---|---|---|
+| Monochrome | 1.3 | Vivid | 4.6 |
+| Neutral | 3.1 | Sunset Red | 6.1 |
+| Portrait | 3.1 | Teal and Orange | 6.9 |
+| Forest Green | 3.5 | FOV Classic Yellow | 7.5 |
+| Standard | 3.7 | Warm Gold | 7.7 |
+| FOV Classic Blue | 3.8 | Cinematic | 10.4 |
+| Landscape | 4.3 | Powder Blue | 10.7 |
+
+Nine of the 14 are under 4.6, which is well inside the gap between one mode and
+the next. The last four are not, and they are the four with the strongest
+matrices. Cinematic and Powder Blue come out at about half the reference's
+chroma.
+
+Cinematic resists more than a wrong constant would. Fitting a per-hue rotation
+and gain straight from the camera's own JPEGs, then testing it on a half of the
+frame the fit never saw, still leaves it at 10.8. So its look is not a luma
+curve plus a hue transform at all, and something in its chain is still missing.
+
 ## Open
 
 - Which of the two variants in the hue table is used, and when.
-- Which parallel matrix table belongs to which output path.
+- What Cinematic, Powder Blue, Warm Gold and FOV Classic Yellow do that the
+  other ten do not. All four have the strongest matrices.
 - The settings enum to internal id conversion. It is inline code, not a table.
 - What ids 34, 35 and 37 are. None has a menu entry. Id 35 has existed since
   Ver 1.02 and carries Standard's matrix. Id 37 arrived in Ver 2.00 next to OFF.
