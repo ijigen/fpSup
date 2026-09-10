@@ -75,6 +75,7 @@ Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 |---|---|
 | [`fp_usb_shell/`](fp_usb_shell/) | the shell itself |
 | [`opengate/`](opengate/) | `fpsup-opengate-test` AutoRun, source, safety notes, and test procedure |
+| [`raw/`](raw/) | Bayer and lossless-codec probes, with live and offline evidence separated |
 | [`focus/`](focus/) | DFD and lens data |
 | [`gyro/`](gyro/) | IMU snapshot and the gyro AutoRun builder |
 | [`console/`](console/) | a live view of camera state |
@@ -142,6 +143,7 @@ Everything runs from an `AutoRun.txt` in RAM. Nothing here reflashes the camera.
 |---|---|
 | [`fp_usb_shell/`](fp_usb_shell/) | shell 本體 |
 | [`opengate/`](opengate/) | `fpsup-opengate-test` AutoRun、源碼、安全注意事項與測試流程 |
+| [`raw/`](raw/) | Bayer 與無損 codec 探針，明確分開實機證據和離線驗證 |
 | [`focus/`](focus/) | DFD 與鏡頭資料 |
 | [`gyro/`](gyro/) | IMU 快照與陀螺 AutoRun 建置 |
 | [`console/`](console/) | 相機狀態即時檢視 |
