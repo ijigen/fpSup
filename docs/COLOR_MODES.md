@@ -171,10 +171,20 @@ and no unit puzzle. Searching the whole image for a degrees-to-u16 constant —
 `65536 / 360` and its relatives — finds nothing, which fits: the two forms are
 built together, not converted at run time.
 
-The blocks run in the same order as the gamma map, and **skip Warm Gold** the
-same way. Index 0 to 12 are Standard, Vivid, Neutral, Portrait, Landscape,
-Cinematic, Teal and Orange, Sunset Red, Forest Green, Powder Blue, FOV Classic
-Blue, FOV Classic Yellow, Monochrome. Warm Gold sits on its own at `0xC0B3D000`.
+The blocks for the menu modes, by the id in each head:
+
+| mode | block | mode | block |
+|---|---|---|---|
+| Monochrome | `0xC0B3B8CC` | Sunset Red | `0xC0B3B318` |
+| Vivid | `0xC0B3AC40` | Forest Green | `0xC0B3B43C` |
+| Neutral | `0xC0B3AD64` | Powder Blue | `0xC0B3B560` |
+| Portrait | `0xC0B3AE88` | FOV Classic Blue | `0xC0B3B684` |
+| Landscape | `0xC0B3AFAC` | FOV Classic Yellow | `0xC0B3B7A8` |
+| Cinematic | `0xC0B3B0D0` | Warm Gold | `0xC0B3CF9C` |
+| Teal and Orange | `0xC0B3B1F4` | OFF | `0xC0B3D308` |
+
+Warm Gold and OFF sit outside the main run, the same way Warm Gold sits at the
+end of the gamma map. Standard has none.
 
 **What this rules out.** The register blocks are the camera's own copy of the
 look, and they agree with the float table on every number: rotation to 0.003
