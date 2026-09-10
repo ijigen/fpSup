@@ -7,13 +7,17 @@
 這是一份給 **SIGMA fp 韌體 Ver.5.02** 的冷開機測試版。它只寫 RAM，不寫 flash；
 移除測試 `AutoRun.txt` 並完整斷電重開，就會回到原廠內容。
 
-這版包含已由實機驗證的最小因果集合：
+這版組合下列最小測試集合：
 
 - FHD/29.97 的三張 picker 表改選 sensor mode 117。
 - mode 117 的 VMAX 改為 7280，輸出約 29.97003 fps。
 - profile 122 的 live/record、H/V 四個 RWZM 值由 `0x640` 改成 unity `0x400`。
 - 在 `0xC043A19C` 掛上已驗證的 v4 幾何 hook，把 DNG／producer envelope 改成
   3032×2012；hook 是整份腳本的最後一個記憶體修改。
+
+mode 117 時序、picker、v4 envelope 與 RWZM 改成 unity 後的硬體 policy 切換都已在
+實機觀察到；**有效 Bayer 內容是否因此由約 1936×1288 填滿 3032×2012，是這個 build
+要驗證的項目，尚未宣稱完成。**
 
 已證明不控制 DNG canvas/producer 的 movie/still 尺寸下游複本沒有放進來；三個獨立
 診斷 hook 全部移除。v4 functional hook 自己原有的 `FA00–FA0F` 四個 telemetry words
