@@ -1,0 +1,91 @@
+# --- TEST: 3032x2012 open gate @29.97 -------------------------------
+# Sigma fp firmware Ver.5.02 ONLY; there is no runtime version guard.
+# Cold-boot RAM patches only. Remove/rename AutoRun.txt and power-cycle
+# to return to stock. Use FHD 29.97 CinemaDNG for this test.
+
+# mode117 VMAX 2184 -> 7280; stock 0x00040888
+mem set 0xC0B59A28 0x00041C70
+# picker table 1 idx7: mode106 -> 117; stock 0x0000006A
+mem set 0xC0BE5888 0x00000075
+# picker table 2 idx7: mode106 -> 117; stock 0x0000006A
+mem set 0xC0BE5A28 0x00000075
+# picker table 3 idx7: mode106 -> 117; stock 0x0000006A
+mem set 0xC0BE5BC8 0x00000075
+# profile122 live RWZM H -> unity; stock 0x00000640
+mem set 0xC0BD9A34 0x00000400
+# profile122 record RWZM H -> unity; stock 0x00000640
+mem set 0xC0BE1684 0x00000400
+# profile122 live RWZM V -> unity; stock 0x00000640
+mem set 0xC0BD9EFC 0x00000400
+# profile122 record RWZM V -> unity; stock 0x00000640
+mem set 0xC0BE1B4C 0x00000400
+
+# clear v4 diagnostic words at 0xC072FA00
+mem set 0xC072FA00 0x00000000
+mem set 0xC072FA04 0x00000000
+mem set 0xC072FA08 0x00000000
+mem set 0xC072FA0C 0x00000000
+
+# proven v4 rowpatch, 232 bytes
+mem set 0xC072F800 0xE92D500F
+mem set 0xC072F804 0xE284105C
+mem set 0xC072F808 0xE30FCA00
+mem set 0xC072F80C 0xE34CC072
+mem set 0xC072F810 0xE5913000
+mem set 0xC072F814 0xE3000790
+mem set 0xC072F818 0xE1530000
+mem set 0xC072F81C 0x1A00002E
+mem set 0xC072F820 0xE5913004
+mem set 0xC072F824 0xE3000442
+mem set 0xC072F828 0xE1530000
+mem set 0xC072F82C 0x1A00002A
+mem set 0xC072F830 0xE59C0000
+mem set 0xC072F834 0xE3500000
+mem set 0xC072F838 0x1A000006
+mem set 0xC072F83C 0xE58C5004
+mem set 0xC072F840 0xE30000D8
+mem set 0xC072F844 0xE7913000
+mem set 0xC072F848 0xE58C3008
+mem set 0xC072F84C 0xE30000E0
+mem set 0xC072F850 0xE7913000
+mem set 0xC072F854 0xE58C300C
+mem set 0xC072F858 0xE3003BD8
+mem set 0xC072F85C 0xE3000000
+mem set 0xC072F860 0xE7813000
+mem set 0xC072F864 0xE30037DC
+mem set 0xC072F868 0xE3000004
+mem set 0xC072F86C 0xE7813000
+mem set 0xC072F870 0xE3003BC0
+mem set 0xC072F874 0xE3000024
+mem set 0xC072F878 0xE7813000
+mem set 0xC072F87C 0xE30037D0
+mem set 0xC072F880 0xE300002C
+mem set 0xC072F884 0xE7813000
+mem set 0xC072F888 0xE3003BD8
+mem set 0xC072F88C 0xE30000D8
+mem set 0xC072F890 0xE7813000
+mem set 0xC072F894 0xE30037DC
+mem set 0xC072F898 0xE30000E0
+mem set 0xC072F89C 0xE7813000
+mem set 0xC072F8A0 0xE3003BD8
+mem set 0xC072F8A4 0xE30000DC
+mem set 0xC072F8A8 0xE7813000
+mem set 0xC072F8AC 0xE30037DC
+mem set 0xC072F8B0 0xE30000E4
+mem set 0xC072F8B4 0xE7813000
+mem set 0xC072F8B8 0xE3003BD8
+mem set 0xC072F8BC 0xE30000F4
+mem set 0xC072F8C0 0xE7813000
+mem set 0xC072F8C4 0xE30037DC
+mem set 0xC072F8C8 0xE30000F8
+mem set 0xC072F8CC 0xE7813000
+mem set 0xC072F8D0 0xE59C3000
+mem set 0xC072F8D4 0xE2833001
+mem set 0xC072F8D8 0xE58C3000
+mem set 0xC072F8DC 0xE8BD500F
+mem set 0xC072F8E0 0xE1A00004
+mem set 0xC072F8E4 0xE12FFF1E
+
+# Arm last: stock instruction is 0xE1A00004 (mov r0,r4).
+mem set 0xC043A19C 0xEB0BD597
+# --- END TEST open gate ---------------------------------------------

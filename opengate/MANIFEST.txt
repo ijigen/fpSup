@@ -1,0 +1,15 @@
+fpsup-opengate-test: Sigma fp 3032x2012 @29.97 open-gate TEST AutoRun
+
+AutoRun.txt bytes=32768 sha256=032e2562e86d12db3085bac14b3ceab0abd71dc13e018e5d7542e145679ea790
+rowpatch_v4 bytes=232 sha256=7d44029ee80b58f3fd09394f7f615643c60e233aad0122051feb0b2c8af4bb4a
+reference_firmware bytes=49482954 sha256=92a8ee993f6c3d66c251e88d45a2ccd5135c6cf7342717784321c2ed506e2fb4
+firmware=Sigma fp Ver.5.02 only; build-time check passed; runtime guard=none
+hook=0xC043A19C stock=0xE1A00004 branch=0xEB0BD597
+code=0xC072F800..0xC072F8E8
+mode=117 size=3032x2012 fps=29.97003
+recording preset=FHD 29.97 CinemaDNG
+causal_data_patches=8; downstream movie/still size tables omitted
+diagnostic_hooks=none
+USB while active=direct mem get/set only; never getfile/putfile/inject/callfn
+capture retrieval=fully power off, then use a card reader
+restore=remove or rename AutoRun.txt, then fully power-cycle
