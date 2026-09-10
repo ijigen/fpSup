@@ -49,24 +49,29 @@ The two variants hold the same hue and almost always the same saturation. Only
 the value multiplier differs, in 54 of 408 bins in Ver 5.02. What selects the
 variant is not known.
 
-Bin `i` covers hue angle `15 * i` degrees, with bin 0 at red. **Bin 0 is now
-measured, not inferred.**
+Bin `i` covers 15 degrees. **Bin 0 is not at red.** An earlier version of this
+file inferred that it was, and a later one said it was red half a turn away.
+Both were wrong. The answer is in the firmware, in the register blocks described
+below: bin 0 of this float table is at **285 degrees** of `atan2(Cr, Cb)`. That
+it comes within 3.65 degrees of red-plus-half-a-turn is a coincidence.
 
-The measurement does not need the firmware. One frame was processed in the
-camera by every mode in turn, which gives a set of JPEGs of the same scene with
-the same geometry and only the look between them. Comparing each mode's JPEG
-against Standard's, per bin of the Cb/Cr angle, gives the rotation and the
-chroma gain that the camera really applied. Cross-correlating those gains
-against the table, over all 24 possible offsets, has one peak. The mild looks
-agree on it on their own: Vivid at 0.94, Landscape at 0.85, Neutral at 0.75.
+Two independent things agree on 285.
 
-The peak puts bin 0 at red, as inferred before, but half a turn from where a
-Rec.601 `atan2(Cr, Cb)` puts red. **The camera carries Cb and Cr with the
-opposite sign.** So a reader that computes the angle as `atan2(Cr, Cb)` must
-subtract `288.65` degrees, not `108.65`.
+From the firmware: the `CEQ24` blocks hold an even 24-bin grid, so hardware bin
+`j` is at `15 * j` degrees of the hardware's own hue. Matching each float record
+against its block lines them up with a **five-bin offset** — float bin `i` is
+hardware bin `i - 5`, which puts float bin 0 at `-75` degrees of hardware hue.
 
-The code that consumes the table still has not been found, so the sign is read
-off the camera's behaviour rather than off an instruction.
+From the camera: one frame processed in camera by every mode gives JPEGs that
+differ only by the look. Comparing each against Standard's, per bin of the Cb/Cr
+angle, recovers the rotation and the chroma gain the camera really applied.
+Cross-correlating those against the table peaks at 285 for both, separately —
+rotation at +0.58, gain at +0.60 — and the mild looks agree on their own: Vivid
+0.94, Landscape 0.85, Neutral 0.75.
+
+Put together, hardware hue zero is at `285 + 75 = 360`, the `+Cb` axis. **The
+camera measures hue as a plain `atan2(Cr, Cb)`**, and this float table is the
+same wheel rotated by five bins.
 
 ## 2. The colour matrix — 24 bytes per mode
 
@@ -124,7 +129,46 @@ point. Standard is a strong lift:
 
 The x spacing is not uniform. It starts at 1/81 and gets finer near 1.0.
 
-## 4. The gamma curves — one per mode, eleven per contrast step
+## 4. The CEQ24 register blocks — what the hardware actually reads
+
+The float table above is not what the colour equaliser reads. The camera also
+holds every look as a block of hardware register values, and those are the ones
+that reach the chip.
+
+There are **62 blocks at `0xC0B3AB80`, a stride of `0x124`** (292 bytes). Each is
+six arrays of 24 `u16`, and 4 bytes over:
+
+| array | what it is |
+|---|---|
+| 0 | `CEQ24_ORG` — the even hue grid, `round(i * 65536 / 24)` |
+| 3 | `CEQ24_TGT` — the same grid rotated, u16 full-circle |
+| 2 | saturation |
+| 1, 4, 5 | further gains, not identified |
+
+Find them by searching for the `ORG` grid, which is the same in every block:
+`0, 2731, 5461, 8192, 10923, 13653, ...`.
+
+**`TGT - ORG` is the float table's hue column.** Converted to degrees with
+`360 / 65536`, and matched to each float record, the regression slope is
+**1.000** with a residual of **0.003 degrees**. So the float column is in
+degrees, and those degrees are the hardware's degrees. There is no scale factor
+and no unit puzzle. Searching the whole image for a degrees-to-u16 constant —
+`65536 / 360` and its relatives — finds nothing, which fits: the two forms are
+built together, not converted at run time.
+
+The blocks run in the same order as the gamma map, and **skip Warm Gold** the
+same way. Index 0 to 12 are Standard, Vivid, Neutral, Portrait, Landscape,
+Cinematic, Teal and Orange, Sunset Red, Forest Green, Powder Blue, FOV Classic
+Blue, FOV Classic Yellow, Monochrome. Warm Gold sits on its own at `0xC0B3D000`.
+
+The saturation array does **not** carry one scale for every mode. Regressing it
+against the float saturation column gives `float * 683` for most modes but
+`float * 1024` for others. So the float column is a scaled encoding whose scale
+is per mode, and reading it as a plain multiplier is wrong. What normalises it
+is not known: dividing array 2 by array 5 does not reproduce what the camera
+does either.
+
+## 5. The gamma curves — one per mode, eleven per contrast step
 
 The tone curve in section 3 is not what renders a JPEG. The camera has a large
 bank of gamma curves at `0xC096CF34`, each `0x1000` bytes, each 2048 `u16`
@@ -296,18 +340,31 @@ For scale, the camera's own modes sit a median 8.16 dE apart from each other.
 
 | mode | dE | mode | dE |
 |---|---|---|---|
-| Monochrome | 1.3 | Vivid | 4.6 |
-| Neutral | 3.1 | Sunset Red | 6.1 |
-| Portrait | 3.1 | Teal and Orange | 6.9 |
-| Forest Green | 3.5 | FOV Classic Yellow | 7.5 |
-| Standard | 3.7 | Warm Gold | 7.7 |
-| FOV Classic Blue | 3.8 | Cinematic | 10.4 |
-| Landscape | 4.3 | Powder Blue | 10.7 |
+| Monochrome | 1.3 | Landscape | 4.1 |
+| Neutral | 2.2 | FOV Classic Blue | 4.2 |
+| Portrait | 3.1 | Sunset Red | 5.2 |
+| Forest Green | 3.3 | FOV Classic Yellow | 7.0 |
+| Standard | 3.7 | Teal and Orange | 7.6 |
+| Vivid | 4.1 | Warm Gold | 8.0 |
+| | | Powder Blue | 10.5 |
+| | | Cinematic | 10.7 |
 
-Nine of the 14 are under 4.6, which is well inside the gap between one mode and
-the next. The last four are not, and they are the four with the strongest
-matrices. Cinematic and Powder Blue come out at about half the reference's
-chroma.
+Mean 5.4. Eight of the 14 are under 4.3, which is well inside the gap between
+one mode and the next.
+
+Splitting the error into its three parts says where the rest is:
+
+| part | share of the squared error |
+|---|---|
+| chroma | 60 percent |
+| hue | 25 percent |
+| lightness | 15 percent |
+
+**Chroma is the problem, not hue.** The median hue error over all modes is 2.2
+degrees. Powder Blue and Cinematic come out at about half the reference's
+chroma, and both have the strongest matrices. Section 4 says why this is still
+open: the saturation column's scale is per mode and what normalises it is not
+known.
 
 Cinematic resists more than a wrong constant would. Fitting a per-hue rotation
 and gain straight from the camera's own JPEGs, then testing it on a half of the
@@ -317,6 +374,11 @@ curve plus a hue transform at all, and something in its chain is still missing.
 ## Open
 
 - Which of the two variants in the hue table is used, and when.
+- **What normalises the saturation array in the `CEQ24` blocks.** This is the
+  largest open question: chroma is 60 percent of the remaining error. The float
+  column encodes the same numbers at `683` for most modes and `1024` for others,
+  so neither form is a plain multiplier.
+- What arrays 1, 4 and 5 of a `CEQ24` block are.
 - What Cinematic, Powder Blue, Warm Gold and FOV Classic Yellow do that the
   other ten do not. All four have the strongest matrices.
 - The settings enum to internal id conversion. It is inline code, not a table.
