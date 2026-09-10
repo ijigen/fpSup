@@ -135,18 +135,33 @@ The float table above is not what the colour equaliser reads. The camera also
 holds every look as a block of hardware register values, and those are the ones
 that reach the chip.
 
-There are **62 blocks at `0xC0B3AB80`, a stride of `0x124`** (292 bytes). Each is
-six arrays of 24 `u16`, and 4 bytes over:
+There are **61 blocks of 292 bytes** (`0x124`), the largest run starting at
+`0xC0B3AB1C`. A block is a two-word head and six arrays of 24 `u16`:
 
-| array | what it is |
+| offset | what it is |
 |---|---|
-| 0 | `CEQ24_ORG` — the even hue grid, `round(i * 65536 / 24)` |
-| 3 | `CEQ24_TGT` — the same grid rotated, u16 full-circle |
-| 2 | saturation |
-| 1, 4, 5 | further gains, not identified |
+| 0 | the mode id, in the same enum as every other table here |
+| 2 | zero |
+| 4 | array A — 512 in every block seen |
+| 52 | array B — the saturation scale, 683 for most modes, 1024 for Cinematic and Teal and Orange |
+| 100 | `CEQ24_ORG` — the even hue grid, `round(i * 65536 / 24)` |
+| 148 | array C — near 512 |
+| 196 | array D — saturation |
+| 244 | `CEQ24_TGT` — the hue grid rotated, u16 full-circle |
 
-Find them by searching for the `ORG` grid, which is the same in every block:
-`0, 2731, 5461, 8192, 10923, 13653, ...`.
+Find them by searching for the `ORG` grid, which is the same in every block —
+`0, 2731, 5461, 8192, 10923, 13653, ...` — and then step back 100 bytes to read
+the id. Do not guess a block's mode from its position in the run: `0xC0B3AB1C`
+looks like it should be Standard and its id says 35.
+
+**Read as `D / B`, the saturation array is the float table's saturation column,
+value for value.** Their means line up exactly — Vivid 1.826, Powder Blue 1.790,
+Forest Green 1.676, Cinematic 1.001, Monochrome 0.000. So array B is what
+normalises array D, and the two forms of the table hold the same numbers.
+
+**Standard has no block.** Id 0 is absent from all 61, the same way id 9 is
+absent from the middle of the gamma map. The ids that are present are 1 to 36
+except 0 and 4, plus 39 and 100.
 
 **`TGT - ORG` is the float table's hue column.** Converted to degrees with
 `360 / 65536`, and matched to each float record, the regression slope is
@@ -161,12 +176,22 @@ same way. Index 0 to 12 are Standard, Vivid, Neutral, Portrait, Landscape,
 Cinematic, Teal and Orange, Sunset Red, Forest Green, Powder Blue, FOV Classic
 Blue, FOV Classic Yellow, Monochrome. Warm Gold sits on its own at `0xC0B3D000`.
 
-The saturation array does **not** carry one scale for every mode. Regressing it
-against the float saturation column gives `float * 683` for most modes but
-`float * 1024` for others. So the float column is a scaled encoding whose scale
-is per mode, and reading it as a plain multiplier is wrong. What normalises it
-is not known: dividing array 2 by array 5 does not reproduce what the camera
-does either.
+**What this rules out.** The register blocks are the camera's own copy of the
+look, and they agree with the float table on every number: rotation to 0.003
+degrees, saturation exactly. So the look tables in this file are right, and the
+difference that remains between a render made from them and the camera's own
+JPEG is **not** in these tables. It is in the rest of the chain — the sensor
+matrix, which is per-body calibration and not in the image at all, and the CEQ's
+other stages, which the firmware names but this file has not decoded:
+`CEQ_YGAM`, `CEQ_KNEE`, `CEQ_CLIP`, `CEQ_CORING`, `CEQ_OFFSET`, `CEQ_COMPATI`.
+
+One thing about the rest of the chain is measurable. The look matrix changes
+saturation by an amount that depends on the primaries it acts between, and the
+camera applies it to its own sensor RGB. Applying it in a wide space rather than
+in Rec.709 is worth 0.3 dE over all modes and much more on the four with the
+strongest matrices — Powder Blue 10.6 to 8.6, Cinematic 10.4 to 9.0. Going
+further out, to ProPhoto or Rec.2020, is far worse, so the camera's own space is
+wide but not that wide.
 
 ## 5. The gamma curves — one per mode, eleven per contrast step
 
@@ -340,31 +365,30 @@ For scale, the camera's own modes sit a median 8.16 dE apart from each other.
 
 | mode | dE | mode | dE |
 |---|---|---|---|
-| Monochrome | 1.3 | Landscape | 4.1 |
-| Neutral | 2.2 | FOV Classic Blue | 4.2 |
-| Portrait | 3.1 | Sunset Red | 5.2 |
-| Forest Green | 3.3 | FOV Classic Yellow | 7.0 |
-| Standard | 3.7 | Teal and Orange | 7.6 |
-| Vivid | 4.1 | Warm Gold | 8.0 |
-| | | Powder Blue | 10.5 |
-| | | Cinematic | 10.7 |
+| Monochrome | 1.2 | Landscape | 4.3 |
+| Neutral | 2.3 | FOV Classic Blue | 4.7 |
+| Portrait | 3.1 | Teal and Orange | 6.1 |
+| Forest Green | 3.2 | FOV Classic Yellow | 6.8 |
+| Standard | 3.7 | Warm Gold | 9.2 |
+| Sunset Red | 3.7 | Cinematic | 9.3 |
+| Vivid | 4.0 | Powder Blue | 9.6 |
 
-Mean 5.4. Eight of the 14 are under 4.3, which is well inside the gap between
+Mean 5.1. Eight of the 14 are under 4.3, which is well inside the gap between
 one mode and the next.
 
 Splitting the error into its three parts says where the rest is:
 
 | part | share of the squared error |
 |---|---|
-| chroma | 60 percent |
-| hue | 25 percent |
-| lightness | 15 percent |
+| chroma | 62 percent |
+| hue | 26 percent |
+| lightness | 12 percent |
 
 **Chroma is the problem, not hue.** The median hue error over all modes is 2.2
 degrees. Powder Blue and Cinematic come out at about half the reference's
 chroma, and both have the strongest matrices. Section 4 says why this is still
-open: the saturation column's scale is per mode and what normalises it is not
-known.
+open, and it is not the tables: the register blocks agree with them exactly, so
+what is missing is elsewhere in the chain.
 
 Cinematic resists more than a wrong constant would. Fitting a per-hue rotation
 and gain straight from the camera's own JPEGs, then testing it on a half of the
@@ -374,11 +398,13 @@ curve plus a hue transform at all, and something in its chain is still missing.
 ## Open
 
 - Which of the two variants in the hue table is used, and when.
-- **What normalises the saturation array in the `CEQ24` blocks.** This is the
-  largest open question: chroma is 60 percent of the remaining error. The float
-  column encodes the same numbers at `683` for most modes and `1024` for others,
-  so neither form is a plain multiplier.
-- What arrays 1, 4 and 5 of a `CEQ24` block are.
+- **The CEQ's other stages**: `CEQ_YGAM`, `CEQ_KNEE`, `CEQ_CLIP`, `CEQ_CORING`,
+  `CEQ_OFFSET`, `CEQ_COMPATI`. The firmware names them and this file has not
+  found their data. Chroma is 62 percent of the remaining error and the hue and
+  saturation tables are now known to be right, so the rest is here or in the
+  sensor matrix.
+- What arrays A and C of a `CEQ24` block are. Both sit near 512.
+- Why Standard has no register block.
 - What Cinematic, Powder Blue, Warm Gold and FOV Classic Yellow do that the
   other ten do not. All four have the strongest matrices.
 - The settings enum to internal id conversion. It is inline code, not a table.
