@@ -104,12 +104,32 @@ occurrences, `0xC0B3A344` and `0xC0B3A464`, and the second is the same table
 further on: its records are ids 35, 1, 16, 22, 2, 17, which is the Monochrome
 and DuoTone section. Standard simply carries the same matrix as id 35.
 
-Every matrix here desaturates. They are written for the camera's own internal
+Every matrix here desaturates. They are written for the camera's own sensor
 RGB, not for a signal that a raw converter has already brought to Rec.709. A
 converter that applies them as they stand desaturates twice. Applying each mode
-as its difference from Standard instead — `M_mode * inverse(M_Standard)` — scores
-about 0.3 dE better against the camera's own JPEGs, and makes Standard the
-identity.
+as its difference from Standard instead — `M_mode * inverse(M_Standard)` — makes
+Standard the identity and cancels the shared part.
+
+**The space these matrices act in matters, and it is measurable.** A
+channel-mixing matrix turns hue by an amount that depends on the primaries it
+acts between. Applied in Rec.709, each mode's render came out turned a
+different way — FOV Classic Blue 11 degrees toward green, Warm Gold 10 toward
+red. Different directions cannot come from one shared upstream error directly,
+but one wrong *space* produces them exactly, through each mode's own matrix. A
+single 3x3 `G` was fitted so that every matrix is applied as
+`inverse(G) * M * G`, on half of a fourteen-mode sample frame, and validated on
+the other half. It collapses the divergence, it converges to nearly the same
+matrix from two unrelated starting points, and it lands close to the
+sRGB-to-camera matrix in Sigma's own DNG profile — which is what it physically
+is: the mode matrices act in sensor RGB, and the DNG's ColorMatrix is the
+per-body calibration this repository said could not be read from the firmware.
+It cannot; it can be fitted from the camera's own JPEGs.
+
+```
+G = [ 0.5264  0.3159  0.1577 ]      sRGB -> camera, rows sum to 1
+    [-0.0813  1.0886 -0.0073 ]
+    [-0.0577  0.3132  0.7446 ]
+```
 
 ## 3. The tone curve — 1028 bytes per mode
 
@@ -366,57 +386,45 @@ saturation by about 1.4 to 1.8 on average.
 ## How close this gets
 
 One frame, processed in the camera by 14 modes, against the same frame rendered
-from its DNG with the tables here. Scored as mean CIE Lab dE, on flat parts of
-the picture only: the RAW has no barrel correction and the JPEG does, so the two
-frames do not lie on top of each other, and any pixel on an edge is a different
-subject in each.
+from its DNG with the tables here plus the fitted space above. The RAW has no
+barrel correction and the JPEG does, so the radial warp between them is fitted
+and undone; the score then uses the whole frame — 708,000 pixels, 157,000 of
+them saturated — as mean CIE Lab dE.
 
 For scale, the camera's own modes sit a median 8.16 dE apart from each other.
 
 | mode | dE | mode | dE |
 |---|---|---|---|
-| Monochrome | 1.2 | Landscape | 4.3 |
-| Neutral | 2.3 | FOV Classic Blue | 4.7 |
-| Portrait | 3.1 | Teal and Orange | 6.1 |
-| Forest Green | 3.2 | FOV Classic Yellow | 6.8 |
-| Standard | 3.7 | Warm Gold | 9.2 |
-| Sunset Red | 3.7 | Cinematic | 9.3 |
-| Vivid | 4.0 | Powder Blue | 9.6 |
+| Monochrome | 1.0 | FOV Classic Blue | 2.9 |
+| Standard | 2.4 | Teal and Orange | 4.2 |
+| Portrait | 2.5 | Sunset Red | 4.7 |
+| Forest Green | 2.6 | FOV Classic Yellow | 4.9 |
+| Neutral | 2.6 | Cinematic | 5.7 |
+| Vivid | 2.8 | Warm Gold | 6.2 |
+| Landscape | 2.9 | Powder Blue | 6.2 |
 
-Mean 5.1. Eight of the 14 are under 4.3, which is well inside the gap between
-one mode and the next.
+Mean 3.7. The median hue error over saturated pixels is 2.6 degrees and the
+chroma ratio 0.97.
 
-Splitting the error into its three parts says where the rest is:
-
-| part | share of the squared error |
-|---|---|
-| chroma | 62 percent |
-| hue | 26 percent |
-| lightness | 12 percent |
-
-**Chroma is the problem, not hue.** The median hue error over all modes is 2.2
-degrees. Powder Blue and Cinematic come out at about half the reference's
-chroma, and both have the strongest matrices. Section 4 says why this is still
-open, and it is not the tables: the register blocks agree with them exactly, so
-what is missing is elsewhere in the chain.
-
-Cinematic resists more than a wrong constant would. Fitting a per-hue rotation
-and gain straight from the camera's own JPEGs, then testing it on a half of the
-frame the fit never saw, still leaves it at 10.8. So its look is not a luma
-curve plus a hue transform at all, and something in its chain is still missing.
+What remains concentrates in the strongest looks' chroma: Powder Blue and
+Cinematic sit near 0.8 of the reference's saturation where every other mode is
+within a few percent. The ISP's chroma stages after the equaliser — `CSUP`,
+`CKNEE`, `CUVCONT`, `ECSUP`, `C_SAT_C` — are represented by one flat measured
+trim, and whatever curve they really apply, the strong looks sit on a different
+part of it.
 
 ## Open
 
 - Which of the two variants in the hue table is used, and when.
 - **The CEQ's other stages**: `CEQ_YGAM`, `CEQ_KNEE`, `CEQ_CLIP`, `CEQ_CORING`,
-  `CEQ_OFFSET`, `CEQ_COMPATI`. The firmware names them and this file has not
-  found their data. Chroma is 62 percent of the remaining error and the hue and
-  saturation tables are now known to be right, so the rest is here or in the
-  sensor matrix.
+  `CEQ_OFFSET`, `CEQ_COMPATI`, and the `PST_TOP` chroma blocks. The firmware
+  names them and this file has not found their data. They are the best
+  candidate for the last error, the strong looks' missing saturation.
 - What arrays A and C of a `CEQ24` block are. Both sit near 512.
 - Why Standard has no register block.
-- What Cinematic, Powder Blue, Warm Gold and FOV Classic Yellow do that the
-  other ten do not. All four have the strongest matrices.
+- What Cinematic and Powder Blue do that the other twelve do not. Both render
+  at about 0.8 of the reference's chroma under the same trim that puts every
+  other mode within a few percent.
 - The settings enum to internal id conversion. It is inline code, not a table.
 - What ids 34, 35 and 37 are. None has a menu entry. Id 35 has existed since
   Ver 1.02 and carries Standard's matrix. Id 37 arrived in Ver 2.00 next to OFF.
