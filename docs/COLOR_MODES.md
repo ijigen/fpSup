@@ -110,6 +110,9 @@ converter that applies them as they stand desaturates twice. Applying each mode
 as its difference from Standard instead — `M_mode * inverse(M_Standard)` — makes
 Standard the identity and cancels the shared part.
 
+**With an OFF frame, the whole linear front end is measurable — see the
+section on the OFF shot below, which supersedes the fitted matrix that follows.**
+
 **The space these matrices act in matters, and it is measurable.** A
 channel-mixing matrix turns hue by an amount that depends on the primaries it
 acts between. Applied in Rec.709, each mode's render came out turned a
@@ -130,6 +133,41 @@ G = [ 0.5264  0.3159  0.1577 ]      sRGB -> camera, rows sum to 1
     [-0.0813  1.0886 -0.0073 ]
     [-0.0577  0.3132  0.7446 ]
 ```
+
+## The OFF shot — the measurement that unlocks the rest
+
+OFF is the identity look: the identity tone curve, zero rotations, gain 1.000 in
+every bin, value 1.000. So a JPEG taken in OFF, inverted through the identity
+curve, **is the camera's linear output**. Nothing else in this project gives a
+direct view of the linear front end; every look shot filters it through a curve
+and a chroma stage.
+
+What one OFF frame settles:
+
+**The front end is one measured matrix.** Regressing the inverted OFF JPEG
+against a linear decode of the same DNG gives the 3x3 between them — least
+squares over 708,000 pixels, mean residual 2.3 percent of signal. Composed with
+`inverse(M_OFF)` and any mode's own firmware matrix, this replaces the fitted
+working-space matrix above, the fitted per-hue base correction, and any exposure
+trim. A render of OFF through it scores **0.9 dE** against the camera's own OFF
+JPEG — below the JPEG's noise floor, on data no fit ever saw.
+
+**The camera applies its curve hue-preserving, not per channel.** Re-fitting the
+front end with the OFF JPEG inverted both ways decides it: read as a
+hue-preserving encode (largest and smallest channel through the curve, the
+middle in proportion) the correction comes out as the identity to 0.9 percent;
+read per channel it needs a green row skewed by 9 percent to fit. A per-channel
+curve also turns saturated colours toward yellow-green by several degrees in
+render tests, and the camera's output shows no such turn.
+
+**The 285-degree anchor holds** re-derived under this chain: a sweep over
+anchors peaks at 285 again.
+
+**What it does not settle**: comparing standard.JPG against off.JPG measures
+Standard's whole look at once — matrix, curve and equaliser together. The
+matrix and curve dominate (chroma gains of 2 to 4, rotations to 22 degrees), so
+the equaliser's rotation column cannot be isolated from that comparison; its
+effect is a minor term inside a much larger transform.
 
 ## 3. The tone curve — 1028 bytes per mode
 
