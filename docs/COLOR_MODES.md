@@ -416,6 +416,16 @@ part of it.
 ## Open
 
 - Which of the two variants in the hue table is used, and when.
+- **Why the camera's output shows only 0.6 to 0.7 of the table's rotation, and
+  what the per-hue base shift is.** Both are measured and both lack a mechanism.
+  Candidates tested against held-out data and rejected: the equaliser working in
+  symmetric `(B-Y, R-Y)` axes rather than Cb/Cr (suggested by the two `256` Q9
+  words in the YCMAT register block; renders score 4.05 against 2.84), a fixed
+  512 denominator for the saturation array (overshoots the two `B=1024` modes),
+  and a chroma-dependent gain (the fit collapses to flat). The words after the
+  luma triple in the block at `0xC0B39118` — `-6, 256, 256, -56, 0, 100, ...` —
+  are still not decoded, and decoding them is the likeliest path to the
+  mechanism.
 - **The CEQ's other stages**: `CEQ_YGAM`, `CEQ_KNEE`, `CEQ_CLIP`, `CEQ_CORING`,
   `CEQ_OFFSET`, `CEQ_COMPATI`, and the `PST_TOP` chroma blocks. The firmware
   names them and this file has not found their data. They are the best
