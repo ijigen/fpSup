@@ -421,6 +421,53 @@ saturation by about 1.4 to 1.8 on average.
   DuoTone colours (ids 24-33). All ten DuoTone matrices are luma matrices with
   slightly different weights.
 
+## The differential method, and what is still missing
+
+With the front end measured, a second differential becomes meaningful: compare
+**mode-vs-OFF in the camera** against **mode-vs-OFF in the render**. Geometry
+cancels, the front end cancels, and what remains is exactly what the model
+misses, per hue.
+
+Measured this way, the missing transform is precise and repeatable. Per bin of
+`atan2(Cr, Cb)` hue, `camera rotation minus render rotation`, on the one sample
+frame (only bins with enough saturated content resolve):
+
+| mode | 90° (red) | 120° | 240° (yellow-green) | 300° (cyan) |
+|---|---|---|---|---|
+| Standard | **−21.8** | −11.5 | −15.9 | −1.4 |
+| Vivid | **−21.0** | −7.7 | −10.5 | −3.9 |
+| Cinematic | −3.3 | −7.2 | **−56.3** | **−58.8** |
+| Warm Gold | +6.2 | +4.1 | −7.4 | −0.4 |
+| Teal and Orange | −0.9 | +0.2 | −13.3 | +0.1 |
+| Powder Blue | −15.7 | −15.7 | +11.8 | −3.5 |
+
+The field is per mode and large — and none of the tables in this file produce
+it. The rotation column at those bins is 0 to 3 degrees for Standard, and
+Cinematic's never exceeds 10.
+
+Mechanisms tested against this field and rejected, so they are not tried again:
+
+- **A shared post-CEQ stage.** The field differs per mode.
+- **The equaliser before the curve rather than after.** Both orders render the
+  differential almost identically under a hue-preserving curve.
+- **The equaliser first with a per-channel curve.** Fixes Warm Gold's warm bins
+  exactly, does not produce Standard's −21 or Cinematic's −56.
+- **The matrix applied in a companded domain** (`MAT_TOP IGAMMA` suggests one).
+  Right direction for Cinematic and Warm Gold, but no single exponent fits: the
+  one Cinematic wants overshoots Warm Gold four-fold and turns Powder Blue the
+  wrong way by 150 degrees. Standard never moves, its matrix being too mild.
+- **The curve before the matrix.** Turns Powder Blue +141 degrees at red.
+- **The 72-bin table as a shared in-camera stage.** Its OFF record being the
+  exact identity makes this reading attractive, and it does land several bins —
+  Cinematic at 120 degrees to within a degree, Teal and Orange's long-standing
+  +17 at 240 down to +6 — but it worsens the whole (3.1 to 3.5 dE right-half),
+  so as a straight extra stage it is wrong too.
+
+What would settle it: a frame with saturated content in every hue bin — this
+scene resolves only four to five of the 24 — so the missing field can be read
+completely instead of extrapolated from four points per mode. The differential
+needs only one such frame shot in each mode plus OFF.
+
 ## How close this gets
 
 One frame, processed in the camera by 14 modes, against the same frame rendered
