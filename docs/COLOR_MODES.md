@@ -162,10 +162,10 @@ There are **61 blocks of 292 bytes** (`0x124`), the largest run starting at
 |---|---|
 | 0 | the mode id, in the same enum as every other table here |
 | 2 | zero |
-| 4 | array A — 512 in every block seen |
+| 4 | array A — the value multiplier of the float table's variant 0, in Q9. All 1.0 |
 | 52 | array B — the saturation scale, 683 for most modes, 1024 for Cinematic and Teal and Orange |
 | 100 | `CEQ24_ORG` — the even hue grid, `round(i * 65536 / 24)` |
-| 148 | array C — near 512 |
+| 148 | array C — the value multiplier of variant 1, in Q9. Monochrome's 576, 672 and 704 are the float table's 1.12, 1.31 and 1.38 exactly |
 | 196 | array D — saturation |
 | 244 | `CEQ24_TGT` — the hue grid rotated, u16 full-circle |
 
@@ -420,7 +420,6 @@ part of it.
   `CEQ_OFFSET`, `CEQ_COMPATI`, and the `PST_TOP` chroma blocks. The firmware
   names them and this file has not found their data. They are the best
   candidate for the last error, the strong looks' missing saturation.
-- What arrays A and C of a `CEQ24` block are. Both sit near 512.
 - Why Standard has no register block.
 - What Cinematic and Powder Blue do that the other twelve do not. Both render
   at about 0.8 of the reference's chroma under the same trim that puts every
