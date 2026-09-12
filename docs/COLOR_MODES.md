@@ -468,16 +468,15 @@ At slider 0 the blend is the midpoint of a mirrored pair, which is the
 identity. So this stage does nothing in the sample frames, and it is ruled out
 as the source of the missing hue field.
 
-**A second matrix builder at `0xC02C55A0` is the best remaining candidate.**
-It builds a YCbCr-domain 3x3 at run time from two per-mode records: a stride-20
-record giving a Q12 luma row and two zero-sum Q9 chroma rows — cross-terms in a
-chroma matrix are exactly a global hue rotation — composed with
+**A second matrix builder at `0xC02C55A0`, now decoded.** It builds a
+YCbCr-domain 3x3 at run time from two per-mode records: a stride-20 record
+giving a Q12 luma row and two zero-sum Q9 chroma rows, composed with
 `diag(1, 1+a/512, 1+b/512)` per-channel chroma gains from a stride-8 record.
 The records are looked up by mode id in RAM tables hung off the parameter
-struct `0xC2F1A064` (offsets +0x28 and +0), with all-zero neutral defaults
-(id 100) in descriptor entries 31 and 24. **The per-mode records are not in
-the firmware image as static arrays** — they are built or uploaded at run
-time, and finding their writer is the next step of this campaign.
+struct `0xC2F1A064` (offsets +0x28 and +0). **The per-mode records are not in
+the firmware image as static arrays** — they are built or uploaded at run time,
+and finding their writer is still open. The static defaults are in descriptor
+entries 24 and 31, and the section on the YC matrix reads them out.
 
 **The effect slider is one system across all tables.** A composer at
 `0xC02CFF00`-ish fetches each parameter class's mode record and extrapolates it
@@ -623,6 +622,82 @@ What the 11 ids select is still open. The ladder shapes point at capture modes,
 because one group covers extended-low ISO, one covers the native range, and one
 varies only above ISO 800. This file does not name them.
 
+## The YC matrix, and the camera's own chroma plane
+
+The builder at `0xC02C55A0` copies 16 bytes from `record + 4` and reads them as
+eight `s16`. It assembles a 3x3 in double precision:
+
+```
+row 0 = (v0, v1, v2)        / 4096      the luma row, Q12
+row 1 = (v3, -(v3+v4), v4)  /  512      Cb, Q9
+row 2 = (v5, -(v5+v6), v6)  /  512      Cr, Q9
+```
+
+Only two coefficients of each chroma row are in the record. The middle one is
+the negative of their sum, so both chroma rows are zero-sum by construction.
+The two scale constants are exact: `0xC02C5934` holds 1/4096, and `0xC02C593C`
+holds 1/512.
+
+The ISP descriptor table at `0xC0B38ACC` is `(pointer, count)` pairs, the same
+shape as the look parameter list. Entry 31 is `0xC0B39118`, count 1, stride 20.
+Its record is `(100, 0, 1224, 2403, 469, -6, 256, 256, -56, 0)`, which decodes
+to:
+
+```
+Y  = ( 1224, 2403,  469) / 4096 = ( 0.2988,  0.5867,  0.1145)
+Cb = (   -6, -250,  256) /  512 = (-0.0117, -0.4883,  0.5000)
+Cr = (  256, -200,  -56) /  512 = ( 0.5000, -0.3906, -0.1094)
+```
+
+An earlier version of this file called entries 31 and 24 all-zero neutral
+defaults. That is true of entry 24 (`0xC0B39088`, the record `(100, 0, 0, 0)`,
+so the chroma gains are the identity). It is not true of entry 31, which holds
+a real matrix.
+
+**The luma row is Rec.601 and the chroma rows are not.** The luma weights are
+Rec.601 to four decimals, and the three of them sum to exactly 4096. Rec.601 Cb
+is `(-0.1687, -0.3313, 0.5)`, where this Cb has almost no red term and sits
+close to `0.5 * (B - G)`. Both row pairs span the same zero-sum plane of RGB, so
+an exact 2x2 map `T` takes Rec.601 chroma to this chroma, with a residual of
+1e-16:
+
+```
+T = [ 1.05404  0.33227 ]
+    [-0.05939  0.97996 ]
+```
+
+In Rec.601 terms the camera's `+Cb` axis is at 3.5 degrees and its `+Cr` axis is
+at 107.5 degrees. The two axes are 104 degrees apart, not 90.
+
+**What this predicts, and what it does not.** A rotation applied in this plane
+and read back in Rec.601 is `inverse(T) * R * T`. That is a rotation of mean
+gain 1.038, with a hue-dependent term of plus or minus 0.278, so the local gain
+runs 0.78 to 1.27. The mean is more than 1. The measured rotation shortfall runs
+the other way, at 0.6 to 0.7, so this stage cannot be its cause.
+
+**Tested and rejected: the equaliser working in this plane.** The rig applied
+the rotation and the gain in the decoded plane instead of in Rec.601, over a
+sweep of anchor and rotation scale. Measured on the left half of the frame and
+validated on the right:
+
+| plane | best anchor | best rotation scale | left dE | right dE |
+|---|---|---|---|---|
+| Rec.601 | 300 | 0.6 | 5.301 | 3.416 |
+| camera | 285 | 0.7 | 5.352 | 3.386 |
+
+The two are the same render to within 0.03 dE on both halves, and the rotation
+scale stays fitted and stays well below 1. So the plane is real and decoded, and
+moving the equaliser into it buys nothing. The script is `xc/ycplane.py`.
+
+The test does confirm one thing. The two planes prefer anchors 15 degrees apart,
+and `T` maps Rec.601 300 degrees to camera 285.2 degrees. The two forms describe
+the same render, which is why the score does not move.
+
+This sweep is not the instrument that fixed the 285-degree anchor, and it does
+not bear on it. It runs a stripped chain with no residual layer, on a 15-degree
+grid, and it sweeps the anchor together with the rotation scale. The anchor
+stands on the register blocks and on the cross-correlation, not on this.
+
 ## The differential method, and what is still missing
 
 With the front end measured, a second differential becomes meaningful: compare
@@ -742,8 +817,16 @@ of a fact.
   `CEQ_CORING`, `CEQ_OFFSET`, `CEQ_COMPATI`, `CUVCONT`, `CSUP`, `ECSUP`,
   `C_SAT_C`. The firmware names them and this file has not found their data.
   Best candidate for the strong looks' missing saturation.
-- **The words after the luma triple** in the YCMAT block at `0xC0B39118`:
-  `-6, 256, 256, -56, 0, 100, ...`. Likeliest path to the rotation shortfall.
+- **The per-mode YC matrix records**, the stride-20 class that `0xC02C55A0`
+  reads. Only the id-100 default is static, at descriptor entry 31. The per-mode
+  records live in RAM off `0xC2F1A064 + 0x28`, and nothing in the image writes
+  them. The words after the luma triple are decoded — they are the two chroma
+  rows — so what is left here is the per-mode data, not the format.
+- **Descriptor entry 30**, `0xC0B39100`, one 24-byte record
+  `(100, 0, 632, -92, -28, 646, 0, -134, 566, 0, -54, 0)`. Three Q9 rows that
+  each sum to 512. Read in the own-channel-first layout, its green row is
+  `(0.000, 1.262, -0.262)`, which is Standard's green row exactly. Its other two
+  rows are not Standard's. No consumer found yet.
 - **The coarse `CEQ_ORG` / `CEQ_TGT` pair**, named beside the 24-bin ones and
   never located.
 - **Arrays A and C** of a `CEQ24` block are identified as the two value columns,
@@ -760,8 +843,10 @@ Interpretation, not missing data. These do not gate anything.
   what the per-hue base shift is. Both are measured and both lack a mechanism.
   Tested and rejected against held-out data: the equaliser working in symmetric
   `(B-Y, R-Y)` axes rather than Cb/Cr (4.05 against 2.84), a fixed 512
-  denominator for the saturation array (overshoots the two `B=1024` modes), and
-  a chroma-dependent gain (the fit collapses to flat).
+  denominator for the saturation array (overshoots the two `B=1024` modes), a
+  chroma-dependent gain (the fit collapses to flat), and the equaliser working
+  in the camera's own decoded chroma plane, which moves the render by 0.03 dE
+  and predicts a mean gain of 1.038, the wrong way.
 - Why Standard has no register block.
 - What Cinematic and Powder Blue do that the other twelve do not. Both render at
   about 0.8 of the reference's chroma under the same trim that puts every other
