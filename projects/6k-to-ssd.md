@@ -23,18 +23,87 @@ RWZM              the 16-phase 2-tap resampler at 0x300F0900
      |            factory ratio 0x640 = 1.5625
      v
 XC_HalLjpeg       0x300D0000, lossless JPEG, ~2.3:1 measured on Bayer
-     |
+     |            **on every other frame** -- see the next section
      v
-SSD               USB 3.x Gen1, 5 Gbps, 625 MB/s theoretical, 376 proven
+SSD               USB 3.x Gen1, 5 Gbps, 625 MB/s theoretical, 379 measured
 ```
 
 Every stage exists and runs today. None of them has been run in this order.
 
-### What decides the output size
+### The design: alternate-frame compression
 
-With compression in the chain the link stops being the constraint — it would
-take 31.98 Mpix at 29.97 to reach 625 MB/s after 2.3:1. **The engine is the only
-gate**, and the output size follows directly from its sustained rate:
+Compressing **every frame** wastes the link; compressing **no frame** wastes the
+engine. Compressing a *fraction* of the frames makes both constraints bind at
+once, and that is worth a third more pixels than either extreme.
+
+With `f` the fraction of frames compressed, `E` the engine's rate, `L` the link
+budget and `C` the compression ratio:
+
+```
+engine allows   px <= E / (f x fps)
+link allows     px <= L / (1.5 x fps x (1 - f/C))
+optimum         f  =  1.5E / (L + 0.75E)
+```
+
+At E=300 Mpix/s, L=500 MB/s, C=2 the optimum is f=0.62 and 16.1 Mpix. **Take
+f=1/2**: 14.83 Mpix at 4717x3144, which is 33% more than uncompressed and 48%
+more than compressing everything, and unlike f=0.62 it leaves timing margin.
+
+| | Mpix | size | vs uncompressed |
+|---|---|---|---|
+| compress nothing | 11.12 | 4085x2723 | — |
+| compress everything | 10.01 | 3875x2583 | −10% |
+| **compress every other frame** | **14.83** | **4717x3144** | **+33%** |
+
+### Why alternate frames and not half a frame
+
+Half a frame does not survive the container. **TIFF's `Compression` tag is per
+IFD**, so one file cannot hold a compressed half and an uncompressed half; no
+reader would reassemble it.
+
+Alternate *frames* is free of that. CinemaDNG is a sequence of independent files
+and each declares its own `Compression`, so frame 1 can be `Compression=7` and
+frame 2 `Compression=1` with both remaining valid DNGs.
+
+> **Assumption, not verified:** that readers tolerate a mixed sequence. A reader
+> that caches the first frame's parameters for the whole sequence would break.
+> This is testable on the host with no camera — build a sequence that alternates
+> and open it in Resolve.
+
+### Timing and buffer
+
+```
+frame time                     33.4 ms at 29.97
+compressing one 14.83 Mpix frame at 300 Mpix/s   49.4 ms
+budget when only every other frame is compressed 66.7 ms   -> 26% margin
+buffer: compression may lag by one frame          ~22 MB
+```
+
+At f=0.62 the margin is zero, which is why 1/2 is the engineering choice rather
+than the arithmetic optimum.
+
+### The number the whole design rests on
+
+```
+break-even engine rate = 0.5 x 11.12 Mpix x 29.97 = 167 Mpix/s
+measured, one cold call                            169.7 Mpix/s
+```
+
+**They are the same number.** At the measured rate this design gains 2% and is
+not worth building; at 240 Mpix/s it gains 33%.
+
+The measurement is a cold call and `FUN_c062fee8` brings up the power domain,
+clock and IRQ *inside* encode — a cost a recording loop pays once and a cold call
+pays every time — so the true sustained rate is very likely higher. Nobody has
+separated them. **Until that is measured, the size of this design is unknown by
+a factor of 1.3.**
+
+### For reference: compressing every frame
+
+Superseded by the design above, kept because the arithmetic explains why. If
+*every* frame is compressed the link stops being the constraint — it would take
+31.98 Mpix at 29.97 to reach 625 MB/s after 2.3:1 — and **the engine becomes the
+only gate**, so the output follows straight from its rate:
 
 | engine | output at 29.97 | written |
 |---|---|---|
@@ -43,9 +112,11 @@ gate**, and the output size follows directly from its sustained rate:
 | 240 Mpix/s | 3466×2310 | 156 MB/s |
 | 169.7 Mpix/s — measured, cold `[C]` | 2915×1943 (5.7 Mpix) | 111 MB/s |
 
-**265 Mpix/s is the number that matters.** Below it, compressing is worse than
-writing 3542×2361 uncompressed at the proven 376 MB/s. Above it, compression
-wins on both size and headroom.
+**265 Mpix/s is the break-even for this variant**, against writing 3542×2361
+uncompressed at the measured 379 MB/s. Note this is a different threshold from
+the 167 Mpix/s above: that one is for alternate-frame compression against a 500
+MB/s budget, this one is for full compression against 379. Two designs, two
+thresholds; the alternate-frame design is the one to build.
 
 `6000×4000 ÷ 1.5625 = 3840×2560` — the sensor's active area through the factory
 RWZM ratio, needing no scaler change — sits just under the inferred ceiling.
@@ -150,6 +221,65 @@ SSD               USB 3.x Gen1,5 Gbps,理論 625 MB/s,已證明 376
 ```
 
 每一段都存在、都在跑。**沒有人把它們照這個順序串過。**
+
+### 設計:隔幀壓縮
+
+**每幀都壓會浪費鏈路,每幀都不壓會浪費引擎。** 只壓一部分的幀,兩個限制才會
+同時吃滿 —— 而那比任何一個極端都多出三分之一的像素。
+
+令 `f` 為被壓縮的幀比例、`E` 引擎速率、`L` 鏈路預算、`C` 壓縮比:
+
+```
+引擎允許   px <= E / (f × fps)
+鏈路允許   px <= L / (1.5 × fps × (1 - f/C))
+最佳       f  =  1.5E / (L + 0.75E)
+```
+
+E=300、L=500、C=2 時最佳 f=0.62、16.1 Mpix。**取 f=1/2**:14.83 Mpix、
+4717×3144 —— 比不壓多 33%、比全壓多 48%,而且不像 f=0.62 那樣時序沒有餘裕。
+
+| | Mpix | 尺寸 | 對比不壓 |
+|---|---|---|---|
+| 完全不壓 | 11.12 | 4085×2723 | — |
+| 每幀都壓 | 10.01 | 3875×2583 | −10% |
+| **隔幀壓** | **14.83** | **4717×3144** | **+33%** |
+
+### 為什麼是隔幀,不是半張圖
+
+半張圖過不了容器。**TIFF 的 `Compression` tag 是每個 IFD 一個**,所以一個檔案
+不可能一半壓、一半不壓,沒有讀取器組得回來。
+
+隔**幀**沒有這個問題。CinemaDNG 是一串獨立的檔案,每個自己宣告 `Compression`,
+所以第 1 幀 `Compression=7`、第 2 幀 `Compression=1`,**兩個都是合法 DNG**。
+
+> **這是假設,沒驗證:**讀取器能不能吃混合的序列。如果某個讀取器把第一幀的參數
+> 套用到整個序列,就會壞。**這可以在主機上測,不用相機** —— 做一個交替的序列,
+> 丟進 Resolve 打開。
+
+### 時序與緩衝
+
+```
+每幀                                    33.4 ms @29.97
+壓一張 14.83 Mpix @300 Mpix/s            49.4 ms
+隔幀壓的預算                             66.7 ms   -> 26% 餘裕
+緩衝:壓縮最多落後一幀                    約 22 MB
+```
+
+f=0.62 的餘裕是零,所以 1/2 才是工程上對的選擇,而不是算術上的最佳解。
+
+### 整個設計壓在哪個數字上
+
+```
+損益平衡的引擎速率 = 0.5 × 11.12 Mpix × 29.97 = 167 Mpix/s
+實測,一次冷呼叫                              169.7 Mpix/s
+```
+
+**兩個是同一個數字。** 用實測值算,這個設計只賺 2%,不值得做;
+引擎若有 240,就賺 33%。
+
+那次量測是冷呼叫,而 `FUN_c062fee8` 把電源域、時脈、IRQ 的拉起做在 encode
+**裡面** —— 錄影迴圈只付一次,冷呼叫每次都付 —— 所以真實穩態速率很可能更高。
+**沒有人分離過。在量出來之前,這個設計的尺寸有 1.3 倍的不確定。**
 
 ### 決定輸出尺寸的是什麼
 
