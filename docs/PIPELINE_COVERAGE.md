@@ -65,10 +65,31 @@ Entries with more than the two copier calls, which marks a real consumer:
 | entry | pointer | count | stride | uses | what it is |
 |---|---|---|---|---|---|
 | 31 | `0xC0B39118` | 1 | 20 | 175 | the YC matrix, decoded |
-| 30 | `0xC0B39100` | 1 | 24 | 4 | a Q9 3x3, rows sum to 512, unread |
+| 30 | `0xC0B39100` | 1 | 24 | 4 | **identified**: a white-preserving saturating Q9 3x3, the fallback default of a matrix class |
 | 24 | `0xC0B39088` | 1 | 8 | 3 | the chroma gains, all zero |
-| 29 | `0xC0B390E8` | 1 | 24 | 3 | three rows of 512, unread |
+| 29 | `0xC0B390E8` | 1 | 24 | 3 | **identified**: the Q9 identity, the neutral default of a second matrix class |
 | 37 | `0xC0B3924C` | 1 | 292 | 3 | **identified**: Standard's own `CEQ24` block |
+
+**The consumer surface is small, and that is what makes the walk tractable.** Of
+the 242 call sites of the getter, 180 are outside the copiers, and they fall into
+only five functions:
+
+| function | entries it reads |
+|---|---|
+| `0xC02C5440` | 24, 30, 31 — the mode-matrix loader |
+| `0xC02CFCF0` | 29, 30, 31, 37 — the effect-strength composer |
+| `0xC02D5E18` | 31, 142 times — the register-write path |
+| `0xC02BF6E8`, `0xC02BFF9C` | one site each, entry not resolved |
+
+**Entry 30 is decoded and rejected as a render stage.** Its rows each sum to 512,
+so it preserves white, but unlike every matrix in the mode table it saturates:
+eigenvalues 1.2344, 1.3672 and 1.0, determinant 1.69. Both consumers use it as
+the fallback when a mode has no keyed record, and the per-mode records are
+stride 40. It matches no mode matrix. Tested in the rig as a shared stage, to see
+whether it could stand where the fitted `chroma_trim` of 1.12 does, it is worse
+than having no trim at all: 3.581 against 3.239 held out with the trim, and 3.496
+with the trim removed and nothing in its place. Applying it before the mode
+matrix instead is worse again, at 3.683. The script is `xc/e30.py`.
 
 Entry 37 is now read. It is a full `CEQ24` block carrying id 100, and it decodes
 to Standard's look exactly. That answers a standing question — Standard does have
@@ -239,10 +260,12 @@ own tables — the stages that carry the mode differences. The render sits at
    only a handful identified. For each: find the RAM address in the copier, scan
    for consumers of that address, and read what the consumer computes. This is
    the method that worked twice on 2026-09-12 and it needs no names.
-2. ~~Entry 37.~~ Done on 2026-09-12: it is Standard's `CEQ24` block.
-3. **Then entries 30 and 29.** Both are 24-byte records of Q9 rows that sum to
-   512, both have real consumers, and entry 30's green row is Standard's green
-   row exactly.
+2. ~~Entries 37, 30 and 29.~~ Done on 2026-09-12. Entry 37 is Standard's `CEQ24`
+   block, entry 30 is a saturating matrix default that the render rejects, and
+   entry 29 is the Q9 identity.
+3. **The 21 descriptor entries with no RAM address.** 28 of 49 are mapped through
+   the copiers; the rest are reached another way and are unexamined. Entries 28
+   and 35 hold all-zero defaults, so they are cheap to rule out.
 4. **The second 36-entry map** in the 72-entry table. Present for Standard and
    OFF, its two saturation divisions differ where the DNG's are identical, and
    its role is open.
