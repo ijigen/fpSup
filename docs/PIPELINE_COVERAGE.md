@@ -178,6 +178,57 @@ entry 37 and moves 292 bytes to `0xC3424DC0 + 0x14c`; table C's copy sits at
 `0xC34252B4`. Nothing in the image builds either address with `movw`/`movt`, so
 the hardware writer reaches them through the table, not directly.
 
+## How an ISO-keyed parameter is actually read
+
+Decompilation settles the mechanism. The generic reader is this, from
+`0xC02D0EC0`:
+
+```c
+key = *(uint *)(ctx + 0xfc);          // the current ISO
+tbl = *(uint **)(table + 0xd0);       // entry 26's records, 0xd0/8 = 26
+n   = *(uint *)(table + 0xd4);        // its count
+// clamp key into [first key, last key], then walk down for the bracketing pair
+v = interp(rec[-2], rec[0], (char)rec[-1], (char)rec[1], key);
+```
+
+`interp` is `0xC04D0F80`, a linear interpolation between two `(key, value)`
+points. Three things follow, and none was visible from the data alone.
+
+- **The camera interpolates between ISO steps.** It does not snap to the nearest
+  rung of the ladder. A parameter is a continuous function of sensitivity, and
+  the ladder is its knot set.
+- **Only the low byte of each value word is used.** The reader casts with
+  `(char)`, so a record's 32-bit value field carries one byte of payload.
+- **The entry index is baked into the reader, not passed in.** `0xC02D0EC0` is
+  hard-wired to entry 26. So there is one small reader function per parameter
+  class, which is why no single call site enumerates the table.
+
+`0xC04D0F80` has 13 callers. Six sit in the ISP parameter code — `0xC02C11A8`,
+`0xC02D0618`, `0xC02D0998`, `0xC02D0EC0`, `0xC02D1150`, `0xC02D1A58` and
+`0xC02D1AD0` — and the rest are in an unrelated subsystem at `0xC0694000`.
+`0xC02D0998` is a generic column reader over 48-byte records, and `0xC02D1150`
+interpolates ten columns of one record at once. Those two are the ones to read
+next, because between them they cover the wide records.
+
+## Reading the image with a decompiler
+
+The analysis from 2026-09-12 onward uses Ghidra headless over the raw image,
+loaded as `ARM:LE:32:v7` at base `0xC0000000`. Auto-analysis finds 39,063
+functions in about five minutes.
+
+It is worth saying why this changed the work rather than just speeding it up.
+Hand-written scanners anchored on a call site cannot follow a pointer that is
+stored into an object, and this firmware does that constantly — the descriptor
+tables are wrapped in a class with a vtable and handed to a generic worker. Real
+cross-references found 10 distinct callers of table A's getter where a
+proximity-clustered scan of the same call sites had found 5, and it found the two
+callers each of B's and C's getters immediately.
+
+The decompiler also serves as a check on hand analysis. It reproduced the YC
+matrix builder at `0xC02C55A0` independently: the 16-byte copy from `record + 4`,
+the luma row scaled by `DAT_c02c5934`, and the two chroma rows as
+`v3, -(v3+v4), v4` and `v5, -(v5+v6), v6` scaled by `DAT_c02c593c`.
+
 ## Coverage by block
 
 Status words, used strictly:
