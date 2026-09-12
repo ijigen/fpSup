@@ -406,14 +406,25 @@ All 11 **named only**. The renderer uses its own demosaic.
 | stage | status | where |
 |---|---|---|
 | `GAMMA TABLE` | decoded | the bank at `0xC096CF34`, 2048 `u16` per curve, 8190 full scale, with the mode-to-group map at `0xC0B3D670` |
-| `YCMAT` | decoded | descriptor entry 31, `0xC0B39118`, built by `0xC02C55A0` |
+| `YCMAT` | decoded | descriptor entry 31, `0xC0B39118`, built by `0xC02C55A0`; all sixteen runtime records are in DNG tag 297 |
 | `GAM_BAS` | named only | |
 | `GAMINT` | named only | |
 | `SBUS GAMMA` | named only | |
 | `GAM_GS GAMDEC` | named only | |
 | `RGBMAT_PL` | named only | |
 
-The per-mode `YCMAT` records are **run time**. Only the id-100 default is static.
+**The bank curve is two stages, not one.** DNG tag 301 holds sixteen 128-point
+tone curves, one per mode, and `bank[mode](x * 2047) = srgb_encode(tone301[mode](x))`
+to a maximum error of 0.0011 over the thirteen exported modes. So the bank is a
+per-mode tone map in linear light composed with a plain sRGB transfer function,
+and its input full scale is 2047. The sixteen curves collapse to the same eight
+groups that the map at `0xC0B3D670` gives, which confirms the map from camera
+output.
+
+An earlier version of this file said the per-mode `YCMAT` records are **run time**
+and only the id-100 default is static. The first half is still true of the image.
+It no longer means the values are unread: tag 297 exports all sixteen. The luma
+row is Rec.601 in every mode, and the chroma rows are per mode.
 
 ### CEQ — the colour equaliser
 
@@ -490,12 +501,18 @@ bulk of what the project has read.
 This is the debt, quarantined in its own fields. It is listed here so the cost of
 each unread stage is visible.
 
-| item | stands in for |
-|---|---|
-| `T`, the front-end transform | an unread stage between the sensor matrix and the look matrix |
-| `residual_lo` / `residual_hi` | undecoded chroma stages, most likely inside `CEQ` or `PST_TOP` |
-| `luma_cb` / `luma_cr` | the per-mode `YCMAT` luma row, which is run time |
-| `rot_scale`, about 0.6 to 0.7 | no mechanism found; four have been tested and rejected |
+This table describes the **shipped** renderer. The decoded chain in
+COLOR_MODES.md carries none of it except `T`, and scores better — 2.161 dE full
+frame against 4.282 for the fitted chain on the same pixels.
+
+| item | stands in for | status |
+|---|---|---|
+| `T`, the front-end transform | an unread stage between the sensor matrix and the look matrix | still needed, one measurement from the OFF frame |
+| `residual_lo` / `residual_hi` | undecoded chroma stages, most likely inside `CEQ` or `PST_TOP` | not needed by the decoded chain |
+| `luma_cb` / `luma_cr` | ~~the per-mode `YCMAT` luma row, which is run time~~ | **the reading was wrong.** Tag 297 gives every mode the same Rec.601 luma row, so these fields stand in for an unknown stage |
+| `rot_scale`, about 0.6 to 0.7 | ~~no mechanism found~~ | **retired.** There was no mechanism. A scale of 1.0 is a sharp interior minimum once the matrix, the composition and the chroma plane are decoded |
+| the working-space matrix `G` | the space the mode matrices act in | retired, the decoded chain needs no conjugation |
+| `chroma_trim`, 1.12 | nothing named | retired, the decoded value is 1.00 |
 
 ## Coverage, counted
 
@@ -506,8 +523,14 @@ decoded far enough to be tested and rejected.
 
 That is about 7 percent of the stages by count. It is much more than 7 percent of
 the look, because the decoded seven are the matrix, the gamma and the equaliser's
-own tables — the stages that carry the mode differences. The render sits at
-2.46 dE against the camera, and 4.18 dE with firmware-derived stages alone.
+own tables — the stages that carry the mode differences.
+
+An earlier version of this file ended here with "the render sits at 2.46 dE
+against the camera, and 4.18 dE with firmware-derived stages alone". The second
+figure is superseded. A chain built only from decoded data and one measured 3x3
+now reaches **1.854 dE** on the held-out half over all fourteen modes, against
+3.239 for the fitted chain on the same pixels. The gap between decoded and fitted
+has reversed, and the decoded chain is the better one.
 
 ## TODO, in order
 
@@ -523,13 +546,20 @@ own tables — the stages that carry the mode differences. The render sits at
    sensitivity, not look data. The look enters only through the classes that take
    a per-mode RAM override, and those are entries 24, 29, 30, 31 and 37 — all now
    identified. Further walking should expect ISO tuning, not looks.
-4. **The second 36-entry map** in the 72-entry table. Present for Standard and
+4. **What builds the runtime matrix for the white-balance-shifting modes.** This
+   is now the most valuable open item. Cinematic, Sunset Red, Powder Blue and
+   FOV Classic Yellow have an exported matrix that no composition of the
+   firmware table reproduces, and Warm Gold is not exported at all and sits at
+   8.0 dE where every other mode is under 2.9. The descriptor walk is the method:
+   look for a per-mode class that carries a channel gain.
+5. **The second 36-entry map** in the 72-entry table. Present for Standard and
    OFF, its two saturation divisions differ where the DNG's are identical, and
    its role is open.
-5. **The `PST_TOP` chroma stages**, through the same descriptor walk rather than
+6. **The `PST_TOP` chroma stages**, through the same descriptor walk rather than
    by name. `CUVCONT`, `CSUP`, `ECSUP` and `CKNEE` are the best candidates for
    the strong looks' missing saturation.
-6. **`SIG1 SHADING`** if the renderer ever needs to match corner falloff. It is
+7. **`SIG1 SHADING`** if the renderer ever needs to match corner falloff. It is
    not on the path the current measurements use.
 
-Items 1 to 3 are bounded work with a known method. Items 5 and 6 are searches.
+Items 1 to 3 are bounded work with a known method. Item 4 is the one that pays.
+Items 6 and 7 are searches.
