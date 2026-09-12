@@ -86,7 +86,8 @@ Entries with more than the two copier calls, which marks a real consumer:
 | 37 | `0xC0B3924C` | 1 | 292 | 3 | **identified**: Standard's own `CEQ24` block |
 
 **Consumers, and a blind spot in how they are counted.** `0xC02D5DE0` is the only
-route to the table: nothing else in the image builds `0xC0B38ACC`. Of its 242
+route to table A specifically — nothing else builds `0xC0B38ACC` — but see the
+section on the three tables: B and C have their own getters. Of A's 242
 call sites, 180 are outside the copiers, and 178 of those index an entry by an
 immediate offset in three functions:
 
@@ -123,6 +124,59 @@ to Standard's look exactly. That answers a standing question — Standard does h
 a register block, as the class default rather than as a keyed record — and it
 confirms the five-bin hue offset through the value column, which no earlier
 derivation used. See COLOR_MODES.md, section 4.
+
+## There are three descriptor tables, not one
+
+An earlier version of this file said `0xC02D5DE0` is the only route to the
+descriptor table. That is true of **that** table, and it hid two siblings. There
+are three, each 49 entries of `(pointer, count)` in the same layout, each with
+its own one-instruction getter:
+
+| table | address | getter | contents |
+|---|---|---|---|
+| A | `0xC0B38ACC` | `0xC02D5DE0` | 49 ROM entries, single-record defaults |
+| B | `0xC0B3EFDC` | `0xC02D6BF8` | 31 RAM + 18 ROM |
+| C | `0xC0B3F83C` | `0xC02D6FF0` | 31 RAM + 18 ROM, a second instance |
+
+The two bulk copiers fill the RAM slots of B and C from A's defaults. B's RAM
+pointers are exactly the copier destinations, which is how the three line up.
+
+**B and C are what the ISP reads; A is only the fallback set.** The same 18
+entries are ROM-resident in both B and C — 0, 1, 6, 8, 9, 10, 14, 15, 16, 17,
+20, 21, 22, 26, 34, 39, 44 and 48 — and those are exactly the classes the copiers
+skip, because they have no runtime override. For those classes B and C carry
+**more data than A**. A's entry 0 is one 16-byte record; B's entry 0 is ten
+records on an ISO ladder. So reading table A alone understates the parameter set
+by a wide margin.
+
+### The 18 ROM classes of table B
+
+All are ISO-keyed, with the same `u16` wrap as table A.
+
+| entry | records | stride | shape |
+|---|---|---|---|
+| 0, 1 | 10 | 16 | identical to each other; zero below ISO 800, then a pair rising to 4128 with a second pair that switches on at 12800 |
+| 6 | 9 | 16 | a pair falling 16383 to 128 as ISO rises — a strength that decreases with sensitivity |
+| 8 | 11 | 12 | three values rising with ISO, 6 to 17 and 24 to 56 |
+| 9, 10, 16, 17, 20, 39 | 1 | 8–40 | single records; 39 is a 20-step ramp 0, 256, 512 … 2304 |
+| 14 | 1 | 20 | two 4-point ladders, `(0, 200, 1032, 800)` and `(0, 200, 1032, 500)` |
+| 15 | 4 | 8 | a strength falling 100, 100, 75, 25 at the top three ISOs |
+| 21 | 4 | 16 | 100/180/180/250 against 100, 100 |
+| 22 | 1 | 16 | `840, 880, 960, 1027, 5` — an ascending triple, likely knee points |
+| 26 | 4 | 8 | 20, 20, 20, 23, 26 |
+| 34 | 11 | 20 | rises with ISO on two columns, 0 to 80 and 1032 to 1068 |
+| 44 | 2 | 20 | two records both keyed 100 |
+| 48 | 79 | 8 | **keyed 0 to 78, not by ISO.** Values are only 0, 1, 256, 257, 258 — a two-byte flag pair. This reads as a per-stage enable table, one row per ISP stage. |
+
+Entry 48 is the most interesting of the set. A 79-row table of small flags keyed
+by a plain index is the shape of a stage-enable map, and the pipeline has roughly
+that many parameter stages. Nothing yet links row `n` to a stage name, and the
+name pool cannot supply the link.
+
+**The `CEQ24` default block is in RAM at `0xC3424F0C`.** The copier reads table A
+entry 37 and moves 292 bytes to `0xC3424DC0 + 0x14c`; table C's copy sits at
+`0xC34252B4`. Nothing in the image builds either address with `movw`/`movt`, so
+the hardware writer reaches them through the table, not directly.
 
 ## Coverage by block
 
