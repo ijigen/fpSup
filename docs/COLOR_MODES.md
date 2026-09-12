@@ -519,6 +519,18 @@ complete 24-bin field from a colour-rich frame would show three lobes centred
 on the targets if this is the stage, which makes the shoot a direct test of
 it.
 
+**The parameter space is enumerated.** Two near-identical orchestrators (the
+vtable methods at `0xC02C6870` and `0xC02C7448`) call about 55 loader functions
+in a fixed sequence — one per parameter class — through a small family of
+per-id fetchers (`0xC02C41F8` the generic one, `0xC02C6540` the 580-stride
+hue-table find, `0xC02D3A90` and `0xC02D5B50` for the heavyweight classes).
+Three of the loaders are per-mode preloaders that fill arrays for every mode id
+in the order 35, 1, 0, 3, 5, 6, 7, 14, 11, 12, 15, ...: the mode matrices
+(36-byte float records via `0xC02C5440`), the runtime YCbCr matrices
+(`0xC02C55A0`), and the float hue tables themselves (576 bytes per mode via
+`0xC02C6540`). The rest of the classes — noise, sharpening, exposure — are
+scoped but not read.
+
 Also catalogued and not yet decoded: a parameter zone around `0xC0B35F90`
 holding Q9 knee-point ladders, a full-scale tone curve ending at `0xC0B35F32`,
 a 33-step strength ladder at `0xC0B386E0`, and further RAM parameter structs at
