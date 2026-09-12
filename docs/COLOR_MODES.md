@@ -856,9 +856,54 @@ All sixteen records are in the order `0xC02C57C0` uses: 35, 1, 0, 3, 5, 6, 7, 14
 and id 36 appears twice, so the camera exports no runtime state for Warm Gold.
 Warm Gold arrived in Ver 5.02 and the sixteen-slot array was not extended for it.
 
+The decompiled preloader passes those sixteen ids as literal immediates, and the
+last two calls are `(iVar1 + 0x1f8, 0xd)` and `(iVar1 + 0x21c, 0x24)` — Powder
+Blue, then OFF a second time.
+
+**The export is a fixed preload, and this is measured, not inferred.** Two DNGs
+were compared: `standard.DNG`, shot in Standard, and `SDIM9995.DNG`, shot in Warm
+Gold on a different scene under a different white balance. Tags 292, 297, 298,
+299 and 301 are **identical in both**, value for value. Thirteen tags differ, and
+they are the white balance, the scene statistics and the timing fields. So the
+exported pipeline state does not depend on the shooting mode, the scene or the
+illuminant, and no DNG from this firmware carries Warm Gold.
+
+Each record was identified by matching its contents against the firmware tables
+rather than by its position in the run. All sixteen match at 0.000000, and Warm
+Gold's own table is 20.0 degrees away from the nearest of them. The reader is
+`xc/wgcheck.py`.
+
 The JPEGs carry none of these tags. A JPEG's MakerNote has 91 entries against the
 DNG's 98, and the seven that only the DNG has are 292, 297, 298, 299, 301, 311
-and 312. So a Warm Gold JPEG does not supply what the DNG omits.
+and 312. The four a JPEG has and the DNG does not — 28, 29, 30 and 31 — are the
+thumbnail size, a version string and two counters. So no Warm Gold file of either
+kind supplies what the preloader omits.
+
+### Tag 52 is a white-balance-normalised per-mode matrix
+
+Tag 52 is nine floats that change with the colour mode, and it is present in
+JPEGs as well as DNGs, which makes it the only per-mode colour data the camera
+writes into a Warm Gold file. It factors exactly:
+
+```
+tag52[mode, illuminant] = diag(1 / wb) @ N[mode]
+```
+
+where `wb` is tag 51, which is `1 / AsShotNeutral` to the last digit. Two Warm
+Gold files under different illuminants — `warm-gold.JPG` at
+`(1.6016, 1.000, 2.5625)` and `SDIM9995.DNG` at `(1.6953, 1.000, 2.2266)` — give
+the same `N` to **9e-8**. Each row of tag 52 scales by its own white-balance
+multiplier, and the green row does not move because that multiplier is 1.000.
+
+**`N[OFF]` is the XYZ D50 to sRGB matrix exactly.** Composed with ProPhoto to XYZ
+D50 it reproduces the standard ProPhoto to sRGB matrix to every digit.
+
+**What `N` is not.** It is not the DNG profile: `ColorMatrix1` and `ColorMatrix2`
+are identical in both DNGs, so they are per-body calibration and carry no mode.
+It is not the runtime look matrix either. `N[mode] @ inverse(N[OFF])` is not
+similar to tag 292 — the eigenvalues do not match and the determinants differ by
+about a hundred — and `N[Monochrome]` equals `N[OFF]` exactly, though Monochrome
+removes all chroma. So tag 52 is decoded as a form and its role is open.
 
 Four more tags are read and are not look data. Tag 51 is the as-shot white
 balance, `(1.6016, 1.000, 2.5625)`. Tags 288 and 289 are ten white-balance
@@ -1113,6 +1158,19 @@ Warm Gold has the second largest white-balance shift, at gains 1.188, 1.000 and
 0.846, and it is the one menu mode the camera does not export. It therefore falls
 in the class the derivation fails on, which is why it stays at 8.0 dE while the
 other thirteen modes sit between 0.65 and 2.89. The script is `xc/curvechain.py`.
+
+**Warm Gold's runtime matrix cannot be read from the camera.** Three independent
+findings close that route: the preloader's sixteen ids are literal immediates
+with id 9 absent, two DNGs shot in different modes carry identical exports, and
+JPEGs carry none of the pipeline tags. So this mode can only be settled by
+reading what builds the runtime matrix for its class, which is the open entry
+above, or by fitting it.
+
+If it is ever fitted, the instrument now exists to do it honestly.
+`SDIM9995.DNG` and `SDIM9995.JPG` are a matched raw and in-camera JPEG pair shot
+in Warm Gold on a **different scene** from the fifteen-mode frame. So a Warm Gold
+matrix can be measured on one scene and scored on the other, which is a stronger
+test than the half-frame split every other fitted value in this file used.
 
 ## The gamma bank is a tone curve and an sRGB encode
 
