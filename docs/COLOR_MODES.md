@@ -45,9 +45,16 @@ The three floats are a hue rotation in degrees, a saturation multiplier and a
 value multiplier. Two entries prove that. Monochrome is saturation 0.000 in
 every bin. OFF is hue 0.0, saturation 1.000 and value 1.000 in every bin.
 
-The two variants hold the same hue and almost always the same saturation. Only
-the value multiplier differs, in 54 of 408 bins in Ver 5.02. What selects the
-variant is not known.
+**For every menu mode the two variants differ only in the value multiplier.**
+Counted over all 408 bins of Ver 5.02: the hue column is identical in 408, the
+saturation column in 391, and the value column in 354. All 17 saturation
+differences belong to id 37, which has no menu entry. So for the 15 modes a user
+can pick, the variants are one table with two value columns.
+
+Variant 0's value column is **1.000 in every bin of every mode**. So choosing
+variant 0 is the same as having no value stage at all. Variant 1's column is
+non-1 in 54 bins. The section on the value columns tests both against the
+camera.
 
 Bin `i` covers 15 degrees. **Bin 0 is not at red.** An earlier version of this
 file inferred that it was, and a later one said it was red half a turn away.
@@ -653,6 +660,47 @@ What the 11 ids select is still open. The ladder shapes point at capture modes,
 because one group covers extended-low ISO, one covers the native range, and one
 varies only above ISO 800. This file does not name them.
 
+## The value columns, tested and rejected
+
+Arrays A and C of a `CEQ24` block are the value multipliers of the float table's
+two variants. Nothing in this project had ever rendered with either. Both are
+now tested.
+
+**Array A cannot do anything.** It is 1.000 in all 408 bins of all 17 modes. A
+render with it applied comes out bit-identical to a render without it, which is
+also a check that the test harness applies the column where it says it does.
+
+**Array C makes the render worse.** It is non-1 in 54 bins, held by nine of the
+15 menu modes. Applied as a per-bin multiplier at the equaliser, over the
+shipped chain, measured on the left half and validated on the right:
+
+| set of modes | baseline L | baseline R | array C, L | array C, R |
+|---|---|---|---|---|
+| all 14 | 5.340 | 3.239 | 5.453 | 3.754 |
+| the nine with a non-1 bin | 5.337 | 2.990 | 5.513 | 3.792 |
+
+Scaling luma alone rather than Y, Cb and Cr together is worse again, at 3.769 on
+the held-out half. The six modes with no non-1 bin do not move, as they cannot.
+The worst hits are FOV Classic Blue at 2.65 to 4.94, Powder Blue at 4.55 to
+6.51, and Monochrome at 1.48 to 2.62.
+
+Monochrome is the sharpest probe of the three. Its output has no chroma, so a
+hue-indexed luma column can only show up as lightness differences between
+objects of different colour. Monochrome renders at 0.9 dE full frame with no
+value stage, and array C moves it the wrong way on data the test never saw. The
+camera is not applying that column.
+
+**So the variant question has an answer for the value stage.** Because the two
+variants are otherwise one table, and variant 0's value column is all 1.000, the
+render says variant 0 — which is the same as saying the fp has no value stage in
+this path.
+
+This tests the column at the equaliser, indexed by the hue of the pixel after
+the curve. It does not rule out the same numbers being used at another point in
+the chain, or against another index. It does rule out the obvious reading.
+
+The script is `xc/valcol.py`.
+
 ## The YC matrix, and the camera's own chroma plane
 
 The builder at `0xC02C55A0` copies 16 bytes from `record + 4` and reads them as
@@ -877,8 +925,8 @@ of a fact.
   rows are not Standard's. No consumer found yet.
 - **The coarse `CEQ_ORG` / `CEQ_TGT` pair**, named beside the 24-bin ones and
   never located.
-- **Arrays A and C** of a `CEQ24` block are identified as the two value columns,
-  but nothing reads them: their effect on the render is untested.
+Arrays A and C used to stand here. Both are tested against the camera now, and
+neither belongs in the render. The section on the value columns has the numbers.
 The `CUVAREA` consumer used to stand here. It is decoded, and its per-mode
 strengths live in RAM rather than in the image, so nothing about it is readable
 and it gates nothing. The section on the care maps has the algorithm.
@@ -887,7 +935,9 @@ and it gates nothing. The section on the care maps has the algorithm.
 
 Interpretation, not missing data. These do not gate anything.
 
-- Which of the two variants in the hue table is used, and when.
+- What selects the hue table's variant, and when. For the 15 menu modes it can
+  only ever change the value column, and the render rejects variant 1's, so the
+  question bears on nothing this file measures.
 - Why the camera's output shows only 0.6 to 0.7 of the table's rotation, and
   what the per-hue base shift is. Both are measured and both lack a mechanism.
   Tested and rejected against held-out data: the equaliser working in symmetric
