@@ -541,14 +541,8 @@ the tone curve. The full list at `0xC0B40074`:
 | 2 | `0xC0B42748` | 3 | `CUVAREA` care-map selector |
 | 3 | `0xC0B42760` | 2 | the 72-entry tables, Standard and OFF only |
 | 4 | `0xC0B434E8` | 2 | the 128-point tone curves |
-| 5 | `0xC0B43CF0` | 22 | **unread**: 11 mode ids x 2 variants, each a RAM pointer and a count |
-| 6 | `0xC0B43E50` | 22 | **unread**: the same shape, a second class |
-
-Entries 5 and 6 hold `(mode id, variant, pointer, count)` records whose pointers
-run from `0xC2F1B3B8` to `0xC2F1CC28` — 6.2 KB of per-mode parameter RAM,
-bracketed by two more getters of the `0xC02D5DE0` family at `0xC02D6BCC` and
-`0xC02D8720`. The data is uploaded there at run time; its static source has not
-been found.
+| 5 | `0xC0B43CF0` | 22 | ISO ladders: 11 capture ids x a low/high split |
+| 6 | `0xC0B43E50` | 22 | ISO ladders, a second class, the same shape |
 
 **The 72-entry table is two maps, and only one of them is the DNG's.** Its 432
 floats are `36 hue x 2 sat x 3` twice over. The first map matches the DNG's
@@ -564,8 +558,70 @@ only for Standard and OFF, so its role is still open.
 
 Also catalogued and not yet decoded: a parameter zone around `0xC0B35F90`
 holding Q9 knee-point ladders, a full-scale tone curve ending at `0xC0B35F32`,
-a 33-step strength ladder at `0xC0B386E0`, and further RAM parameter structs at
-`0xC2F1BCD8` and `0xC3424DC0`.
+a 33-step strength ladder at `0xC0B386E0`, and a further RAM parameter struct
+at `0xC3424DC0`. The struct once listed at `0xC2F1BCD8` is not a separate
+object: it is one block of the ISO ladders, decoded in the section that follows.
+
+## Entries 5 and 6 are ISO ladders, not colour-mode data
+
+An earlier version of this file read these two entries as "11 mode ids by 2
+variants" and said their static source was missing. Both parts were wrong.
+
+Each record is 16 bytes, and field `+4` holds an ISO value. The initialiser
+writes that field through the converter at `0xC04D01F8`, which takes an integer
+ISO and returns a log form. The 415 records hold the fp's own ISO ladder, from
+the extended low of 6 to the extended high of 102400.
+
+The `variant` column is an ISO split. Variant 0 is the low ladder and variant 1
+is the high one. The two meet at a shared boundary ISO, so the last key of
+variant 0 repeats as the first key of variant 1.
+
+The 11 ids resolve to three ladder shapes. Entry 5, by id group:
+
+| ids | variant 0 (count) | variant 1 (count) |
+|---|---|---|
+| 0, 1, 2 | 6, 200, 250, 320, 400, 500, 640 (7) | 640 to 102400 (23) |
+| 3, 5, 7, 9 | 100, 800, 1000, 1250, 1600, 2000, 2500, 3200 (8) | 3200 to 102400 (16) |
+| 4, 6, 8, 10 | 100, 125, 160, 200, 250, 320, 400, 500, 640 (9) | 640 to 102400 (23) |
+
+Entry 6 repeats the last two rows value for value. Its first row is finer: ids
+0, 1 and 2 get all 21 steps from 6 to 640. In entry 6 the three groups share
+their pointers outright, so its 22 records address only six distinct blocks.
+
+**One function writes the whole region.** The initialiser at `0xC02D73F8` sits
+directly after the getter `0xC02D73E8` and runs `0x1248` bytes of unrolled
+stores. It holds the base `0xC2F1BCD8` in `r4` and reaches the region with
+signed offsets. Past the 4095-byte offset limit it reloads `r8` with
+`0xC2F1CC28`, and that reload is what `0xC02D8720` is. That address is not a
+getter. `0xC02D6BCC` is not one either: it copies 176 bytes out of
+`0xC2F1B060`, which is below the region. Neither address brackets anything.
+
+All 415 stores write field `+4`. No other code in the image forms an address
+into the region. A sweep for `movw`/`movt` pairs and for literal-pool words in
+`0xC2F1B3B8` to `0xC2F1CD98` finds only this initialiser and the two parameter
+tables themselves. So the ISO keys are in the image, and the payload fields
+`+0`, `+8` and `+12` are not.
+
+The region ends at `0xC2F1CD98`. An earlier reading gave `0xC2F1CC28`, which is
+the start of the last block, not the end of the data.
+
+**Why this does not bear on the colour error.** Four things settle it:
+
+- The key column is ISO. All 415 records are keyed by an ISO value.
+- The id column runs 0 to 10 with no gaps. Every colour-mode table in this file
+  uses the wide internal enum, which skips id 4 and reaches 37.
+- Two of the three id groups alternate odd and even. Colour modes do not
+  alternate, and 11 ids collapsing to three parameter sets is not 15 looks.
+- The payload has no source in the image, so no per-mode value can be read here.
+
+A search that cannot fail has not been run, so here is what would have found
+colour data: an id column in the internal enum, a record count of 15, 17 or 36
+to match the other look tables, or a ROM writer for the payload fields. None of
+the three is present.
+
+What the 11 ids select is still open. The ladder shapes point at capture modes,
+because one group covers extended-low ISO, one covers the native range, and one
+varies only above ISO 800. This file does not name them.
 
 ## The differential method, and what is still missing
 
@@ -677,11 +733,6 @@ gate on fitting** — see `CLAUDE.md`. Each entry is a place where real per-mode
 data sits, so a fitted constant added while any of these stands is a fit on top
 of a fact.
 
-- **Parameter list entries 5 and 6**, `0xC0B43CF0` and `0xC0B43E50`, 22 records
-  each: 11 mode ids by 2 variants of `(id, variant, pointer, count)`, addressing
-  `0xC2F1B3B8` to `0xC2F1CC28` — 6.2 KB of per-mode parameter RAM. The static
-  source that fills it has not been found. Two getters of the `0xC02D5DE0`
-  family bracket the region, at `0xC02D6BCC` and `0xC02D8720`.
 - **The second 36-entry map** in the 72-entry table, present for Standard and
   OFF. Unlike the DNG's copy its two saturation divisions differ, so the camera
   holds a saturation-dependent hue and saturation map and flattens it for
@@ -716,6 +767,8 @@ Interpretation, not missing data. These do not gate anything.
   about 0.8 of the reference's chroma under the same trim that puts every other
   mode within a few percent.
 - The settings enum to internal id conversion. It is inline code, not a table.
+- What the 11 ids of parameter list entries 5 and 6 select. They are not colour
+  modes. Their ladder shapes point at capture modes, and nothing names them.
 - What ids 34, 35 and 37 are. None has a menu entry. Id 35 has existed since
   Ver 1.02, carries Standard's matrix, and is the blend base for the effect
   strength system. Id 37 arrived in Ver 2.00 next to OFF.
