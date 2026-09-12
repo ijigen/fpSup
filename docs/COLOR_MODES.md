@@ -499,24 +499,55 @@ hue bins the sample frame cannot measure — the same four-of-24-bins limit as
 before. The field is not shipped; the mechanism is recorded, and one
 colour-rich frame per mode completes it.
 
-**The `CUVAREA` care maps are found.** Parameter-list entries 1 and 2 (at
-`0xC0B42730` and `0xC0B42748`) are id-to-pointer tables selecting among three
-blocks each, ids 0 to 2. The entry-2 blocks are 32x32 grids over the chroma
-plane holding the **distance from a target colour** — a radial bowl whose zero
-sits just off neutral, a different target per id. The entry-1 blocks are the
-same idea as 21x31 tables in a (position, level) form with a triangular depth
-envelope. Three targets, per-plane distance maps: this is the machinery behind
-the register name `PST_TOP CUVAREA CARE_SEL` — chroma processing weighted by
-the distance to protected memory colours (three of them, presumably skin, sky
-and foliage).
+**The `CUVAREA` care maps are found, and they are not memory colours.**
+Parameter-list entries 1 and 2 (at `0xC0B42730` and `0xC0B42748`) are
+id-to-pointer tables selecting among three blocks each, ids 0 to 2. The entry-2
+blocks are 32x32 grids over the chroma plane. The entry-1 blocks are the same
+idea as 21x31 tables, 651 cells.
 
-Why it matters: corrections weighted by distance to specific chroma-plane
-targets produce exactly the localized, sign-flipping rotation lobes measured
-in the missing field — strong near a target, reversing across it, absent far
-away. The consumer code and the per-mode strengths are the open ends; the
-complete 24-bin field from a colour-rich frame would show three lobes centred
-on the targets if this is the stage, which makes the shoot a direct test of
-it.
+An earlier version of this file said each grid holds the distance from a target
+colour, a bowl whose zero sits just off neutral, with a different target per id,
+and read that as protection for three memory colours. **Every part of that was
+wrong.** All three grids put their zero on the four centre cells — at neutral
+exactly, not off it. The three are one shape at three strengths: `id1 / id0` is
+0.942 and `id2 / id0` is 0.754, each with a spread of about 0.04.
+
+The shape is an elliptical distance from neutral. Fitting
+`sqrt((a*dCb)^2 + (b*dCr)^2)` gives an axis ratio of 1.481 and a residual of
+1.0 percent of full scale, where the best circle leaves 6.9 percent. The value
+runs 0 at neutral to 1024 at the corners, and it is linear in distance, not
+squared.
+
+**So `CUVAREA` cannot be the mechanism behind the residual field.** The earlier
+reading made it the leading candidate, because a correction weighted by the
+distance to specific chroma targets gives localized, sign-flipping lobes. A
+single monotone bowl centred on neutral cannot. It is a chroma-magnitude weight
+with a mild twice-per-turn hue term, so it has no way to act at one hue and
+reverse at another. The shoot it was going to be tested by would have found
+nothing, because there are no three lobes to look for.
+
+**The `CUVAREA` consumer is decoded.** It exists twice, once per orchestrator:
+the entry-2 copy at `0xC02CE260` and the entry-1 copy at `0xC02CDCF0`. Both run
+the same steps.
+
+- A base struct comes from `0xC02C1CF0`, which holds it in RAM at `0xC3414470`.
+  `0xC02D3A90` is not a fetcher. It adds `0x1c` or `0x110` to that pointer,
+  chosen by a byte flag, and returns it.
+- Two 9-entry `int` arrays at `+0x90` and `+0xb4` of that struct become floats.
+  These are the per-mode strengths, one pair per level.
+- If every `+0xb4` entry is zero, the whole stage is skipped.
+- A settings flag at `+0x33d` picks the care map: id 1 through `[table + 0xc]`,
+  or id 2 through `[table + 0x14]`. The id is a constant offset in the code, not
+  a computed index.
+- For each cell — 1024 of them for entry 2, 651 for entry 1 — the cell's `u16`
+  is bracketed in a ladder of `level * 128`, which is 0, 128, up to 1024 over
+  nine levels. The two strengths are then interpolated across that bracket.
+- The result is written as two planes of 2048 bytes, at `[obj + 0x190]` and
+  `0x800` after it. That is the same two-plane 32x32 shape as the effect-slider
+  LUT, so both stages feed the same kind of chroma table.
+
+**The per-mode strengths are not in the image.** They sit in the RAM struct
+above, so this stage cannot gate a fit: there is nothing here left to read.
 
 **The parameter space is enumerated.** Two near-identical orchestrators (the
 vtable methods at `0xC02C6870` and `0xC02C7448`) call about 55 loader functions
@@ -848,8 +879,9 @@ of a fact.
   never located.
 - **Arrays A and C** of a `CEQ24` block are identified as the two value columns,
   but nothing reads them: their effect on the render is untested.
-- **The `CUVAREA` consumer**, and the per-mode strengths that drive it. The
-  three care maps are decoded; the code that applies them is not.
+The `CUVAREA` consumer used to stand here. It is decoded, and its per-mode
+strengths live in RAM rather than in the image, so nothing about it is readable
+and it gates nothing. The section on the care maps has the algorithm.
 
 ## Open questions
 
