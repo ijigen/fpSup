@@ -278,15 +278,31 @@ Four routes were checked and all are empty:
 
 **The camera plainly does apply per-mode matrices**, because the fifteen modes
 render differently and the ROM matrix table holds fifteen different matrices. So
-a writer must exist and is not statically visible. This is the same puzzle as the
-long-standing one in COLOR_MODES.md — that no pointer to the matrix table at
-`0xC0B3A340` exists anywhere in the image — and it now has a shape: the pointer
-is installed into RAM at run time by a route that is neither a `movw`/`movt` pair
-nor a literal-pool word.
+a writer must exist and is not statically visible.
 
 Do not read this as "the per-mode tables are unused". It is a gap in the search,
-not a fact about the camera, and finding that writer is now the most valuable
+not a fact about the camera, and finding that writer is still the most valuable
 open item in this file.
+
+**A wrong inference, killed by its own control.** Ghidra reports zero references
+to the matrix table, the `CEQ24` run and the gamma map, and that looked like
+evidence of a consumer outside the ARM core. It is not. The control settles it:
+`0xC096CF34`, the gamma curve bank, and `0xC0B400AC`, the 24-bin hue tables, and
+`0xC0B434E8`, the tone curves, **also have zero direct references**, and all three
+are certainly used. Data blocks here are reached as `table[i].pointer`, and only
+the table gets a reference. Zero references is the normal state, not a signal.
+
+What remains anomalous is narrower and sharper. The hue tables are unreferenced
+but *are pointed to*, by the parameter list word at `0xC0B4007C`. The matrix
+table is pointed to by nothing at all — no code reference and no table entry.
+That, not the reference count, is the thing still to explain.
+
+Two further facts from the same pass. The preloader `0xC02C57C0` calls the matrix
+loader sixteen times, for mode ids 35, 1, 0, 3, 5, 6, 7, 14, 11, 12, 15, 8, 10,
+36, 13 and 36, writing 36-byte slots, and then calls an upload at `0xC00BA378`
+with the arguments `(ctx, 5, 292, 11, 144, array)`. And the mode search
+`0xC02D2670` reads slot 1 of the RAM table, pointer at `+0x08` and count at
+`+0x0c`, at stride 24 — the mode matrix record size.
 
 ## What the ISO machinery is for
 
@@ -300,6 +316,41 @@ So the ISO-keyed machinery is per-resolution capture tuning. That is independent
 support for reading the eleven ids of parameter-list entries 5 and 6 as capture
 modes rather than looks, and it is the reason walking the ISO tables does not
 find colour.
+
+## Finding tables: enumerate the getters
+
+Every parameter table in this firmware is reached through a one-line getter of
+the form `movw r0, #lo; movt r0, #hi; bx lr`. That pattern is a reliable way to
+enumerate them, and it should be the first thing a new reader runs.
+
+The image holds **134 such getters**. Fourteen return an address inside the
+parameter blob:
+
+| getter | table | status |
+|---|---|---|
+| `0xC02D5DE0` | `0xC0B38ACC` | descriptor table A |
+| `0xC02D6BF8` | `0xC0B3EFDC` | descriptor table B |
+| `0xC02D6FF0` | `0xC0B3F83C` | descriptor table C |
+| `0xC02D73E8` | `0xC0B40074` | the look parameter list |
+| `0xC02DA6D0` | `0xC0B468A8` | the effect-slider LUT selector |
+| `0xC02DB900` | `0xC0B4D940` | **unexamined** |
+| `0xC02DB948` | `0xC0B4D958` | **unexamined**, begins with ASCII |
+| `0xC02E0AE8` | `0xC0B4E294` | **unexamined** |
+| `0xC02F75F0` | `0xC0B520B0` | **unexamined**, `(pointer, count)` shape, 30 records |
+| `0xC03092D8` | `0xC0B55440` | **unexamined**, begins `SIGM` |
+| `0xC03092E8` | `0xC0B55448` | **unexamined**, begins `SDIM` |
+| `0xC030C6A8` | `0xC0B55F64` | **unexamined** |
+| `0xC0322FB8` | `0xC0B5F96C` | **unexamined**, `(pointer, count)` shape, 2 entries |
+| `0xC0326E20` | `0xC0B5FDA4` | **unexamined**, `(pointer, count)` shape, 70 records |
+
+This project knew of the first five. Nine more exist, and they sit past
+`0xC0B46A70`, which had been the frontier of everything read so far. Three are in
+the `(pointer, count)` shape the rest of the blob uses. Their record strides are
+not yet established, so nothing is claimed about their contents.
+
+A further 72 getters return RAM addresses. Three of those sit in the
+picture-quality code range and are worth following: `0xC02B5A10` to `0xC3411E70`,
+`0xC02ECC68` to `0xC3434184`, and `0xC02EF3D0` to `0xC3434474`.
 
 ## Coverage by block
 
