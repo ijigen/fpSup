@@ -3,9 +3,9 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Bayer capture, streaming, compression and RAW packaging.
-**Status: researched; lossless UHD to card hinges on one unmeasured number**
+**Status: researched; the engine is measured at 169.7 Mpixel/s cold — enough for FHD, not UHD, and the figure is a floor**
 
-Bayer 擷取、串流、壓縮與 RAW 封裝。**狀態:研究完成;無損 UHD 寫卡壓在一個沒量過的數字上**
+Bayer 擷取、串流、壓縮與 RAW 封裝。**狀態:研究完成;引擎冷呼叫實測 169.7 Mpixel/s —— FHD 夠、UHD 不夠,而且那是下限**
 
 ---
 
@@ -54,9 +54,48 @@ for still DNG. What is known:
   or speed-class figure, and CinemaDNG's `Compression=1` is set by a single
   function with a single caller
 
-**So this is potentially feasible and hinges on one unmeasured number:** the
-engine's true sustained Mpixel/s. The ceiling says yes, the floor says no, and
-nothing in the firmware measures it — there is no performance counter anywhere.
+### That number has been measured (2026-08-30, on the camera)
+
+```
+6064x4042 = 24.51 Mpix, one encode, returns 1 = success, 144,431 us
+    -> 169.7 Mpixel/s
+```
+
+Timed with `FUN_c002b6e0`, the counter the logger already uses — confirmed to be
+a 1 MHz microsecond counter. The probe hooks `0xC037E7AC`, the `bl FUN_c05a6920`
+on the stills path; source in `raw/ljtime.S`.
+
+**This killed the old "32 Mpixel/s, eight times too slow" conclusion.** That
+figure came from `FUN_c062f6f8`'s `timeout = pixels / 32000`, which is a
+watchdog with 5.3x of headroom, not a throughput. Everything built on it was
+wrong.
+
+What 169.7 supports and does not:
+
+| | needs | verdict |
+|---|---|---|
+| FHD 30p lossless | 62 Mpixel/s | **works**, 2.7x of headroom |
+| UHD 30p lossless | 249 Mpixel/s | **no** — the engine gives UHD only 20.4 fps |
+| 6064x4042 full sensor | 24.51 Mpix/frame | **6.9 fps** at this figure |
+
+**169.7 is a floor, not the engine's rate.** It was measured once, on one frame
+size, with a *cold* call — and `FUN_c062fee8` brings up power domain 5, the clock
+and IRQ 0x29 **inside encode**, so a cold call pays that every time and a
+recording loop would not. Fixed overhead and per-pixel rate have never been
+separated. The way to do it is in `notes/RAW_COMPRESSION_RESEARCH.md`: time two
+or three different frame sizes and fit. With the inferred ceiling at ~300
+Mpixel/s the gap is large enough to matter — at 290 Mpixel/s the full sensor
+reaches 11.8 fps instead of 6.9.
+
+⚠️ **Hook it, do not call it.** Cold-calling the engine breaks stills
+compression until a reboot: file sizes on the card went 26-28 MB (compressed)
+before, 51 MB (uncompressed) after a dozen cold calls, and back to 36 MB after a
+power cycle. The note had said "one global engine, no mutex, touch it only when
+idle" and it got called anyway.
+
+Two constraints that bound any plan here: **the clock cannot be raised safely** —
+it shares the imaging domain with sensor readout and has no separate divider —
+and there is **one engine, so no parallelism**.
 
 The one risk that cannot be settled by reading code is whether the variable-length
 coder drops below a pixel per clock on high-entropy tiles.
@@ -158,8 +197,41 @@ FHD 12-bit 24 fps 是 74.6 MB/s,正是相機自己允許的數字 —— 算術�
   韌體**從不比對 MB/s 或速度等級**,而 CinemaDNG 的 `Compression=1`
   是由**單一函式、單一呼叫者**設定的
 
-**所以這件事「潛在可行」,而且壓在一個沒人量過的數字上:**引擎的真實持續吞吐。
-上限說可以,下限說不行,而韌體裡沒有任何效能計數器可以問。
+### 那個數字已經量到了(2026-08-30 實機)
+
+```
+6064x4042 = 24.51 Mpix,一次 encode,回傳 1 = 成功,144,431 us
+    -> 169.7 Mpixel/s
+```
+
+碼表用 `FUN_c002b6e0`(logger 一直在用的那個),實測是 1 MHz 微秒計數器。
+探針 hook 在 `0xC037E7AC`(靜態路徑那條 `bl FUN_c05a6920`),程式碼在 `raw/ljtime.S`。
+
+**這推翻了舊的「32 Mpixel/s、慢八倍」結論。** 那個數字來自
+`FUN_c062f6f8` 的 `timeout = pixels / 32000` —— 那是有 5.3 倍餘裕的看門狗,
+不是吞吐。建立在它上面的每一條推論都是錯的。
+
+169.7 支持什麼、不支持什麼:
+
+| | 需要 | 判定 |
+|---|---|---|
+| FHD 30p 無損 | 62 Mpixel/s | **可行**,2.7 倍餘裕 |
+| UHD 30p 無損 | 249 Mpixel/s | **不行** —— 引擎在 UHD 只有 20.4 fps |
+| 6064x4042 全片幅 | 每幀 24.51 Mpix | 這個數字下是 **6.9 fps** |
+
+**而 169.7 是下限,不是引擎的速率。** 它只量過一次、一個尺寸、而且是**冷呼叫** ——
+`FUN_c062fee8` 把 power domain 5、時脈與 IRQ 0x29 的拉起做在 **encode 裡面**,
+所以冷呼叫每次都付這筆,錄影迴圈不會付。**固定開銷與每像素速率從來沒有分離過。**
+做法寫在 `notes/RAW_COMPRESSION_RESEARCH.md`:量兩三個不同尺寸再擬合。
+推論的天花板是 ~300 Mpixel/s,差距大到有意義 —— 若實際是 290,全片幅就是
+**11.8 fps** 而不是 6.9。
+
+⚠️ **要 hook 它,不要呼叫它。** 冷呼叫會把靜態壓縮弄壞到重開機:卡上檔案大小
+在那之前是 26–28 MB(有壓縮),連打十幾次之後三張 51 MB(未壓縮),重開機後
+回到 36 MB。筆記早就寫著「單一全域引擎、無互斥鎖、只能閒置時碰」。
+
+另外兩個限制框住任何計畫:**時脈不能安全提高**(與 sensor readout 共用成像域,
+沒有獨立分頻器),以及**只有一顆引擎,不能並行**。
 
 唯一沒辦法靠讀程式碼定案的風險是:**變長編碼在高熵 tile 上會不會掉到 1 pixel/clock 以下。**
 
