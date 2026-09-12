@@ -881,10 +881,25 @@ weights (its cb coefficient is -1.6), which was most of its long-standing luma
 error; the runtime matrix builder at `0xC02C55A0` holds the same concept as a
 Q12 per-mode luma row, confirming the mechanism class in code.
 
-All of it is measured as medians of camera-vs-camera differentials on the left
-half of the sample frame and validated on the right half, where every mode
-improves. It ships as a distinct layer in the render, documented as measured
-rather than derived.
+**The luma row's mechanism is now read out of the register-write path.** The
+function at `0xC02D5E18` fetches descriptor entry 31 — the YC matrix record — 142
+times and writes fields into a register block. The structure is regular: 57
+groups at a stride of 20 bytes, spanning register offsets `0xA88` to `0xEEA`,
+cycling with a period of four groups. **Only the luma fields are written.** The
+three offsets used are `+4`, `+6` and `+8`, which are the Q12 luma row. The
+chroma fields `+10` to `+16` are never written by this path.
+
+So the camera broadcasts one per-mode luma row to 57 register slots across the
+pipeline. That is why every chroma stage preserves the same per-mode luma rather
+than Rec.601, and it raises the earlier note from "the mechanism class exists in
+code" to "the mechanism is this, and here is where it is written". The values
+stay undecoded, because the per-mode records are built in RAM and only the id-100
+default is static.
+
+All of the residual layer is measured as medians of camera-vs-camera
+differentials on the left half of the sample frame and validated on the right
+half, where every mode improves. It ships as a distinct layer in the render,
+documented as measured rather than derived.
 
 Also settled while reading the code: the two double-precision constants at
 `0xC0970044` and `0xC097008C` are the standard XYZ-to-sRGB matrix with
