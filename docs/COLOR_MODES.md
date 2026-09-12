@@ -879,10 +879,56 @@ row is `(-0.1289, 0.6406, 0.4883)` against the table's `(-0.129, 0.641, 0.488)`,
 which matches, while the red row is `(1.498, -0.2578, -0.2402)` against
 `(1.035, -0.002, -0.033)`, which does not. Several modes behave the same way.
 
-This matters more than anything else open in this file. These are the matrices
-the camera actually used, in float, available from any DNG the camera has ever
-written. If the relation to the table is understood, the matrix stage stops being
-a reconstruction.
+### The rule, and it is exact
+
+The relation is now decoded:
+
+```
+exported[mode] = rownorm( inverse(M_OFF) @ M_mode )
+```
+
+where `M_mode` is the firmware record put through the loader at `0xC02C5440` —
+reassembled own-channel-first and divided by the red row's sum — and `rownorm`
+scales each row to sum to 1.
+
+Ten of the fourteen menu modes match to **0.003 or better**, which is Q9
+rounding. The four that do not are exactly the modes whose matrix rows do not sum
+to 512, and their error tracks the size of that white-balance shift:
+
+| mode | channel gains | max gain deviation | error |
+|---|---|---|---|
+| Neutral, Landscape, Forest Green, Teal and Orange, FOV Classic Blue, Monochrome, OFF | 1.000 | 0.000 | 0.0000 to 0.0015 |
+| Vivid, Portrait | 0.998 to 1.002 | 0.002 | 0.0026 |
+| FOV Classic Yellow | 0.990 | 0.010 | 0.0146 |
+| Powder Blue | 0.941, 1.000, 0.971 | 0.059 | 0.0623 |
+| Cinematic | 1.041, 1.023, 0.748 | 0.252 | 0.1693 |
+| Sunset Red | 1.127, 1.002, 0.980 | 0.127 | 0.1722 |
+
+The correlation between the error and the gain deviation is **0.937**, and the
+ratio is about 1. So the row renormalisation is precisely what discards the
+per-mode channel gain, which is consistent with the note in the develop-path
+section that dividing by the red row's sum made renders worse because the gain is
+compensated elsewhere.
+
+**Two things follow.** The firmware matrix table is confirmed as the source the
+camera runs on, because the runtime matrices derive from it exactly wherever no
+white-balance shift intervenes. And the camera composes **against OFF, on the
+left**, where this project's renderer composes against Standard, on the right.
+
+### Tested in the render, and the test is confounded
+
+Substituting `rownorm(inverse(M_OFF) @ M_mode)` for `M_mode @ inverse(M_Standard)`
+in the rig makes the render much worse, 5.021 against 3.223 on the held-out half.
+
+That is **not** evidence against the rule, and it must not be read as such. The
+rig's working-space matrix and its measured front end were both derived with the
+old composition in place, so they have absorbed whatever the old form gets wrong.
+Swapping one factor of an entangled chain and scoring it tests the entanglement,
+not the factor. A fair test needs the front end re-derived from the OFF frame
+under the new composition, and that is the next step.
+
+What is settled is what the camera does. What is open is what the renderer should
+do about it.
 
 ## The differential method, and what is still missing
 
