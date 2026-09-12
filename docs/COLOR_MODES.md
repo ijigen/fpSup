@@ -747,6 +747,23 @@ needs only one such frame shot in each mode plus OFF.
 
 ## The measured residual layer, and the luma row
 
+**What the sample frame actually covers**, measured rather than asserted. Per
+hue bin of `atan2(Cr, Cb)`, counting camera-JPEG pixels above the chroma
+threshold of 0.12 that `metric2` itself uses, a bin counts as resolved at 300
+pixels:
+
+| mode | bins resolved | mode | bins resolved |
+|---|---|---|---|
+| Vivid | 10 of 24 | Warm Gold | 5 of 24 |
+| Powder Blue | 9 of 24 | Cinematic | 4 of 24 |
+| Standard | 7 of 24 | Teal and Orange | 4 of 24 |
+
+The frame is not short of saturated pixels. Each mode has 61,000 to 96,000 of
+them. The content is concentrated: bins 8 and 9 hold about 130,000 pixels each
+across six modes, where bins 16 to 23 hold a few thousand between them, and bins
+0 to 3 hold none at all. So the limit is the spread of hues, not the amount of
+colour, and it falls hardest on the modes whose content sits in the thin bins.
+
 With the field measurable in 9 of 24 bins (binning by the decode's hue rather
 than the OFF image's unlocked five more bins from the same frame), the residual
 between render and camera is read directly as per-mode tables: a rotation and a
