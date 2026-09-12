@@ -571,35 +571,54 @@ scene resolves only four to five of the 24 — so the missing field can be read
 completely instead of extrapolated from four points per mode. The differential
 needs only one such frame shot in each mode plus OFF.
 
+## The measured residual layer, and the luma row
+
+With the field measurable in 9 of 24 bins (binning by the decode's hue rather
+than the OFF image's unlocked five more bins from the same frame), the residual
+between render and camera is read directly as per-mode tables: a rotation and a
+gain per bin of the decode hue, plus **a per-mode luma row** — the camera's
+chroma stages preserve a per-mode luma, not Rec.601, and the difference appears
+as a luma shift linear in Cb and Cr. Teal and Orange carries the largest
+weights (its cb coefficient is -1.6), which was most of its long-standing luma
+error; the runtime matrix builder at `0xC02C55A0` holds the same concept as a
+Q12 per-mode luma row, confirming the mechanism class in code.
+
+All of it is measured as medians of camera-vs-camera differentials on the left
+half of the sample frame and validated on the right half, where every mode
+improves. It ships as a distinct layer in the render, documented as measured
+rather than derived.
+
+Also settled while reading the code: the two double-precision constants at
+`0xC0970044` and `0xC097008C` are the standard XYZ-to-sRGB matrix with
+per-channel white-balance diagonals baked in — `diag(0.492, 1.000, 0.649)` and
+`diag(0.480, 1.210, 1.569)` — the camera's two calibration illuminants,
+consumed by the double-precision 3x3 inverter at `0xC02C6CD8`. An earlier note
+read this region as garbage floats; they are doubles.
+
 ## How close this gets
 
-One frame, processed in the camera by 14 modes, against the same frame rendered
-from its DNG with the tables here plus the fitted space above. The RAW has no
-barrel correction and the JPEG does, so the radial warp between them is fitted
-and undone; the score then uses the whole frame — 708,000 pixels, 157,000 of
-them saturated — as mean CIE Lab dE.
-
-For scale, the camera's own modes sit a median 8.16 dE apart from each other.
+One frame, processed in the camera by all fifteen looks, against the same frame
+rendered from its DNG. Warp fitted and undone, full frame, mean CIE Lab dE,
+against a median 8.2 dE between one camera mode and the next:
 
 | mode | dE | mode | dE |
 |---|---|---|---|
-| Monochrome | 1.0 | FOV Classic Blue | 2.9 |
-| Standard | 2.4 | Teal and Orange | 4.2 |
-| Portrait | 2.5 | Sunset Red | 4.7 |
-| Forest Green | 2.6 | FOV Classic Yellow | 4.9 |
-| Neutral | 2.6 | Cinematic | 5.7 |
-| Vivid | 2.8 | Warm Gold | 6.2 |
-| Landscape | 2.9 | Powder Blue | 6.2 |
+| OFF | 0.9 | Teal and Orange | 3.1 |
+| Monochrome | 0.9 | Sunset Red | 3.5 |
+| FOV Classic Yellow | 2.0 | Warm Gold | 3.8 |
+| Neutral | 2.4 | Cinematic | 4.4 |
+| Forest Green | 2.5 | Powder Blue | 4.5 |
+| Landscape | 2.5 | | |
+| Portrait | 2.5 | | |
+| Standard | 2.6 | | |
+| Vivid | 2.8 | | |
+| FOV Classic Blue | 3.0 | | |
 
-Mean 3.7. The median hue error over saturated pixels is 2.6 degrees and the
-chroma ratio 0.97.
+Mean 2.7. Median hue error on saturated pixels +0.5 degrees, chroma ratio 1.00.
 
-What remains concentrates in the strongest looks' chroma: Powder Blue and
-Cinematic sit near 0.8 of the reference's saturation where every other mode is
-within a few percent. The ISP's chroma stages after the equaliser — `CSUP`,
-`CKNEE`, `CUVCONT`, `ECSUP`, `C_SAT_C` — are represented by one flat measured
-trim, and whatever curve they really apply, the strong looks sit on a different
-part of it.
+What remains: Cinematic and Powder Blue still sit at 0.87 and 0.92 of the
+reference chroma, FOV Classic Blue carries +5 degrees of hue, and Warm Gold 4.5
+of hue spread — all concentrated where the sample frame's hue coverage thins.
 
 ## Open
 
