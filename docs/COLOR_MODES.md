@@ -2,7 +2,16 @@
 
 The fp's colour modes are three static tables in the firmware, one entry per
 mode. This is where the looks live. It is not the XC container — that is menu
-artwork, see [XC_CONTAINER.md](XC_CONTAINER.md).
+artwork, see [XC_CONTAINER.md](XC_CONTAINER.md). For where these findings sit in
+the whole pipeline, and what is still unread, see
+[PIPELINE_COVERAGE.md](PIPELINE_COVERAGE.md).
+
+**The register names in this file are inferences.** The firmware carries a pool
+of ISP stage names at `0xC07D366C`, and nothing in the image refers to any string
+in it — no `movw`/`movt` pair, no 32-bit word anywhere, no PC-relative `ADR`, and
+no pointer to the pool base. So there is no name-to-address table. Wherever this
+file calls a block `YCMAT`, `CUVAREA` or `CEQ24`, that name was matched to the
+data by its shape, not read from the firmware.
 
 Derived 2026-09-09 against all six unpacked firmwares, from Ver 1.02 to
 Ver 5.02.
