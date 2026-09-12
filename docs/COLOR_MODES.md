@@ -500,6 +500,25 @@ hue bins the sample frame cannot measure — the same four-of-24-bins limit as
 before. The field is not shipped; the mechanism is recorded, and one
 colour-rich frame per mode completes it.
 
+**The `CUVAREA` care maps are found.** Parameter-list entries 1 and 2 (at
+`0xC0B42730` and `0xC0B42748`) are id-to-pointer tables selecting among three
+blocks each, ids 0 to 2. The entry-2 blocks are 32x32 grids over the chroma
+plane holding the **distance from a target colour** — a radial bowl whose zero
+sits just off neutral, a different target per id. The entry-1 blocks are the
+same idea as 21x31 tables in a (position, level) form with a triangular depth
+envelope. Three targets, per-plane distance maps: this is the machinery behind
+the register name `PST_TOP CUVAREA CARE_SEL` — chroma processing weighted by
+the distance to protected memory colours (three of them, presumably skin, sky
+and foliage).
+
+Why it matters: corrections weighted by distance to specific chroma-plane
+targets produce exactly the localized, sign-flipping rotation lobes measured
+in the missing field — strong near a target, reversing across it, absent far
+away. The consumer code and the per-mode strengths are the open ends; the
+complete 24-bin field from a colour-rich frame would show three lobes centred
+on the targets if this is the stage, which makes the shoot a direct test of
+it.
+
 Also catalogued and not yet decoded: a parameter zone around `0xC0B35F90`
 holding Q9 knee-point ladders, a full-scale tone curve ending at `0xC0B35F32`,
 a 33-step strength ladder at `0xC0B386E0`, and further RAM parameter structs at
