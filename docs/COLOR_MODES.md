@@ -39,9 +39,16 @@ Three tables, each an array of records with a `u32` mode id first.
 
 The hue table is entry 0 of the parameter list at `0xC0B40074` (Ver 5.02), which
 the `PictureQuality` constructor `0xC02C40B8` reads through the getter
-`0xC02D73E8`. The tone curve is entry 4 of the same list. The matrix table has
-no pointer to it anywhere in the image, so the code must reach it by an offset
-from a nearby base.
+`0xC02D73E8`. The tone curve is entry 4 of the same list.
+
+**The matrix table has no pointer to it anywhere in the image.** An earlier
+version of this file guessed the code reaches it by an offset from a nearby base.
+That guess is now testable and it fails: the offsets from the descriptor table
+base to the matrix table, the `CEQ24` run and the gamma map never appear as `add`
+immediates, and no literal-pool word holds any of the three addresses. The real
+answer is in PIPELINE_COVERAGE.md — the mode-matrix loader takes its records from
+a mode-keyed table in RAM at `0xC2F1A064 + 0x08`, and whatever installs that
+pointer is not statically visible.
 
 ## 1. The hue table — 580 bytes per mode
 
