@@ -1,10 +1,40 @@
 # The colour-mode look tables
 
-The fp's colour modes are three static tables in the firmware, one entry per
-mode. This is where the looks live. It is not the XC container — that is menu
-artwork, see [XC_CONTAINER.md](XC_CONTAINER.md). For where these findings sit in
-the whole pipeline, and what is still unread, see
+The fp's colour modes come from two places, and both are the camera itself: three
+static tables in the firmware image, and the pipeline state the camera writes
+into every DNG it takes. This is where the looks live. It is not the XC container
+— that is menu artwork, see [XC_CONTAINER.md](XC_CONTAINER.md). For where these
+findings sit in the whole pipeline, and what is still unread, see
 [PIPELINE_COVERAGE.md](PIPELINE_COVERAGE.md).
+
+## Where this stands
+
+The chain is decoded and it is shipped. `rusty-emulsion` renders the fp's looks
+from firmware tables and DNG export alone, with **one** measured constant and no
+fitted ones, and scores **1.85 dE** held out over fourteen modes — 1.38 over the
+thirteen the camera exports — against a median 8.2 dE between one camera mode and
+the next.
+
+| stage | source | section |
+|---|---|---|
+| front end | **measured**, one 3x3 from the OFF frame | "The OFF shot" |
+| mode matrix | DNG tag 292 | "The runtime matrix is the export" |
+| curve, per channel | the gamma bank, equal to tag 301 plus an sRGB encode | "The gamma bank is a tone curve" |
+| chroma plane | DNG tag 297, per mode, out through Rec.601 | "The YC matrices are per mode" |
+| equaliser | the 24-bin tables at face value, anchor 285 | "Three fitted constants are retired" |
+
+**Two things are still wrong or unread, and they are the whole of the open work.**
+Warm Gold renders at about 8 dE because the camera does not export it and the
+firmware composition fails for its class. That class — the four modes that shift
+white balance — is the one unread item that gates anything. Everything else in
+the "Unread data" list is real but does not bear on the render today.
+
+**How to read the rest of this file.** It is written as a record of what was
+believed and why it was wrong, so several sections carry their own corrections.
+Where a section is superseded it says so in its first paragraph. The sections
+that describe the working chain are the five in the table above.
+
+---
 
 **The register names in this file are inferences.** The firmware carries a pool
 of ISP stage names at `0xC07D366C`, and nothing in the image refers to any string
@@ -14,11 +44,12 @@ file calls a block `YCMAT`, `CUVAREA` or `CEQ24`, that name was matched to the
 data by its shape, not read from the firmware.
 
 Derived 2026-09-09 against all six unpacked firmwares, from Ver 1.02 to
-Ver 5.02.
+Ver 5.02. The DNG export was read on 2026-09-13.
 
-Tool: [`firmware/colormode_extract.py`](../firmware/colormode_extract.py). It
-needs no third-party modules and finds the tables by signature, so it works on
-every version.
+Tools: [`firmware/colormode_extract.py`](../firmware/colormode_extract.py) reads
+the firmware tables. It needs no third-party modules and finds them by signature,
+so it works on every version. `xc/mkn.py` reads the DNG export, and
+`xc/wgcheck.py` reports which modes a given DNG carries.
 
 ```
 colormode_extract.py report MAIN_dec.bin
@@ -142,8 +173,8 @@ acts between. Applied in Rec.709, each mode's render came out turned a
 different way — FOV Classic Blue 11 degrees toward green, Warm Gold 10 toward
 red. Different directions cannot come from one shared upstream error directly,
 but one wrong *space* produces them exactly, through each mode's own matrix. A
-single 3x3 `G` was fitted so that every matrix is applied as
-`inverse(G) * M * G`, on half of a fourteen-mode sample frame, and validated on
+single 3x3 `W` was fitted so that every matrix is applied as
+`inverse(W) * M * W`, on half of a fourteen-mode sample frame, and validated on
 the other half. It collapses the divergence, it converges to nearly the same
 matrix from two unrelated starting points, and it lands close to the
 sRGB-to-camera matrix in Sigma's own DNG profile — which is what it physically
@@ -152,10 +183,17 @@ per-body calibration this repository said could not be read from the firmware.
 It cannot; it can be fitted from the camera's own JPEGs.
 
 ```
-G = [ 0.5264  0.3159  0.1577 ]      sRGB -> camera, rows sum to 1
+W = [ 0.5264  0.3159  0.1577 ]      sRGB -> camera, rows sum to 1
     [-0.0813  1.0886 -0.0073 ]
     [-0.0577  0.3132  0.7446 ]
 ```
+
+**`W` is retired.** It was a fitted stand-in for the front end, and the section
+that follows measures that front end directly instead. The decoded chain applies
+no conjugation at all: the camera's exported matrices already act in the right
+space. `W` is kept here because the reasoning that produced it — different modes
+turning different ways can only come from a wrong *space* — is correct, and it is
+what pointed at the front end in the first place.
 
 ## The OFF shot — the measurement that unlocks the rest
 
@@ -169,26 +207,39 @@ What one OFF frame settles:
 
 **The front end is one measured matrix.** Regressing the inverted OFF JPEG
 against a linear decode of the same DNG gives the 3x3 between them — least
-squares over 708,000 pixels, mean residual 2.3 percent of signal. Composed with
-`inverse(M_OFF)` and any mode's own firmware matrix, this replaces the fitted
-working-space matrix above, the fitted per-hue base correction, and any exposure
-trim. A render of OFF through it scores **0.9 dE** against the camera's own OFF
-JPEG — below the JPEG's noise floor, on data no fit ever saw.
+squares over 709,631 pixels, mean residual 2.31 percent of signal. It is the only
+measured object in the chain, and it replaces the fitted working-space matrix
+above, the fitted per-hue base correction and any exposure trim.
 
-**The camera applies its curve hue-preserving, not per channel.** ~~Re-fitting
-the front end with the OFF JPEG inverted both ways decides it: read as a
-hue-preserving encode (largest and smallest channel through the curve, the
-middle in proportion) the correction comes out as the identity to 0.9 percent;
-read per channel it needs a green row skewed by 9 percent to fit. A per-channel
-curve also turns saturated colours toward yellow-green by several degrees in
-render tests, and the camera's output shows no such turn.~~
+Because the camera's own exported matrix for OFF is the **exact identity**, this
+fit never sees any mode's matrix, so every other mode is a prediction rather than
+a tuning. That is what makes the measurement safe to keep.
 
-**This is wrong, and the section "The curve is applied per channel" below
-replaces it.** The first argument asks the front-end correction to look like the
-identity, which nothing requires. The second was measured on a chain whose mode
-matrix was wrong for four modes. With the inverse matched to the forward and the
-matrix taken from the camera's export, per channel beats hue-preserving by
-0.85 dE on thirteen modes the fit never sees.
+```
+F = [ 0.826628 -0.048768 -0.155484 ]    ProPhoto linear -> camera linear
+    [-0.052120  0.643991  0.032050 ]
+    [-0.106242  0.218943  0.510454 ]
+```
+
+`F` is invariant to the exposure the fit is given, to 6e-8: the regression
+absorbs whatever gain it is handed, so `gain * F` is the same matrix at every
+gain in the sweep. It must be derived at the same curve full scale the render
+uses.
+
+**The camera applies its curve per channel.** An earlier version of this file
+concluded the opposite, from two arguments, and both are withdrawn. It read the
+OFF JPEG inverted both ways and preferred hue-preserving because the correction
+then came out as the identity to 0.9 percent, where per channel needed a green
+row skewed by 9 percent. Nothing requires that correction to be the identity —
+the measured front end is a real transform with 0.83 on its leading diagonal — so
+the criterion was never evidence. It also cited render tests that turned
+saturated colours yellow-green, and those ran on a chain whose mode matrix was
+wrong for four modes.
+
+The render is the instrument, with the inverse matched to the forward. Per
+channel wins by **0.85 dE** on thirteen modes the fit never sees, and it is the
+better fit on its own terms, 2.31 percent against 2.45. See "The curve is applied
+per channel".
 
 **The 285-degree anchor holds** re-derived under this chain: a sweep over
 anchors peaks at 285 again.
@@ -206,8 +257,10 @@ u32          mode id
 float[128][2]   128 (x, y) control points, both in 0.0 to 1.0
 ```
 
-Only two modes carry one: Standard and OFF. OFF is the exact identity, point for
-point. Standard is a strong lift:
+Only two modes carry one **in the firmware image**: Standard and OFF. The camera
+holds one for every mode and exports all sixteen in DNG tag 301 — see "The gamma
+bank is a tone curve and an sRGB encode", which also shows what these curves are
+for. OFF is the exact identity, point for point. Standard is a strong lift:
 
 ```
 0.0123 -> 0.0047      0.4553 -> 0.7238
@@ -535,18 +588,22 @@ away from the id-35 record by a percentage: `out = mode + (mode - base) * pct
 matrix and no menu entry — is the **blend base for the strength system**. At
 effect 0 every path returns the plain tables.
 
-**The leading mechanism for the missing hue field, validated held-out:** a
-shared rotation proportional to chroma magnitude. Measured as `degrees per
-unit chroma` per hue bin from five Standard-family modes' left halves and
-applied to all modes' right halves, it improves eight modes (Standard 3.03 to
-2.79 dE, Vivid 2.93 to 2.62, Landscape 2.75 to 2.47, Forest Green 2.31 to
-2.13) and moves none of the measurements it was built from. It also explains
-the long-standing 0.6 rotation shortfall: a negative-slope shared stage
-partially undoes the equaliser's rotations exactly where pixels are saturated.
-Two modes regress (Warm Gold, Teal and Orange) because their content sits in
-hue bins the sample frame cannot measure — the same four-of-24-bins limit as
-before. The field is not shipped; the mechanism is recorded, and one
-colour-rich frame per mode completes it.
+**A mechanism for the missing hue field, since withdrawn:** a shared rotation
+proportional to chroma magnitude. Measured as `degrees per unit chroma` per hue
+bin from five Standard-family modes' left halves and applied to all modes' right
+halves, it improved eight modes (Standard 3.03 to 2.79 dE, Vivid 2.93 to 2.62,
+Landscape 2.75 to 2.47, Forest Green 2.31 to 2.13) and moved none of the
+measurements it was built from. Two modes regressed, Warm Gold and Teal and
+Orange, because their content sits in hue bins the sample frame cannot measure.
+
+It was attractive because it also explained the 0.6 rotation shortfall: a
+negative-slope shared stage partially undoes the equaliser's rotations exactly
+where pixels are saturated. **There was no shortfall to explain.** With the
+matrix taken from the export, the composition against OFF and the equaliser in
+the mode's own chroma plane, a rotation scale of 1.0 is a sharp interior minimum.
+So this mechanism was fitted against an artefact, and the held-out improvement it
+showed was it absorbing the matrix error. It was never shipped. It is kept here
+as a worked example of a fit that validates cleanly and is still wrong.
 
 **The `CUVAREA` care maps are found, and they are not memory colours.**
 Parameter-list entries 1 and 2 (at `0xC0B42730` and `0xC0B42748`) are
@@ -713,8 +770,10 @@ render with it applied comes out bit-identical to a render without it, which is
 also a check that the test harness applies the column where it says it does.
 
 **Array C makes the render worse.** It is non-1 in 54 bins, held by nine of the
-15 menu modes. Applied as a per-bin multiplier at the equaliser, over the
-shipped chain, measured on the left half and validated on the right:
+15 menu modes. Applied as a per-bin multiplier at the equaliser, over the chain
+as it then stood, measured on the left half and validated on the right. The
+baselines below are the old fitted chain's, so read the columns against each
+other rather than against today's figures:
 
 | set of modes | baseline L | baseline R | array C, L | array C, R |
 |---|---|---|---|---|
@@ -743,7 +802,14 @@ the chain, or against another index. It does rule out the obvious reading.
 
 The script is `xc/valcol.py`.
 
-## The YC matrix, and the camera's own chroma plane
+## The YC matrix class, and the id-100 default
+
+This section used to be called "the camera's own chroma plane", and that title was
+the error. It reads descriptor entry 31 correctly, but entry 31 is the **class
+default**, not the camera's plane. Tag 297 shows each mode carries its own, OFF's
+is Rec.601 exactly, and the id-100 record is simply one more of them. The format
+work below stands; the interpretation is corrected in "The YC matrices are per
+mode".
 
 The builder at `0xC02C55A0` copies 16 bytes from `record + 4` and reads them as
 eight `s16`. It assembles a 3x3 in double precision:
@@ -793,8 +859,10 @@ at 107.5 degrees. The two axes are 104 degrees apart, not 90.
 **What this predicts, and what it does not.** A rotation applied in this plane
 and read back in Rec.601 is `inverse(T) * R * T`. That is a rotation of mean
 gain 1.038, with a hue-dependent term of plus or minus 0.278, so the local gain
-runs 0.78 to 1.27. The mean is more than 1. The measured rotation shortfall runs
-the other way, at 0.6 to 0.7, so this stage cannot be its cause.
+runs 0.78 to 1.27. The mean is more than 1, where the rotation shortfall then
+being chased ran the other way at 0.6 to 0.7, so this stage was ruled out as its
+cause. That reasoning was sound and is now moot: there was no shortfall to
+explain. See "Three fitted constants are retired".
 
 **Tested and rejected: the equaliser working in this plane.** The rig applied
 the rotation and the gain in the decoded plane instead of in Rec.601, over a
@@ -806,9 +874,16 @@ validated on the right:
 | Rec.601 | 300 | 0.6 | 5.301 | 3.416 |
 | camera | 285 | 0.7 | 5.352 | 3.386 |
 
-The two are the same render to within 0.03 dE on both halves, and the rotation
-scale stays fitted and stays well below 1. So the plane is real and decoded, and
-moving the equaliser into it buys nothing. The script is `xc/ycplane.py`.
+The two are the same render to within 0.03 dE on both halves. The script is
+`xc/ycplane.py`.
+
+**"Moving the equaliser into it buys nothing" was the wrong lesson**, and the
+reason is the same error as the section title. This test moved the equaliser into
+**one shared plane** — the id-100 default, applied to every mode — and converted
+back out through the same matrix. Both halves of that are wrong. The plane is per
+mode, and the way out is Rec.601 rather than the matrix that was used coming in.
+Done correctly the stage is worth **1.87 dE**. A conjugation by a single shared
+matrix nearly cancels, which is exactly why this test read as a null result.
 
 The test does confirm one thing. The two planes prefer anchors 15 degrees apart,
 and `T` maps Rec.601 300 degrees to camera 285.2 degrees. The two forms describe
@@ -879,37 +954,6 @@ and 312. The four a JPEG has and the DNG does not — 28, 29, 30 and 31 — are 
 thumbnail size, a version string and two counters. So no Warm Gold file of either
 kind supplies what the preloader omits.
 
-### Tag 52 is a white-balance-normalised per-mode matrix
-
-Tag 52 is nine floats that change with the colour mode, and it is present in
-JPEGs as well as DNGs, which makes it the only per-mode colour data the camera
-writes into a Warm Gold file. It factors exactly:
-
-```
-tag52[mode, illuminant] = diag(1 / wb) @ N[mode]
-```
-
-where `wb` is tag 51, which is `1 / AsShotNeutral` to the last digit. Two Warm
-Gold files under different illuminants — `warm-gold.JPG` at
-`(1.6016, 1.000, 2.5625)` and `SDIM9995.DNG` at `(1.6953, 1.000, 2.2266)` — give
-the same `N` to **9e-8**. Each row of tag 52 scales by its own white-balance
-multiplier, and the green row does not move because that multiplier is 1.000.
-
-**`N[OFF]` is the XYZ D50 to sRGB matrix exactly.** Composed with ProPhoto to XYZ
-D50 it reproduces the standard ProPhoto to sRGB matrix to every digit.
-
-**What `N` is not.** It is not the DNG profile: `ColorMatrix1` and `ColorMatrix2`
-are identical in both DNGs, so they are per-body calibration and carry no mode.
-It is not the runtime look matrix either. `N[mode] @ inverse(N[OFF])` is not
-similar to tag 292 — the eigenvalues do not match and the determinants differ by
-about a hundred — and `N[Monochrome]` equals `N[OFF]` exactly, though Monochrome
-removes all chroma. So tag 52 is decoded as a form and its role is open.
-
-Four more tags are read and are not look data. Tag 51 is the as-shot white
-balance, `(1.6016, 1.000, 2.5625)`. Tags 288 and 289 are ten white-balance
-presets each, and row 7 of tag 288 is tag 51. Tag 287 is
-`diag(1.0186, 1.000, 1.0223)`.
-
 ### What it confirms
 
 **The hue tables match the firmware exactly.** Matching each of the sixteen
@@ -948,6 +992,37 @@ row is `(-0.1289, 0.6406, 0.4883)` against the table's `(-0.129, 0.641, 0.488)`,
 which matches, while the red row is `(1.498, -0.2578, -0.2402)` against
 `(1.035, -0.002, -0.033)`, which does not. Several modes behave the same way.
 
+### Tag 52 is a white-balance-normalised per-mode matrix
+
+Tag 52 is nine floats that change with the colour mode, and it is present in
+JPEGs as well as DNGs, which makes it the only per-mode colour data the camera
+writes into a Warm Gold file. It factors exactly:
+
+```
+tag52[mode, illuminant] = diag(1 / wb) @ N[mode]
+```
+
+where `wb` is tag 51, which is `1 / AsShotNeutral` to the last digit. Two Warm
+Gold files under different illuminants — `warm-gold.JPG` at
+`(1.6016, 1.000, 2.5625)` and `SDIM9995.DNG` at `(1.6953, 1.000, 2.2266)` — give
+the same `N` to **9e-8**. Each row of tag 52 scales by its own white-balance
+multiplier, and the green row does not move because that multiplier is 1.000.
+
+**`N[OFF]` is the XYZ D50 to sRGB matrix exactly.** Composed with ProPhoto to XYZ
+D50 it reproduces the standard ProPhoto to sRGB matrix to every digit.
+
+**What `N` is not.** It is not the DNG profile: `ColorMatrix1` and `ColorMatrix2`
+are identical in both DNGs, so they are per-body calibration and carry no mode.
+It is not the runtime look matrix either. `N[mode] @ inverse(N[OFF])` is not
+similar to tag 292 — the eigenvalues do not match and the determinants differ by
+about a hundred — and `N[Monochrome]` equals `N[OFF]` exactly, though Monochrome
+removes all chroma. So tag 52 is decoded as a form and its role is open.
+
+Four more tags are read and are not look data. Tag 51 is the as-shot white
+balance, `(1.6016, 1.000, 2.5625)`. Tags 288 and 289 are ten white-balance
+presets each, and row 7 of tag 288 is tag 51. Tag 287 is
+`diag(1.0186, 1.000, 1.0223)`.
+
 ### The rule, and it is exact
 
 The relation is now decoded:
@@ -979,78 +1054,73 @@ per-mode channel gain, which is consistent with the note in the develop-path
 section that dividing by the red row's sum made renders worse because the gain is
 compensated elsewhere.
 
-**Two things follow.** The firmware matrix table is confirmed as the source the
-camera runs on, because the runtime matrices derive from it exactly wherever no
-white-balance shift intervenes. And the camera composes **against OFF, on the
-left**, where this project's renderer composes against Standard, on the right.
+**Two things follow, and one of them is narrower than it first looks.** The camera
+composes **against OFF, on the left**, where this project's renderer composed
+against Standard, on the right. That is settled, and the renderer now does it the
+camera's way.
 
-### Tested in the render, and the test is confounded
+The firmware matrix table is confirmed as the source the camera runs on **only
+for modes that keep white neutral**. Where a white-balance shift intervenes the
+runtime matrix does not derive from the table by this rule or by any other one
+tried, and the table above is the measurement of that failure rather than of Q9
+rounding. See the "Unread data" entry it opens.
 
-Substituting `rownorm(inverse(M_OFF) @ M_mode)` for `M_mode @ inverse(M_Standard)`
-in the rig makes the render much worse, 5.021 against 3.223 on the held-out half.
+### Three chains that were wrong, and what each one taught
 
-That is **not** evidence against the rule, and it must not be read as such. The
-rig's working-space matrix and its measured front end were both derived with the
-old composition in place, so they have absorbed whatever the old form gets wrong.
-Swapping one factor of an entangled chain and scoring it tests the entanglement,
-not the factor. A fair test needs the front end re-derived from the OFF frame
-under the new composition, and that is the next step.
+What follows is the route from the export to the working chain. It is compressed
+because all three of its scores are superseded — the working numbers are in
+"Three fitted constants are retired" — but the reasoning is kept, because two of
+the lessons are method and they generalise.
 
-### The front end re-derived, and an honest score
+**A confounded test is not a refutation.** Substituting
+`rownorm(inverse(M_OFF) @ M_mode)` for `M_mode @ inverse(M_Standard)` in the rig
+made the render much worse, 5.021 against 3.223 held out. That was not evidence
+against the rule. The rig's working-space matrix and its front end had both been
+derived with the old composition in place, so they had absorbed whatever the old
+form got wrong. Swapping one factor of an entangled chain tests the entanglement,
+not the factor.
 
-The front end was re-fitted from the OFF frame alone, under the decoded
-composition, on 709,631 pixels. Its residual is **2.45 percent of signal**,
-against 2.3 percent for the front end this file already had, so the fit is as
-good. Because `M_new[OFF]` is the identity by construction, the fit never sees
-any mode's matrix, and every other mode is a prediction.
+**Re-deriving the front end under the new composition** gave 4.978 held out
+against 3.178 for the fitted chain, with the saturation made absolute and the
+chroma trim falling out at 1.00. Monochrome improved to 1.12, which mattered:
+Monochrome is the only mode with no chroma stage, so it tests the front end, the
+matrix and the curve alone. The decoded chain was better on the one mode that
+isolates them and worse on thirteen — which localised the fault downstream of the
+matrix rather than in it.
 
-```
-F = [ 1.7201 -0.1003 -0.3240 ]     decode in ProPhoto -> camera linear
-    [-0.0482  1.3982 -0.0466 ]
-    [-0.2155  0.4481  1.0653 ]
-```
+**Adding the per-mode YC stage** took it to 4.379. At that point the file
+concluded that a stage was still missing between the matrix and the equaliser,
+and called the remaining 1.2 dE the next problem.
 
-Scored on identical pixels with an identical metric, so the three chains are
-comparable:
+**That conclusion was wrong, and the error was in how the decoded data was used
+rather than in the chain's shape.** The matrices were derived from the firmware
+table by the composition rule instead of being read from the export, and the
+curve was applied hue-preserving. Neither is a missing stage. The two sections
+after this one read them out.
 
-| chain | left | right |
-|---|---|---|
-| Standard-relative, per-channel curve | 5.155 | **3.178** |
-| Standard-relative, hue-preserving curve | 6.397 | 3.524 |
-| OFF-relative, decoded, saturation relative to Standard | 7.791 | 5.499 |
-| OFF-relative, decoded, **saturation absolute, trim 1.00** | 6.328 | 4.978 |
+The sweep that retired the rotation scale was first run here, against the derived
+matrix, and its conclusions survive on the finer grid later:
 
-**Three things in the decoded chain's favour.**
+| anchor | rotation scale | left | right |
+|---|---|---|---|
+| 270 | any | 6.4 to 6.7 | 4.74 to 4.76 |
+| **285** | **0.6** | 5.780 | 4.390 |
+| **285** | **0.8** | 5.652 | **4.370** |
+| **285** | **1.0** | **5.597** | 4.379 |
+| 300 | any | 6.6 to 6.9 | 4.66 to 4.84 |
 
-Monochrome goes from 1.48 to **1.12**, and Monochrome is the only mode with no
-chroma stage — its saturation column is zero in every bin. So on the one mode
-that tests the front end, the matrix and the curve without the equaliser, the
-decoded chain is the better one.
+This is the first place the rotation shortfall failed to appear: 1.0 scored the
+same as 0.6, within 0.01 dE.
 
-Making the saturation absolute rather than relative to Standard is worth 0.52 dE
-on the held-out half. That is the change the composition implies: if the matrix
-is referred to OFF then so should the saturation be, and OFF's saturation column
-is 1.000 in every bin.
-
-The fitted `chroma_trim` **falls out**. Under the Standard-relative chain its best
-value is 1.12; under the OFF-relative chain it is 1.00, which is no trim at all.
-A fitted constant that stops being needed when a stage is decoded properly is
-what a correct decode looks like.
-
-**And the decoded chain still loses, 4.978 against 3.178.** That is recorded
-plainly. Thirteen of fourteen modes are worse. The composition is proven from the
-camera's own export, so the fault is elsewhere in the chain: either a stage is
-missing between the matrix and the equaliser, or the equaliser's own settings —
-the 285-degree anchor and the 0.6 rotation scale — were themselves fitted against
-the Standard-relative form and no longer apply. Sweeping the rotation scale from
-0.6 to 1.0 does not help, which argues for the missing stage rather than the
-setting.
-
-### The YC matrices are per mode, and that is the missing stage
+### The YC matrices are per mode
 
 Tag 297 holds sixteen YC matrices, and **thirteen of them are distinct**. This
 file had assumed one shared matrix, because the only static record in the image
 is the id-100 default.
+
+An earlier version of this section called this "the missing stage". It is not.
+The stage is real and worth **1.87 dE**, but it did not account for the gap that
+was open when it was found — the matrix did. Both are needed.
 
 The split is clean:
 
@@ -1063,8 +1133,7 @@ The split is clean:
 
 That last point is what makes the stage legible. OFF is the identity look, so a
 mode's chroma rows are its look's chroma stage, expressed as a change of basis
-away from Rec.601. The largest departures belong to Cinematic and Powder Blue,
-which are the two worst-rendering modes in this file's own table.
+away from Rec.601. The largest departures belong to Cinematic and Powder Blue.
 
 **This corrects the section on the camera's chroma plane.** That section reads the
 id-100 record and concludes the camera's chroma axes are not Rec.601 and sit 104
@@ -1074,53 +1143,11 @@ Rec.601 exactly, and the fallback is simply another one of them.
 
 **It matters how the matrix is applied.** Used as a basis — convert with the
 mode's matrix, run the equaliser, convert back with the same one — it changes
-nothing, 4.983 against 4.978, because conjugation nearly cancels. Used as a
-transform — convert with the mode's matrix, run the equaliser, convert back with
-**OFF's** — it is worth 0.59 dE, taking the decoded chain from 4.978 to **4.390**
-on the held-out half.
-
-### Two fitted constants stop mattering
-
-The sweep below was run with the firmware-derived matrix, so its absolute scores
-are superseded by the section "Three fitted constants are retired". Its
-conclusions survive, and the later sweep reaches each one on a finer grid and
-with a sharper margin. The table is kept because it is the first place the
-rotation shortfall failed to appear.
-
-With the front end, the matrix composition and the chroma stage all decoded, the
-equaliser's own fitted settings were swept again:
-
-| anchor | rotation scale | left | right |
-|---|---|---|---|
-| 270 | any | 6.4 to 6.7 | 4.74 to 4.76 |
-| **285** | **0.6** | 5.780 | 4.390 |
-| **285** | **0.8** | 5.652 | **4.370** |
-| **285** | **1.0** | **5.597** | 4.379 |
-| 300 | any | 6.6 to 6.9 | 4.66 to 4.84 |
-
-**The 285-degree anchor is confirmed a third way**, now inside a chain where
-nothing upstream of it is fitted.
-
-**The rotation shortfall is gone.** A rotation scale of 1.0 scores the same as
-0.6, within 0.01 dE, and is the better of the two on the fit half. The standing
-question in this file — why the camera shows only 0.6 to 0.7 of the table's
-rotation, with four mechanisms tested and rejected — has an answer that is not a
-mechanism at all: it was an artefact of composing against Standard and running
-the equaliser in Rec.601. Decode those two and the table's rotations apply in
-full.
-
-`chroma_trim` is likewise 1.00, having been 1.12.
-
-### Where the decoded chain stands
-
-An earlier version of this file ended here with **4.379 dE on the held-out half,
-against 3.178 for the fitted chain**, and called the 1.2 dE gap the next problem.
-That gap is now closed and the sign is reversed. The decoded chain reaches
-**1.854 dE** held out over all fourteen modes, against **3.239** for the fitted
-chain on the same pixels and the same metric.
-
-Two errors produced the 1.2 dE gap, and neither was a missing stage. The section
-that follows reads them out.
+nothing, because the conjugation nearly cancels. Used as a transform — convert
+with the mode's matrix, run the equaliser, convert back through **Rec.601** — it
+is worth 1.87 dE. Rec.601 is the right way out because a JPEG stores Y, Cb and Cr
+and every decoder reads them as Rec.601. OFF's own matrix is Rec.601, so
+"convert back with OFF's" and "convert back with Rec.601" are the same operation.
 
 ## The runtime matrix is the export, not the rule applied to the firmware
 
@@ -1280,29 +1307,35 @@ Classic Blue 1.27, Teal and Orange 1.46, Cinematic 1.55, Powder Blue 2.26, Sunse
 Red 2.86, Warm Gold 8.02.
 
 The decoded chain carries **no residual layer, no fitted working space, no chroma
-trim, no rotation scale and no per-mode luma row**. The shipped renderer's 2.46 dE
-is a full-frame figure that includes a measured residual layer, so it is not the
-same object as the 2.161 above. The comparison that holds the harness fixed is
-the fitted chain at 4.282 full frame against the decoded chain at 2.161.
+trim, no rotation scale and no per-mode luma row**.
 
-## The differential method, and what is still missing
+**This is what `rusty-emulsion` now renders.** The port is generated by
+`xc/gen_rust2.py`, which replaces `xc/gen_rust.py`, and it reproduces the chain
+scored here to a maximum of 0.0008 per channel — the renderer's 256-point gamma
+table against this file's 2048-point one, about 0.2 of an 8-bit level.
 
-**Read the table below with care.** The residuals in it were measured against a
-render whose mode matrix was wrong for four modes and whose curve was applied
-hue-preserving. Cinematic and Powder Blue are two of the four, and they carry the
-largest entries. So the field this section measures is partly the matrix error
-that the section "The runtime matrix is the export" removes, and it must be
-re-measured against the decoded chain before anything is built on it. The method
-is sound and the numbers are stale.
+One number in the old record invites a wrong comparison. The renderer that this
+one replaced scored 2.46 dE full frame, which looks close to the 2.161 above, but
+the two are not the same object: that figure included a 390-value measured
+residual layer and was a full-frame mean. Held to one harness, the fitted chain
+is 4.282 full frame and 3.239 held out, against 2.161 and 1.854.
+
+## The differential method, and a field that was mostly the matrix
+
+The method stands and is the best instrument in this file. The numbers below do
+not: they were measured against a render whose mode matrix was wrong for four
+modes and whose curve was applied hue-preserving, and the corrected chain removes
+most of what they record. They are kept because the method is worth reusing and
+because the rejected mechanisms should not be tried again.
 
 With the front end measured, a second differential becomes meaningful: compare
 **mode-vs-OFF in the camera** against **mode-vs-OFF in the render**. Geometry
 cancels, the front end cancels, and what remains is exactly what the model
 misses, per hue.
 
-Measured this way, the missing transform is precise and repeatable. Per bin of
-`atan2(Cr, Cb)` hue, `camera rotation minus render rotation`, on the one sample
-frame (only bins with enough saturated content resolve):
+Measured that way against the old chain, per bin of `atan2(Cr, Cb)` hue, as
+`camera rotation minus render rotation` (only bins with enough saturated content
+resolve):
 
 | mode | 90° (red) | 120° | 240° (yellow-green) | 300° (cyan) |
 |---|---|---|---|---|
@@ -1313,11 +1346,17 @@ frame (only bins with enough saturated content resolve):
 | Teal and Orange | −0.9 | +0.2 | −13.3 | +0.1 |
 | Powder Blue | −15.7 | −15.7 | +11.8 | −3.5 |
 
-The field is per mode and large — and none of the tables in this file produce
-it. The rotation column at those bins is 0 to 3 degrees for Standard, and
-Cinematic's never exceeds 10.
+**Cinematic and Powder Blue are two of the four modes whose matrix was wrong, and
+they carry the largest entries in the table.** Cinematic's −56 and −59 are not a
+missing hue stage; they are a matrix that was off by 0.17. With the exported
+matrix Cinematic renders at 1.55 dE and Powder Blue at 2.26, so whatever field
+remains is far smaller than this table suggests. It has not been re-measured
+against the corrected chain, and it must be before anything is built on it.
 
-Mechanisms tested against this field and rejected, so they are not tried again:
+Mechanisms tested against the old field and rejected. They were tested against
+numbers that are now known to be contaminated, so a rejection here is weaker than
+it looks — but each was rejected for a structural reason rather than on score
+alone, and those reasons survive:
 
 - **A shared post-CEQ stage.** The field differs per mode.
 - **The equaliser before the curve rather than after.** Both orders render the
@@ -1330,17 +1369,23 @@ Mechanisms tested against this field and rejected, so they are not tried again:
   wrong way by 150 degrees. Standard never moves, its matrix being too mild.
 - **The curve before the matrix.** Turns Powder Blue +141 degrees at red.
 - **The 72-bin table as a shared in-camera stage.** Its OFF record being the
-  exact identity makes this reading attractive, and it does land several bins —
-  Cinematic at 120 degrees to within a degree, Teal and Orange's long-standing
-  +17 at 240 down to +6 — but it worsens the whole (3.1 to 3.5 dE right-half),
-  so as a straight extra stage it is wrong too.
+  exact identity makes this reading attractive, and it does land several bins,
+  but it worsens the whole (3.1 to 3.5 dE right-half).
 
-What would settle it: a frame with saturated content in every hue bin — this
-scene resolves only four to five of the 24 — so the missing field can be read
-completely instead of extrapolated from four points per mode. The differential
-needs only one such frame shot in each mode plus OFF.
+**The standing data request is weaker than it was.** This section used to ask for
+a frame with saturated content in every hue bin, because the field could only be
+read in four or five of 24. That is still the way to measure any residual field
+completely. But the field it was meant to explain has largely turned out to be
+the matrix, so the request now buys refinement rather than a missing mechanism.
 
 ## The measured residual layer, and the luma row
+
+**This layer no longer exists.** It was 390 measured values per render — a
+rotation and a gain per hue bin in two chroma bands for each of thirteen modes —
+plus a per-mode luma row of 26 more. All of it is removed from the renderer, and
+the score improved. What it was standing in for was the matrix error and the
+missing chroma stage, both now decoded. The section is kept for three things that
+survive it.
 
 **What the sample frame actually covers**, measured rather than asserted. Per
 hue bin of `atan2(Cr, Cb)`, counting camera-JPEG pixels above the chroma
@@ -1359,42 +1404,28 @@ across six modes, where bins 16 to 23 hold a few thousand between them, and bins
 0 to 3 hold none at all. So the limit is the spread of hues, not the amount of
 colour, and it falls hardest on the modes whose content sits in the thin bins.
 
-With the field measurable in 9 of 24 bins (binning by the decode's hue rather
-than the OFF image's unlocked five more bins from the same frame), the residual
-between render and camera is read directly as per-mode tables: a rotation and a
-gain per bin of the decode hue, plus **a per-mode luma row** — the camera's
-chroma stages preserve a per-mode luma, not Rec.601, and the difference appears
-as a luma shift linear in Cb and Cr. Teal and Orange carries the largest
-weights (its cb coefficient is -1.6), which was most of its long-standing luma
-error; the runtime matrix builder at `0xC02C55A0` holds the same concept as a
-Q12 per-mode luma row, confirming the mechanism class in code.
+This still stands, and it still bounds what any per-bin measurement on this frame
+can claim.
 
-**The luma row's mechanism is now read out of the register-write path.** The
-function at `0xC02D5E18` fetches descriptor entry 31 — the YC matrix record — 142
-times and writes fields into a register block. The structure is regular: 57
-groups at a stride of 20 bytes, spanning register offsets `0xA88` to `0xEEA`,
-cycling with a period of four groups. **Only the luma fields are written.** The
-three offsets used are `+4`, `+6` and `+8`, which are the Q12 luma row. The
-chroma fields `+10` to `+16` are never written by this path.
+**The luma broadcast is real and is read correctly.** The function at
+`0xC02D5E18` fetches descriptor entry 31 — the YC matrix record — 142 times and
+writes fields into a register block. The structure is regular: 57 groups at a
+stride of 20 bytes, spanning register offsets `0xA88` to `0xEEA`, cycling with a
+period of four groups. **Only the luma fields are written.** The three offsets
+used are `+4`, `+6` and `+8`, which are the Q12 luma row. The chroma fields `+10`
+to `+16` are never written by this path. So the camera broadcasts one luma row to
+57 register slots across the pipeline.
 
-So the camera broadcasts one luma row to 57 register slots across the pipeline.
-The register path is read correctly and stands.
+**The row is not per mode, and the export settles it.** An earlier version of this
+section read the measured per-mode luma shift as the YCMAT luma row, and cited
+the builder at `0xC02C55A0` as holding the same concept. Tag 297 refutes it: all
+sixteen exported YC matrices carry the luma row `(0.2988, 0.5867, 0.1145)`,
+identical to the last decimal and summing to exactly 1, which is Rec.601. The
+camera broadcasts the *same* row for every mode.
 
-**The row is not per mode, and the export settles it.** Tag 297 holds the sixteen
-runtime YC matrices, and every one of them carries the luma row
-`(0.2988, 0.5867, 0.1145)`, identical to the last decimal and summing to exactly
-1. That is Rec.601. So the camera broadcasts the *same* luma row for every mode,
-and the values are no longer undecoded.
-
-This kills the mechanism this section proposed. The measured per-mode luma shift
-is real, and the YCMAT luma row is not its cause. Whatever produces it sits
-elsewhere, and the residual layer's `luma_cb` and `luma_cr` fields now stand in
-for an unknown stage rather than for a known one.
-
-All of the residual layer is measured as medians of camera-vs-camera
-differentials on the left half of the sample frame and validated on the right
-half, where every mode improves. It ships as a distinct layer in the render,
-documented as measured rather than derived.
+So the mechanism this section proposed is dead. Whether a per-mode luma shift
+exists at all is now open: it was measured against a chain with a wrong matrix
+for four modes, and the corrected chain does not need it.
 
 Also settled while reading the code: the two double-precision constants at
 `0xC0970044` and `0xC097008C` are the standard XYZ-to-sRGB matrix with
@@ -1403,7 +1434,7 @@ per-channel white-balance diagonals baked in — `diag(0.492, 1.000, 0.649)` and
 consumed by the double-precision 3x3 inverter at `0xC02C6CD8`. An earlier note
 read this region as garbage floats; they are doubles.
 
-## How close this gets
+## How close the fitted renderer got (history)
 
 **This section is history.** It describes the renderer as it stood before the
 decoded chain was ported into it: the fitted chain plus a measured residual
@@ -1452,9 +1483,11 @@ the increments' own metric). Final per-mode, full frame: OFF and Monochrome
 0.9, ten modes between 2.0 and 3.1, Warm Gold 3.5, Powder Blue 3.9, Cinematic
 4.2 — against a median 8.2 dE between one camera mode and the next.
 
-What remains sits in hue variance inside bins the frame measures thinly, and in
-Cinematic's chroma at 0.92. The next measurable gain needs hue coverage this
-frame does not have.
+That renderer's own reading of what was left — hue variance inside thinly
+measured bins, and Cinematic's chroma at 0.92 — was wrong about the cause. Both
+were symptoms of the derived matrix. Cinematic's chroma error in particular came
+from a matrix that was off by 0.17, not from anything the sample frame could not
+resolve.
 
 ## Unread data
 
@@ -1478,7 +1511,9 @@ of a fact.
 - **The `CEQ` and `PST_TOP` chroma stages**: `CEQ_YGAM`, `CEQ_KNEE`, `CEQ_CLIP`,
   `CEQ_CORING`, `CEQ_OFFSET`, `CEQ_COMPATI`, `CUVCONT`, `CSUP`, `ECSUP`,
   `C_SAT_C`. The firmware names them and this file has not found their data.
-  Best candidate for the strong looks' missing saturation.
+  They used to be the best candidate for the strong looks' missing saturation.
+  That symptom is gone — Cinematic and Powder Blue now render at 1.55 and 2.26 dE
+  — so these stages are unread rather than suspected of anything.
 - ~~**The per-mode YC matrix records**, the stride-20 class that `0xC02C55A0`
   reads.~~ **Closed.** Tag 297 exports all sixteen of them as floats. The luma
   row is Rec.601 in every mode and the chroma rows are per mode. Nothing about

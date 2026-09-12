@@ -114,10 +114,15 @@ so it preserves white, but unlike every matrix in the mode table it saturates:
 eigenvalues 1.2344, 1.3672 and 1.0, determinant 1.69. Both consumers use it as
 the fallback when a mode has no keyed record, and the per-mode records are
 stride 40. It matches no mode matrix. Tested in the rig as a shared stage, to see
-whether it could stand where the fitted `chroma_trim` of 1.12 does, it is worse
-than having no trim at all: 3.581 against 3.239 held out with the trim, and 3.496
-with the trim removed and nothing in its place. Applying it before the mode
+whether it could stand where the then-fitted `chroma_trim` of 1.12 does, it is
+worse than having no trim at all: 3.581 against 3.239 held out with the trim, and
+3.496 with the trim removed and nothing in its place. Applying it before the mode
 matrix instead is worse again, at 3.683. The script is `xc/e30.py`.
+
+Those scores are the old fitted chain's, and the trim they were testing is itself
+retired. The rejection stands on the shape of the matrix rather than on the
+scores: entry 30 saturates where every mode matrix desaturates, and both its
+consumers use it as a fallback for a missing keyed record.
 
 Entry 37 is now read. It is a full `CEQ24` block carrying id 100, and it decodes
 to Standard's look exactly. That answers a standing question — Standard does have
@@ -502,23 +507,23 @@ This is the debt, quarantined in its own fields. It is listed here so the cost o
 each unread stage is visible.
 
 **This table is now history.** It described the renderer as it stood before the
-decoded chain was ported into it. Everything in it except `T` has been removed
+decoded chain was ported into it. Everything in it except the front end has been removed
 from `rusty-emulsion`, and the score improved. It is kept because it is the
 record of what each fitted object was standing in for.
 
 The shipped renderer now runs the decoded chain: the camera's exported runtime
 matrix, the gamma curve per channel, the per-mode YC matrix, and the 24-bin
-tables at face value. `T` is the only measurement left. The generator is
-`xc/gen_rust2.py` and it replaces `xc/gen_rust.py`.
+tables at face value. The front end `F` is the only measurement left. The
+generator is `xc/gen_rust2.py` and it replaces `xc/gen_rust.py`.
 
-| item | stands in for | status |
+| item | stood in for | status |
 |---|---|---|
-| `T`, the front-end transform | an unread stage between the sensor matrix and the look matrix | still needed, one measurement from the OFF frame |
-| `residual_lo` / `residual_hi` | undecoded chroma stages, most likely inside `CEQ` or `PST_TOP` | not needed by the decoded chain |
-| `luma_cb` / `luma_cr` | ~~the per-mode `YCMAT` luma row, which is run time~~ | **the reading was wrong.** Tag 297 gives every mode the same Rec.601 luma row, so these fields stand in for an unknown stage |
-| `rot_scale`, about 0.6 to 0.7 | ~~no mechanism found~~ | **retired.** There was no mechanism. A scale of 1.0 is a sharp interior minimum once the matrix, the composition and the chroma plane are decoded |
-| the working-space matrix `G` | the space the mode matrices act in | retired, the decoded chain needs no conjugation |
-| `chroma_trim`, 1.12 | nothing named | retired, the decoded value is 1.00 |
+| `F`, the front-end transform | the transform from this project's decode to the camera's linear front end | **kept.** One measurement, from the OFF frame, 709,631 px at 2.31 percent |
+| `residual_lo` / `residual_hi`, 390 values | undecoded chroma stages, suspected inside `CEQ` or `PST_TOP` | **removed.** It was mostly the derived matrix and the missing YC stage |
+| `luma_cb` / `luma_cr`, 26 values | ~~the per-mode `YCMAT` luma row, which is run time~~ | **removed, and the reading was wrong.** Tag 297 gives every mode the identical Rec.601 luma row. Whether a per-mode luma shift exists at all is now open — it was measured against a chain with a wrong matrix for four modes |
+| `rot_scale`, about 0.6 to 0.7 | ~~no mechanism found~~ | **removed.** There was no mechanism. A scale of 1.0 is a sharp interior minimum once the matrix, the composition and the chroma plane are decoded |
+| the working-space matrix `W` | the space the mode matrices act in | **removed.** The decoded chain needs no conjugation |
+| `chroma_trim`, 1.12 then 0.93 | nothing named | **removed.** The decoded value is 1.00 |
 
 ## Coverage, counted
 
