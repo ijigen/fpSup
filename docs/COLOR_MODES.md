@@ -614,11 +614,18 @@ against a median 8.2 dE between one camera mode and the next:
 | Vivid | 2.8 | | |
 | FOV Classic Blue | 3.0 | | |
 
-Mean 2.7. Median hue error on saturated pixels +0.5 degrees, chroma ratio 1.00.
+Mean 2.7 with one flat residual band; **2.46 with two** — the residual layer
+split into two chroma bands of the decode (below and above 0.08, blended over
+0.03), because the field is chroma-dependent within a bin: Powder Blue's pastel
+blues need 1.7x chroma where its saturated blues need none. Each round was
+measured on the left half and validated on the right (2.30 to 2.22 to 2.03 on
+the increments' own metric). Final per-mode, full frame: OFF and Monochrome
+0.9, ten modes between 2.0 and 3.1, Warm Gold 3.5, Powder Blue 3.9, Cinematic
+4.2 — against a median 8.2 dE between one camera mode and the next.
 
-What remains: Cinematic and Powder Blue still sit at 0.87 and 0.92 of the
-reference chroma, FOV Classic Blue carries +5 degrees of hue, and Warm Gold 4.5
-of hue spread — all concentrated where the sample frame's hue coverage thins.
+What remains sits in hue variance inside bins the frame measures thinly, and in
+Cinematic's chroma at 0.92. The next measurable gain needs hue coverage this
+frame does not have.
 
 ## Open
 
