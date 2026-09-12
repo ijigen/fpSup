@@ -479,6 +479,27 @@ struct `0xC2F1A064` (offsets +0x28 and +0), with all-zero neutral defaults
 the firmware image as static arrays** — they are built or uploaded at run
 time, and finding their writer is the next step of this campaign.
 
+**The effect slider is one system across all tables.** A composer at
+`0xC02CFF00`-ish fetches each parameter class's mode record and extrapolates it
+away from the id-35 record by a percentage: `out = mode + (mode - base) * pct
+/ 100`, via the blender at `0xC02CF758` (the divide-by-100 constant
+`0x51EB851F` names the unit). Id 35 — present since Ver 1.02 with Standard's
+matrix and no menu entry — is the **blend base for the strength system**. At
+effect 0 every path returns the plain tables.
+
+**The leading mechanism for the missing hue field, validated held-out:** a
+shared rotation proportional to chroma magnitude. Measured as `degrees per
+unit chroma` per hue bin from five Standard-family modes' left halves and
+applied to all modes' right halves, it improves eight modes (Standard 3.03 to
+2.79 dE, Vivid 2.93 to 2.62, Landscape 2.75 to 2.47, Forest Green 2.31 to
+2.13) and moves none of the measurements it was built from. It also explains
+the long-standing 0.6 rotation shortfall: a negative-slope shared stage
+partially undoes the equaliser's rotations exactly where pixels are saturated.
+Two modes regress (Warm Gold, Teal and Orange) because their content sits in
+hue bins the sample frame cannot measure — the same four-of-24-bins limit as
+before. The field is not shipped; the mechanism is recorded, and one
+colour-rich frame per mode completes it.
+
 Also catalogued and not yet decoded: a parameter zone around `0xC0B35F90`
 holding Q9 knee-point ladders, a full-scale tone curve ending at `0xC0B35F32`,
 a 33-step strength ladder at `0xC0B386E0`, and further RAM parameter structs at
