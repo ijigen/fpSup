@@ -927,6 +927,61 @@ Swapping one factor of an entangled chain and scoring it tests the entanglement,
 not the factor. A fair test needs the front end re-derived from the OFF frame
 under the new composition, and that is the next step.
 
+### The front end re-derived, and an honest score
+
+The front end was re-fitted from the OFF frame alone, under the decoded
+composition, on 709,631 pixels. Its residual is **2.45 percent of signal**,
+against 2.3 percent for the front end this file already had, so the fit is as
+good. Because `M_new[OFF]` is the identity by construction, the fit never sees
+any mode's matrix, and every other mode is a prediction.
+
+```
+F = [ 1.7201 -0.1003 -0.3240 ]     decode in ProPhoto -> camera linear
+    [-0.0482  1.3982 -0.0466 ]
+    [-0.2155  0.4481  1.0653 ]
+```
+
+Scored on identical pixels with an identical metric, so the three chains are
+comparable:
+
+| chain | left | right |
+|---|---|---|
+| Standard-relative, per-channel curve | 5.155 | **3.178** |
+| Standard-relative, hue-preserving curve | 6.397 | 3.524 |
+| OFF-relative, decoded, saturation relative to Standard | 7.791 | 5.499 |
+| OFF-relative, decoded, **saturation absolute, trim 1.00** | 6.328 | 4.978 |
+
+**Three things in the decoded chain's favour.**
+
+Monochrome goes from 1.48 to **1.12**, and Monochrome is the only mode with no
+chroma stage — its saturation column is zero in every bin. So on the one mode
+that tests the front end, the matrix and the curve without the equaliser, the
+decoded chain is the better one.
+
+Making the saturation absolute rather than relative to Standard is worth 0.52 dE
+on the held-out half. That is the change the composition implies: if the matrix
+is referred to OFF then so should the saturation be, and OFF's saturation column
+is 1.000 in every bin.
+
+The fitted `chroma_trim` **falls out**. Under the Standard-relative chain its best
+value is 1.12; under the OFF-relative chain it is 1.00, which is no trim at all.
+A fitted constant that stops being needed when a stage is decoded properly is
+what a correct decode looks like.
+
+**And the decoded chain still loses, 4.978 against 3.178.** That is recorded
+plainly. Thirteen of fourteen modes are worse. The composition is proven from the
+camera's own export, so the fault is elsewhere in the chain: either a stage is
+missing between the matrix and the equaliser, or the equaliser's own settings —
+the 285-degree anchor and the 0.6 rotation scale — were themselves fitted against
+the Standard-relative form and no longer apply. Sweeping the rotation scale from
+0.6 to 1.0 does not help, which argues for the missing stage rather than the
+setting.
+
+The next thing to try is the camera's own chroma plane. This file records that
+test as rejected, but it was run inside the Standard-relative chain where nothing
+else was decoded. Inside a chain whose matrix and front end are both the camera's
+own, it is a different experiment.
+
 What is settled is what the camera does. What is open is what the renderer should
 do about it.
 
