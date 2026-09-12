@@ -1405,11 +1405,26 @@ read this region as garbage floats; they are doubles.
 
 ## How close this gets
 
-This section describes the **shipped** renderer, which is the fitted chain plus a
-measured residual layer. It is not the best result in this file. The decoded
-chain reaches 2.161 dE full frame with no residual layer at all — see "Three
-fitted constants are retired". The shipped renderer has not been rebuilt on the
-decoded chain yet.
+**This section is history.** It describes the renderer as it stood before the
+decoded chain was ported into it: the fitted chain plus a measured residual
+layer, at 2.46 dE. That renderer is gone. `rusty-emulsion` now runs the decoded
+chain, and the numbers to read are in "Three fitted constants are retired".
+
+What was removed from the shipped renderer, and what replaced it:
+
+| removed | count | replaced by |
+|---|---|---|
+| the residual layer, two chroma bands | 390 measured values | the exported matrix and the YC stage |
+| the per-mode luma row | 26 measured values | nothing — refuted, the YC luma row is Rec.601 in every mode |
+| the rotation scale, 0.6 | 1 | the table's own rotation at face value |
+| the chroma trim, 0.93 | 1 | the table's own absolute gain |
+
+The front end stays, as one measured 3x3. The generator is `xc/gen_rust2.py`.
+The port reproduces the chain measured here to a maximum of 0.0008 per channel,
+which is the renderer's 256-point gamma table against this file's 2048-point one.
+
+The table below is what the removed layer bought on top of the old chain, and it
+is kept for the record.
 
 One frame, processed in the camera by all fifteen looks, against the same frame
 rendered from its DNG. Warp fitted and undone, full frame, mean CIE Lab dE,
