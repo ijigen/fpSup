@@ -977,13 +977,79 @@ the Standard-relative form and no longer apply. Sweeping the rotation scale from
 0.6 to 1.0 does not help, which argues for the missing stage rather than the
 setting.
 
-The next thing to try is the camera's own chroma plane. This file records that
-test as rejected, but it was run inside the Standard-relative chain where nothing
-else was decoded. Inside a chain whose matrix and front end are both the camera's
-own, it is a different experiment.
+### The YC matrices are per mode, and that is the missing stage
 
-What is settled is what the camera does. What is open is what the renderer should
-do about it.
+Tag 297 holds sixteen YC matrices, and **thirteen of them are distinct**. This
+file had assumed one shared matrix, because the only static record in the image
+is the id-100 default.
+
+The split is clean:
+
+- **The luma row is Rec.601 in every mode**, `(0.2988, 0.5867, 0.1145)`, summing
+  to exactly 1.
+- **The chroma rows are per mode**, and they vary a great deal. Cinematic's Cb is
+  `(0.1895, -0.8965, 0.7070)` where Landscape's is `(-0.0039, -0.4961, 0.5000)`.
+- **OFF's chroma rows are exactly Rec.601**: `(-0.168, -0.332, 0.5)` and
+  `(0.5, -0.418, -0.082)`, to Q9 quantisation.
+
+That last point is what makes the stage legible. OFF is the identity look, so a
+mode's chroma rows are its look's chroma stage, expressed as a change of basis
+away from Rec.601. The largest departures belong to Cinematic and Powder Blue,
+which are the two worst-rendering modes in this file's own table.
+
+**This corrects the section on the camera's chroma plane.** That section reads the
+id-100 record and concludes the camera's chroma axes are not Rec.601 and sit 104
+degrees apart. The record is decoded correctly, but it is a fallback, and reading
+it as "the camera's chroma plane" was wrong. Each mode has its own, OFF's is
+Rec.601 exactly, and the fallback is simply another one of them.
+
+**It matters how the matrix is applied.** Used as a basis — convert with the
+mode's matrix, run the equaliser, convert back with the same one — it changes
+nothing, 4.983 against 4.978, because conjugation nearly cancels. Used as a
+transform — convert with the mode's matrix, run the equaliser, convert back with
+**OFF's** — it is worth 0.59 dE, taking the decoded chain from 4.978 to **4.390**
+on the held-out half.
+
+### Two fitted constants stop mattering
+
+With the front end, the matrix composition and the chroma stage all decoded, the
+equaliser's own fitted settings were swept again:
+
+| anchor | rotation scale | left | right |
+|---|---|---|---|
+| 270 | any | 6.4 to 6.7 | 4.74 to 4.76 |
+| **285** | **0.6** | 5.780 | 4.390 |
+| **285** | **0.8** | 5.652 | **4.370** |
+| **285** | **1.0** | **5.597** | 4.379 |
+| 300 | any | 6.6 to 6.9 | 4.66 to 4.84 |
+
+**The 285-degree anchor is confirmed a third way**, now inside a chain where
+nothing upstream of it is fitted.
+
+**The rotation shortfall is gone.** A rotation scale of 1.0 scores the same as
+0.6, within 0.01 dE, and is the better of the two on the fit half. The standing
+question in this file — why the camera shows only 0.6 to 0.7 of the table's
+rotation, with four mechanisms tested and rejected — has an answer that is not a
+mechanism at all: it was an artefact of composing against Standard and running
+the equaliser in Rec.601. Decode those two and the table's rotations apply in
+full.
+
+`chroma_trim` is likewise 1.00, having been 1.12.
+
+### Where the decoded chain stands
+
+**4.379 dE on the held-out half, against 3.178 for the fitted chain.** The decoded
+chain still loses by 1.2 dE, and that is the honest headline.
+
+But the two are not the same kind of object. The fitted chain carries a fitted
+working-space matrix, a fitted chroma trim and a fitted rotation scale. The
+decoded chain carries one measurement, the front end from the OFF frame, and
+nothing else: the matrix composition, the chroma stage, the rotation scale and
+the trim are all read out of the camera. Three fitted constants have been retired
+and the score has moved the wrong way by 1.2 dE.
+
+What remains unexplained is therefore sharper than before. It is not the matrix,
+not the chroma basis, not the rotation scale and not the anchor.
 
 ## The differential method, and what is still missing
 
