@@ -68,11 +68,13 @@ Entries with more than the two copier calls, which marks a real consumer:
 | 30 | `0xC0B39100` | 1 | 24 | 4 | a Q9 3x3, rows sum to 512, unread |
 | 24 | `0xC0B39088` | 1 | 8 | 3 | the chroma gains, all zero |
 | 29 | `0xC0B390E8` | 1 | 24 | 3 | three rows of 512, unread |
-| 37 | `0xC0B3924C` | 1 | 292 | 3 | 292 bytes of 512, a `CEQ24`-shaped default |
+| 37 | `0xC0B3924C` | 1 | 292 | 3 | **identified**: Standard's own `CEQ24` block |
 
-Entry 37 is the strongest lead on the list. 292 bytes is exactly the `CEQ24`
-block size, and its contents are Q9 1.0 throughout, which is what a neutral
-equaliser looks like.
+Entry 37 is now read. It is a full `CEQ24` block carrying id 100, and it decodes
+to Standard's look exactly. That answers a standing question — Standard does have
+a register block, as the class default rather than as a keyed record — and it
+confirms the five-bin hue offset through the value column, which no earlier
+derivation used. See COLOR_MODES.md, section 4.
 
 ## Coverage by block
 
@@ -237,8 +239,7 @@ own tables — the stages that carry the mode differences. The render sits at
    only a handful identified. For each: find the RAM address in the copier, scan
    for consumers of that address, and read what the consumer computes. This is
    the method that worked twice on 2026-09-12 and it needs no names.
-2. **Entry 37 first.** 292 bytes of Q9 1.0 is a `CEQ24`-shaped neutral default,
-   and `CEQ` is where the unread mass is.
+2. ~~Entry 37.~~ Done on 2026-09-12: it is Standard's `CEQ24` block.
 3. **Then entries 30 and 29.** Both are 24-byte records of Q9 rows that sum to
    512, both have real consumers, and entry 30's green row is Standard's green
    row exactly.

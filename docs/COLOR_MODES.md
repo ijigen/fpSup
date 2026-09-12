@@ -233,9 +233,28 @@ value for value.** Their means line up exactly — Vivid 1.826, Powder Blue 1.79
 Forest Green 1.676, Cinematic 1.001, Monochrome 0.000. So array B is what
 normalises array D, and the two forms of the table hold the same numbers.
 
-**Standard has no block.** Id 0 is absent from all 61, the same way id 9 is
-absent from the middle of the gamma map. The ids that are present are 1 to 36
-except 0 and 4, plus 39 and 100.
+**Standard's block is the class default, keyed 100.** An earlier version of this
+file said Standard had no block, because id 0 is absent from the run. Id 0 is
+absent, but the look is not. The block at `0xC0B3924C`, which carries id 100,
+decodes to Standard exactly: its saturation column matches Standard's float
+record to 0.00000, its value column to 0.00000, and its rotation column to 0.0063
+degrees. Its mean saturation is 1.495 and its largest rotation 11.25 degrees,
+which are Standard's own figures.
+
+That block is **descriptor entry 37** of the ISP table at `0xC0B38ACC`, so it is
+the id-100 neutral default of the `CEQ24` parameter class. Standard is the
+camera's default look, so the class default holds Standard's numbers and id 0
+never needs a keyed record. A signature search over the whole image finds no
+other id-100 block. The ids present are 1 to 36 except 0 and 4, plus 39 and 100,
+and id 9 is absent from the middle of the gamma map in the same way.
+
+This confirms the five-bin offset a third time, through a column no earlier
+derivation used. Array C is non-512 in exactly two bins, 10 and 22, at 1.125 and
+0.750. Standard's float value column is non-1 in exactly two bins, 15 and 3, at
+the same two numbers, and `15 - 5 = 10`, `3 - 5 = 22` modulo 24.
+
+Id 35 is a different look, despite carrying Standard's matrix. Its block at
+`0xC0B3AB1C` matches the float record for id 35, not Standard's.
 
 **`TGT - ORG` is the float table's hue column.** Converted to degrees with
 `360 / 65536`, and matched to each float record, the regression slope is
@@ -955,7 +974,6 @@ Interpretation, not missing data. These do not gate anything.
   chroma-dependent gain (the fit collapses to flat), and the equaliser working
   in the camera's own decoded chroma plane, which moves the render by 0.03 dE
   and predicts a mean gain of 1.038, the wrong way.
-- Why Standard has no register block.
 - What Cinematic and Powder Blue do that the other twelve do not. Both render at
   about 0.8 of the reference's chroma under the same trim that puts every other
   mode within a few percent.
