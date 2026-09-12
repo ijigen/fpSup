@@ -812,6 +812,78 @@ not bear on it. It runs a stripped chain with no residual layer, on a 15-degree
 grid, and it sweeps the anchor together with the rotation scale. The anchor
 stands on the register blocks and on the cross-correlation, not on this.
 
+## The camera exports its own pipeline state in the DNG
+
+**Every DNG the fp writes carries the colour pipeline it used, as floats, in the
+Sigma MakerNote.** This was found by following `0xC02C57C0`, which this file had
+called a preloader. It is not a preloader. It fills an array of sixteen 36-byte
+float records and hands them to `0xC00BA378`, which is a TIFF tag writer — the
+call `(ctx, 5, 0x124, 0xb, 0x90, array)` is tag 292, type 11 FLOAT, count 144.
+
+### Reading it
+
+The MakerNote is Exif tag 37500 in the ExifIFD. Its header is `SIGMA\0\0\0`
+followed by a two-byte version, and the IFD count is at offset 10, with entries
+from offset 12. **Value offsets are relative to the TIFF base, not to the
+MakerNote.** Getting that wrong yields plausible-looking garbage.
+
+The DNG's MakerNote has 98 entries where a JPEG's has 91, and the extra ones are
+the interesting ones. A JPEG does not carry tag 292.
+
+| tag | type | count | what it is |
+|---|---|---|---|
+| 292 `0x0124` | FLOAT | 144 | sixteen 3x3 mode matrices |
+| 297 `0x0129` | FLOAT | 144 | sixteen 3x3 YC matrices |
+| 299 `0x012B` | FLOAT | 2304 | **the complete hue tables**: 16 modes x 24 bins x 2 variants x (hue, sat, val) |
+| 301 `0x012D` | FLOAT | 4096 | a 2048-point tone curve, as (x, y) pairs |
+| 279 `0x0117` | FLOAT | 2048 | a near-unity correction curve, 0.998 to 1.002 |
+
+All sixteen records are in the order `0xC02C57C0` uses: 35, 1, 0, 3, 5, 6, 7, 14,
+11, 12, 15, 8, 10, 36, 13, 36.
+
+### What it confirms
+
+**The hue tables match the firmware exactly.** Matching each of the sixteen
+exported records against the firmware tables gives a maximum absolute difference
+of **0.000000** for fifteen of them and 0.000001 for the sixteenth. The whole
+24-bin hue table decode in this file is now confirmed from camera output, not
+only from the image.
+
+**Tag 297 confirms the YC matrix decode, coefficient for coefficient.** Its first
+record is `0.2988, 0.5867, 0.1145, -0.0117, -0.4883, 0.5000, 0.5000, -0.3906,
+-0.1094`, which is exactly the matrix this file derives from descriptor entry 31
+— including the two chroma rows whose middle coefficient is the negative of the
+other two, a packing that was read out of the instructions and had no independent
+check until now.
+
+**Tag 292's first record confirms entry 30**, as `1.2344, -0.1797, -0.0547, 0,
+1.2617, -0.2617, 0, -0.1055, 1.1055`, including the own-channel-first layout.
+
+**The per-mode RAM table is populated after all.** PIPELINE_COVERAGE.md records
+that no writer for it is statically visible, and treats that as a gap in the
+search rather than a fact. The export settles it: ids 0 and 35 come out as entry
+30, the fallback, while Monochrome and OFF come out as the identity and the other
+eleven modes each carry distinct matrices. A table that produces eleven different
+answers is populated.
+
+### What it opens
+
+**The exported matrices are not the firmware matrix table.** They are
+white-preserving and they saturate, where every matrix in the table at
+`0xC0B3A340` desaturates. Simple relations do not explain the difference: the
+inverse, and composition with OFF's matrix either way, all fail, with a best mean
+error of 0.03 and a worst case of 0.17 after row normalisation.
+
+The difference is not uniform across rows. For Teal and Orange the exported green
+row is `(-0.1289, 0.6406, 0.4883)` against the table's `(-0.129, 0.641, 0.488)`,
+which matches, while the red row is `(1.498, -0.2578, -0.2402)` against
+`(1.035, -0.002, -0.033)`, which does not. Several modes behave the same way.
+
+This matters more than anything else open in this file. These are the matrices
+the camera actually used, in float, available from any DNG the camera has ever
+written. If the relation to the table is understood, the matrix stage stops being
+a reconstruction.
+
 ## The differential method, and what is still missing
 
 With the front end measured, a second differential becomes meaningful: compare
