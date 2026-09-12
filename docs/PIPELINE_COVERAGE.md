@@ -80,7 +80,7 @@ Entries with more than the two copier calls, which marks a real consumer:
 | entry | pointer | count | stride | uses | what it is |
 |---|---|---|---|---|---|
 | 31 | `0xC0B39118` | 1 | 20 | 175 | the YC matrix, decoded |
-| 30 | `0xC0B39100` | 1 | 24 | 4 | **identified**: a white-preserving saturating Q9 3x3, the fallback default of a matrix class |
+| 30 | `0xC0B39100` | 1 | 24 | 4 | **the mode-matrix default**, a white-preserving saturating Q9 3x3, used when the mode lookup misses |
 | 24 | `0xC0B39088` | 1 | 8 | 3 | the chroma gains, all zero |
 | 29 | `0xC0B390E8` | 1 | 24 | 3 | **identified**: the Q9 identity, the neutral default of a second matrix class |
 | 37 | `0xC0B3924C` | 1 | 292 | 3 | **identified**: Standard's own `CEQ24` block |
@@ -228,6 +228,78 @@ The decompiler also serves as a check on hand analysis. It reproduced the YC
 matrix builder at `0xC02C55A0` independently: the 16-byte copy from `record + 4`,
 the luma row scaled by `DAT_c02c5934`, and the two chroma rows as
 `v3, -(v3+v4), v4` and `v5, -(v5+v6), v6` scaled by `DAT_c02c593c`.
+
+## The fourth table: mode-keyed, and in RAM
+
+`0xC02D5DF0` returns `0xC2F1A064`. Decompiling its three callers shows what that
+is: **a fourth table in the same `(pointer, count)` shape as A, B and C, but keyed
+by mode id rather than by ISO.**
+
+`0xC02D2818` is its lookup:
+
+```c
+if (*(uint *)(tbl + 0x2c) != 0) {                        // count of entry 5
+    key = *(uint *)(*(int *)(tbl + 0x28) + i * 0x14);    // pointer, stride 20
+    // linear search for key == mode id
+}
+```
+
+Two of its entries carry the look:
+
+| slot | entry | records | falls back to |
+|---|---|---|---|
+| `+0x08` / `+0x0c` | 1 | per-mode, stride 24 — the mode matrix record shape | descriptor entry 30 |
+| `+0x28` / `+0x2c` | 5 | per-mode, stride 20 — the YC matrix record shape | descriptor entry 31 |
+
+That settles what entry 30 is. The mode-matrix loader `0xC02C5440` reads
+`*(descriptor + 0xf0)`, and `0xf0 / 8 = 30`, when the mode lookup misses. So
+**entry 30 is the mode-matrix default**, not merely "a matrix class default" as
+this file said a few commits ago. The decompiler also confirms the division by
+the red row's sum that the matrix section records.
+
+**`0xC2F1A064` is not in the image.** Its offset from the load address is
+`0x2F1A064`, and the file is `0x2EF0000` bytes. It is pure RAM.
+
+### An open contradiction, stated plainly
+
+Nothing in the image writes the pointer or count of either look-bearing slot.
+Four routes were checked and all are empty:
+
+- No store to `0xC2F1A064 + 0x08`, `+0x0c`, `+0x28` or `+0x2c` with the base in a
+  tracked register. The five stores that do land in that struct go to `+0x350`
+  and `+0x9ac` to `+0x9b8`.
+- Only two sites build the address directly, the getter itself and the luma
+  broadcast at `0xC02D5E00`, and the broadcast writes only `0xA88` to `0xEEC`.
+- The getter has exactly three callers: the two matrix builders, which read, and
+  the `PictureQualityFuncTh` constructor, which stores the pointer in an object.
+- That object's vtable at `0xC0B35F34` holds three real methods — `0xC02CF360`,
+  `0xC02D4510` and `0xC02D4570` — and they are the effect-slider engine, not a
+  table filler.
+
+**The camera plainly does apply per-mode matrices**, because the fifteen modes
+render differently and the ROM matrix table holds fifteen different matrices. So
+a writer must exist and is not statically visible. This is the same puzzle as the
+long-standing one in COLOR_MODES.md — that no pointer to the matrix table at
+`0xC0B3A340` exists anywhere in the image — and it now has a shape: the pointer
+is installed into RAM at run time by a route that is neither a `movw`/`movt` pair
+nor a literal-pool word.
+
+Do not read this as "the per-mode tables are unused". It is a gap in the search,
+not a fact about the camera, and finding that writer is now the most valuable
+open item in this file.
+
+## What the ISO machinery is for
+
+`0xC02D0998` is a generic reader over 48-byte records — a key and eleven columns
+— with the column chosen by an argument. Its three callers, `0xC02C0D30`,
+`0xC02C0F78` and `0xC02C1098`, pick among eight candidate record arrays held in
+an object, and they choose by capture mode and by frame size: the test
+`iVar6 == 0xf00` with `iVar6 == 0x870` is 3840 by 2160.
+
+So the ISO-keyed machinery is per-resolution capture tuning. That is independent
+support for reading the eleven ids of parameter-list entries 5 and 6 as capture
+modes rather than looks, and it is the reason walking the ISO tables does not
+find colour.
 
 ## Coverage by block
 
