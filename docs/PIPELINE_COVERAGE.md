@@ -41,8 +41,23 @@ really does build a YCbCr matrix — but it is an inference, and the same goes f
 ## The route that does work
 
 The ISP descriptor table at `0xC0B38ACC` is 49 entries of `(pointer, count)`.
-Every entry's first record begins `100, 0`, the id-100 neutral default, so all 49
-are per-mode parameter classes with a static default in ROM.
+
+**The table is keyed by ISO, not by mode.** Every record starts with a `u16` key.
+Of the 12 entries with more than one record, 10 hold an ISO ladder — 100, 200,
+400, 800, 1600, 3200, 6400, 12800, 25600, 51200, 102400, or a subset of it. The
+other two, entries 44 and 48, are keyed by a plain index. All 37 single-record
+entries are keyed 100, which is base ISO, not a mode.
+
+A trap for the next reader: **the top step is stored wrapped.** The key is a
+`u16`, so ISO 102400 appears as 36864, and read as a signed value it appears as
+-28672. ISO 51200 appears as -14336. A reader who takes those at face value will
+not recognise the ladder.
+
+An earlier version of this file called these per-mode parameter classes with an
+id-100 neutral default. That was wrong on both counts. They are ISO-keyed, and
+the 100 is base ISO. The per-mode look data is not here: it is the RAM override
+that a handful of these classes accept, which is why `0xC02C55A0` looks up by
+mode id in RAM and falls back to the descriptor record when it finds nothing.
 
 The getter is `0xC02D5DE0`. It has 242 call sites, but for most entries the only
 two are the bulk copiers at `0xC02D6C08` and `0xC02D7000`, which move each
@@ -70,16 +85,28 @@ Entries with more than the two copier calls, which marks a real consumer:
 | 29 | `0xC0B390E8` | 1 | 24 | 3 | **identified**: the Q9 identity, the neutral default of a second matrix class |
 | 37 | `0xC0B3924C` | 1 | 292 | 3 | **identified**: Standard's own `CEQ24` block |
 
-**The consumer surface is small, and that is what makes the walk tractable.** Of
-the 242 call sites of the getter, 180 are outside the copiers, and they fall into
-only five functions:
+**Consumers, and a blind spot in how they are counted.** `0xC02D5DE0` is the only
+route to the table: nothing else in the image builds `0xC0B38ACC`. Of its 242
+call sites, 180 are outside the copiers, and 178 of those index an entry by an
+immediate offset in three functions:
 
 | function | entries it reads |
 |---|---|
 | `0xC02C5440` | 24, 30, 31 — the mode-matrix loader |
 | `0xC02CFCF0` | 29, 30, 31, 37 — the effect-strength composer |
 | `0xC02D5E18` | 31, 142 times — the register-write path |
-| `0xC02BF6E8`, `0xC02BFF9C` | one site each, entry not resolved |
+
+The remaining two call sites pass the table pointer on rather than indexing it.
+`0xC02BFF9C` hands it to `0xC02D0EC0`, which reads entry 26. `0xC02BF6E8` hands
+it to `0xC02BDC20`, which **stores it into an object**.
+
+That last one is the blind spot, and it is worth stating plainly: once the
+pointer is in an object, any code holding that object can index the table, and no
+scan anchored on the getter will see it. So a count of call sites is a lower
+bound on consumers, never a proof that an entry is unused. Do not conclude an
+entry is dead from silence here. The reliable route stays the RAM one — the
+copier gives the address, and addresses are built with `movw`/`movt`, which is
+searchable.
 
 **Entry 30 is decoded and rejected as a render stage.** Its rows each sum to 512,
 so it preserves white, but unlike every matrix in the mode table it saturates:
@@ -263,9 +290,11 @@ own tables — the stages that carry the mode differences. The render sits at
 2. ~~Entries 37, 30 and 29.~~ Done on 2026-09-12. Entry 37 is Standard's `CEQ24`
    block, entry 30 is a saturating matrix default that the render rejects, and
    entry 29 is the Q9 identity.
-3. **The 21 descriptor entries with no RAM address.** 28 of 49 are mapped through
-   the copiers; the rest are reached another way and are unexamined. Entries 28
-   and 35 hold all-zero defaults, so they are cheap to rule out.
+3. **The descriptor walk is close to exhausted for colour.** Because the table is
+   ISO-keyed, most of its 49 entries are sensor and noise tuning that varies with
+   sensitivity, not look data. The look enters only through the classes that take
+   a per-mode RAM override, and those are entries 24, 29, 30, 31 and 37 — all now
+   identified. Further walking should expect ISO tuning, not looks.
 4. **The second 36-entry map** in the 72-entry table. Present for Standard and
    OFF, its two saturation divisions differ where the DNG's are identical, and
    its role is open.
