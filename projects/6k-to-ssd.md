@@ -55,6 +55,51 @@ more than compressing everything, and unlike f=0.62 it leaves timing margin.
 | compress everything | 10.01 | 3875x2583 | −10% |
 | **compress every other frame** | **14.83** | **4717x3144** | **+33%** |
 
+### What compression is for here, and how much of it
+
+**It is not for saving card space.** It is for carrying a frame the link cannot
+otherwise carry. At the link speed this camera has actually been measured at —
+379 MB/s, from a real take — uncompressed tops out at 8.43 Mpix and
+alternate-frame compression reaches 14.09. Same link, 67% more pixels.
+
+But compression is not a switch, it is a dial, and turning it all the way is
+worse than leaving it off:
+
+| link | uncompressed | every frame | alternate frames |
+|---|---|---|---|
+| 379 MB/s *measured* | 8.43 Mpix `3556x2371` | 10.01 `3875x2583` | **14.09 `4597x3064`** |
+| 500 MB/s | 11.12 `4085x2723` | 10.01 `3875x2583` | **16.78 `5017x3344`** |
+
+At 500 MB/s, **compressing every frame gives fewer pixels than compressing
+none** — because it moves the bottleneck from the link to the engine, and the
+engine is the slower of the two. The point is not to compress but to compress
+*exactly enough that neither is the bottleneck*:
+
+```
+f = 1.5E / (L + 1.5E(1 - 1/C))
+
+L = 379 MB/s  ->  f = 0.71
+L = 500 MB/s  ->  f = 0.60
+```
+
+### The optimum has no timing margin, by construction
+
+At the optimum the engine runs at 100% — that is what "the engine is a
+bottleneck too" means — so a real design has to back off. What that costs:
+
+```
+link 379 MB/s                          link 500 MB/s
+f      Mpix    engine                  f      Mpix    engine
+0.711  14.09   100%  <- no margin      0.597  16.78   100%  <- no margin
+0.650  13.33    87%                    0.550  16.14    89%
+0.600  12.76    76%                    0.500  15.50    77%
+0.500  11.75    59%                    0.400  14.37    57%
+```
+
+**f = 1/2 is the recommendation**: 77% engine utilisation at a 500 MB/s link,
+59% at 379, a duty cycle trivial to implement, and it costs 8% of the pixels
+against the optimum. Every figure elsewhere in this document uses f = 1/2.
+
 ### Why alternate frames and not half a frame
 
 Half a frame does not survive the container. **TIFF's `Compression` tag is per
@@ -243,6 +288,46 @@ E=300、L=500、C=2 時最佳 f=0.62、16.1 Mpix。**取 f=1/2**:14.83 Mpix、
 | 完全不壓 | 11.12 | 4085×2723 | — |
 | 每幀都壓 | 10.01 | 3875×2583 | −10% |
 | **隔幀壓** | **14.83** | **4717×3144** | **+33%** |
+
+### 壓縮在這裡是為了什麼,以及要壓多少
+
+**不是為了省卡片空間。** 是為了把鏈路本來載不動的畫格載出去。用這台相機**實際
+量到**的鏈路速度(379 MB/s,來自一段真實素材):不壓縮頂到 8.43 Mpix,隔幀壓
+到 14.09。同一條鏈路,多 67% 的像素。
+
+但壓縮不是開關,是旋鈕,而且轉到底比不轉還差:
+
+| 鏈路 | 不壓縮 | 每幀都壓 | 隔幀壓 |
+|---|---|---|---|
+| 379 MB/s **實測** | 8.43 Mpix `3556x2371` | 10.01 `3875x2583` | **14.09 `4597x3064`** |
+| 500 MB/s | 11.12 `4085x2723` | 10.01 `3875x2583` | **16.78 `5017x3344`** |
+
+在 500 MB/s 下,**每幀都壓拿到的像素比完全不壓還少** —— 因為它把瓶頸從鏈路搬到
+引擎,而引擎是兩者裡較慢的那個。重點不是「壓」,是**壓到剛好讓兩邊都不是瓶頸**:
+
+```
+f = 1.5E / (L + 1.5E(1 - 1/C))
+
+L = 379 MB/s  ->  f = 0.71
+L = 500 MB/s  ->  f = 0.60
+```
+
+### 最佳解在定義上沒有時序餘裕
+
+最佳解處引擎跑 100% —— 那就是「引擎也是瓶頸」的意思 —— 所以實際設計必須退讓。
+代價是:
+
+```
+鏈路 379 MB/s                          鏈路 500 MB/s
+f      Mpix    引擎                     f      Mpix    引擎
+0.711  14.09   100%  <- 零餘裕          0.597  16.78   100%  <- 零餘裕
+0.650  13.33    87%                    0.550  16.14    89%
+0.600  12.76    76%                    0.500  15.50    77%
+0.500  11.75    59%                    0.400  14.37    57%
+```
+
+**建議取 f = 1/2**:鏈路 500 時引擎用 77%、379 時用 59%,duty cycle 實作極簡單,
+代價是比最佳解少 8% 的像素。這份文件其他地方的數字都用 f = 1/2。
 
 ### 為什麼是隔幀,不是半張圖
 
