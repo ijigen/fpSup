@@ -670,28 +670,53 @@ What remains sits in hue variance inside bins the frame measures thinly, and in
 Cinematic's chroma at 0.92. The next measurable gain needs hue coverage this
 frame does not have.
 
-## Open
+## Unread data
+
+Firmware objects this file knows exist and has not decoded. **This list is the
+gate on fitting** — see `CLAUDE.md`. Each entry is a place where real per-mode
+data sits, so a fitted constant added while any of these stands is a fit on top
+of a fact.
+
+- **Parameter list entries 5 and 6**, `0xC0B43CF0` and `0xC0B43E50`, 22 records
+  each: 11 mode ids by 2 variants of `(id, variant, pointer, count)`, addressing
+  `0xC2F1B3B8` to `0xC2F1CC28` — 6.2 KB of per-mode parameter RAM. The static
+  source that fills it has not been found. Two getters of the `0xC02D5DE0`
+  family bracket the region, at `0xC02D6BCC` and `0xC02D8720`.
+- **The second 36-entry map** in the 72-entry table, present for Standard and
+  OFF. Unlike the DNG's copy its two saturation divisions differ, so the camera
+  holds a saturation-dependent hue and saturation map and flattens it for
+  export. Applying it as a shared stage does not fit (3.08 to 3.55 dE), so its
+  role is open.
+- **The `CEQ` and `PST_TOP` chroma stages**: `CEQ_YGAM`, `CEQ_KNEE`, `CEQ_CLIP`,
+  `CEQ_CORING`, `CEQ_OFFSET`, `CEQ_COMPATI`, `CUVCONT`, `CSUP`, `ECSUP`,
+  `C_SAT_C`. The firmware names them and this file has not found their data.
+  Best candidate for the strong looks' missing saturation.
+- **The words after the luma triple** in the YCMAT block at `0xC0B39118`:
+  `-6, 256, 256, -56, 0, 100, ...`. Likeliest path to the rotation shortfall.
+- **The coarse `CEQ_ORG` / `CEQ_TGT` pair**, named beside the 24-bin ones and
+  never located.
+- **Arrays A and C** of a `CEQ24` block are identified as the two value columns,
+  but nothing reads them: their effect on the render is untested.
+- **The `CUVAREA` consumer**, and the per-mode strengths that drive it. The
+  three care maps are decoded; the code that applies them is not.
+
+## Open questions
+
+Interpretation, not missing data. These do not gate anything.
 
 - Which of the two variants in the hue table is used, and when.
-- **Why the camera's output shows only 0.6 to 0.7 of the table's rotation, and
-  what the per-hue base shift is.** Both are measured and both lack a mechanism.
-  Candidates tested against held-out data and rejected: the equaliser working in
-  symmetric `(B-Y, R-Y)` axes rather than Cb/Cr (suggested by the two `256` Q9
-  words in the YCMAT register block; renders score 4.05 against 2.84), a fixed
-  512 denominator for the saturation array (overshoots the two `B=1024` modes),
-  and a chroma-dependent gain (the fit collapses to flat). The words after the
-  luma triple in the block at `0xC0B39118` — `-6, 256, 256, -56, 0, 100, ...` —
-  are still not decoded, and decoding them is the likeliest path to the
-  mechanism.
-- **The CEQ's other stages**: `CEQ_YGAM`, `CEQ_KNEE`, `CEQ_CLIP`, `CEQ_CORING`,
-  `CEQ_OFFSET`, `CEQ_COMPATI`, and the `PST_TOP` chroma blocks. The firmware
-  names them and this file has not found their data. They are the best
-  candidate for the last error, the strong looks' missing saturation.
+- Why the camera's output shows only 0.6 to 0.7 of the table's rotation, and
+  what the per-hue base shift is. Both are measured and both lack a mechanism.
+  Tested and rejected against held-out data: the equaliser working in symmetric
+  `(B-Y, R-Y)` axes rather than Cb/Cr (4.05 against 2.84), a fixed 512
+  denominator for the saturation array (overshoots the two `B=1024` modes), and
+  a chroma-dependent gain (the fit collapses to flat).
 - Why Standard has no register block.
-- What Cinematic and Powder Blue do that the other twelve do not. Both render
-  at about 0.8 of the reference's chroma under the same trim that puts every
-  other mode within a few percent.
+- What Cinematic and Powder Blue do that the other twelve do not. Both render at
+  about 0.8 of the reference's chroma under the same trim that puts every other
+  mode within a few percent.
 - The settings enum to internal id conversion. It is inline code, not a table.
 - What ids 34, 35 and 37 are. None has a menu entry. Id 35 has existed since
-  Ver 1.02 and carries Standard's matrix. Id 37 arrived in Ver 2.00 next to OFF.
+  Ver 1.02, carries Standard's matrix, and is the blend base for the effect
+  strength system. Id 37 arrived in Ver 2.00 next to OFF.
 - The last five name assignments, above.
