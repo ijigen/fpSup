@@ -531,6 +531,37 @@ in the order 35, 1, 0, 3, 5, 6, 7, 14, 11, 12, 15, ...: the mode matrices
 `0xC02C6540`). The rest of the classes — noise, sharpening, exposure — are
 scoped but not read.
 
+**The parameter list is seven entries, not five.** An earlier reading stopped at
+the tone curve. The full list at `0xC0B40074`:
+
+| entry | data | count | what |
+|---|---|---|---|
+| 0 | `0xC0B400AC` | 17 | the 24-bin hue tables |
+| 1 | `0xC0B42730` | 3 | `CUVAREA` care-map selector |
+| 2 | `0xC0B42748` | 3 | `CUVAREA` care-map selector |
+| 3 | `0xC0B42760` | 2 | the 72-entry tables, Standard and OFF only |
+| 4 | `0xC0B434E8` | 2 | the 128-point tone curves |
+| 5 | `0xC0B43CF0` | 22 | **unread**: 11 mode ids x 2 variants, each a RAM pointer and a count |
+| 6 | `0xC0B43E50` | 22 | **unread**: the same shape, a second class |
+
+Entries 5 and 6 hold `(mode id, variant, pointer, count)` records whose pointers
+run from `0xC2F1B3B8` to `0xC2F1CC28` — 6.2 KB of per-mode parameter RAM,
+bracketed by two more getters of the `0xC02D5DE0` family at `0xC02D6BCC` and
+`0xC02D8720`. The data is uploaded there at run time; its static source has not
+been found.
+
+**The 72-entry table is two maps, and only one of them is the DNG's.** Its 432
+floats are `36 hue x 2 sat x 3` twice over. The first map matches the DNG's
+`ProfileHueSatMap` exactly, both saturation divisions. The second map is
+different data and **has never been used by anything in this project**. Its two
+saturation divisions differ from each other, where the DNG's are identical —
+so the camera holds a saturation-dependent hue and saturation map, and
+deliberately flattens it for the DNG export. That is direct evidence that the
+internal pipeline has exactly the chroma-dependent hue behaviour that the
+measured residual layer models. Applying the second map as a shared stage,
+before or after the mode matrix, does not fit (3.08 to 3.55 dE), and it exists
+only for Standard and OFF, so its role is still open.
+
 Also catalogued and not yet decoded: a parameter zone around `0xC0B35F90`
 holding Q9 knee-point ladders, a full-scale tone curve ending at `0xC0B35F32`,
 a 33-step strength ladder at `0xC0B386E0`, and further RAM parameter structs at
