@@ -421,6 +421,69 @@ saturation by about 1.4 to 1.8 on average.
   DuoTone colours (ids 24-33). All ten DuoTone matrices are luma matrices with
   slightly different weights.
 
+## The develop code path, as read so far
+
+The JPEG engine's colour code is now partly mapped. Everything below is read
+from Ver 5.02 disassembly, with addresses so it can be picked up cold.
+
+**The data plane has exactly two doors.** No code in the image holds a direct
+pointer to any look table. Everything goes through two getter functions:
+`0xC02D73E8` returns the look-parameter list `0xC0B40074`, and `0xC02D5DE0`
+returns the ISP descriptor table `0xC0B38ACC`. Every consumer calls one of
+these, so the callers enumerate the whole colour path.
+
+**The matrix loader is `0xC02C5440`**, and it settles two questions in code:
+
+- It reassembles the record as `row0=(h0,h1,h2), row1=(h4,h3,h5), row2=(h7,h8,h6)`
+  — the own-channel-first layout this file derived from the DuoTone records,
+  now confirmed by the instructions that consume it.
+- It divides all nine coefficients by `h0+h1+h2` — the red row's sum — in
+  double precision. For most modes that is 512 and changes nothing. For the
+  white-shifting modes it rescales the whole matrix: Warm Gold by 0.842,
+  Sunset Red by 0.888, Cinematic by 0.961. Renders got worse with this applied,
+  so the consumer of these floats has its exposure compensated elsewhere; the
+  fact is recorded, not adopted.
+
+A driver at `0xC02C57C0` preloads a float matrix for every mode id in the order
+35, 1, 0, 3, 5, 6, 7, 14, 11, 12, 15, ... into an array of 36-byte records.
+
+**The colour-effect slider engine is fully decoded.** The
+`PictureQualityFuncTh` thread object (name in ROM at `0xC0B35F74`, constructor
+`0xC02CF310`, two real methods `0xC02D4510` and `0xC02D4570`) owns two 4 KB
+scratch buffers and builds a two-plane 32x32 chroma LUT of Q9 gains:
+
+- `0xC02D4510` converts the +/-5 slider to Q9: `512 + slider * 512 / 10`.
+- `0xC02D4570` blends two source LUTs per plane by the slider in Q10 —
+  `(g*A + (1024-g)*B) >> 10` — then scales the result's offset from 512 by a
+  per-family strength, `512 + s*delta/256`.
+- The source LUTs live at **`0xC0B46A70`: twelve 32x32 grids of 2 KB each**,
+  selected by a pointer table at `0xC0B468AC` — a count of 8, then 8 records of
+  a tag and 13 pointers. Eight records for the eight look families, the same
+  partition as the gamma groups. LUT 0 is the identity (512 everywhere); the
+  production grids are mirrored plus/minus radial bowls (saturation-dependent
+  gain, up to +/-10 percent); LUTs 1, 8, 10 and 11 are test patterns —
+  registration crosses at the corners, quadrant centres and centre.
+
+At slider 0 the blend is the midpoint of a mirrored pair, which is the
+identity. So this stage does nothing in the sample frames, and it is ruled out
+as the source of the missing hue field.
+
+**A second matrix builder at `0xC02C55A0` is the best remaining candidate.**
+It builds a YCbCr-domain 3x3 at run time from two per-mode records: a stride-20
+record giving a Q12 luma row and two zero-sum Q9 chroma rows — cross-terms in a
+chroma matrix are exactly a global hue rotation — composed with
+`diag(1, 1+a/512, 1+b/512)` per-channel chroma gains from a stride-8 record.
+The records are looked up by mode id in RAM tables hung off the parameter
+struct `0xC2F1A064` (offsets +0x28 and +0), with all-zero neutral defaults
+(id 100) in descriptor entries 31 and 24. **The per-mode records are not in
+the firmware image as static arrays** — they are built or uploaded at run
+time, and finding their writer is the next step of this campaign.
+
+Also catalogued and not yet decoded: a parameter zone around `0xC0B35F90`
+holding Q9 knee-point ladders, a full-scale tone curve ending at `0xC0B35F32`,
+a 33-step strength ladder at `0xC0B386E0`, and further RAM parameter structs at
+`0xC2F1BCD8` and `0xC3424DC0`.
+
 ## The differential method, and what is still missing
 
 With the front end measured, a second differential becomes meaningful: compare
