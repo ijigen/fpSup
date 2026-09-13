@@ -30,6 +30,9 @@ def main():
                     help='bytes to read; default comes from dir')
     ap.add_argument('--mode', type=lambda s: int(s, 0), default=1)
     ap.add_argument('--buf', type=lambda s: int(s, 0), default=None)
+    ap.add_argument('--partial', action='store_true',
+                    help='keep a read that filled the buffer -- for fetching '
+                         'just the head of a file whose size is not known')
     a = ap.parse_args()
 
     name = a.remote.lstrip('\\').split('\\')[-1]
@@ -116,8 +119,11 @@ def main():
 
     actual = st[P_ACTUAL // 4]
     if heap and actual >= ask:
-        raise SystemExit(f'  read filled the whole buffer ({actual}); the file '
-                         f'is longer than it was thought to be')
+        if not a.partial:
+            raise SystemExit(f'  read filled the whole buffer ({actual}); the file '
+                             f'is longer than it was thought to be')
+        print(f'  partial read of the head: {actual} bytes')
+        size = min(size, actual)
     # The buffer came from the firmware's allocator, which the controller can
     # reach directly -- so there is no reason to copy it through a 16 KiB
     # staging buffer sixteen kilobytes at a time.
