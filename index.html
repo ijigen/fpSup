@@ -71,14 +71,7 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
     checks every combination against the same rules the build scripts use.</small>
     <span class="m">runs in the browser · no toolchain</span>
   </a>
-  <a class="row" href="tools/storage-benchmark/">
-    <b>Storage benchmark</b>
-    <small>A card that makes the camera measure its own SD and SSD write speed, using
-    the firmware's own benchmark. Worth running before anything above FHD: CinemaDNG
-    is limited by write speed long before anything else.</small>
-    <span class="m">no memory patches · not tied to a firmware version</span>
-  </a>
-</div>
+  </div>
 
 <h2>Releases</h2>
 <table>
@@ -96,36 +89,12 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
 <code>VSHL.BIN</code> to the root of the card — no folder to make, no step afterwards.
 To combine two of them, use the card composer rather than copying both.</p>
 
-<h2>Reference</h2>
-<div class="grid">
-  <a class="row" href="docs/SHELL_COMMANDS.md">
-    <b>Firmware shell commands</b>
-    <small>The 77 top-level commands the camera's own debug shell carries, and what
-    each one is for.</small>
-  </a>
-  <a class="row" href="docs/MENU_MODIFICATION.md">
-    <b>Changing the menus</b>
-    <small>Every menu item carries its own metadata — the values it accepts and what
-    they mean — immediately after its name string in ROM.</small>
-  </a>
-  <a class="row" href="projects/">
-    <b>Projects</b>
-    <small>What each piece of work is trying to do, what is established, and what is
-    not. Start with <code>open-gate</code>, <code>gyro-sup</code> or
-    <code>6k-to-ssd</code>.</small>
-  </a>
-</div>
-
 <h2>Explainers</h2>
 <div class="grid">
   <a class="row" href="explainers/imx410-iso-gain.html">
     <b>IMX410 ISO and gain</b>
     <small>How the sensor's gain is actually applied, and what that means for dynamic
     range at each ISO.</small>
-  </a>
-  <a class="row" href="gyro/web/">
-    <b>fpGyroSup</b>
-    <small>What the gyro logger does and how to use its output in Gyroflow.</small>
   </a>
 </div>
 

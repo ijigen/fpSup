@@ -22,10 +22,10 @@ happens to be at those addresses on another.
 **[ijigen.github.io/fpSup](https://ijigen.github.io/fpSup/)** — the tools, the
 releases and the reference, in one page.
 
-| | |
-|---|---|
-| [**Card composer**](https://ijigen.github.io/fpSup/tools/card-composer/) | Pick the products you want on one card and get `AutoRun.txt` and `VSHL.BIN`. Merged cards are produced here and nowhere else, and every combination is checked against the same rules the build scripts use. Runs in the browser — no toolchain, no camera. |
-| [**Storage benchmark**](tools/storage-benchmark/) | A card that makes the camera measure its own SD and SSD write speed with the firmware's own benchmark. Run it before anything above FHD. |
+**[Card composer](https://ijigen.github.io/fpSup/tools/card-composer/)** — pick the
+products you want on one card and get `AutoRun.txt` and `VSHL.BIN`. Merged cards are
+produced here and nowhere else, and every combination is checked against the same
+rules the build scripts use. Runs in the browser — no toolchain, no camera.
 
 ### Releases
 
@@ -47,7 +47,7 @@ identically — see [`releases/README.md`](releases/README.md) and
 > before anything else. Open gate at 29.97 is 273 MB/s; a mid-range UHS-II card
 > measured here sustains 94, and plain FHD 12-bit already needs 97. A card that
 > cannot keep up buffers in RAM and then stops the take. That is the card, not a
-> bug — measure yours with the storage benchmark.
+> bug — [`tools/storage-benchmark/`](tools/storage-benchmark/) measures yours.
 
 ### Projects
 
@@ -57,7 +57,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 |---|---|---|---|
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — v3.1.0. The channel is built on the camera's own PTP gadget, so recording survives it |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html), and the mode-table ambiguity closed |
-| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — two editions; Base writes a raw `.GYR` instead, converted [in a browser](https://ijigen.github.io/fpSup/gyro/web/) |
+| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — two editions; Base writes a raw `.GYR` instead, converted [in a browser](gyro/web/) |
 | 4 | [**open gate**](projects/open-gate.md) | Recording the sensor's full 3:2 area | **working** — live view, in-camera playback and its own menu entry all verified |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | Getting the best 6K the link can carry | designed; 8-bit lands within 94–100% of native 6K across every remaining unknown |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
@@ -108,10 +108,9 @@ Each page says what has been proven, what is being worked on, and what is open.
 
 **[ijigen.github.io/fpSup](https://ijigen.github.io/fpSup/)** —— 工具、釋出版、參考資料都在一頁。
 
-| | |
-|---|---|
-| [**卡片合併器**](https://ijigen.github.io/fpSup/tools/card-composer/) | 勾選要的產品,產生 `AutoRun.txt` 與 `VSHL.BIN`。**合併版只在這裡產生**,而且每個組合都用建置腳本同一套規則檢查過。在瀏覽器裡跑 —— 不用工具鏈,不用相機。 |
-| [**儲存測速卡**](tools/storage-benchmark/) | 讓相機用韌體自帶的跑分量自己的 SD 與 SSD 寫入速度。錄 FHD 以上之前先跑它。 |
+**[卡片合併器](https://ijigen.github.io/fpSup/tools/card-composer/)** —— 勾選要的產品,
+產生 `AutoRun.txt` 與 `VSHL.BIN`。**合併版只在這裡產生**,而且每個組合都用建置腳本
+同一套規則檢查過。在瀏覽器裡跑 —— 不用工具鏈,不用相機。
 
 ### 釋出版
 
@@ -129,7 +128,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 > **最可能咬人的一件事:** CinemaDNG 遠在其他東西之前就先被寫入速度卡住。
 > Open gate 29.97 是 273 MB/s;這裡實測一張中階 UHS-II 卡持續寫入 94,
 > 而純 FHD 12bit 就已經要 97。撐不住的卡會先用 RAM 緩衝,然後**停止錄影** ——
-> 那是卡不是 bug。用測速卡量自己的。
+> 那是卡不是 bug。用 [`tools/storage-benchmark/`](tools/storage-benchmark/) 量自己的。
 
 ### 項目
 
@@ -139,7 +138,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 |---|---|---|---|
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸 | **已釋出** —— v3.1.0。通道建在相機自己的 PTP gadget 上,所以錄影撐得過去 |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、增益、感光元件控制 | **研究完成** —— [互動說明](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html),模式表的歧義也收掉了 |
-| 3 | [**gyro sup**](projects/gyro-sup.md) | 陀螺儀、六軸記錄、Gyroflow 流程 | **已釋出** —— 兩個版本;Base 版寫原始 `.GYR`,[在瀏覽器裡](https://ijigen.github.io/fpSup/gyro/web/)轉換 |
+| 3 | [**gyro sup**](projects/gyro-sup.md) | 陀螺儀、六軸記錄、Gyroflow 流程 | **已釋出** —— 兩個版本;Base 版寫原始 `.GYR`,[在瀏覽器裡](gyro/web/)轉換 |
 | 4 | [**open gate**](projects/open-gate.md) | 錄下感光元件完整的 3:2 面積 | **可用** —— live view、機內回放、獨立選單項目都驗證過 |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | 把鏈路載得動的最好 6K 拿出來 | 設計完成;8bit 在所有剩餘未知數下都落在原生 6K 的 94–100% |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD、對焦模型、鏡頭控制、跟焦 | AF 深度反編譯完成;收集器還沒做 |
