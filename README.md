@@ -36,7 +36,7 @@ card, use the composer rather than copying both.
 | product | version | what it does |
 |---|---|---|
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.11b/) | v1.11b | Writes Gyroflow's `.gcsv` and `.json` into the clip's own folder while recording. Every sample at 2500 Hz, distortion read off the lens, portrait too, no computer afterwards. |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.1.0test/) | v0.1.0test | The sensor's whole 3:2 area — 3024×2010 CinemaDNG, DNG cropped to 3008×2000, at eight frame rates from 23.976 to 100. **Sensor modes 98 and 117: a native 2×2-binned 3:2 readout, not 6K resampled down.** Rolling shutter 9.2–12.6 ms, against 24.98 ms for a full 6064×4042 read. |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.1.1test/) | v0.1.1test | The sensor's whole 3:2 area — 3024×2010 CinemaDNG, DNG cropped to 3008×2000, at eight frame rates from 23.976 to 100. **Sensor modes 98 and 117: a native 2×2-binned 3:2 readout, not 6K resampled down.** Rolling shutter 9.2–12.6 ms, against 24.98 ms for a full 6064×4042 read. **v0.1.1test: every ISO now records correctly** — the capture was being classified as a stills acquisition, which moved the dual-native switch to ISO 640 and cost ~2.7 stops of highlight headroom above it. |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.1.0/) | v3.1.0 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
 
 Named `fpsup-<product>-v<version>`, one directory each, and the tag is spelled
@@ -83,7 +83,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 - **The camera writes its own Gyroflow files while it records.** The GCSV streams
   during the take and the JSON lands a few seconds in; stop is just stop. Zero
   dropped samples over a 15-minute take, timestamps verified row by row.
-- **Open gate works.** 3024×2010 of a 3:2 sensor read, edge to edge — verified by
+- **Open gate works, at every ISO.** 3024×2010 of a 3:2 sensor read, edge to edge — verified by
   unpacking a real take, not inferred. Live view, playback and the menu entry too.
 - **The IMX410 ISO and gain chain is fully decompiled**, with an explainer that
   separates firmware-confirmed behaviour from OTP values still needing measurement.
@@ -119,7 +119,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 產品 | 版本 | 做什麼 |
 |---|---|---|
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.11b/) | v1.11b | 錄影當下就把 Gyroflow 要的 `.gcsv` 與 `.json` 寫進片段自己的資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭,直拿也支援,事後不用電腦。 |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.1.0test/) | v0.1.0test | 感光元件完整的 3:2 面積 —— 3024×2010 CinemaDNG、DNG 裁切 3008×2000,八個幀率從 23.976 到 100。**用感光元件 mode 98 / 117:原生 2×2 binning 的 3:2 讀出,不是 6K 縮下來的。**捲簾 9.2–12.6 ms,而完整 6064×4042 讀出是 24.98 ms。 |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.1.1test/) | v0.1.1test | 感光元件完整的 3:2 面積 —— 3024×2010 CinemaDNG、DNG 裁切 3008×2000,八個幀率從 23.976 到 100。**用感光元件 mode 98 / 117:原生 2×2 binning 的 3:2 讀出,不是 6K 縮下來的。**捲簾 9.2–12.6 ms,而完整 6064×4042 讀出是 24.98 ms。**v0.1.1test:全 ISO 都正確** —— 先前擷取被歸類成拍照,雙原生切換點落在 ISO 640,640 以上少了約 2.7 檔高光餘裕。 |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.1.0/) | v3.1.0 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
 
 命名是 `fpsup-<產品>-v<版本>`,一個版本一個資料夾,tag 逐字相同 ——
@@ -150,7 +150,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 ### 主要成果
 
 - **相機自己在錄影當下寫出 Gyroflow 要的檔案。** GCSV 邊錄邊串流,JSON 開始幾秒後落地,停止就只是停止。15 分鐘的 take 零掉樣,時間戳逐列驗過。
-- **Open gate 可用。** 3:2 讀出的 3024×2010,整幅邊到邊 —— 解檔實錄驗證,不是推論。live view、回放、選單項目也都好了。
+- **Open gate 可用,全 ISO。** 3:2 讀出的 3024×2010,整幅邊到邊 —— 解檔實錄驗證,不是推論。live view、回放、選單項目也都好了;v0.1.1test 修好了原生 ISO 的分類,ISO 640 以上不再少 2.7 檔高光。
 - **IMX410 的 ISO 與增益鏈完整反編譯**,說明頁把「韌體確認的行為」跟「還需要量測的 OTP 值」分開。
 - **USB shell 不會弄壞錄影。** 它建在相機自己的 PTP gadget 上,端點由韌體管,錄影模式重配之後韌體會自己重建。
 

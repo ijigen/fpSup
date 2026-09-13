@@ -35,7 +35,7 @@ you are also running the gyro logger — it corrects for exactly this:
 2. Power off, remove the battery, and work on the SD card in a reader.
 3. Copy **`AutoRun.txt`** and **`VSHL.BIN`** to the **root** of the card. Nothing
    else — no folder to make, no file to convert.
-4. Card in, power on. The screen shows a progress bar and then `fpSup-OG3K!`.
+4. Card in, power on. The screen shows a progress bar and then `fpSup-OG3K-v0.1.1!`.
 5. **MENU → recording → resolution** now offers a third entry. Pick it.
 
 To remove it: delete `AutoRun.txt`, power off **completely** (battery out, not
@@ -49,7 +49,47 @@ just the switch — a warm restart does not clear RAM), power on.
 - **Live view** correct in standby, half-press and recording — a recording frame
   against a standby frame is 1.000× on both axes, anisotropy 1.0000, correlation
   0.9787.
-- **In-camera playback** works, paused and running (A001_037).
+- **In-camera playback** works, paused and running (A001_037, on v0.1.0test;
+  not re-checked on v0.1.1test).
+- **Every ISO records correctly** (v0.1.1test). At ISO 800 the raw level and
+  channel balance match a stock FHD clip of the same scene — G/R 1.81, G/B 1.99
+  against 1.81, 2.05 — and `BaselineExposure` is +3.000, as the factory writes.
+  The capture is measured to run on `gain_state` 7 at the decision function
+  itself, not inferred.
+
+## Native ISO — what v0.1.1test fixed
+
+The IMX410 has two native sensitivities, and where it switches between them
+depends on how the capture is classified:
+
+| classification | switch point |
+|---|---|
+| 12-bit CinemaDNG (`gain_state` 7) | ISO 3200 |
+| stills capture (`gain_state` 1/3) | ISO 640 |
+
+OG3K borrows a stills profile for its geometry, so up to v0.1.0test the capture
+was classified as a stills acquisition and moved to the high-conversion-gain
+readout at ISO 640 — **about 2.7 stops of highlight headroom lost** above that.
+Clipped highlights do not come back.
+
+It is also why in-camera playback looked over-exposed. The movie pipeline
+records roughly 3 stops under and playback lifts it by a fixed +3 EV; OG3K's
+frames were not recorded to that convention, so playback over-exposed them by
+the same 2.7 stops. The files themselves were always internally consistent —
+anything that honours `BaselineExposure` rendered them correctly.
+
+Measured, same scene and settings, at ISO 800:
+
+| | raw vs stock FHD | `BaselineExposure` |
+|---|---|---|
+| v0.1.0test | 2.675 EV brighter | +0.322 |
+| v0.1.1test | identical | +3.000 |
+
+The fix hooks the single predicate the gain dispatch uses to ask "is this a raw
+movie". It deliberately leaves alone the sensor-mode programming that reads the
+same flag: driving that too made the recording preview flicker green. The
+preview plane is also declared 12-bit, as the factory movie profiles do, rather
+than the 8-bit a stills profile declares.
 
 ## Known cosmetic issues — they do not affect recording
 
