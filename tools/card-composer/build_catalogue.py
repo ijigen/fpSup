@@ -60,17 +60,48 @@ LABELS = {
 # These are carried whole.  Splitting an AutoRun into optional blocks would be
 # rebuilding build_autorun.py's option matrix in JavaScript, and that matrix
 # grows; a whole template per configuration does not rot.
-# The merged cards are built on demand into a temporary directory and thrown
-# away.  They used to sit in the tree as og3k_gyro_release/ and og3k_gyro/, which
-# contradicted the policy this tool exists to enforce: a merged card that looks
-# like a finished artefact invites someone to put it on an SD card, and merges
-# are supposed to come from the page.  They are still built, because they are
-# what the page's output is checked against -- they just do not survive the run.
+# The three AutoRun templates come straight from build_autorun.py.  They are a
+# property of the *loader*, and the loader has exactly three configurations:
+#
+#   --no-shell        NOTASK=1.  236-byte loader, the read happens in the
+#                     borrowed dispatcher task.  135 commands.
+#   --no-ep-patches   the task-creating loader plus the interface-class patch,
+#                     without the six EP 0x83 writes.  189 commands.
+#   (neither)         the same plus the push patches.  193 commands.
+#
+# An earlier version of this file lifted two of them out of merged cards that
+# had been built and left in the tree, which is why a merge tool appeared to
+# depend on merged cards.  It never did: the cards happened to be the first
+# place each loader configuration could be found.  Verified identical.
+TEMPLATE_FLAGS = {'plain': ['--no-shell'], 'shell': ['--no-ep-patches'], 'shellpush': []}
+
+
+def build_templates():
+    """Run build_autorun.py once per loader configuration, in a temp dir."""
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix='tpl-'))
+    out = {}
+    for name, flags in TEMPLATE_FLAGS.items():
+        f = tmp / f'{name}.txt'
+        r = subprocess.run([sys.executable,
+                            str(ROOT / 'fpSup' / 'fp_usb_shell' / 'build_autorun.py'),
+                            '--loader', *flags, '--banner', '@@BANNER@@',
+                            '--vshl-entry', '0xC072E064', '--out', str(f)],
+                           capture_output=True, text=True)
+        if r.returncode:
+            sys.stderr.write(r.stdout + r.stderr)
+            raise SystemExit(f'could not build the {name} template')
+        out[name] = f.read_text('utf-8').split('# pad -- see PAD_TO')[0]
+    shutil.rmtree(tmp, ignore_errors=True)
+    return out
+
+
+# The merge checks are the one thing that still needs the OG3K toolchain: they
+# prove the page's merge is byte-for-byte what build_og3k_gyro.py produces.  That
+# is a test, not part of building the page -- --no-merge-check skips it.
 REFS = {}
 
 
 def refs():
-    """Build the two merged reference cards into a temp dir.  Caller cleans up."""
     if REFS:
         return REFS
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='og3kref-'))
@@ -85,12 +116,6 @@ def refs():
     REFS['_tmp'] = tmp
     return REFS
 
-
-TEMPLATES = [
-    ('plain',     lambda: refs()['plain'] / 'AutoRun.txt'),
-    ('shell',     lambda: refs()['shell'] / 'AutoRun.txt'),
-    ('shellpush', lambda: ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt'),
-]
 
 CARDS = [
     # First on purpose.  picked() walks this list, and the development card puts
@@ -205,11 +230,8 @@ def main():
         print(f'  {card["id"]:9} {len(recs):3} sections  entry '
               f'0x{entry:08X}  "{ban}"')
 
-    templates_out = {}
-    for name, path in TEMPLATES:
-        txt = path().read_text('utf-8')
-        ban = banner_of(txt)
-        templates_out[name] = txt.split('# pad -- see PAD_TO')[0].replace(ban, '@@BANNER@@')
+    templates_out = build_templates()
+    for name in TEMPLATE_FLAGS:
         n = len([l for l in autorun(templates_out[name], 'X').splitlines()
                  if l.strip() and not l.lstrip().startswith('#')])
         print(f'  template {name:10} {n} commands')
@@ -293,11 +315,14 @@ def main():
          autorun(templates_out['shell'], banner_of(
              (refs()['shell'] / 'AutoRun.txt').read_text('utf-8'))),
          (refs()['shell'] / 'AutoRun.txt').read_text('utf-8')),
-        ('AutoRun shellpush  == fp_usb_shell',
-         autorun(templates_out['shellpush'], banner_of(
-             (ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt').read_text('utf-8'))),
-         (ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt').read_text('utf-8')),
     ]
+    # There is deliberately no "AutoRun shellpush == fp_usb_shell/autorun" check.
+    # That template IS build_autorun.py's output for those flags, so comparing it
+    # to itself proves nothing -- and the stored card is older than the current
+    # loader anyway: its task tail still spins on `b .` where the loader now
+    # sleeps through dly_tsk, which is the fix for the priority inversion that
+    # starved the worker.  A stored artefact predating a loader change is
+    # information, not a failure.
     for what, got, want in autos:
         ok = got == want
         bad |= not ok

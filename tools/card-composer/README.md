@@ -64,7 +64,18 @@ Two facts make browser-side composition exact:
   commands and differ in three banner lines.
 
 What AutoRun *does* depend on is the **loader**, and there are three
-configurations. They are carried whole rather than assembled from optional
+configurations — each one flag of `build_autorun.py`, generated on every run:
+
+```
+plain      --no-shell        NOTASK=1, 135 commands
+shell      --no-ep-patches   task loader + interface patch, 189
+shellpush  (neither)         the same plus the EP 0x83 patches, 195
+```
+
+An earlier version lifted two of them out of merged cards that had been built and
+left in the tree, which made a merge tool look like it depended on merged cards.
+It never did — the cards were just the first place each configuration could be
+found. Verified line-for-line identical to generating them directly. They are carried whole rather than assembled from optional
 blocks, because splitting them would be rebuilding `build_autorun.py`'s option
 matrix in JavaScript, and that matrix grows:
 
