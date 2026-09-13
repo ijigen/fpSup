@@ -1,4 +1,4 @@
-# fp Card Composer
+# fpSup-Merge
 
 **Policy, 2026-09-13: merged cards are produced here and nowhere else.**
 

@@ -22,7 +22,7 @@ happens to be at those addresses on another.
 **[ijigen.github.io/fpSup](https://ijigen.github.io/fpSup/)** — the tools, the
 releases and the reference, in one page.
 
-**[Card composer](https://ijigen.github.io/fpSup/tools/card-composer/)** — pick the
+**[fpSup-Merge](https://ijigen.github.io/fpSup/tools/card-composer/)** — pick the
 products you want on one card and get `AutoRun.txt` and `VSHL.BIN`. Merged cards are
 produced here and nowhere else, and every combination is checked against the same
 rules the build scripts use. Runs in the browser — no toolchain, no camera.
@@ -108,7 +108,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 
 **[ijigen.github.io/fpSup](https://ijigen.github.io/fpSup/)** —— 工具、釋出版、參考資料都在一頁。
 
-**[卡片合併器](https://ijigen.github.io/fpSup/tools/card-composer/)** —— 勾選要的產品,
+**[fpSup-Merge](https://ijigen.github.io/fpSup/tools/card-composer/)** —— 勾選要的產品,
 產生 `AutoRun.txt` 與 `VSHL.BIN`。**合併版只在這裡產生**,而且每個組合都用建置腳本
 同一套規則檢查過。在瀏覽器裡跑 —— 不用工具鏈,不用相機。
 
