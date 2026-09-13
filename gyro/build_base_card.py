@@ -249,9 +249,33 @@ def main():
     ap.add_argument('--version', default='dev',
                     help='what to call it in README.txt; release_card.py '
                          'passes the real one')
+    ap.add_argument('--also-bin', action='append', default=[],
+                    metavar='0xADDR:FILE',
+                    help='an extra section to place alongside the edition\'s '
+                         'own, spelled as build_autorun.py spells it.  OG3K '
+                         'passes its canvas and hook writes this way.  They go '
+                         'through check() with everything else, so an extra '
+                         'section that overlaps the logger or lands in the '
+                         'loader\'s read window fails the build rather than '
+                         'the camera.')
+    ap.add_argument('--banner', default=None,
+                    help='override the screen banner; a merged card is not '
+                         'the edition on its own and should not claim to be')
     a = ap.parse_args()
     out = a.out or (HERE / 'release' / a.edition)
     secs = sections(a.edition)
+    # Extras go in front of gsup_entry, which sections() deliberately appends
+    # last.  Order inside the binary is the order they are placed in, and the
+    # entry section is what the loader branches to when the placing is done.
+    extra = []
+    for spec in a.also_bin:
+        at, _, path = spec.partition(':')
+        if not _:
+            raise SystemExit(f'--also-bin wants 0xADDR:FILE, got {spec!r}')
+        f = pathlib.Path(path)
+        extra.append((int(at, 0), f.read_bytes(), f'extra {f.name}'))
+    if extra:
+        secs = secs[:-1] + extra + secs[-1:]
     check(secs)
 
     tmp = pathlib.Path(tempfile.mkdtemp())
@@ -268,7 +292,7 @@ def main():
     # the version because the two cards are indistinguishable once they are in
     # the camera, and "which build is in there" has been guessed at more than
     # once.
-    banner = f'fpSup-{BANNER[a.edition]}-{a.version}!'
+    banner = a.banner or f'fpSup-{BANNER[a.edition]}-{a.version}!'
     cmd = [sys.executable, str(SHELL / 'build_autorun.py'),
            '--loader', '--banner', banner] + (
                ['--no-ep-patches'] if a.debug else ['--no-shell']) + [
