@@ -24,7 +24,7 @@ same checks the build scripts run.
 
 To add a card: drop its directory in CARDS and run this.  Data, not code.
 """
-import base64, json, pathlib, struct, sys, zipfile
+import base64, json, pathlib, shutil, struct, subprocess, sys, tempfile, zipfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent
@@ -60,10 +60,36 @@ LABELS = {
 # These are carried whole.  Splitting an AutoRun into optional blocks would be
 # rebuilding build_autorun.py's option matrix in JavaScript, and that matrix
 # grows; a whole template per configuration does not rot.
+# The merged cards are built on demand into a temporary directory and thrown
+# away.  They used to sit in the tree as og3k_gyro_release/ and og3k_gyro/, which
+# contradicted the policy this tool exists to enforce: a merged card that looks
+# like a finished artefact invites someone to put it on an SD card, and merges
+# are supposed to come from the page.  They are still built, because they are
+# what the page's output is checked against -- they just do not survive the run.
+REFS = {}
+
+
+def refs():
+    """Build the two merged reference cards into a temp dir.  Caller cleans up."""
+    if REFS:
+        return REFS
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix='og3kref-'))
+    for name, args in (('plain', ['--reference', '--release']), ('shell', ['--reference'])):
+        d = tmp / name
+        r = subprocess.run([sys.executable, str(OG / 'build_og3k_gyro.py'),
+                            *args, '--out', str(d)], capture_output=True, text=True)
+        if r.returncode:
+            sys.stderr.write(r.stdout + r.stderr)
+            raise SystemExit(f'could not build the {name} reference card')
+        REFS[name] = d
+    REFS['_tmp'] = tmp
+    return REFS
+
+
 TEMPLATES = [
-    ('plain',     OG / 'og3k_gyro_release' / 'AutoRun.txt'),
-    ('shell',     OG / 'og3k_gyro' / 'AutoRun.txt'),
-    ('shellpush', ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt'),
+    ('plain',     lambda: refs()['plain'] / 'AutoRun.txt'),
+    ('shell',     lambda: refs()['shell'] / 'AutoRun.txt'),
+    ('shellpush', lambda: ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt'),
 ]
 
 CARDS = [
@@ -181,7 +207,7 @@ def main():
 
     templates_out = {}
     for name, path in TEMPLATES:
-        txt = path.read_text('utf-8')
+        txt = path().read_text('utf-8')
         ban = banner_of(txt)
         templates_out[name] = txt.split('# pad -- see PAD_TO')[0].replace(ban, '@@BANNER@@')
         n = len([l for l in autorun(templates_out[name], 'X').splitlines()
@@ -250,9 +276,9 @@ def main():
         return compose([(r['a'], base64.b64decode(r['b'])) for r in recs], entry)
     merges = [
         ('gyro+og3k          == og3k_gyro_release',
-         merge(['gyro', 'og3k']), (OG / 'og3k_gyro_release' / 'VSHL.BIN').read_bytes()),
+         merge(['gyro', 'og3k']), (refs()['plain'] / 'VSHL.BIN').read_bytes()),
         ('shell+gyro+og3k    == og3k_gyro (dev)',
-         merge(['shell', 'gyro', 'og3k']), (OG / 'og3k_gyro' / 'VSHL.BIN').read_bytes()),
+         merge(['shell', 'gyro', 'og3k']), (refs()['shell'] / 'VSHL.BIN').read_bytes()),
     ]
     for what, got, want in merges:
         ok = got == want
@@ -261,12 +287,12 @@ def main():
     autos = [
         ('AutoRun plain      == og3k_gyro_release',
          autorun(templates_out['plain'], banner_of(
-             (OG / 'og3k_gyro_release' / 'AutoRun.txt').read_text('utf-8'))),
-         (OG / 'og3k_gyro_release' / 'AutoRun.txt').read_text('utf-8')),
+             (refs()['plain'] / 'AutoRun.txt').read_text('utf-8'))),
+         (refs()['plain'] / 'AutoRun.txt').read_text('utf-8')),
         ('AutoRun shell      == og3k_gyro (dev)',
          autorun(templates_out['shell'], banner_of(
-             (OG / 'og3k_gyro' / 'AutoRun.txt').read_text('utf-8'))),
-         (OG / 'og3k_gyro' / 'AutoRun.txt').read_text('utf-8')),
+             (refs()['shell'] / 'AutoRun.txt').read_text('utf-8'))),
+         (refs()['shell'] / 'AutoRun.txt').read_text('utf-8')),
         ('AutoRun shellpush  == fp_usb_shell',
          autorun(templates_out['shellpush'], banner_of(
              (ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt').read_text('utf-8'))),
@@ -298,6 +324,9 @@ def main():
         + css + '</style>\n</head>\n<body>\n' + rest + '\n</body>\n</html>\n')
     print(f'\n  wrote  {HERE / "index.html"}  '
           f'{(HERE / "index.html").stat().st_size:,} bytes')
+    if '_tmp' in REFS:
+        shutil.rmtree(REFS['_tmp'], ignore_errors=True)
+        print('  refs   built and discarded (merged cards never land in the tree)')
 
 
 if __name__ == '__main__':

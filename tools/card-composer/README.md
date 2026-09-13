@@ -160,9 +160,16 @@ the catalogue reproduces all of this byte for byte:
 gyro              == fp-gyro-sup-v1.11b.zip
 og3k              == og3k_release/
 shell             == fp_usb_shell/autorun/
-og3k+gyro         == og3k_gyro_release/
-shell+og3k+gyro   == og3k_gyro/          (the development card)
+og3k+gyro         == build_og3k_gyro.py --reference --release
+shell+og3k+gyro   == build_og3k_gyro.py --reference
 ```
+
+The last two are built into a temporary directory and deleted when the run
+finishes. They used to sit in the tree as `og3k_gyro_release/` and `og3k_gyro/`,
+which quietly contradicted the policy this tool exists to enforce: a merged card
+that looks like a finished artefact invites someone to put it on an SD card. They
+are still built on every run, because they are what the page's output is checked
+against — they just do not survive it.
 
 The last two are the ones that matter: they are the merges, and they come out
 identical to what the build scripts produce.
