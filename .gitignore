@@ -4,5 +4,8 @@ gyro/autorun/
 gyro/.pgen.bin
 *.bak
 
-# August experiments; kept on disk, deliberately not tracked.
-raw/
+# August experiments stay untracked; the reviewed lossless-codec suite is kept.
+raw/*
+!raw/README.md
+!raw/lossless_codec/
+!raw/lossless_codec/**
