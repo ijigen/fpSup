@@ -128,7 +128,7 @@ PRODUCTS = {
     'gyro':     dict(id='gyro', name='fpGyroSup',
                      desc='Writes .gcsv and .json into the clip folder while '
                           'recording. The released card, unmodified.'),
-    'og3k':     dict(id='og3k', name='OG3K open gate — 3:2',
+    'og3k':     dict(id='og3k', name='OpenGate3K',
                      desc='3024×2010, DNG cropped to 3008×2000, eight frame rates. '
                           'Sensor modes 98/117 — a native 2×2-binned 3:2 readout, '
                           'not 6K resampled down. Carries no entry section: it is '
