@@ -2,8 +2,36 @@
 
 **Policy, 2026-09-13: merged cards are produced here and nowhere else.**
 
-Open `index.html` in a browser. Tick the cards you want, get `AutoRun.txt` and
-`VSHL.BIN`. Drop in someone else's `VSHL.BIN` to merge that too.
+Tick the cards you want, get `AutoRun.txt` and `VSHL.BIN`. Drop in someone
+else's `VSHL.BIN` to merge that too.
+
+## Which copy to open
+
+**A person wants the page rendered.** Open `index.html` from disk — it is one
+self-contained file, no server and no build step. Everything works from a
+`file://` URL, downloads included.
+
+What does *not* work is opening it from GitHub's raw host:
+
+    raw.githubusercontent.com  ->  content-type: text/plain
+
+GitHub serves every raw file as plain text on purpose, so it cannot be used as
+a web host, and the browser shows you the source instead of the page. jsDelivr
+does the same for `.html`. To get a rendered page from a URL you need GitHub
+Pages (Settings → Pages → deploy from this branch, folder `/`), which puts it at
+`…github.io/<repo>/tools/card-composer/`.
+
+**An agent wants the text, and `text/plain` is exactly right.** Fetch the raw
+file and pull the two blocks out of it — there is no rendering step anywhere in
+the path, and no browser:
+
+```js
+const html = await fetch(RAW_URL).then(r => r.text());
+```
+
+Then follow "Using it from a script, or from an agent" below. The catalogue and
+the composition code are both inside that one file, so the fetch is the whole
+install.
 
 ## Why the rule exists
 
