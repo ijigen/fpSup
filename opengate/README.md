@@ -72,7 +72,7 @@ just the switch — a warm restart does not clear RAM), power on.
 `MANIFEST.txt` carries the checksums and the reasoning — why 3024×2010 rather
 than 3032×2012, which profile is borrowed and why, and what was verified when.
 The research is in [`projects/open-gate.md`](../projects/open-gate.md); how the
-answers were found is archived in `notes/OPEN_GATE_EXPLORATION_ARCHIVE.md`.
+answers were found is archived in `notes/projects/open-gate/OPEN_GATE_EXPLORATION_ARCHIVE.md`.
 
 To put the gyro logger on the same card, merge them with
 [`tools/card-composer`](../tools/card-composer/) — that is the only place merged

@@ -307,6 +307,6 @@ Hook 的條件寫在 record 自己的內容上(`base == 1936×1090`),不是寫�
 
 ---
 
-**探索過程的封存**:`notes/OPEN_GATE_EXPLORATION_ARCHIVE.md` 是 2026-09-10 的版本,
+**探索過程的封存**:`notes/projects/open-gate/OPEN_GATE_EXPLORATION_ARCHIVE.md` 是 2026-09-10 的版本,
 留著「怎麼找到答案」—— 模式如何被設定、直接問選擇器的回答、畫布的逐步排除、
 3K 路線為何不便宜、已關閉的線索。它的狀態宣告已過時,只拿來查過程。

@@ -333,7 +333,7 @@ which a card never does.
 **21 notes in `notes/` still describe `EP 0x05 OUT / EP 0x84 IN`.** That
 configuration is gone; EP84 is not enabled under the current descriptors and
 `StartTransfer` on it was refused 100/100. Read
-`notes/USB_SHELL_INDEX.md` before any other shell note — it says which are
+`notes/projects/usb-shell-sup/USB_SHELL_INDEX.md` before any other shell note — it says which are
 current and which were overturned.
 
 ## Cards

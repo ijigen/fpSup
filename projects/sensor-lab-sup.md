@@ -37,7 +37,7 @@ the firmware confirms versus which are OTP values that still need measuring.
 > A real take reads 106 back from `0xC343B590`.
 >
 > **FHD 29.97 CinemaDNG rolling shutter is 10.556 ms.** That is the number gyro
-> sup's lens profile was missing. See `notes/FRAME_RATE_IS_VMAX.md`.
+> sup's lens profile was missing. See `notes/research/imx410/FRAME_RATE_IS_VMAX.md`.
 
 ---
 
@@ -64,7 +64,7 @@ the firmware confirms versus which are OTP values that still need measuring.
 > **模式 111 在三張表裡都不存在**。實錄後 `0xC343B590` 也讀回 106。
 >
 > **FHD 29.97 CinemaDNG 的捲簾是 10.556 ms。** 這正是 gyro sup 鏡頭 profile 缺的數字。
-> 見 `notes/FRAME_RATE_IS_VMAX.md`。
+> 見 `notes/research/imx410/FRAME_RATE_IS_VMAX.md`。
 
 ---
 

@@ -329,7 +329,7 @@ choosing 8-bit demoted it.
 - `projects/open-gate.md` — the 6K source and the canvas work
 - `projects/raw-sup.md` — the engine, its measurement and the roadmap
 - `tools/storage-benchmark/` — the card that settles items 1 and 2 above
-- `notes/RAW_COMPRESSION_RESEARCH.md` — separating overhead from rate
+- `notes/research/imaging-hw/RAW_COMPRESSION_RESEARCH.md` — separating overhead from rate
 
 ---
 
@@ -610,4 +610,4 @@ FUN_c03d9668(addr)                        虛擬 -> 匯流排位址轉換
 - `projects/open-gate.md` —— 6K 來源與畫布的工作
 - `projects/raw-sup.md` —— 引擎、它的量測與路線圖
 - `tools/storage-benchmark/` —— 收掉上面第 1、2 項的那張卡
-- `notes/RAW_COMPRESSION_RESEARCH.md` —— 把固定開銷與速率分開的方法
+- `notes/research/imaging-hw/RAW_COMPRESSION_RESEARCH.md` —— 把固定開銷與速率分開的方法

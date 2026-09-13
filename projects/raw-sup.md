@@ -82,7 +82,7 @@ What 169.7 supports and does not:
 size, with a *cold* call — and `FUN_c062fee8` brings up power domain 5, the clock
 and IRQ 0x29 **inside encode**, so a cold call pays that every time and a
 recording loop would not. Fixed overhead and per-pixel rate have never been
-separated. The way to do it is in `notes/RAW_COMPRESSION_RESEARCH.md`: time two
+separated. The way to do it is in `notes/research/imaging-hw/RAW_COMPRESSION_RESEARCH.md`: time two
 or three different frame sizes and fit. With the inferred ceiling at ~300
 Mpixel/s the gap is large enough to matter — at 290 Mpixel/s the full sensor
 reaches 11.8 fps instead of 6.9.
@@ -233,7 +233,7 @@ FHD 12-bit 24 fps 是 74.6 MB/s,正是相機自己允許的數字 —— 算術�
 **而 169.7 是下限,不是引擎的速率。** 它只量過一次、一個尺寸、而且是**冷呼叫** ——
 `FUN_c062fee8` 把 power domain 5、時脈與 IRQ 0x29 的拉起做在 **encode 裡面**,
 所以冷呼叫每次都付這筆,錄影迴圈不會付。**固定開銷與每像素速率從來沒有分離過。**
-做法寫在 `notes/RAW_COMPRESSION_RESEARCH.md`:量兩三個不同尺寸再擬合。
+做法寫在 `notes/research/imaging-hw/RAW_COMPRESSION_RESEARCH.md`:量兩三個不同尺寸再擬合。
 推論的天花板是 ~300 Mpixel/s,差距大到有意義 —— 若實際是 290,全片幅就是
 **11.8 fps** 而不是 6.9。
 
