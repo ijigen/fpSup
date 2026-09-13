@@ -506,15 +506,14 @@ bulk of what the project has read.
 This is the debt, quarantined in its own fields. It is listed here so the cost of
 each unread stage is visible.
 
-**This table is now history.** It described the renderer as it stood before the
-decoded chain was ported into it. Everything in it except the front end has been removed
-from `rusty-emulsion`, and the score improved. It is kept because it is the
-record of what each fitted object was standing in for.
+**This table is now history.** It describes the renderer as it stood before the
+chain was decoded. Everything in it except the front end is retired, and the
+score improved. It is kept because it is the record of what each fitted object
+was standing in for.
 
-The shipped renderer now runs the decoded chain: the camera's exported runtime
-matrix, the gamma curve per channel, the per-mode YC matrix, and the 24-bin
-tables at face value. The front end `F` is the only measurement left. The
-generator is `xc/gen_rust2.py` and it replaces `xc/gen_rust.py`.
+The decoded chain uses the camera's exported runtime matrix, the gamma curve per
+channel, the per-mode YC matrix, and the 24-bin tables at face value. The front
+end `F` is the only measurement left. `color/render_dng.py` implements it.
 
 | item | stood in for | status |
 |---|---|---|
