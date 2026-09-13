@@ -2,8 +2,8 @@
 
 SIGMA fp Ver.5.02。全部 RAM,拔電池就回原狀。
 
-這份把散在 `notes/projects/open-gate/CANVAS_IS_NOT_THE_SETTINGS_BLOCK.md`、`notes/projects/usb-shell-sup/SHELL_COMMANDS.md`、
-`notes/research/imx410/FRAME_RATE_IS_VMAX.md` 和 `projects/open-gate.md` 裡的選單相關發現收在一起。
+這份把散在 `../projects/open-gate/notes/CANVAS_IS_NOT_THE_SETTINGS_BLOCK.md`、`../projects/usb-shell-sup/notes/SHELL_COMMANDS.md`、
+`../research/imx410/notes/FRAME_RATE_IS_VMAX.md` 和 `projects/open-gate.md` 裡的選單相關發現收在一起。
 **只收我們自己驗過的**,標註哪些實測、哪些推論、哪些沒測。
 
 ---
@@ -217,7 +217,7 @@ vtable `0xC07421BC` 全是 `0xC00A8xxx` 的**通用**屬性類別(`+0x2C` 寫值
 
 ## 相關
 
-- `notes/projects/open-gate/CANVAS_IS_NOT_THE_SETTINGS_BLOCK.md` —— 這份的主要來源,含完整的排除過程
-- `notes/projects/usb-shell-sup/SHELL_COMMANDS.md` —— 韌體 shell 的 77 條指令表
+- `../projects/open-gate/notes/CANVAS_IS_NOT_THE_SETTINGS_BLOCK.md` —— 這份的主要來源,含完整的排除過程
+- `../projects/usb-shell-sup/notes/SHELL_COMMANDS.md` —— 韌體 shell 的 77 條指令表
 - `projects/open-gate.md` —— 畫布真正在哪(不在選單這一側)
-- `notes/research/imx410/FRAME_RATE_IS_VMAX.md` —— §4 那段 `SetMovRecSize` 語義已被本文 §2 訂正
+- `../research/imx410/notes/FRAME_RATE_IS_VMAX.md` —— §4 那段 `SetMovRecSize` 語義已被本文 §2 訂正

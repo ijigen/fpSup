@@ -29,7 +29,7 @@ import base64, json, pathlib, struct, sys, zipfile
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent
 OG = ROOT / 'codex' / 'opengate'
-GYRO = ROOT / 'fpSup-v1' / 'gyro'
+GYRO = ROOT / 'fpSup' / 'gyro'
 
 PARK_AT, F_WRITE_AT = 0xC072EFB4, 0xC03660E8
 # build_base_card.py passes these two as `--also`, not `--also-bin`, so its own
@@ -63,7 +63,7 @@ LABELS = {
 TEMPLATES = [
     ('plain',     OG / 'og3k_gyro_release' / 'AutoRun.txt'),
     ('shell',     OG / 'og3k_gyro' / 'AutoRun.txt'),
-    ('shellpush', ROOT / 'fpSup-v1' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt'),
+    ('shellpush', ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt'),
 ]
 
 CARDS = [
@@ -71,7 +71,7 @@ CARDS = [
     # the worker at record 1 -- listing the shell here is what makes the merge
     # come out byte-identical to it instead of merely equivalent.
     dict(id='shell', name='USB shell', shell=True,
-         dir=ROOT / 'fpSup-v1' / 'fp_usb_shell' / 'autorun',
+         dir=ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun',
          template='shellpush',
          desc='The worker that answers `shl` over USB. Selecting it switches the '
               'AutoRun to the loader that creates a task, because the worker '
@@ -145,7 +145,7 @@ def banner_of(text):
 def loader_window():
     """Derived from loader.S so the address is never written down twice."""
     import re
-    src = (ROOT / 'fpSup-v1' / 'fp_usb_shell' / 'templates' / 'loader.S').read_text()
+    src = (ROOT / 'fpSup' / 'fp_usb_shell' / 'templates' / 'loader.S').read_text()
     eq = dict(re.findall(r'\.equ\s+(\w+)\s*,\s*(0x[0-9A-Fa-f]+|\d+)', src))
     return int(eq['O_FOBJ'], 0), int(eq['O_BUF'], 0) + int(eq['MAXLEN'], 0)
 
@@ -269,8 +269,8 @@ def main():
          (OG / 'og3k_gyro' / 'AutoRun.txt').read_text('utf-8')),
         ('AutoRun shellpush  == fp_usb_shell',
          autorun(templates_out['shellpush'], banner_of(
-             (ROOT / 'fpSup-v1' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt').read_text('utf-8'))),
-         (ROOT / 'fpSup-v1' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt').read_text('utf-8')),
+             (ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt').read_text('utf-8'))),
+         (ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun' / 'AutoRun.txt').read_text('utf-8')),
     ]
     for what, got, want in autos:
         ok = got == want

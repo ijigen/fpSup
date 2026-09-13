@@ -13,7 +13,7 @@ that went wrong on this camera.
 The shell talks over a Unix socket, so the daemon has to be up:
 
 ```sh
-cd fpSup-v1/fp_usb_shell
+cd fpSup/fp_usb_shell
 (./fpshd >/tmp/fpshd.log 2>&1 &)          # socket /tmp/fpshd.sock
 ```
 
@@ -93,7 +93,7 @@ cave layout — see the **fp-usb-shell** skill. fpGyroSup is released and in
 maintenance; new work starts there.
 
 ```sh
-cd fpSup-v1/gyro
+cd fpSup/gyro
 python3 ring_task_deploy.py --gcsv --place     # the writer, into the pool
 python3 imu_stream_deploy.py --restore         # unhook first, or arming refuses
 python3 imu_stream_deploy.py                   # place the producers and arm

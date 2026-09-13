@@ -8,7 +8,7 @@ description: Packaging and shipping an fpGyroSup card — building the archive, 
 ## Build it with the script, never by hand
 
 ```sh
-cd fpSup-v1/gyro
+cd fpSup/gyro
 python3 release_card.py gcsv v1.11b        # or: base v1
 ```
 

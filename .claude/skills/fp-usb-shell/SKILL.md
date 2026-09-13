@@ -217,7 +217,7 @@ How to read it:
 ## Host tools
 
 ```sh
-cd fpSup-v1/fp_usb_shell
+cd fpSup/fp_usb_shell
 (./fpshd >/tmp/fpshd.log 2>&1 &)              # daemon; socket /tmp/fpshd.sock
 ```
 
@@ -333,7 +333,7 @@ which a card never does.
 **21 notes in `notes/` still describe `EP 0x05 OUT / EP 0x84 IN`.** That
 configuration is gone; EP84 is not enabled under the current descriptors and
 `StartTransfer` on it was refused 100/100. Read
-`notes/projects/usb-shell-sup/USB_SHELL_INDEX.md` before any other shell note — it says which are
+`../projects/usb-shell-sup/notes/USB_SHELL_INDEX.md` before any other shell note — it says which are
 current and which were overturned.
 
 ## Cards

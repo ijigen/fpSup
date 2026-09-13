@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build, arm, inspect, or restore the exact CinemaDNG writer probe.
 
-The live operations talk only through fpSup-v1/fp_usb_shell/host/fpsh.  Arming
+The live operations talk only through fpSup/fp_usb_shell/host/fpsh.  Arming
 is deliberately ordered so the hook instruction is the final write.  Every
 code/state write is read back, and an unexpected hook word is never replaced.
 
@@ -54,7 +54,7 @@ def _find_default_fpsup() -> pathlib.Path:
     for parent in source.parents:
         if (parent / "fp_usb_shell" / "armasm.py").is_file():
             return parent
-    return source.parents[2] / "fpSup-v1"
+    return source.parents[2] / "fpSup"
 
 
 DEFAULT_FPSUP = _find_default_fpsup()
@@ -390,7 +390,7 @@ def make_parser() -> argparse.ArgumentParser:
         "--fpsup",
         type=pathlib.Path,
         default=DEFAULT_FPSUP,
-        help=f"fpSup-v1 checkout (default: {DEFAULT_FPSUP})",
+        help=f"fpSup checkout (default: {DEFAULT_FPSUP})",
     )
     parser.add_argument(
         "--fpsh",
