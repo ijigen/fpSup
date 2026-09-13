@@ -18,6 +18,9 @@ WHAT IT IS
   resampled to 3K, which is a different thing that costs 24.98 ms
   of rolling shutter where this costs 12.4.
 
+  **ISO 100 only.** It is the only sensitivity this build has been
+  seen to record correctly — see ISO 100 ONLY below.
+
   **Firmware Ver.5.02 only.** RAM only: delete AutoRun.txt, pull the
   battery, and the camera is stock. Nothing is written to flash.
 
@@ -68,6 +71,21 @@ FRAME RATES, AND WHY THEY ARE EXACT
   worth far more when someone can go and check mode 220's timing.
 
 ----------------------------------------------------------------
+ISO 100 ONLY
+----------------------------------------------------------------
+
+  **Shoot this at ISO 100.** That is the only sensitivity this build
+  has been seen to record correctly. Other ISOs are not blocked — the
+  menu will let you pick them — but what comes out of them has not
+  been verified and should not be trusted.
+
+  Why other ISOs misbehave is not yet known — it has not been traced,
+  only observed. So the note is exactly what was seen and nothing
+  more: ISO 100 records correctly, the rest have not been shown to.
+  If you shoot one anyway, a report saying which ISO and what went
+  wrong is genuinely useful.
+
+----------------------------------------------------------------
 THIS IS A TEST BUILD
 ----------------------------------------------------------------
 
@@ -76,13 +94,14 @@ THIS IS A TEST BUILD
   but have had far less time on a camera. Treat a take as disposable
   until you have checked it.
 
-  Verified, on 29.97:
+  Verified, on 29.97, at ISO 100:
     - whole frame is picture, edge to edge (A001_036 unpacked:
       header 3024x2010, crop 3008x2000, StripByteCounts 9,117,360)
     - live view correct in standby, half-press and recording
     - in-camera playback works, paused and running
 
-  Not verified: the other seven rates, end to end.
+  Not verified: the other seven rates end to end, and any ISO
+  other than 100 at any rate.
 
 ----------------------------------------------------------------
 INSTALL
@@ -96,6 +115,8 @@ INSTALL
   4. Card in, power on. Progress bar, then fpSup-OG3K-v0.1.0t!
   5. MENU -> recording -> resolution: pick the new entry, then the
      frame rate as usual.
+  6. Set ISO to 100. See ISO 100 ONLY above — it is the only one
+     verified to record correctly.
 
   To remove: delete AutoRun.txt, power off COMPLETELY (battery out —
   a warm restart does not clear RAM), power on.
@@ -133,5 +154,6 @@ IF SOMETHING GOES WRONG
   Camera hangs at boot, or the progress bar stops: pull the battery,
   put the card in a reader, delete AutoRun.txt. Nothing persists.
 
-  Worth reporting: firmware version, which frame rate, what the
-  screen showed, and whether the clip folder has any DNGs in it.
+  Worth reporting: firmware version, which frame rate, **which ISO**,
+  what the screen showed, and whether the clip folder has any DNGs
+  in it.

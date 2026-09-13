@@ -131,8 +131,9 @@ PRODUCTS = {
     'og3k':     dict(id='og3k', name='OpenGate3K',
                      desc='3024×2010, DNG cropped to 3008×2000, eight frame rates. '
                           'Sensor modes 98/117 — a native 2×2-binned 3:2 readout, '
-                          'not 6K resampled down. Carries no entry section: it is '
-                          'all static writes.'),
+                          'not 6K resampled down. ISO 100 only: it is the only '
+                          'sensitivity verified to record correctly. Carries no '
+                          'entry section: it is all static writes.'),
 }
 # usbshell first: picked() walks this order, and the development card puts the
 # worker at record 1, which is what makes the merge come out byte-identical to it.
