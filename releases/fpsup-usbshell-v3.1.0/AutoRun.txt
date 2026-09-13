@@ -18,7 +18,7 @@
 # that has not run yet, so no stale instruction-cache line can shadow them.
 #
 # The screen reads fpSup[........]0 through fpSup[########]100 while this runs
-# and fpSup-Shell-v1.0.0! when it is done.  A bar that stops means the load stopped there.
+# and fpSup-Shell-v3.1.0! when it is done.  A bar that stops means the load stopped there.
 # ============================================================================
 
 # --- screen ------------------------------------------------------------------
@@ -272,11 +272,11 @@ mem set 0xC0BAC2F8 0xC03D99A0
 display osd 1 0x00000000
 display osd 1 0x00000000
 display osd 1 0x00000000
-display text fpSup-Shell-v1.0.0!
+display text fpSup-Shell-v3.1.0!
 display osd 1
-display text fpSup-Shell-v1.0.0!
+display text fpSup-Shell-v3.1.0!
 display osd 1
-display text fpSup-Shell-v1.0.0!
+display text fpSup-Shell-v3.1.0!
 display osd 1
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
