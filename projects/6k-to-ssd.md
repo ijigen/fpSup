@@ -2,175 +2,256 @@
 
 [English](#english) | [繁體中文](#繁體中文)
 
-One pipeline, fixed: **6K sensor readout → RWZM reduction → hardware lossless →
-SSD**, at 29.97 or better. This document is what is established about it and
-what is not.
+One pipeline: **6K sensor readout → 8-bit companded → hardware lossless on a
+fraction of the frames → SSD *and* SD card in parallel**, at 29.97.
 
-一條固定的管線:**6K 讀出 → RWZM 縮小 → 硬體無損 → SSD**,29.97 以上。
-這份記錄它已確立與未確立的部分。
+一條管線:**6K 讀出 → 8bit companding → 一部分幀走硬體無損 → 同時寫 SSD 與 SD 卡**,
+29.97。
+
+> **Revised 2026-09-13** after the first real storage measurements. Three things
+> in the previous version of this document were wrong: the link ceiling (625
+> MB/s — it ignored 8b/10b), the claim that the SSD had untested headroom, and
+> the claim that the fp's DNGs cannot carry a companding curve. All three are
+> corrected below and the design changed as a result: **the output is 8-bit
+> now, not 12-bit.**
 
 ---
 
 ## English
 
-### The pipeline
+### The storage measurements
+
+Taken with the firmware's own benchmark, `sdcard test3 <slot> <bytes> <loops>`
+(`FUN_c0408A20`), which times one write with the 1 MHz counter `FUN_c002b940`
+and prints `MB/sec` as bytes per microsecond — decimal MB, the same unit as
+everything else here. `[M]` = measured, twice, on 2026-09-13.
 
 ```
-mode 3 / 121      6064x4042 1x1 @29.97, a stock mode (it is the live-view mode)
-     |            rolling shutter 24.98 ms -- fixed, this is what 4042 rows cost
-     v
-RWZM              the 16-phase 2-tap resampler at 0x300F0900
-     |            factory ratio 0x640 = 1.5625
-     v
-XC_HalLjpeg       0x300D0000, lossless JPEG, ~2.3:1 measured on Bayer
-     |            **on every other frame** -- see the next section
-     v
-SSD               USB 3.x Gen1, 5 Gbps, 625 MB/s theoretical, 379 measured
+                        write        read
+SSD 2 TB, enclosure A    390         400      [M]
+SSD 2 TB, enclosure B    363         370      [M]   same drive
+SD 128 GB UHS-II          94         218      [M]   reproduced within 1%
 ```
 
-Every stage exists and runs today. None of them has been run in this order.
+**The SSD is bus-limited, not drive-limited.** Write and read land within 3% of
+each other, and swapping the enclosure moved it 7%. USB 3.0 Gen1 is 5 Gbps with
+8b/10b encoding = **500 MB/s of payload**, and practical bulk mass-storage sits
+at 400–450. We are already there. A faster drive will not help.
 
-### The design: alternate-frame compression
+**Block size matters, and it is not a small effect:**
 
-Compressing **every frame** wastes the link; compressing **no frame** wastes the
-engine. Compressing a *fraction* of the frames makes both constraints bind at
-once, and that is worth a third more pixels than either extreme.
+```
+             10 MB      50 MB     100 MB
+SSD           328        390        393     flat from 50 MB
+SD             66         94          ?     +48%, no plateau yet
+```
 
-With `f` the fraction of frames compressed, `E` the engine's rate, `L` the link
-budget and `C` the compression ratio:
+One 6K 8-bit frame is 24.5 MB. Writing one file per frame — which is what
+CinemaDNG is — puts the SD card at the slow end of that curve. A writer that
+accumulates and writes 100–200 MB blocks may get more out of the same card for
+free. **The SD card above 50 MB has not been measured.** `[?]`
+
+### The link budget
+
+```
+SSD   390   measured, enclosure A
+SD    160   assumed -- a good V90 card; the one measured does 94
+-----------
+      550   the planning figure
+```
+
+Only the second line is an assumption, and it is one that can be settled by
+buying a card. `tools/storage-benchmark/` is the card that settles it.
+
+**The two paths are structurally independent** and can be expected to add: the
+SD card goes through `XC_MediaDriverSdcard` with its lock at `0xC351EE18`, the
+SSD through USB host mass storage (`MscHost`). Different drivers, different
+locks, different controllers, no shared write queue. `[C]`
+
+> **Assumption, not verified:** that they actually add. They were measured
+> separately. Concurrent writes share DRAM bandwidth and CPU.
+
+### Why 8-bit, and why that is not a compromise
+
+**The camera already ships 8-bit CinemaDNG with a proper companding curve.**
+A UHD 8-bit clip off the card (`3856×2170`, `BitsPerSample=8`,
+`Compression=1`) carries **59** tags where the 12-bit clips carry 58. The extra
+one is `LinearizationTable` (50712), 256 SHORT entries, monotonic 0 → 4095,
+`WhiteLevel` still 4095:
+
+```
+code   0- 32    8.5 levels per code
+code  32- 64    4.0                  <- shadows fine
+code  64-128    5.75
+code 128-192   16.0
+code 192-255   36.6                  <- highlights coarse
+```
+
+That is a piecewise-linear log curve, carried by the DNG standard's own
+mechanism. Every DNG reader handles it. `[M]`
+
+The previous version of this document listed "8-bit needs a companding curve and
+the fp's DNGs do not carry one" as an open problem. It was wrong: that is true
+of the 12-bit files and false of the 8-bit ones. **The obstacle does not exist.**
+
+### The design at L = 550
+
+`f` is the fraction of frames sent through the compressor. `f` trades the two
+bottlenecks against each other: raising it moves bytes off the link and work
+onto the engine.
 
 ```
 engine allows   px <= E / (f x fps)
-link allows     px <= L / (1.5 x fps x (1 - f/C))
-optimum         f  =  1.5E / (L + 0.75E)
+link allows     px <= L / (k x fps x (1 - f + f/C))      k = bytes/pixel
+and f settles at  f  =  Ek / (L + Ek(1 - 1/C))    -- see below, it is not chosen
 ```
 
-At E=300 Mpix/s, L=500 MB/s, C=2 the optimum is f=0.62 and 16.1 Mpix. **Take
-f=1/2**: 14.83 Mpix at 4717x3144, which is 33% more than uncompressed and 48%
-more than compressing everything, and unlike f=0.62 it leaves timing margin.
+With C = 2.3, and both constraints binding at once — which is where the greedy
+scheduler of the next section lands on its own:
 
-| | Mpix | size | vs uncompressed |
+| | E = 300 `[I]` | E = 240 | E = 169.7 `[M]` |
 |---|---|---|---|
-| compress nothing | 11.12 | 4085x2723 | — |
-| compress everything | 10.01 | 3875x2583 | −10% |
-| **compress every other frame** | **14.83** | **4717x3144** | **+33%** |
+| 12-bit | 17.89 Mpix `5181×3453` | 16.76 `5014×3342` | 15.43 `4812×3208` |
+| 10-bit | 20.34 `5524×3682` | 19.21 `5368×3578` | 17.88 `5179×3452` |
+| **8-bit** | **24.01 `6002×4000`** | **22.88 `5859×3905`** | **21.55 `5686×3790`** |
 
-### What compression is for here, and how much of it
+### The point of the table: 8-bit is insensitive to the one number nobody has measured
 
-**It is not for saving card space.** It is for carrying a frame the link cannot
-otherwise carry. At the link speed this camera has actually been measured at —
-379 MB/s, from a real take — uncompressed tops out at 8.43 Mpix and
-alternate-frame compression reaches 14.09. Same link, 67% more pixels.
+The engine's sustained rate is still unmeasured and the estimates span 77%
+(169.7 to 300 Mpix/s). In 8-bit that moves the output by **5% of linear
+dimension** — 5686×3790 to 6002×4000, i.e. 94% to 99% of native 6K.
 
-But compression is not a switch, it is a dial, and turning it all the way is
-worse than leaving it off:
+It is insensitive to the compression ratio too. `C = 2.3` was measured on
+**12-bit** Bayer; using it for 8-bit is an assumption, so here is the whole
+range (8-bit, L = 550, E = 300):
 
-| link | uncompressed | every frame | alternate frames |
+```
+C = 1.5    5704x3802        C = 2.3    6002x4000
+C = 2.0    5920x3946        C = 3.0    6064x4042  (native)
+```
+
+**Both of the design's unmeasured inputs move the answer between 94% and 100% of
+native 6K.** That is why 8-bit is the path: not because it is cheaper, but
+because it is the only variant whose answer is already known.
+
+### Native 6064×4042 does not fit in 550, and at the measured engine rate it cannot
+
+```
+6K 8-bit uncompressed = 734.6 MB/s
+to reach 550          = must remove 25.1%
+removable             = f x (1 - 1/C),  and f is capped by the engine
+```
+
+| E | f cap | most removable | needs C |
 |---|---|---|---|
-| 379 MB/s *measured* | 8.43 Mpix `3556x2371` | 10.01 `3875x2583` | **14.09 `4597x3064`** |
-| 500 MB/s | 11.12 `4085x2723` | 10.01 `3875x2583` | **16.78 `5017x3344`** |
+| 169.7 `[M]` | 0.231 | 23.1% | **impossible** |
+| 240 | 0.327 | 32.7% | 4.33 |
+| 300 `[I]` | 0.408 | 40.8% | 2.60 |
 
-At 500 MB/s, **compressing every frame gives fewer pixels than compressing
-none** — because it moves the bottleneck from the link to the engine, and the
-engine is the slower of the two. The point is not to compress but to compress
-*exactly enough that neither is the bottleneck*:
+The first row is not "the compression is not good enough". At `f = 0.231` the
+most that can be removed is 23.1% **even if the compressed frames were zero
+bytes**, and 25.1% is needed. There are not enough compressible frames.
 
-```
-f = 1.5E / (L + 1.5E(1 - 1/C))
+To get spec-native 6064×4042 the link has to reach **565 MB/s** (at E = 300) or
+**639** (at E = 169.7) — SD at 175 or 249 MB/s. The first is possible with a
+good card; the second is not.
 
-L = 379 MB/s  ->  f = 0.71
-L = 500 MB/s  ->  f = 0.60
-```
+For practical purposes 6002×4000 and 6064×4042 differ by 1% of linear dimension.
 
-### The optimum has no timing margin, by construction
+### There is no `f` to choose — the scheduler finds it
 
-At the optimum the engine runs at 100% — that is what "the engine is a
-bottleneck too" means — so a real design has to back off. What that costs:
-
-```
-link 379 MB/s                          link 500 MB/s
-f      Mpix    engine                  f      Mpix    engine
-0.711  14.09   100%  <- no margin      0.597  16.78   100%  <- no margin
-0.650  13.33    87%                    0.550  16.14    89%
-0.600  12.76    76%                    0.500  15.50    77%
-0.500  11.75    59%                    0.400  14.37    57%
-```
-
-**f = 1/2 is the recommendation**: 77% engine utilisation at a 500 MB/s link,
-59% at 379, a duty cycle trivial to implement, and it costs 8% of the pixels
-against the optimum. Every figure elsewhere in this document uses f = 1/2.
-
-### Why alternate frames and not half a frame
-
-Half a frame does not survive the container. **TIFF's `Compression` tag is per
-IFD**, so one file cannot hold a compressed half and an uncompressed half; no
-reader would reassemble it.
-
-Alternate *frames* is free of that. CinemaDNG is a sequence of independent files
-and each declares its own `Compression`, so frame 1 can be `Compression=7` and
-frame 2 `Compression=1` with both remaining valid DNGs.
-
-> **Assumption, not verified:** that readers tolerate a mixed sequence. A reader
-> that caches the first frame's parameters for the whole sequence would break.
-> This is testable on the host with no camera — build a sequence that alternates
-> and open it in Resolve.
-
-### Timing and buffer
+`f` is a way of *describing* the result, not a knob to set. The compressor takes
+the next frame the moment it is free; a frame that arrives while it is busy goes
+out uncompressed. Nothing schedules, nothing decides a duty cycle.
 
 ```
-frame time                     33.4 ms at 29.97
-compressing one 14.83 Mpix frame at 300 Mpix/s   49.4 ms
-budget when only every other frame is compressed 66.7 ms   -> 26% margin
-buffer: compression may lag by one frame          ~22 MB
+frame arrives -> engine idle?  yes -> compress it, write Compression=7
+                               no  -> write it as-is, Compression=1
 ```
 
-At f=0.62 the margin is zero, which is why 1/2 is the engineering choice rather
-than the arithmetic optimum.
-
-### The number the whole design rests on
+That is work-conserving, and it lands exactly on the arithmetic optimum above.
+For any given frame size a higher `f` always means fewer bytes, so the best `f`
+is the highest the engine can sustain — which is what a greedy scheduler
+produces by definition:
 
 ```
-break-even engine rate = 0.5 x 11.12 Mpix x 29.97 = 167 Mpix/s
-measured, one cold call                            169.7 Mpix/s
+f  =  E / (px x fps)      automatically, as an outcome
 ```
 
-**They are the same number.** At the measured rate this design gains 2% and is
-not worth building; at 240 Mpix/s it gains 33%.
+Substituting that back gives `px <= (L + Ek(1 - 1/C)) / (k x fps)`, which is the
+same bound the "optimum f" formula produces. **The greedy scheduler is optimal
+and needs no knowledge of `E`.**
 
-The measurement is a cold call and `FUN_c062fee8` brings up the power domain,
-clock and IRQ *inside* encode — a cost a recording loop pays once and a cold call
-pays every time — so the true sustained rate is very likely higher. Nobody has
-separated them. **Until that is measured, the size of this design is unknown by
-a factor of 1.3.**
+**This removes the margin problem entirely.** The previous version of this
+document worried that at the optimum the engine runs at 100% with no timing
+margin, and recommended backing off to `f = 1/2` to buy slack. That worry was an
+artefact of treating `f` as fixed: with a fixed duty cycle, "compress this frame"
+is a *deadline*, and missing it is a failure. With a greedy scheduler there is no
+deadline — the engine being busy is not an error, it is just a frame that goes
+out uncompressed. **100% engine utilisation is the normal operating point, not a
+danger.**
 
-### For reference: compressing every frame
+It also absorbs variation nothing else can:
 
-Superseded by the design above, kept because the arithmetic explains why. If
-*every* frame is compressed the link stops being the constraint — it would take
-31.98 Mpix at 29.97 to reach 625 MB/s after 2.3:1 — and **the engine becomes the
-only gate**, so the output follows straight from its rate:
+- compression time varies with frame content; a fixed `f` must assume the worst
+- the engine may throttle, or share the bus on some frames
+- `E` is unmeasured, and the scheduler does not care
 
-| engine | output at 29.97 | written |
-|---|---|---|
-| 300 Mpix/s — inferred ceiling `[I]` | **3875×2583** (10.0 Mpix) | 196 MB/s |
-| 265 Mpix/s — break-even | 3644×2429 | 174 MB/s |
-| 240 Mpix/s | 3466×2310 | 156 MB/s |
-| 169.7 Mpix/s — measured, cold `[C]` | 2915×1943 (5.7 Mpix) | 111 MB/s |
+The cost is that the output size varies frame to frame and which frames are
+compressed is not known in advance. For a flat stream with an index that is
+nothing; for CinemaDNG each file declares its own `Compression` anyway.
 
-**265 Mpix/s is the break-even for this variant**, against writing 3542×2361
-uncompressed at the measured 379 MB/s. Note this is a different threshold from
-the 167 Mpix/s above: that one is for alternate-frame compression against a 500
-MB/s budget, this one is for full compression against 379. Two designs, two
-thresholds; the alternate-frame design is the one to build.
+### Why alternate frames, and what relaxes if the output need not be legal DNG
 
-`6000×4000 ÷ 1.5625 = 3840×2560` — the sensor's active area through the factory
-RWZM ratio, needing no scaler change — sits just under the inferred ceiling.
+**TIFF's `Compression` tag is per IFD**, so one file cannot hold a compressed
+half and an uncompressed half. Alternate *frames* is free of that: CinemaDNG is
+a sequence of independent files and each declares its own `Compression`, so
+frame 1 can be 7 and frame 2 can be 1 with both valid.
+
+> **Assumption, not verified:** that readers tolerate a mixed sequence. Testable
+> on the host with no camera — build one and open it in Resolve.
+
+If the on-card format does not have to be legal DNG — a flat stream converted on
+the host — then three things change, and **none of them is bandwidth**:
+
+1. **Large sequential writes become possible.** Worth more than the other two:
+   see the block-size numbers above. The SD card at 10 MB blocks is 30% slower
+   than at 50 MB, and one frame is 24.5 MB.
+2. **The per-frame DNG header goes away** — measured at 79,240 B (open gate)
+   and 79,960 B (UHD 8-bit) per frame, about 0.9%, or 2.4 MB/s. Small, free.
+3. **The mixed-sequence assumption above stops mattering**, because the host
+   converter produces whatever the reader wants.
+
+The cost is a host-side converter, which the mixed-sequence risk may require
+anyway.
+
+### What the camera records today, measured off the card
+
+Useful as calibration for anything above. Taken from the DNG headers of real
+takes, `bytes/frame x 29.97`:
+
+```
+FHD  1936x1090  12-bit    3,244,544 B     97.2 MB/s
+UHD  3856x2170   8-bit    8,447,488 B    253.2 MB/s
+UHD  3856x2170  12-bit   12,630,528 B    378.5 MB/s
+open gate 3032x2012 12b   9,229,824 B    276.6 MB/s
+```
+
+Two things fall out of this:
+
+- **FHD 12-bit needs 97.2 MB/s and the measured card does 94.** It records only
+  because the RAM buffer covers a 3% shortfall. That is the real explanation for
+  the 692 ms worst-case write latency during recording, for the writer at
+  priority 28 losing the card lock, and for dropped gyro samples: during an FHD
+  take this card is saturated.
+- **Every open-gate take on the card stops at 3–4 s.** 276.6 MB/s against a
+  94 MB/s card drains a buffer at 182 MB/s; the lengths imply 600–750 MB of
+  buffer. Not a bug — the card.
 
 ### The engine's API, from the stills path
 
 The stills path already compresses a 6064×4042 Bayer frame to a lossless DNG.
-It is the reference implementation, and the HAL is
-`src/hal/RawCD/src/XC_HalLjpeg.cpp`:
+It is the reference implementation; the HAL is `src/hal/RawCD/src/XC_HalLjpeg.cpp`:
 
 ```
 FUN_c05a6890(params9)  -> FUN_c062f5a8    start the encode
@@ -179,8 +260,8 @@ FUN_c05a6990(x, 1)     -> FUN_c062fa48    collect the result
 FUN_c03d9668(addr)                        virtual -> bus address translation
 ```
 
-The nine words the encode takes, read off the caller in `blk_c03.c` around the
-`StillCr...` assert at `0xC037E7AC`:
+The nine words the encode takes, read off the caller in `blk_c03.c` around
+`0xC037E7AC`:
 
 ```
 [0] width        [1] height       [2] source buffer (translated)
@@ -190,263 +271,343 @@ The nine words the encode takes, read off the caller in `blk_c03.c` around the
 ```
 
 The wait call takes five: `{w, h, buf, 0x100, 0x100}`. `FUN_c062f6f8` is where
-`timeout = pixels / 32000` lives — a watchdog with 5.3x of headroom, **not** a
-throughput figure. `+0xF8` on the block is the produced-byte count; `+0x3FC` is
-busy/clear.
+`timeout = pixels / 32000` lives — a watchdog, **not** a throughput figure.
+`+0xF8` is the produced-byte count; `+0x3FC` is busy/clear.
 
 ### What is established
 
-- **The engine is idle during video.** Recording uses the DSP at `0x301B` and the
-  RFC readout at `0x300C`. No contention to design around. `[C]`
-- **It is cold standalone-callable** — the wrappers bring up power domain 5, the
-  clock and IRQ 0x29 themselves, inside encode. `[C]`
-- **Compression ratio ~2.3:1** on this sensor's Bayer. `[C]`
-- **One engine, no parallelism**, and the clock cannot be raised — it shares the
-  imaging domain with sensor readout and has no divider. `[C]`
-- **Mode 3 is a stock 6064×4042 1×1 @29.97 readout.** The source needs no
-  invention. `[C]`
-- **The link is Gen1.** The BOS device capability is SUPERSPEED_USB with
-  `wSpeedsSupported = 0x000E` (FS|HS|SS) and there is no SUPERSPEED_PLUS
-  capability anywhere in the descriptor region. `[C]`
+- **SSD ~390 MB/s write, bus-limited.** Two enclosures, 363 and 390; read
+  matches write. `[M]`
+- **SD 94 MB/s write, 218 read.** Reproduced across two boots within 1%. `[M]`
+- **Write block size matters** — SD +48% from 10 to 50 MB, not yet flat. `[M]`
+- **8-bit CinemaDNG carries `LinearizationTable`**, 256 entries, piecewise log.
+  Companding is a solved problem, in shipping firmware. `[M]`
+- **The two media are independent** — separate drivers, separate locks. `[C]`
+- **The engine is idle during video.** Recording uses the DSP at `0x301B` and
+  the RFC readout at `0x300C`. No contention to design around. `[C]`
+- **Compression ~2.3:1** on this sensor's 12-bit Bayer. `[C]`
+- **One engine, no parallelism**, clock cannot be raised. `[C]`
+- **Mode 3 is a stock 6064×4042 1×1 @29.97 readout.** `[C]`
+- **The link is Gen1.** BOS says SUPERSPEED_USB, `wSpeedsSupported = 0x000E`,
+  no SUPERSPEED_PLUS anywhere. `[C]`
 
 ### What is not
 
-Ranked by how much each changes the design.
+Ranked by how much each changes the design. **The engine is no longer first** —
+choosing 8-bit demoted it.
 
-1. **The engine's sustained rate.** Everything above depends on it and the only
-   measurement is one cold call on one frame size: 6064×4042 in 144,431 µs =
-   169.7 Mpix/s. `FUN_c062fee8` does the power/clock/IRQ bring-up *inside*
-   encode, so a cold call pays it every frame and a recording loop pays it once.
-   Fixed overhead and per-pixel rate have never been separated. **Time two or
-   three frame sizes and fit.** Probe exists: `raw/ljtime.S`, hooks
-   `0xC037E7AC`, times with `FUN_c002b6e0` (a 1 MHz counter).
-2. **Whether RWZM's output can feed the engine.** The engine takes CFA/Bayer —
-   the stills path proves that. Whether what RWZM writes is still Bayer, in a
-   layout and alignment the engine accepts, is untested.
-3. **DNG packaging.** Setting the Compression tag does not compress pixels. The
-   encoder's output has to be written into the DNG with the right strip
-   structure. One stripe per frame, which keeps it simple. `[C]`
-4. **The link's real sustained throughput.** 376 MB/s is proven by a shipping
-   mode; 625 is theoretical. Irrelevant if compression works — at 196 MB/s there
-   is a factor of two in hand either way.
+1. **Whether the SD card can reach 160 MB/s.** The whole link budget rests on
+   it. Settled by buying a card and running `tools/storage-benchmark/`.
+2. **Whether large blocks help the SD card.** Unmeasured above 50 MB, and the
+   curve was still rising. Free to find out, same card.
+3. **Whether the two media add.** Measured separately; concurrent writes share
+   DRAM and CPU.
+4. **The engine's sustained rate.** Still one cold call, 6064×4042 in 144,431 µs
+   = 169.7 Mpix/s, with the power/clock/IRQ bring-up *inside* encode. Probe
+   exists and has never been run: `raw/ljtime_deploy.py`, hooks `0xC037E7AC`.
+   In 8-bit this only moves the output 94% → 99%.
+5. **The compression ratio on 8-bit companded data.** 2.3:1 is a 12-bit figure.
+   Range tested above; also only worth 5%.
+6. **Whether RWZM's output can feed the engine.** Only matters if the output is
+   reduced below sensor size, which at 8-bit it no longer needs to be.
+7. **Whether readers tolerate a mixed-`Compression` sequence.** Host-side test,
+   no camera.
 
 ### Do not
 
 - **Do not cold-call the engine. Hook it.** A dozen cold calls broke stills
   compression until a reboot — card file sizes went 26–28 MB (compressed) to
-  51 MB (uncompressed) and back to 36 MB after a power cycle.
-- **Do not expect compression to rescue a larger frame.** The engine is slower
-  than the link, so the compressed ceiling (10 Mpix) is *below* the uncompressed
-  theoretical one (13.9 Mpix). Compression buys headroom and reliability, not
-  resolution beyond 10 Mpix.
+  51 MB (uncompressed), back to 36 MB after a power cycle.
+- **Do not buy a faster SSD.** The bus is the limit. Buy a better *enclosure*
+  if anything, and a better *SD card* first.
+- **Do not plan around 12-bit.** At L = 550 it yields `5181×3453` at best —
+  worse than 8-bit at `6002×4000`, and it is the variant whose answer depends
+  on the unmeasured engine rate.
 
 ### Related
 
 - `projects/open-gate.md` — the 6K source and the canvas work
 - `projects/raw-sup.md` — the engine, its measurement and the roadmap
-- `notes/RAW_COMPRESSION_RESEARCH.md` — the method for separating overhead from rate
+- `tools/storage-benchmark/` — the card that settles items 1 and 2 above
+- `notes/RAW_COMPRESSION_RESEARCH.md` — separating overhead from rate
 
 ---
 
 ## 繁體中文
 
-### 管線
+### 儲存實測
+
+用韌體自己的跑分 `sdcard test3 <slot> <bytes> <loops>`(`FUN_c0408A20`)量的。
+它用 1 MHz 計數器 `FUN_c002b940` 夾住單次寫入,印出的 `MB/sec` 是 bytes/µs ——
+十進位 MB,跟這份文件其他數字同一把尺。`[M]` = 2026-09-13 實測,跑了兩次。
 
 ```
-mode 3 / 121      6064x4042 1x1 @29.97,原廠模式(即時取景就是它)
-     |            捲簾 24.98 ms —— 固定,那是讀 4042 列的代價
-     v
-RWZM              0x300F0900 的 16 相位 2-tap 重採樣器
-     |            出廠比例 0x640 = 1.5625
-     v
-XC_HalLjpeg       0x300D0000,無損 JPEG,Bayer 上實測約 2.3:1
-     |
-     v
-SSD               USB 3.x Gen1,5 Gbps,理論 625 MB/s,已證明 376
+                          寫         讀
+SSD 2 TB,外接盒 A        390        400      [M]
+SSD 2 TB,外接盒 B        363        370      [M]  同一顆硬碟
+SD 128 GB UHS-II           94        218      [M]  兩次誤差 <1%
 ```
 
-每一段都存在、都在跑。**沒有人把它們照這個順序串過。**
+**SSD 卡在匯流排,不是硬碟。** 讀寫落差 3% 以內,換個外接盒差 7%。
+USB 3.0 Gen1 是 5 Gbps **8b/10b 編碼 = 500 MB/s 載荷**,bulk 大量儲存實務值
+400~450。我們已經貼著了。**換更快的硬碟沒有用。**
 
-### 設計:隔幀壓縮
+**寫入區塊大小有影響,而且不小:**
 
-**每幀都壓會浪費鏈路,每幀都不壓會浪費引擎。** 只壓一部分的幀,兩個限制才會
-同時吃滿 —— 而那比任何一個極端都多出三分之一的像素。
+```
+              10 MB      50 MB     100 MB
+SSD            328        390        393     50 MB 起就平
+SD              66         94          ?     +48%,還沒看到平台
+```
 
-令 `f` 為被壓縮的幀比例、`E` 引擎速率、`L` 鏈路預算、`C` 壓縮比:
+一格 6K 8bit 是 24.5 MB。「一格一個檔」—— CinemaDNG 就是這樣 —— 讓 SD 卡永遠
+在這條曲線的慢端運作。一個會攢成 100~200 MB 再寫的 writer,可能從同一張卡上
+白撿一截。**SD 卡 50 MB 以上沒量過。** `[?]`
+
+### 鏈路預算
+
+```
+SSD   390   實測,外接盒 A
+SD    160   假設 —— 好一點的 V90;實測那張只有 94
+-----------
+      550   規劃值
+```
+
+只有第二行是假設,而且是**可以用買的解決**的假設。
+`tools/storage-benchmark/` 就是拿來收掉它的卡。
+
+**兩條路結構上獨立,可以預期相加**:SD 走 `XC_MediaDriverSdcard`,鎖在
+`0xC351EE18`;SSD 走 USB host 大量儲存(`MscHost`)。不同驅動、不同鎖、
+不同控制器,沒有共用寫入隊列。`[C]`
+
+> **假設,未驗證:**它們真的會相加。兩者是**分開量**的。同時寫要共用 DRAM
+> 頻寬與 CPU。
+
+### 為什麼是 8bit,以及為什麼那不是妥協
+
+**相機本來就出 8bit CinemaDNG,而且帶了正規的 companding 曲線。**
+卡上一段 UHD 8bit(`3856×2170`、`BitsPerSample=8`、`Compression=1`)有
+**59** 個 tag,12bit 的只有 58。多的那個就是 `LinearizationTable`(50712),
+256 筆 SHORT,單調 0 → 4095,`WhiteLevel` 仍是 4095:
+
+```
+code   0- 32   每個 code  8.5 階
+code  32- 64             4.0        <- 暗部細
+code  64-128             5.75
+code 128-192            16.0
+code 192-255            36.6        <- 亮部粗
+```
+
+這就是一條分段線性的 log 曲線,走 DNG 標準自己的機制。任何讀 DNG 的軟體都吃
+得下。`[M]`
+
+這份文件的上一版把「8bit 需要 companding 曲線,而 fp 的 DNG 帶不了」列為未解
+問題。**那是錯的**:12bit 的檔案沒有,8bit 的有。**這個障礙不存在。**
+
+### L = 550 的設計
+
+`f` 是送進壓縮器的幀的比例。它把兩個瓶頸互相對換:調高 f,位元組從鏈路移走、
+工作移到引擎身上。
 
 ```
 引擎允許   px <= E / (f × fps)
-鏈路允許   px <= L / (1.5 × fps × (1 - f/C))
-最佳       f  =  1.5E / (L + 0.75E)
+鏈路允許   px <= L / (k × fps × (1 - f + f/C))      k = 每畫素位元組
+而 f 會停在  f  =  Ek / (L + Ek(1 - 1/C))    —— 見下節,它不是選的
 ```
 
-E=300、L=500、C=2 時最佳 f=0.62、16.1 Mpix。**取 f=1/2**:14.83 Mpix、
-4717×3144 —— 比不壓多 33%、比全壓多 48%,而且不像 f=0.62 那樣時序沒有餘裕。
+C = 2.3,兩個約束同時綁住 —— 那是下一節的貪婪排程器自己會走到的點:
 
-| | Mpix | 尺寸 | 對比不壓 |
+| | E = 300 `[I]` | E = 240 | E = 169.7 `[M]` |
 |---|---|---|---|
-| 完全不壓 | 11.12 | 4085×2723 | — |
-| 每幀都壓 | 10.01 | 3875×2583 | −10% |
-| **隔幀壓** | **14.83** | **4717×3144** | **+33%** |
+| 12bit | 17.89 Mpix `5181×3453` | 16.76 `5014×3342` | 15.43 `4812×3208` |
+| 10bit | 20.34 `5524×3682` | 19.21 `5368×3578` | 17.88 `5179×3452` |
+| **8bit** | **24.01 `6002×4000`** | **22.88 `5859×3905`** | **21.55 `5686×3790`** |
 
-### 壓縮在這裡是為了什麼,以及要壓多少
+### 這張表的重點:8bit 對那個沒人量過的數字不敏感
 
-**不是為了省卡片空間。** 是為了把鏈路本來載不動的畫格載出去。用這台相機**實際
-量到**的鏈路速度(379 MB/s,來自一段真實素材):不壓縮頂到 8.43 Mpix,隔幀壓
-到 14.09。同一條鏈路,多 67% 的像素。
+引擎的持續速率仍然沒量過,估計值跨度 77%(169.7 到 300 Mpix/s)。
+在 8bit 下,那只讓輸出**邊長差 5%** —— 5686×3790 到 6002×4000,
+也就是原生 6K 的 94% 到 99%。
 
-但壓縮不是開關,是旋鈕,而且轉到底比不轉還差:
+對壓縮比也不敏感。`C = 2.3` 是在 **12bit** Bayer 上量的,用在 8bit 上是假設,
+所以把整個範圍都算了(8bit、L = 550、E = 300):
 
-| 鏈路 | 不壓縮 | 每幀都壓 | 隔幀壓 |
+```
+C = 1.5    5704x3802        C = 2.3    6002x4000
+C = 2.0    5920x3946        C = 3.0    6064x4042(原生)
+```
+
+**這個設計的兩個未量輸入,都只把答案在原生 6K 的 94%~100% 之間移動。**
+這才是選 8bit 的理由:不是因為它便宜,而是因為**只有它的答案已經知道了。**
+
+### 原生 6064×4042 塞不進 550,而且在實測的引擎速率下是不可能
+
+```
+6K 8bit 未壓縮 = 734.6 MB/s
+要到 550       = 必須減掉 25.1%
+能減掉的       = f × (1 - 1/C),而 f 被引擎鎖死
+```
+
+| E | f 上限 | 最多能減 | 需要的 C |
 |---|---|---|---|
-| 379 MB/s **實測** | 8.43 Mpix `3556x2371` | 10.01 `3875x2583` | **14.09 `4597x3064`** |
-| 500 MB/s | 11.12 `4085x2723` | 10.01 `3875x2583` | **16.78 `5017x3344`** |
+| 169.7 `[M]` | 0.231 | 23.1% | **不可能** |
+| 240 | 0.327 | 32.7% | 4.33 |
+| 300 `[I]` | 0.408 | 40.8% | 2.60 |
 
-在 500 MB/s 下,**每幀都壓拿到的像素比完全不壓還少** —— 因為它把瓶頸從鏈路搬到
-引擎,而引擎是兩者裡較慢的那個。重點不是「壓」,是**壓到剛好讓兩邊都不是瓶頸**:
+第一列不是「壓縮比不夠好」。`f = 0.231` 時,**就算被壓的幀變成 0 bytes**,
+最多也只減得掉 23.1%,而需要 25.1%。**能壓的幀數本身就不夠。**
 
-```
-f = 1.5E / (L + 1.5E(1 - 1/C))
+要規格上的原生 6064×4042,鏈路得到 **565 MB/s**(E = 300)或 **639**
+(E = 169.7)—— SD 要 175 或 249 MB/s。前者好卡有機會,後者不存在。
 
-L = 379 MB/s  ->  f = 0.71
-L = 500 MB/s  ->  f = 0.60
-```
+實務上 6002×4000 跟 6064×4042 差 1% 邊長。
 
-### 最佳解在定義上沒有時序餘裕
+### 沒有 `f` 要選 —— 排程器自己找到它
 
-最佳解處引擎跑 100% —— 那就是「引擎也是瓶頸」的意思 —— 所以實際設計必須退讓。
-代價是:
-
-```
-鏈路 379 MB/s                          鏈路 500 MB/s
-f      Mpix    引擎                     f      Mpix    引擎
-0.711  14.09   100%  <- 零餘裕          0.597  16.78   100%  <- 零餘裕
-0.650  13.33    87%                    0.550  16.14    89%
-0.600  12.76    76%                    0.500  15.50    77%
-0.500  11.75    59%                    0.400  14.37    57%
-```
-
-**建議取 f = 1/2**:鏈路 500 時引擎用 77%、379 時用 59%,duty cycle 實作極簡單,
-代價是比最佳解少 8% 的像素。這份文件其他地方的數字都用 f = 1/2。
-
-### 為什麼是隔幀,不是半張圖
-
-半張圖過不了容器。**TIFF 的 `Compression` tag 是每個 IFD 一個**,所以一個檔案
-不可能一半壓、一半不壓,沒有讀取器組得回來。
-
-隔**幀**沒有這個問題。CinemaDNG 是一串獨立的檔案,每個自己宣告 `Compression`,
-所以第 1 幀 `Compression=7`、第 2 幀 `Compression=1`,**兩個都是合法 DNG**。
-
-> **這是假設,沒驗證:**讀取器能不能吃混合的序列。如果某個讀取器把第一幀的參數
-> 套用到整個序列,就會壞。**這可以在主機上測,不用相機** —— 做一個交替的序列,
-> 丟進 Resolve 打開。
-
-### 時序與緩衝
+`f` 是用來**描述結果**的,不是要設的旋鈕。壓縮器一空下來就抓下一幀;在它忙的
+時候到達的幀就原樣寫出去。不需要排程,不需要決定 duty cycle。
 
 ```
-每幀                                    33.4 ms @29.97
-壓一張 14.83 Mpix @300 Mpix/s            49.4 ms
-隔幀壓的預算                             66.7 ms   -> 26% 餘裕
-緩衝:壓縮最多落後一幀                    約 22 MB
+一幀到達 -> 引擎閒著? 是 -> 壓,寫 Compression=7
+                      否 -> 原樣寫,Compression=1
 ```
 
-f=0.62 的餘裕是零,所以 1/2 才是工程上對的選擇,而不是算術上的最佳解。
-
-### 整個設計壓在哪個數字上
+這叫 work-conserving,而且它**剛好落在上面那個算式的最佳解上**。
+對任何固定的幀尺寸,`f` 越高位元組越少,所以最好的 `f` 就是引擎撐得住的最高值 ——
+那正是貪婪排程器依定義會產生的結果:
 
 ```
-損益平衡的引擎速率 = 0.5 × 11.12 Mpix × 29.97 = 167 Mpix/s
-實測,一次冷呼叫                              169.7 Mpix/s
+f  =  E / (px × fps)      自動得到,是結果不是輸入
 ```
 
-**兩個是同一個數字。** 用實測值算,這個設計只賺 2%,不值得做;
-引擎若有 240,就賺 33%。
+代回去得到 `px <= (L + Ek(1 - 1/C)) / (k × fps)`,跟「最佳 f」公式給的界一模一樣。
+**貪婪排程器是最佳的,而且完全不需要知道 `E`。**
 
-那次量測是冷呼叫,而 `FUN_c062fee8` 把電源域、時脈、IRQ 的拉起做在 encode
-**裡面** —— 錄影迴圈只付一次,冷呼叫每次都付 —— 所以真實穩態速率很可能更高。
-**沒有人分離過。在量出來之前,這個設計的尺寸有 1.3 倍的不確定。**
+**這把餘裕問題整個消掉了。** 這份文件的上一版擔心「最佳解讓引擎跑 100%、沒有
+時序餘裕」,因此建議退到 `f = 1/2` 換點空間。那個擔心是**把 `f` 當成固定值的
+副作用**:duty cycle 固定時,「這一幀要壓」是一個**死線**,錯過就是失敗。
+貪婪排程沒有死線 —— 引擎忙不是錯誤,只是那一幀原樣寫出去。
+**引擎 100% 是正常工作點,不是危險。**
 
-### 決定輸出尺寸的是什麼
+它還吸收掉別的方法吸收不了的變異:
 
-鏈路裡一旦有壓縮,它就不再是限制 —— 2.3:1 之後要 31.98 Mpix @29.97 才碰得到
-625 MB/s。**唯一的關卡是引擎**,輸出尺寸直接由它的穩態速率決定:
+- 壓縮時間隨畫面內容變動;固定 `f` 必須照最壞情況假設
+- 引擎可能降頻,或在某些幀上跟別人搶匯流排
+- `E` 沒量過,而排程器不在乎
 
-| 引擎 | 29.97 下的輸出 | 寫出 |
-|---|---|---|
-| 300 Mpix/s — 推論天花板 `[I]` | **3875×2583**(10.0 Mpix) | 196 MB/s |
-| 265 Mpix/s — 損益平衡 | 3644×2429 | 174 MB/s |
-| 240 Mpix/s | 3466×2310 | 156 MB/s |
-| 169.7 Mpix/s — 實測,冷呼叫 `[C]` | 2915×1943(5.7 Mpix) | 111 MB/s |
+代價是輸出大小逐幀不同、哪些幀被壓事先不知道。對「自己的串流 + 索引」來說那不算
+什麼;對 CinemaDNG 來說每個檔案本來就各自宣告 `Compression`。
 
-**265 Mpix/s 是分水嶺。** 低於它,壓縮不如用已證明的 376 MB/s 直接無壓縮寫
-3542×2361;高於它,壓縮在尺寸與餘裕上都贏。
+### 為什麼是隔幀,以及「不必是合法 DNG」鬆開了什麼
 
-`6000×4000 ÷ 1.5625 = 3840×2560` —— 感光元件有效區走出廠的 RWZM 比例、
-縮放器一個字都不用動 —— 剛好落在推論天花板底下一點。
+**TIFF 的 `Compression` 是每個 IFD 一個**,所以同一個檔案不能一半壓一半不壓。
+隔**幀**就沒這個問題:CinemaDNG 是一串獨立檔案,各自宣告 `Compression`,
+幀 1 寫 7、幀 2 寫 1,兩個都合法。
+
+> **假設,未驗證:**讀取端能接受混用的序列。**這個不用相機就能測** ——
+> 主機端做一段交錯的丟進 Resolve。
+
+如果卡上的格式**不必**是合法 DNG(自己的串流,主機端轉檔),鬆開三件事,
+而且**沒有一件是頻寬**:
+
+1. **可以大塊順序寫入。** 比另外兩件值錢:見上面的區塊大小數字。SD 卡在
+   10 MB 區塊比 50 MB 慢 30%,而一格是 24.5 MB。
+2. **省掉每幀的 DNG header** —— 實測 79,240 B(open gate)與 79,960 B
+   (UHD 8bit),約 0.9%,即 2.4 MB/s。零頭,但白送。
+3. **上面那個混合序列的假設不再重要**,因為轉檔器可以產出讀取端要的任何東西。
+
+代價是一個主機端轉檔器 —— 而混合序列的風險**反正可能也要寫**。
+
+### 相機今天實際在錄什麼(從卡上的檔案量的)
+
+拿來校準上面所有數字。從真實 take 的 DNG header 讀出,`每格位元組 × 29.97`:
+
+```
+FHD  1936x1090  12bit    3,244,544 B     97.2 MB/s
+UHD  3856x2170   8bit    8,447,488 B    253.2 MB/s
+UHD  3856x2170  12bit   12,630,528 B    378.5 MB/s
+open gate 3032x2012 12b  9,229,824 B    276.6 MB/s
+```
+
+兩個推論:
+
+- **FHD 12bit 要 97.2 MB/s,而實測那張卡只有 94。** 它錄得下去只是因為 RAM
+  緩衝墊掉了 3% 的差額。**這才是**錄影中 SD 寫入最壞 692 ms、優先權 28 的
+  writer 搶不到卡鎖、陀螺樣本被擠掉的真正解釋:錄 FHD 時那張卡是滿載的。
+- **卡上每一段 open gate 都停在 3~4 秒。** 276.6 對上 94 MB/s,緩衝以
+  182 MB/s 的赤字被吃掉;由片長反推緩衝約 600~750 MB。**不是 bug,是卡。**
 
 ### 引擎的 API,來自靜態拍照路徑
 
-靜態路徑本來就把 6064×4042 的 Bayer 壓成無損 DNG。**它就是參考實作**,
+靜態拍照路徑已經會把 6064×4042 的 Bayer 壓成無損 DNG,那就是參考實作。
 HAL 是 `src/hal/RawCD/src/XC_HalLjpeg.cpp`:
 
 ```
-FUN_c05a6890(9 字)  -> FUN_c062f5a8    啟動編碼
-FUN_c05a6920(5 字)  -> FUN_c062f6f8    等完成
-FUN_c05a6990(x, 1)  -> FUN_c062fa48    取結果
-FUN_c03d9668(addr)                     虛擬 → 匯流排位址轉換
+FUN_c05a6890(params9)  -> FUN_c062f5a8    開始編碼
+FUN_c05a6920(params5)  -> FUN_c062f6f8    等完成
+FUN_c05a6990(x, 1)     -> FUN_c062fa48    取結果
+FUN_c03d9668(addr)                        虛擬 -> 匯流排位址轉換
 ```
 
-編碼的九個字,從 `blk_c03.c` 裡 `StillCr...` 斷言(`0xC037E7AC`)附近的呼叫端讀出:
+編碼吃的九個字,從 `blk_c03.c` 中 `0xC037E7AC` 附近的呼叫端讀出:
 
 ```
-[0] 寬          [1] 高           [2] 來源緩衝(經轉換)
+[0] 寬          [1] 高           [2] 來源緩衝(已轉換)
 [3] 0x100       [4] 0x100        [5] 目的緩衝
 [6] FUN_c0398b00() 的回傳        [7] *(obj+0x0C)
-[8] 模式位元組,低位清零
+[8] 模式位元組,低位元清掉
 ```
 
-等待呼叫吃五個字:`{寬, 高, 緩衝, 0x100, 0x100}`。`FUN_c062f6f8` 就是
-`timeout = pixels / 32000` 所在的地方 —— **那是有 5.3 倍餘裕的看門狗,不是吞吐**。
-區塊的 `+0xF8` 是產出位元組數,`+0x3FC` 是 busy/clear。
+等待呼叫吃五個:`{w, h, buf, 0x100, 0x100}`。`FUN_c062f6f8` 裡的
+`timeout = pixels / 32000` 是**看門狗,不是吞吐量**。
+`+0xF8` 是產出位元組數,`+0x3FC` 是忙碌/清除。
 
 ### 已確立
 
-- **錄影時引擎是閒置的。** 錄影走 DSP `0x301B` 與 RFC 讀出 `0x300C`,不衝突。`[C]`
-- **可以冷啟動獨立呼叫** —— 包裝函式自己在 encode 裡把 power domain 5、時脈、
-  IRQ 0x29 帶起來。`[C]`
-- **壓縮比約 2.3:1**(這顆感光元件的 Bayer)。`[C]`
-- **單引擎、不能並行**,而且時脈不能提高 —— 與 sensor readout 共用成像域,
-  沒有獨立分頻器。`[C]`
-- **mode 3 是原廠的 6064×4042 1×1 @29.97 讀出。** 來源不需要發明。`[C]`
-- **鏈路是 Gen1。** BOS 的裝置能力是 SUPERSPEED_USB、`wSpeedsSupported = 0x000E`
-  (FS|HS|SS),描述元區裡沒有任何 SUPERSPEED_PLUS。`[C]`
+- **SSD 寫 ~390 MB/s,卡在匯流排。** 兩個外接盒 363 與 390;讀寫相當。`[M]`
+- **SD 寫 94、讀 218。** 兩次開機重現,誤差 <1%。`[M]`
+- **寫入區塊大小有影響** —— SD 從 10 到 50 MB 提升 48%,還沒平。`[M]`
+- **8bit CinemaDNG 帶 `LinearizationTable`**,256 筆,分段 log。
+  **companding 是已解決的問題,而且在出廠韌體裡。**`[M]`
+- **兩個媒體互相獨立** —— 不同驅動、不同鎖。`[C]`
+- **錄影期間引擎是閒的。** 錄影用 `0x301B` 的 DSP 與 `0x300C` 的 RFC 讀出,
+  沒有爭用要設計。`[C]`
+- **壓縮比約 2.3:1**,在這顆感光元件的 12bit Bayer 上。`[C]`
+- **只有一個引擎、沒有平行度**,時脈不能拉高。`[C]`
+- **mode 3 是原廠的 6064×4042 1×1 @29.97 讀出。**`[C]`
+- **鏈路是 Gen1。** BOS 是 SUPERSPEED_USB、`wSpeedsSupported = 0x000E`,
+  描述元區完全沒有 SUPERSPEED_PLUS。`[C]`
 
 ### 未確立
 
-按「改變設計的程度」排序。
+按對設計的影響排序。**引擎已經不是第一名了** —— 選了 8bit 把它降級了。
 
-1. **引擎的穩態速率。** 上面整張表都靠它,而唯一的量測是**一次冷呼叫、一個尺寸**:
-   6064×4042 花 144,431 µs = 169.7 Mpix/s。`FUN_c062fee8` 把電源/時脈/IRQ 的拉起
-   做在 **encode 裡面**,所以冷呼叫每幀都付,錄影迴圈只付一次。
-   **固定開銷與每像素速率從來沒有分離過。量兩三個尺寸再擬合。**
-   探針現成:`raw/ljtime.S`,hook `0xC037E7AC`,碼表 `FUN_c002b6e0`(1 MHz)。
-2. **RWZM 的輸出能不能餵進引擎。** 引擎吃 CFA/Bayer —— 靜態路徑證明了。
-   但 RWZM 寫出來的還是不是 Bayer、擺放與對齊引擎收不收,**沒測過**。
-3. **DNG 封裝。** 改 Compression tag 不會讓像素被壓縮,編碼器的輸出要以正確的
-   strip 結構寫進 DNG。每幀單 stripe,結構單純。`[C]`
-4. **鏈路的真實持續吞吐。** 376 MB/s 由出貨模式證明,625 是理論值。
-   壓縮若成立這題就不重要 —— 196 MB/s 兩邊都有一倍餘裕。
+1. **SD 卡能不能到 160 MB/s。** 整個鏈路預算壓在這上面。
+   買一張卡、跑 `tools/storage-benchmark/` 就收掉。
+2. **大區塊對 SD 卡有沒有幫助。** 50 MB 以上沒量過,而且曲線還在往上。
+   同一張卡免費就能知道。
+3. **兩個媒體會不會相加。** 是分開量的;同時寫要共用 DRAM 與 CPU。
+4. **引擎的持續速率。** 仍然只有一次冷呼叫:6064×4042 花 144,431 µs =
+   169.7 Mpix/s,而且電源/時脈/IRQ 的啟動在 encode **裡面**。
+   探針寫好了但從沒跑過:`raw/ljtime_deploy.py`,掛 `0xC037E7AC`。
+   **在 8bit 下這只把輸出從 94% 移到 99%。**
+5. **8bit companded 資料的壓縮比。** 2.3:1 是 12bit 的數字。
+   上面算過整個範圍,一樣只值 5%。
+6. **RWZM 的輸出能不能餵給引擎。** 只有在輸出要縮到小於感光元件時才重要,
+   而 8bit 已經不需要縮了。
+7. **讀取端能不能吃 `Compression` 混用的序列。** 主機端就能測,不用相機。
 
 ### 不要做的
 
-- **不要冷呼叫引擎,要 hook 它。** 連打十幾次冷呼叫把靜態壓縮弄壞到重開機 ——
-  卡上檔案從 26–28 MB(有壓縮)變成 51 MB(未壓縮),重開機後回到 36 MB。
-- **不要指望壓縮能救更大的畫格。** 引擎比鏈路慢,所以壓縮後的天花板(10 Mpix)
-  **低於**無壓縮的理論天花板(13.9 Mpix)。壓縮買到的是餘裕與可靠度,
-  不是 10 Mpix 以上的解析度。
+- **不要冷呼叫引擎,要用 hook。** 十幾次冷呼叫把靜態壓縮弄壞到重開機才復原 ——
+  卡上檔案大小從 26~28 MB(壓過)變成 51 MB(沒壓),重開後 36 MB。
+- **不要買更快的 SSD。** 瓶頸是匯流排。真要花錢,先換**外接盒**,更先換**記憶卡**。
+- **不要照 12bit 規劃。** L = 550 時它最多給 `5181×3453`,比 8bit 的
+  `6002×4000` 還差,而且它是那個「答案取決於沒量過的引擎速率」的版本。
 
 ### 相關
 
-- `projects/open-gate.md` —— 6K 來源與畫布
+- `projects/open-gate.md` —— 6K 來源與畫布的工作
 - `projects/raw-sup.md` —— 引擎、它的量測與路線圖
-- `notes/RAW_COMPRESSION_RESEARCH.md` —— 分離固定開銷與速率的方法
+- `tools/storage-benchmark/` —— 收掉上面第 1、2 項的那張卡
+- `notes/RAW_COMPRESSION_RESEARCH.md` —— 把固定開銷與速率分開的方法

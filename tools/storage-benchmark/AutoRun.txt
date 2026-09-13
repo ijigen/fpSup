@@ -1,0 +1,88 @@
+####################################################################
+#  SIGMA fp -- storage write-speed test                     v1
+#
+#  Put this file at the ROOT of an SD card and switch the camera on.
+#  It measures how fast your SD card, and optionally an external SSD,
+#  can be written and read, and saves the numbers to FPSPEED.TXT on
+#  the same SD card.
+#
+#  WHY: CinemaDNG recording is limited by write speed long before it
+#  is limited by anything else.  FHD 12-bit is 97 MB/s; UHD 8-bit is
+#  253 MB/s.  A card that cannot sustain that stops the take.  These
+#  numbers are the camera's own, measured through its own driver, so
+#  they mean more than a card reader benchmark does.
+#
+#  WHAT IT RUNS: only commands that already exist in the camera's
+#  firmware (`sdcard test3`, `version`, `ctrl mediaOut`).  It does
+#  NOT write to memory, NOT patch anything, NOT touch flash, and is
+#  NOT tied to a firmware version.  Delete this file and the camera
+#  is exactly as it was.
+#
+#  IT WILL: create \test.txt (up to 200 MB) on each volume it tests,
+#           and FPSPEED.TXT on the SD card.  Delete both afterwards.
+#  IT NEEDS: ~250 MB free on each volume tested.
+#  DO NOT: press record while this card is in.  The benchmark borrows
+#          the buffer the movie recorder uses.
+#
+#  See README.txt next to this file.
+####################################################################
+display monitor 0 1
+display osd 1 0x00000000
+display text fp storage test
+display osd 1
+sdcard slot sd0
+ctrl mediaOut \FPSPEED.TXT
+version
+model
+sdcard slot
+sdcard size sd0
+#
+# ---------- SD card ----------
+# Block size matters: this camera writes a whole DNG per frame, so
+# the block sizes below bracket one frame (FHD 3 MB .. open gate 9 MB)
+# up to the large sequential writes a custom writer could use.
+display text testing SD 1 of 4
+display osd 1
+sdcard test3 sd0 10000000 3
+display text testing SD 2 of 4
+display osd 1
+sdcard test3 sd0 50000000 3
+display text testing SD 3 of 4
+display osd 1
+sdcard test3 sd0 100000000 3
+display text testing SD 4 of 4
+display osd 1
+sdcard test3 sd0 200000000 2
+#
+# ---------- external SSD (optional) ----------
+# If you have no SSD, ignore this part -- the ext lines will simply
+# report an error and the run still finishes.
+display text PLUG SSD NOW 20s
+display osd 1
+ctrl sleep 5000
+display text PLUG SSD 15s
+display osd 1
+ctrl sleep 5000
+display text PLUG SSD 10s
+display osd 1
+ctrl sleep 5000
+display text PLUG SSD 5s
+display osd 1
+ctrl sleep 5000
+sdcard mnt ext
+sdcard size ext
+display text testing SSD 1 of 4
+display osd 1
+sdcard test3 ext 10000000 3
+display text testing SSD 2 of 4
+display osd 1
+sdcard test3 ext 50000000 3
+display text testing SSD 3 of 4
+display osd 1
+sdcard test3 ext 100000000 3
+display text testing SSD 4 of 4
+display osd 1
+sdcard test3 ext 200000000 2
+ctrl mediaOut off
+display text DONE - FPSPEED.TXT
+display osd 1
