@@ -53,6 +53,24 @@ Verified by unpacking A001_036: header 3024×2010, crop 3008×2000 at (8, 5),
 `StripByteCounts` 9,117,360 = 3024 × 2010 × 1.5, sharp edge to edge, nothing
 clipped.
 
+### Stored matrix versus default crop
+
+The recording is a **3024×2010 stored RAW matrix**, and the hook deliberately writes
+`DefaultCropSize = 3008×2000` with `DefaultCropOrigin = (8, 5)`. The difference is a
+centred margin — 8 pixels each side, 5 rows top and bottom — and `ActiveArea` still
+covers the whole matrix.
+
+Most DNG applications honour `DefaultCropSize`, so they will report and export
+3008×2000 even though `ImageWidth`, `ImageLength`, the strip and the allocation are
+all 3024×2010. **That is a presentation crop the hook writes on purpose, not evidence
+that the producer only filled 3008×2000.** The margin is what the camera's own three
+recording profiles do — +16 wide and +10 high from a 16-aligned recorded width — and
+following it is what made in-camera playback work.
+
+A full-matrix variant would set the crop pair to 3024×2010 with the origin at zero,
+and then the edge pixels are worth re-testing: they are inside the readout but have
+never been looked at, because nothing has displayed them.
+
 ### Three separate problems
 
 Each needed its own fix, and each was mistaken for the others at some point.
@@ -200,6 +218,21 @@ DNG 裁切 3008 × 2000 @ (8, 5) · strip 9,117,360 bytes · 273.2 MB/s
 
 解檔 A001_036 驗證:標頭 3024×2010、裁切 3008×2000 @ (8, 5)、
 `StripByteCounts` 9,117,360 = 3024 × 2010 × 1.5,整幅清晰、邊到邊、無剪切。
+
+### 儲存矩陣與預設裁切
+
+錄下來的是 **3024×2010 的 RAW 儲存矩陣**,而 hook 刻意寫入
+`DefaultCropSize = 3008×2000`、`DefaultCropOrigin = (8, 5)`。差額是置中的邊界 ——
+左右各 8 pixels、上下各 5 rows —— `ActiveArea` 仍然涵蓋整個矩陣。
+
+多數 DNG 軟體會遵循 `DefaultCropSize`,所以會顯示與匯出 3008×2000,即使
+`ImageWidth`、`ImageLength`、strip 與配置全都是 3024×2010。
+**那是 hook 主動寫進去的顯示裁切,不是 producer 只填了 3008×2000 的證據。**
+那圈邊界就是相機自己三個錄影 profile 的做法 —— 從 16 對齊的記錄寬度裁 +16 寬 / +10 高
+—— 而遵守它正是機內回放能正常的原因。
+
+若要做完整矩陣的版本,就把 crop pair 設成 3024×2010、原點歸零;
+那時邊緣 pixels 值得重測 —— 它們在讀出範圍內,但從來沒有人看過,因為沒有東西顯示過它們。
 
 ### 三個各自獨立的問題
 
