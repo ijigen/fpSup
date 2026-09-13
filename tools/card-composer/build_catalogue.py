@@ -28,7 +28,7 @@ import base64, json, pathlib, struct, sys, zipfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent
-OG = ROOT / 'codex' / 'opengate'
+OG = ROOT / 'projects' / 'open-gate' / 'build'
 GYRO = ROOT / 'fpSup' / 'gyro'
 
 PARK_AT, F_WRITE_AT = 0xC072EFB4, 0xC03660E8
