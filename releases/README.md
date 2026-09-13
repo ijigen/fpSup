@@ -44,3 +44,7 @@ MANIFEST.txt  可選,雜湊與建置紀錄
 建好卡片,放進 `fpsup-<product>-v<版本>/`,跑一次
 `tools/card-composer/build_catalogue.py`。合併器會自己挑到新的那個 ——
 不需要改程式。
+
+---
+
+**fpSup** · [Ko-fi](https://ko-fi.com/fpsup) · [Discord](https://discord.gg/XeFK5zNZpT)

@@ -12,6 +12,12 @@ WHAT IT IS
      3024 x 2010 · 3:2 · 12-bit
      DNG cropped to 3008 x 2000 at (8, 5)
 
+  **This is a native readout, not a downscale.** The sensor is put
+  into mode 98 or 117 — its own 2x2-binned 3:2 mode, 3032 x 2012 —
+  and the camera records that. It is not 6064 x 4042 read out and
+  resampled to 3K, which is a different thing that costs 24.98 ms
+  of rolling shutter where this costs 12.4.
+
   **Firmware Ver.5.02 only.** RAM only: delete AutoRun.txt, pull the
   battery, and the camera is stock. Nothing is written to flash.
 

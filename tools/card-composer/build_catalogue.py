@@ -129,8 +129,10 @@ PRODUCTS = {
                      desc='Writes .gcsv and .json into the clip folder while '
                           'recording. The released card, unmodified.'),
     'og3k':     dict(id='og3k', name='OG3K open gate — 3:2',
-                     desc='3024×2010 readout, DNG cropped to 3008×2000, eight frame '
-                          'rates. Carries no entry section — it is all static writes.'),
+                     desc='3024×2010, DNG cropped to 3008×2000, eight frame rates. '
+                          'Sensor modes 98/117 — a native 2×2-binned 3:2 readout, '
+                          'not 6K resampled down. Carries no entry section: it is '
+                          'all static writes.'),
 }
 # usbshell first: picked() walks this order, and the development card puts the
 # worker at record 1, which is what makes the merge come out byte-identical to it.

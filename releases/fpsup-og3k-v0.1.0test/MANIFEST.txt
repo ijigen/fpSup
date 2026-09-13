@@ -2,10 +2,10 @@ SIGMA fp — OG3K 3:2 open gate (release)
 banner: fpSup-OG3K-v0.1.0t!
 
 AutoRun.txt  32,772B  sha256=a24b0c15b259a366d0dd2a0abad4fd9fbc116162c2a75cb165802b68a339b533
-VSHL.BIN     32,768B  sha256=822a0ba02723dc362209ddfeabfe92a4590d3641e89ab5f9fabd0c24a1b89ab1
+VSHL.BIN     32,768B  sha256=4256ea4a371d542cd21a6ddf3de3b4e4019b3e074753ad3c0be492473d4fdc14
 reference_firmware sha256=92a8ee993f6c3d66c251e88d45a2ccd5135c6cf7342717784321c2ed506e2fb4
 
-AutoRun 指令 135 條(上限 648);OG3K 的 541 筆寫入全在 VSHL.BIN 裡,
+AutoRun 指令 135 條(上限 648);OG3K 的 554 筆寫入全在 VSHL.BIN 裡,
 所以未來加格率/模式不會增加開機指令數。
 
 卡上放:AutoRun.txt 與 VSHL.BIN(根目錄),沒有別的。
