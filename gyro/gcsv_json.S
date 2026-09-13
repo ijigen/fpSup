@@ -612,6 +612,16 @@ j_open:
     beq     9f
     mov     r5, r0
 
+    /* The same disk the gcsv went to.  clip_path already gave us the same
+     * folder; getting the volume from F_VOL again would send the json to the
+     * SSD while the gcsv sat on the SD, and a log without its profile is half
+     * a take. */
+    movw    ip, #:lower16:G_FALLBACK
+    movt    ip, #:upper16:G_FALLBACK
+    ldr     ip, [ip]
+    cmp     ip, #2
+    moveq   r1, #VOL_SD
+    beq     1f
     movw    ip, #:lower16:F_MGR
     movt    ip, #:upper16:F_MGR
     blx     ip
@@ -620,7 +630,7 @@ j_open:
     movt    ip, #:upper16:F_VOL
     blx     ip
     mov     r1, r0
-    mov     r0, r4
+1:  mov     r0, r4
     movw    ip, #:lower16:F_CTOR
     movt    ip, #:upper16:F_CTOR
     blx     ip

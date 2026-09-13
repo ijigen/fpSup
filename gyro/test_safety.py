@@ -11,6 +11,8 @@ from __future__ import annotations
 import itertools
 import struct
 import sys
+import pathlib
+import re
 import unittest
 from pathlib import Path
 
@@ -413,28 +415,166 @@ class ImageLayoutTests(unittest.TestCase):
         file_object_at = 0x400
         self.assertEqual(queue_at + metadata + jobs, file_object_at)
 
+    # These check the images load.sh places over USB, which start at load.py's
+    # CAVE_BASE.  They used to spell that base as 0xC072E064 -- which is
+    # build_base_card.py's ENTRY_AT, where the VSHL *card* image starts, 512
+    # bytes higher.  Two different images, two different bases, one constant
+    # copied between them: the tests went red the week logger.S grew past the
+    # margin that 512-byte error had eaten, and stayed red reading like a real
+    # overrun.  Both bases are read from their own build script now.
+
+    def _cave_base(self):
+        source = (ROOT / "fp_usb_shell" / "load.py").read_text()
+        m = re.search(r"^CAVE_BASE = (0x[0-9A-Fa-f]+)", source, re.M)
+        self.assertIsNotNone(m, "CAVE_BASE is gone from load.py")
+        return int(m.group(1), 0)
+
     def test_logger_ends_before_parking_stub(self):
         logger = assemble(HERE / "logger.S")
         park = assemble(ROOT / "fp_usb_shell" / "templates" / "park.S")
-        load_at = 0xC072E064
         park_at = 0xC072EFB4
         cave_end = 0xC072F000
-        self.assertLessEqual(load_at + len(logger), park_at)
+        self.assertLessEqual(self._cave_base() + len(logger), park_at)
         self.assertLessEqual(park_at + len(park), cave_end)
 
     def test_stream_logger_ends_before_parking_stub(self):
         logger = assemble(HERE / "logger_stream.S")
-        load_at = 0xC072E064
         conservative_end = 0xC072EF00
         park_at = 0xC072EFB4
-        self.assertLessEqual(load_at + len(logger), conservative_end)
-        self.assertLessEqual(load_at + len(logger), park_at)
+        self.assertLessEqual(self._cave_base() + len(logger), conservative_end)
+        self.assertLessEqual(self._cave_base() + len(logger), park_at)
+
+    def test_the_autorun_arms_the_loader_only_after_writing_it(self):
+        """The order the AutoRun writes things in, which has no second chance.
+
+        The loader is spelled out one `mem set` per word and then called by
+        pointing the `echo` handler at it and saying `echo`.  Two orderings
+        brick the boot with nothing printed: arming before the last word is
+        written calls a half-written routine, and any `mem set` after `echo`
+        races the loader, which by then is placing sections and may already
+        have branched into what it placed.
+
+        This replaced a bootstrap in the gyro callback, where the ordering was
+        genuinely unenforceable -- the callback fired whenever it liked, which
+        is why that path needed a run-once word and an early restore.  Called
+        from `echo` the order is the AutoRun's own, so it can be checked here.
+        """
+        import subprocess, tempfile, re as _re
+        shell = ROOT / "fp_usb_shell"
+        with tempfile.TemporaryDirectory() as d:
+            out = pathlib.Path(d) / "AutoRun.txt"
+            r = subprocess.run([sys.executable, "build_autorun.py", "--loader",
+                                "--out", str(out)],
+                               cwd=shell, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            cmds = [l.strip() for l in out.read_text().splitlines()
+                    if l.strip() and not l.startswith("#")]
+
+        src = (shell / "build_autorun.py").read_text()
+        def const(name):
+            m = _re.search(r"^%s\s*= (0x[0-9A-Fa-f]+)" % name, src, _re.M)
+            self.assertIsNotNone(m, "%s is gone from build_autorun.py" % name)
+            return int(m.group(1), 0)
+        slot, orig, hook = const("ECHO_SLOT"), const("ECHO_ORIG"), const("HOOK")
+
+        sets = [(i, int(m.group(1), 16), int(m.group(2), 16))
+                for i, l in enumerate(cmds)
+                for m in [_re.match(r"mem set (0x[0-9A-Fa-f]+) (0x[0-9A-Fa-f]+)$", l)]
+                if m]
+        echoes = [i for i, l in enumerate(cmds) if l == "echo"]
+        self.assertEqual(len(echoes), 1, "the loader is called exactly once")
+        e = echoes[0]
+
+        arm = [(i, v) for i, a, v in sets if a == slot and v != orig]
+        self.assertEqual(len(arm), 1, "the handler is armed exactly once")
+        self.assertLess(arm[0][0], e, "armed before `echo`")
+
+        boot = arm[0][1]
+        body = [i for i, a, v in sets if boot <= a < boot + 0x400]
+        self.assertTrue(body, "no loader words written at the armed address")
+        self.assertLess(max(body), arm[0][0],
+                        "a loader word is written after the handler is armed")
+
+        after = [(a, v) for i, a, v in sets if i > e]
+        self.assertTrue(all(a == slot for a, v in after),
+                        "a `mem set` after `echo` races the loader: %r" % (after,))
+        self.assertTrue(all(v == orig for a, v in after), "restores put the shell back")
+        self.assertGreaterEqual(len(after), 3, "`mem set` drops; restore more than once")
+
+        self.assertFalse([1 for i, a, v in sets if a == hook],
+                         "the shell writes the gyro callback again -- it is the "
+                         "logger's alone since the bootstrap moved to `echo`")
+
+    def test_the_pool_blob_offset_agrees_everywhere_it_is_written(self):
+        """0x44000 is written down twice and assembly cannot see across files.
+
+        ring_task_deploy.py tells stage2 where to put the writer blob;
+        gsup_entry.S, forty bytes in the cave, adds the same offset to the pool
+        base to find it again.  If one moves, gsup_entry reads a word out of
+        whatever is at the old offset instead of the routine table -- and its
+        only guard is that the word is exactly zero, so anything else becomes
+        a blx into garbage.
+        """
+        deploy = (HERE / "ring_task_deploy.py").read_text()
+        entry = (HERE / "gsup_entry.S").read_text()
+        m = re.search(r"^CODE_POOL_OFF = (0x[0-9A-Fa-f]+)", deploy, re.M)
+        n = re.search(r"^\.equ CODE_POOL_OFF,\s*(0x[0-9A-Fa-f]+)", entry, re.M)
+        self.assertIsNotNone(m, "CODE_POOL_OFF is gone from ring_task_deploy.py")
+        self.assertIsNotNone(n, "CODE_POOL_OFF is gone from gsup_entry.S")
+        self.assertEqual(int(m.group(1), 0), int(n.group(1), 0))
+
+    def test_the_pool_blob_clears_the_loader_read_window(self):
+        """stage2 runs from the loader's read buffer and reads the remaining
+        sections out of it, so a pool section landing there overwrites itself
+        mid-copy -- a boot freeze with nothing printed.  build_base_card.check
+        enforces this; that it is enforced at all is what is asserted here."""
+        import build_base_card
+        lo, hi = build_base_card.loader_window()
+        deploy = (HERE / "ring_task_deploy.py").read_text()
+        blob = int(re.search(r"^CODE_POOL_OFF = (0x[0-9A-Fa-f]+)",
+                             deploy, re.M).group(1), 0)
+        self.assertGreaterEqual(blob, hi)
+
+        secs = build_base_card.sections("gcsv")
+        pool = [(a, a + len(b), w) for a, b, w in secs if a < 0x40000000]
+        self.assertTrue(pool, "no pool-relative section: this test has nothing "
+                              "left to guard and should be re-examined")
+        for a, b, w in pool:
+            self.assertFalse(a < hi and lo < b,
+                             "%s at pool+0x%X..0x%X is in the window" % (w, a, b))
+
+        moved = [(lo if a < 0x40000000 else a, b, w) for a, b, w in secs]
+        with self.assertRaises(SystemExit):
+            build_base_card.check(moved)
+
+    def test_the_card_image_starts_above_the_loader(self):
+        """ENTRY_AT is not CAVE_BASE -- what the two tests above got wrong.
+
+        The gap is what the loader needs to not be overwritten by the image it
+        just placed.  Asserted as "big enough", not as its present value: 0x200
+        is a round number someone chose with margin, and the loader assembles
+        to 396 bytes at its largest, so pinning the constant would fail a
+        legitimate tightening of it.  What must never happen is the image
+        starting inside the running loader.
+        """
+        card = (HERE / "build_base_card.py").read_text()
+        m = re.search(r"^ENTRY_AT = (0x[0-9A-Fa-f]+)", card, re.M)
+        self.assertIsNotNone(m)
+        entry_at = int(m.group(1), 0)
+        loader = assemble(ROOT / "fp_usb_shell" / "templates" / "loader.S",
+                          ("LOADER_BASE=0x%X" % self._cave_base(),))
+        self.assertGreaterEqual(entry_at - self._cave_base(), len(loader))
 
     def test_stream_probe_logger_ends_before_parking_stub(self):
         logger = assemble(HERE / "logger_stream_probe.S")
         load_at = 0xC072E064
         park_at = 0xC072EFB4
         self.assertLessEqual(load_at + len(logger), park_at)
+
+    def test_the_shipping_build_guards_the_park_stub_itself(self):
+        source = (HERE / "build_base_card.py").read_text()
+        self.assertIn("PARK_AT = 0xC072EFB4", source)
+        self.assertIn("if hi > PARK_AT:", source)
 
     def test_stream_pgen_fits_the_loader_window(self):
         defines = ("FPGYRO_NATIVE_LIFECYCLE", "FPGYRO_GCSV_STREAM")
@@ -461,42 +601,52 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertLessEqual(stream_state + stream_state_last_word + 4, header)
         self.assertLessEqual(text + flush + max_line_slop, next_region)
 
-    def test_streaming_three_32k_slots_do_not_overlap_pool_users(self):
-        state_buffer_a = 0x1000
-        state_buffer_b = 0x30000
-        state_buffer_c = 0x38000
-        buffer_size = 0x8000
-        profile = 0x9000
-        profile_end = 0x19000
-        text = 0x1A000
-        text_live_end = text + 0x8000 + 64
-        diagnostics = 0x40000
-        diagnostics_size = 0x24
-        read_buffer = 0x5B000
+    def test_the_streaming_slots_are_read_from_the_source_not_recited(self):
+        """The slot layout, taken from gcsvgen.S rather than copied here.
 
-        self.assertEqual(state_buffer_a + buffer_size, profile)
-        self.assertLessEqual(profile_end, text)
-        self.assertLessEqual(text_live_end, state_buffer_b)
-        self.assertEqual(state_buffer_b + buffer_size, state_buffer_c)
-        self.assertEqual(state_buffer_c + buffer_size, diagnostics)
-        self.assertLessEqual(diagnostics + diagnostics_size, read_buffer)
+        This test used to spell the geometry out as its own arithmetic --
+        0x1000 / 0x30000 / 0x38000, 32 KiB each -- and check that those numbers
+        agreed with each other.  They did, for two weeks after the source had
+        moved to 0x81000 / 0xA1000 / 0xC1000 at 128 KiB, because nothing tied
+        the two together: the test was consistent with itself and describing a
+        layout that no longer existed.  Reading the values out of the source is
+        the only version of this test that cannot drift.
 
-        gyro_capacity = 0x77E0
-        seconds_per_slot = (gyro_capacity // 8) / 2500
-        self.assertEqual(gyro_capacity // 8, 0xEFC)
-        self.assertEqual(0x800 // 12, 170)
-        self.assertGreater(seconds_per_slot * 2, 3.0)
-        self.assertGreaterEqual(0x800 // 12, int(seconds_per_slot * 47) * 2)
-
-        logger = (HERE / "logger.S").read_text()
+        The overlap and bounds checks are gcsvgen.S's own .error directives now
+        (a bad layout fails to assemble, which is stronger than failing here),
+        so what is left for this test is that those guards are present and that
+        the capacities still cover a slot's worth of time.
+        """
         gcsv = (HERE / "gcsvgen.S").read_text()
-        for source in (logger, gcsv):
-            self.assertIn(".equ O_BUF_B,         0x30000", source)
-            self.assertIn(".equ O_BUF_C,         0x38000", source)
-            self.assertIn(".equ BUF_SIZE,        0x00008000", source)
-            self.assertIn(".equ GYRO_CAP,        0x77E0", source)
-        self.assertIn(".equ GYRO_SAMPLE_CAP, 0x00000EFC", gcsv)
-        self.assertIn(".equ ACCEL_REC_CAP,   170", gcsv)
+
+        def equ(name):
+            m = re.search(r"^\.equ %s,\s*(0x[0-9A-Fa-f]+|\d+)" % name,
+                          gcsv, re.M)
+            self.assertIsNotNone(m, "%s is gone from gcsvgen.S" % name)
+            return int(m.group(1), 0)
+
+        buf_size = equ("BUF_SIZE")
+        gyro_cap = equ("GYRO_CAP")
+        sample_cap = equ("GYRO_SAMPLE_CAP")
+        accel_zone = equ("ACCEL_ZONE")
+        accel_base = equ("ACCEL_BASE")
+        accel_cap = equ("ACCEL_REC_CAP")
+        accel_rec = equ("ACCEL_REC")
+
+        self.assertEqual(gyro_cap // 8, sample_cap)
+        self.assertEqual(accel_base + accel_zone, buf_size)
+        self.assertLessEqual(accel_cap * accel_rec, accel_zone)
+
+        seconds_per_slot = sample_cap / 2500.0
+        self.assertGreater(seconds_per_slot, 3.0)
+        self.assertGreaterEqual(accel_cap, seconds_per_slot * 100)
+
+        for guard in (".if O_BUF_A < 0x81000",
+                      ".if (O_BUF_C + BUF_SIZE) > 0xF8800",
+                      ".if (O_BUF_A + BUF_SIZE) > O_BUF_B",
+                      ".if (O_BUF_B + BUF_SIZE) > O_BUF_C",
+                      ".if (ACCEL_BASE + ACCEL_ZONE) != BUF_SIZE"):
+            self.assertIn(guard, gcsv)
 
     def test_streaming_source_uses_three_slot_ordered_queue(self):
         source = (HERE / "logger.S").read_text()
