@@ -110,7 +110,7 @@ NATIVE ISO — FIXED IN THIS BUILD
 THIS IS A TEST BUILD
 ----------------------------------------------------------------
 
-  v0.1.0test. The 29.97 path (OG3K30) is the one that has been shot
+  v0.1.1test. The 29.97 path (OG3K30) is the one that has been shot
   and verified frame by frame; the other seven share its machinery
   but have had far less time on a camera. Treat a take as disposable
   until you have checked it.

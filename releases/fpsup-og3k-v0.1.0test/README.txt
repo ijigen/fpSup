@@ -3,6 +3,13 @@
  SIGMA fp — 3:2 open gate, eight frame rates
 ================================================================
 
+  SUPERSEDED BY og3k-v0.1.1test. This build is only correct at
+  ISO 100 (see ISO 100 ONLY below); v0.1.1test found the cause and
+  fixes it, and records correctly at every ISO. Use that one. This
+  directory is kept so the note below stays readable.
+
+================================================================
+
 WHAT IT IS
 
   The sensor's whole 3:2 area recorded as CinemaDNG, instead of the
