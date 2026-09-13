@@ -11,7 +11,7 @@ findings sit in the whole pipeline, and what is still unread, see
 
 The chain is decoded and it is shipped. `rusty-emulsion` renders the fp's looks
 from firmware tables and DNG export alone, with **one** measured constant and no
-fitted ones, and scores **1.85 dE** held out over fourteen modes — 1.38 over the
+fitted ones, and scores **1.89 dE** held out over fourteen modes — 1.42 over the
 thirteen the camera exports — against a median 8.2 dE between one camera mode and
 the next.
 
@@ -1243,7 +1243,10 @@ the measured front end is a real transform with 1.72 on its leading diagonal —
 "it looks like the identity" is not evidence. The render test is the instrument,
 and it must be run with the inverse matched to the forward.
 
-Matched both ways, over thirteen modes the fit never sees:
+Matched both ways, over thirteen modes the fit never sees. These four rows and
+the sweeps that follow use the swept-exposure scoring, so read them against each
+other rather than as absolutes — the headline figures are in "The chain, and what
+each part rests on":
 
 | front-end inverse | render curve | held out, 13 modes | held out, 14 modes |
 |---|---|---|---|
@@ -1298,13 +1301,26 @@ so the fit never sees any mode's matrix. The other thirteen modes are prediction
 | | left | held out | full frame |
 |---|---|---|---|
 | fitted chain, 14 modes | 5.340 | 3.239 | 4.282 |
-| decoded chain, 14 modes | 2.478 | **1.854** | 2.161 |
-| decoded chain, 13 exported modes | 2.176 | **1.379** | 1.773 |
+| decoded chain, 14 modes | 2.503 | **1.893** | 2.194 |
+| decoded chain, 13 exported modes | 2.203 | **1.422** | 1.807 |
 
-Per mode, held out: Monochrome 0.65, Neutral 0.90, Vivid 1.10, FOV Classic
-Yellow 1.11, Portrait 1.08, Landscape 1.21, Forest Green 1.23, Standard 1.25, FOV
-Classic Blue 1.27, Teal and Orange 1.46, Cinematic 1.55, Powder Blue 2.26, Sunset
-Red 2.86, Warm Gold 8.02.
+**Those are at a fixed exposure**, with the front end applied exactly as
+measured. An earlier version of this table gave 1.854 and 1.379, from a scoring
+loop that swept a gain in front of the curve and took the best value per mode.
+That sweep ranged up to 1.67 times the measured front end, which is too much
+freedom to quote a headline from.
+
+The sweep turns out to be nearly inert, which is why the correction is small.
+Thirteen of the fourteen modes score identically swept and fixed. Only Sunset Red
+moves, from 2.08 to 3.41, and it moves for a reason: it is one of the four
+white-balance-shifting modes, its exported matrix is row-normalised, and the
+row normalisation discards the 1.127 red gain the firmware gives it. The exposure
+freedom was partly standing in for that missing gain.
+
+Per mode, held out at a fixed exposure: Monochrome 0.65, Neutral 0.90, Portrait
+1.08, Vivid 1.10, FOV Classic Yellow 1.11, Landscape 1.21, Forest Green 1.23,
+Standard 1.25, FOV Classic Blue 1.27, Teal and Orange 1.46, Cinematic 1.55,
+Powder Blue 2.26, Sunset Red 3.41, Warm Gold 8.02.
 
 The decoded chain carries **no residual layer, no fitted working space, no chroma
 trim, no rotation scale and no per-mode luma row**.
@@ -1318,7 +1334,7 @@ One number in the old record invites a wrong comparison. The renderer that this
 one replaced scored 2.46 dE full frame, which looks close to the 2.161 above, but
 the two are not the same object: that figure included a 390-value measured
 residual layer and was a full-frame mean. Held to one harness, the fitted chain
-is 4.282 full frame and 3.239 held out, against 2.161 and 1.854.
+is 4.282 full frame and 3.239 held out, against 2.194 and 1.893.
 
 ## The differential method, and a field that was mostly the matrix
 

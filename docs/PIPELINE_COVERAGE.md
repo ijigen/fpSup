@@ -539,8 +539,9 @@ own tables — the stages that carry the mode differences.
 An earlier version of this file ended here with "the render sits at 2.46 dE
 against the camera, and 4.18 dE with firmware-derived stages alone". The second
 figure is superseded. A chain built only from decoded data and one measured 3x3
-now reaches **1.854 dE** on the held-out half over all fourteen modes, against
-3.239 for the fitted chain on the same pixels. The gap between decoded and fitted
+now reaches **1.893 dE** on the held-out half over all fourteen modes, and 1.422
+over the thirteen the camera exports, against 3.239 for the fitted chain on the
+same pixels. The gap between decoded and fitted
 has reversed, and the decoded chain is the better one.
 
 ## TODO, in order

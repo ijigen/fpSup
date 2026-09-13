@@ -90,7 +90,7 @@ in [`docs/COLOR_MODES.md`](../docs/COLOR_MODES.md).
 | against | difference |
 |---|---|
 | the chain measured in `docs/COLOR_MODES.md` | mean 0.0002, 99th percentile 0.0018, worst 0.0087 |
-| the camera's own JPEG, held out | 1.85 dE mean over fourteen modes, 1.38 over the thirteen exported |
+| the camera's own JPEG, held out | 1.89 dE mean over fourteen modes, 1.42 over the thirteen exported |
 
 The first row is this script against the reference implementation, over thirteen
 modes and 2000 colours. In 8-bit terms that is a mean of 0.05 of a level, 0.5 at
@@ -107,10 +107,17 @@ The second row is the pipeline itself against the camera, from the document —
 measured on one half of a frame and scored on the other, against a median 8.2 dE
 between one camera mode and the next.
 
-**No exposure fudge.** Those scores allowed brightness to vary by about a quarter
-stop per mode when matching the camera's JPEG, to absorb decode differences. This
-script applies `FRONT` as measured and nothing else, so a render may sit slightly
-darker or lighter than the camera's JPEG of the same frame.
+**No exposure fudge, and the figures above say so.** They are scored with `FRONT`
+applied exactly as this script applies it, with no per-mode exposure freedom. An
+earlier scoring loop swept a gain in front of the curve and took the best value
+per mode; it turns out to be nearly inert — thirteen of the fourteen modes pick
+the same exposure anyway — and removing it costs 0.10 dE on the mean.
+
+The one mode it mattered for is Sunset Red, 2.08 swept against 3.41 fixed. That
+is a real defect rather than a scoring artefact: Sunset Red is one of the four
+white-balance-shifting modes, its exported matrix is row-normalised, and that
+discards the 1.127 red gain the firmware gives it. The exposure freedom was
+partly standing in for the missing gain.
 
 It does no sharpening, no noise reduction and no lens correction. The camera's
 JPEG is barrel-corrected and its DNG is not, so the two do not lie on the same
