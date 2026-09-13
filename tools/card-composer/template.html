@@ -118,6 +118,13 @@ button.x{border:0;background:transparent;color:var(--dim);font-family:var(--mono
 button.x:hover{color:var(--bad)}
 .note{font-size:.82rem;color:var(--dim);border-left:2px solid var(--line);padding-left:11px;margin-top:14px}
 .note b{color:var(--ink);font-weight:600}
+.support{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.support a{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);
+  font-size:.8rem;text-decoration:none;padding:7px 13px;border-radius:3px;
+  border:1px solid var(--line);color:var(--dim);transition:border-color .12s,color .12s}
+.support a:hover{border-color:var(--sig);color:var(--sig)}
+.support a:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+.support b{color:var(--ink);font-weight:600}
 footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
   font-size:.8rem;color:var(--dim)}
 </style>
@@ -186,9 +193,14 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
 </div>
 
 <footer>
-  Firmware Ver.5.02 on the original fp only. Both files go in the root of the SD card the
+  <div class="support">
+    <b>fpSup</b>
+    <a href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">♥ Support on Ko-fi</a>
+    <a href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">◆ Discord</a>
+  </div>
+  <p style="margin-top:14px">Firmware Ver.5.02 on the original fp only. Both files go in the root of the SD card the
   camera boots from. Everything is RAM-only — remove <code>AutoRun.txt</code>, power-cycle,
-  and the camera is stock. Nothing is ever written to flash.
+  and the camera is stock. Nothing is ever written to flash.</p>
 </footer>
 
 <script id="cat" type="application/json">@@CATALOGUE@@</script>

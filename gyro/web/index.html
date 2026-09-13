@@ -109,6 +109,13 @@ button:disabled{opacity:.45;cursor:default;filter:none}
 footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--rule);
   color:var(--dim);font-size:.87rem}
 footer h3{margin:0 0 .4rem;font-size:.95rem;color:var(--ink);font-weight:620}
+footer .support{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:1.6rem 0 0}
+footer .support a{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,Menlo,monospace;
+  font-size:.8rem;text-decoration:none;padding:7px 13px;border-radius:3px;border:1px solid var(--faint);
+  color:var(--dim);transition:border-color .12s,color .12s}
+footer .support a:hover{border-color:var(--accent);color:var(--accent)}
+footer .support a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+footer .support b{color:var(--ink,inherit);font-weight:600}
 footer p{margin:0 0 1rem;max-width:64ch}
 footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
 a{color:var(--accent)}
@@ -162,6 +169,11 @@ a{color:var(--accent)}
   gyro's twenty-five hundred. It is out of the log by default because it made
   Gyroflow's fusion worse in the test that settled the axis order — but horizon
   levelling needs gravity, so there is a switch for it on each take.</p>
+  <div class="support">
+    <b>fpSup</b>
+    <a href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">&hearts; Support on Ko-fi</a>
+    <a href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">&#9670; Discord</a>
+  </div>
 </footer>
 </main>
 

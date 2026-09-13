@@ -42,6 +42,13 @@ td a:hover{border-bottom-color:var(--sig)}
 td a:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
 .note{font-size:.9rem;color:var(--dim);border-left:2px solid var(--line);padding-left:13px;margin:16px 0}
 .note b{color:var(--ink)}
+.support{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.support a{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);
+  font-size:.8rem;text-decoration:none;padding:7px 13px;border-radius:3px;
+  border:1px solid var(--line);color:var(--dim);transition:border-color .12s,color .12s}
+.support a:hover{border-color:var(--sig);color:var(--sig)}
+.support a:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+.support b{color:var(--ink);font-weight:600}
 footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
  font-size:.84rem;color:var(--dim)}
 </style>
@@ -123,9 +130,14 @@ To combine two of them, use the card composer rather than copying both.</p>
 </div>
 
 <footer>
-  RAM only, Ver.5.02 only, and every card is removable by deleting one file.
+  <div class="support">
+    <b>fpSup</b>
+    <a href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">♥ Support on Ko-fi</a>
+    <a href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">◆ Discord</a>
+  </div>
+  <p style="margin-top:14px">RAM only, Ver.5.02 only, and every card is removable by deleting one file.
   Recording above FHD needs a medium that can keep up — a card that cannot buffers
-  in RAM and then stops the take, which is the card rather than a bug.
+  in RAM and then stops the take, which is the card rather than a bug.</p>
 </footer>
 </body>
 </html>
