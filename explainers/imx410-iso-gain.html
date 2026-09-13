@@ -935,7 +935,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     #imx410-explainer .stage-title{font-size:12px;font-weight:750;margin-bottom:9px}
     #imx410-explainer .arrow{display:flex;align-items:center;justify-content:center;color:var(--muted-foreground);font-size:20px}
     #imx410-explainer .bucket-wrap{height:92px;display:flex;gap:8px;align-items:flex-end;justify-content:center}
-    #imx410-explainer .bucket{width:56px;border:2px solid var(--foreground);border-top:0;border-radius:0 0 8px 8px;position:relative;transition:height .25s}
+    #imx410-explainer .bucket{width:56px;border:2px solid var(--foreground);border-top:0;border-radius:0 0 8px 8px;position:relative;transition:height .25s,width .25s}
     #imx410-explainer .water{position:absolute;left:3px;right:3px;bottom:3px;background:var(--viz-series-1);opacity:.7;border-radius:0 0 4px 4px;transition:height .25s}
     #imx410-explainer .noise{position:absolute;left:3px;right:3px;bottom:3px;background:repeating-linear-gradient(135deg,var(--viz-series-4),var(--viz-series-4) 3px,transparent 3px,transparent 6px);transition:height .25s}
     #imx410-explainer .mini{font-size:11px;color:var(--muted-foreground);text-align:center;margin-top:7px}
@@ -980,7 +980,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     #imx410-explainer .evidence-tag{display:inline-block;margin-right:5px;padding:1px 5px;border-radius:999px;background:color-mix(in srgb,var(--viz-series-2) 18%,transparent);color:var(--foreground);font-size:9px;font-weight:800}
     #imx410-explainer .evidence-tag.infer{background:color-mix(in srgb,var(--viz-series-4) 20%,transparent)}
     #imx410-explainer .compare-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-    #imx410-explainer .compare-notes>div{padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:11px;color:var(--muted-foreground)}
+    #imx410-explainer .compare-notes&gt;div{padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:11px;color:var(--muted-foreground)}
     #imx410-explainer .compare a{color:var(--viz-series-1)}
     #imx410-explainer .lang-zh{display:none}
     #imx410-explainer[data-lang=zh-Hant] .lang-en{display:none}
@@ -1271,9 +1271,13 @@ html&gt;body{padding:0}&lt;/style&gt;
         $(&#x27;table-fps&#x27;).textContent=(lang===&#x27;en&#x27;?&#x27;Table VMAX: &#x27;:&#x27;表內 VMAX：&#x27;)+p.f.toFixed(6)+&#x27;p&#x27;;
         $(&#x27;imx-code-value&#x27;).textContent=cv+&#x27; · 0x&#x27;+cv.toString(16).toUpperCase().padStart(3,&#x27;0&#x27;);
         $(&#x27;amp-value&#x27;).textContent=linear.toFixed(2)+&#x27;× · &#x27;+db.toFixed(1)+&#x27; dB&#x27;;
-        $(&#x27;bucket&#x27;).style.height=(hcg?62:91)+&#x27;px&#x27;;
-        $(&#x27;water&#x27;).style.height=(hcg?44:61)+&#x27;px&#x27;;
-        $(&#x27;noise&#x27;).style.height=(hcg?9:22)+&#x27;px&#x27;;
+        // 只有寬度變:HCG 窄桶(井容量小),LCG 寬桶(井容量大)。高度固定。
+        // 水量(面積)兩邊相同 —— 同樣的光,窄桶裡水位就逼近桶緣,寬桶裡還剩一大截。
+        const bw=hcg?34:66, bh=91, area=2000;   // 高度與噪聲層固定,只有寬度隨 HCG/LCG 改變
+        $(&#x27;bucket&#x27;).style.width=bw+&#x27;px&#x27;;
+        $(&#x27;bucket&#x27;).style.height=bh+&#x27;px&#x27;;
+        $(&#x27;water&#x27;).style.height=Math.min(bh-6,Math.round(area/bw))+&#x27;px&#x27;;
+        $(&#x27;noise&#x27;).style.height=&#x27;14px&#x27;;   // 噪聲底層厚度固定,只有桶寬在變
         const en=lang===&#x27;en&#x27;;
         $(&#x27;cg-caption&#x27;).textContent=known?(hcg?(en?&#x27;HCG: smaller bucket, lower noise floor&#x27;:&#x27;HCG：小桶、低噪聲底&#x27;):(en?&#x27;LCG: larger bucket, preserves highlights&#x27;:&#x27;LCG：大桶、保留高光&#x27;)):(en?&#x27;Live View: switching point comes from this camera’s OTP&#x27;:&#x27;Live View：切換點由本機 OTP 決定&#x27;);
         $(&#x27;stage-cg&#x27;).classList.toggle(&#x27;active&#x27;,hcg);
