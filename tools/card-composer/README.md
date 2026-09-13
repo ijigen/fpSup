@@ -185,7 +185,11 @@ against — they just do not survive it.
 The last two are the ones that matter: they are the merges, and they come out
 identical to what the build scripts produce.
 
-To add a card, put its directory in `CARDS` and run this. Data, not code.
+To add a version, put the card in `releases/fpsup-<product>-v<version>/` and run
+this. Nothing here names a version — the products are listed once, and each one
+resolves to the newest directory that matches it. Numbers compare as numbers, so
+`v1.11` beats `v1.2`; among equal numbers a plain release beats a letter revision
+beats `test`.
 
 ## Not covered
 

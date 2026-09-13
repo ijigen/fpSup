@@ -24,7 +24,7 @@ same checks the build scripts run.
 
 To add a card: drop its directory in CARDS and run this.  Data, not code.
 """
-import base64, json, pathlib, shutil, struct, subprocess, sys, tempfile, zipfile
+import base64, json, pathlib, re, shutil, struct, subprocess, sys, tempfile, zipfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent
@@ -117,30 +117,63 @@ def refs():
     return REFS
 
 
-CARDS = [
-    # First on purpose.  picked() walks this list, and the development card puts
-    # the worker at record 1 -- listing the shell here is what makes the merge
-    # come out byte-identical to it instead of merely equivalent.
-    dict(id='shell', name='USB shell', shell=True,
-         dir=ROOT / 'fpSup' / 'fp_usb_shell' / 'autorun',
-         template='shellpush',
-         desc='The worker that answers `shl` over USB. Selecting it switches the '
-              'AutoRun to the loader that creates a task, because the worker '
-              'blocks on the endpoint and cannot run in a borrowed callback.'),
-    dict(id='gyro', name='fpGyroSup v1.11b',
-         zip=(GYRO / 'release' / 'fp-gyro-sup-v1.11b.zip', 'fp-gyro-sup-v1.11b/'),
-         desc='Writes .gcsv and .json into the clip folder while recording. '
-              'The released card, unmodified.'),
-    dict(id='og3k', name='OG3K open gate — 3:2', dir=OG / 'og3k_release',
-         desc='3024×2010 readout, DNG cropped to 3008×2000. Live view, playback '
-              'and DNG geometry all verified. Carries no entry section — it is '
-              'all static writes.'),
-    # og3k_gyro_release is deliberately NOT a card.  Under the policy that merges
-    # happen only in the page, offering a pre-merged card alongside its two
-    # halves is a second way to get the same bytes -- and a second way to drift.
-    # It stays a verification reference below: ticking OG3K and the gyro must
-    # produce it exactly.
-]
+RELEASES = ROOT / 'fpSup' / 'releases'
+
+PRODUCTS = {
+    'usbshell': dict(id='shell', name='USB shell', shell=True, template='shellpush',
+                     desc='The worker that answers `shl` over USB. Selecting it '
+                          'switches the AutoRun to the loader that creates a task, '
+                          'because the worker blocks on the endpoint and cannot run '
+                          'in a borrowed callback.'),
+    'gyro':     dict(id='gyro', name='fpGyroSup',
+                     desc='Writes .gcsv and .json into the clip folder while '
+                          'recording. The released card, unmodified.'),
+    'og3k':     dict(id='og3k', name='OG3K open gate — 3:2',
+                     desc='3024×2010 readout, DNG cropped to 3008×2000, eight frame '
+                          'rates. Carries no entry section — it is all static writes.'),
+}
+# usbshell first: picked() walks this order, and the development card puts the
+# worker at record 1, which is what makes the merge come out byte-identical to it.
+ORDER = ['usbshell', 'gyro', 'og3k']
+
+
+def version_key(q):
+    """Sort key for a release's version string.
+
+    Numbers compare as numbers, so 1.11 beats 1.2.  Among equal numbers a plain
+    release is newest, then letter revisions, then anything word-shaped:
+    v1.11b > v1.11a > v1.11test is wrong only if someone ships a `test` *after*
+    a final, which is not a thing.
+    """
+    nums = tuple(int(n) for n in re.findall(r'\d+', q))
+    tail = re.sub(r'^[\d.]*', '', q)
+    rank = 2 if not tail else (1 if len(tail) == 1 else 0)
+    return (nums, rank, tail)
+
+
+def latest(product):
+    """Newest fpsup-<product>-v<version>/ directory, or None."""
+    found = []
+    for d in RELEASES.glob(f'fpsup-{product}-v*'):
+        if d.is_dir() and (d / 'VSHL.BIN').exists() and (d / 'AutoRun.txt').exists():
+            found.append((version_key(d.name.split('-v', 1)[1]), d))
+    return max(found)[1] if found else None
+
+
+def discover():
+    """Resolve every product to its newest release.  Adding a version is adding
+    a directory -- nothing here names one."""
+    out = []
+    for key in ORDER:
+        d = latest(key)
+        if d is None:
+            raise SystemExit(f'no release for {key} in {RELEASES}')
+        spec = dict(PRODUCTS[key])
+        spec['dir'] = d
+        spec['version'] = d.name.split('-v', 1)[1]
+        out.append(spec)
+    return out
+
 
 PAD_TO = 32768
 FILLER = '# pad -- see PAD_TO: mode 7 overwrites but does not truncate\n'
@@ -214,13 +247,14 @@ def load(card):
 
 def main():
     out_cards, templates = [], {}
-    for card in CARDS:
+    for card in discover():
         vshl, ar = load(card)
         entry, recs = parse(vshl)
         ban = banner_of(ar)
         templates[ban] = ar.split('# pad -- see PAD_TO')[0].replace(ban, '@@BANNER@@')
         out_cards.append(dict(
-            id=card['id'], name=card['name'], desc=card['desc'],
+            id=card['id'], name=card['name'] + '  ' + card['version'],
+            desc=card['desc'],
             banner=ban, entry=entry, shell=bool(card.get('shell')),
             template=card.get('template', 'plain'),
             records=[dict(a=a, b=base64.b64encode(b).decode(),
@@ -260,7 +294,7 @@ def main():
     # Refuse to ship a catalogue that does not reproduce what it came from.
     print()
     bad = False
-    for card, spec in zip(out_cards, CARDS):
+    for card, spec in zip(out_cards, discover()):
         vshl, ar = load(spec)
         got = compose([(r['a'], base64.b64decode(r['b'])) for r in card['records']],
                       card['entry'])
