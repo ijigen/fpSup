@@ -70,6 +70,13 @@ overhead from the per-pixel rate. The engine is idle when not shooting stills, s
 this is contention-safe, and the shell can now run injected code, so it costs one
 routine.
 
+The staged FHD integration probes are kept in
+[`raw/lossless_codec/`](../raw/lossless_codec/). The exact writer seam and its
+power/clock preflight passed on hardware on 2026-08-31. The guarded scratch
+phase is offline-verified but has not run on camera; encode remains dry-run only
+until it consumes and frees that retained allocation. This suite therefore
+proves the integration context, not the missing sustained-throughput number.
+
 ### A correction worth keeping
 
 An earlier reading of this engine put its throughput at 32 Mpixel/s and concluded
@@ -98,6 +105,8 @@ fps and 145 MB/s at 10.
 - **The hardware lossless JPEG encoder** (`0x300D0000`) can be called standalone by
   the worker, at stills-class speed, which is also why video is uncompressed. It
   can pre-compress a USB capture
+- **The live FHD writer seam** at `0xC0722AFC` passes a 3,244,544-byte DNG
+  segment to `0xC069AC88`; the one-shot probe restored the original call itself
 - **The detection image channel** at `0xC375D8C0` is a clean 320×240 linear 8-bit
   greyscale, proven over hook-push. The display scanout is **tiled** (16 px tiles)
   — do not try to decode that one
@@ -114,6 +123,8 @@ configuration lives in a shadow bank at `0x3021xxxx`. `still_raw_dump`'s
 ### Not done
 
 - Actually extracting Bayer frames (the HDMI RAW path is not open yet)
+- Run the retained-scratch phase on hardware, implement its encode/free
+  consumer, and measure sustained lossless throughput on real Bayer entropy
 - CinemaDNG packaging
 - The external recorder (specification written, see `RECORDER_SPEC`)
 
@@ -171,6 +182,12 @@ FHD 12-bit 24 fps 是 74.6 MB/s,正是相機自己允許的數字 —— 算術�
 引擎在沒拍靜態照時是閒置的,所以不會有爭用;而 shell 現在能執行注入的程式碼,
 成本只有一支常式。
 
+分階段的 FHD 整合探針收在
+[`raw/lossless_codec/`](../raw/lossless_codec/)。2026-08-31 已實機通過 exact writer
+交接點與 power/clock 預檢；有 guard 的 scratch 階段已通過離線驗證，但尚未上機。
+encode 在能接手並釋放 retained allocation 之前仍強制只能 dry-run。因此這組工具證實的是
+整合上下文，不是尚未量出的持續吞吐量。
+
 ### 一個值得留著的修正
 
 早先對這顆引擎的解讀把吞吐當成 32 Mpixel/s,並據此結論「無損 UHD 寫卡差八倍,不可行」。
@@ -196,6 +213,8 @@ FHD 12-bit 24 fps 是 74.6 MB/s,正是相機自己允許的數字 —— 算術�
   這是目前最有希望的取得管道
 - **硬體無損 JPEG 編碼器** (`0x300D0000`) 可以由 worker 獨立呼叫,
   屬於靜態影像等級的速度(這也解釋了為什麼錄影是無壓縮的)。可以拿來預壓縮 USB 擷取
+- **FHD live writer 交接點** `0xC0722AFC` 會把 3,244,544-byte DNG segment
+  交給 `0xC069AC88`；one-shot 探針已自行還原原始 call
 - **偵測影像通道** `0xC375D8C0` —— 乾淨的 320×240 線性 8-bit 灰階,hook-push 已驗證。
   顯示掃描輸出是**分塊的**(16 px tile),不要拿去解碼
 - **hook-push 通道** 0.125 ms/frame、零 stall,峰值約 311 MB/s
@@ -209,6 +228,8 @@ FHD 12-bit 24 fps 是 74.6 MB/s,正是相機自己允許的數字 —— 算術�
 ### 未做
 
 - 實際把 Bayer 影格搬出來(HDMI RAW 路徑尚未打通)
+- 在實機跑 retained-scratch 階段，完成接手並釋放它的 encode/free consumer，
+  再以真實 Bayer 熵量出無損持續吞吐
 - CinemaDNG 封裝
 - 外接錄影機(規格書已寫,見 `RECORDER_SPEC`)
 

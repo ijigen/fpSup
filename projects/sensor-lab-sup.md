@@ -3,9 +3,10 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 IMX410 modes, ISO, gain and sensor control.
-**Status: ISO and gain fully solved, one open item in the mode table**
+**Status: research complete — ISO and gain fully solved, and the mode-table
+ambiguity closed on 2026-09-10**
 
-IMX410 模式、ISO、gain 與 sensor 控制。**狀態:ISO/gain 已完整解出,模式表有一項未解**
+IMX410 模式、ISO、gain 與 sensor 控制。**狀態:研究完成 —— ISO/gain 已完整解出,模式表的歧義 2026-09-10 已解**
 
 ---
 
@@ -28,13 +29,15 @@ the firmware confirms versus which are OTP values that still need measuring.
 
 ### Open
 
-- **Mode ambiguity** — 1080p29.97 matches mode 106 (hmax 445, vmax 5398, readout
-  10.556 ms) and mode 111 (hmax 330, vmax 7280, 7.828 ms) equally well. The
-  rolling-shutter times differ substantially; focal length does not.
-  **The mode-index field has not been found** — `*(0xC375D840 + 8)` returns 175
-  and 3, which are not valid mode ids
-- This blocks gyro sup's lens profile: without the rolling-shutter time it cannot
-  be completed
+> ✅ **Resolved 2026-09-10 — and the mode-index field was never needed.**
+> The mode is chosen by a table, so read the table. The picker's three arrays
+> (`0xC0BE5810` / `0xC0BE59B0` / `0xC0BE5B50`, 26 entries of 16 bytes, `+0x08`
+> the sensor mode) are laid out as *(readout geometry × frame rate)*, and the
+> FHD 29.97 slot holds **106**. **Mode 111 does not appear in any of the three.**
+> A real take reads 106 back from `0xC343B590`.
+>
+> **FHD 29.97 CinemaDNG rolling shutter is 10.556 ms.** That is the number gyro
+> sup's lens profile was missing. See `notes/FRAME_RATE_IS_VMAX.md`.
 
 ---
 
@@ -54,10 +57,14 @@ the firmware confirms versus which are OTP values that still need measuring.
 
 ### 未解
 
-- **模式歧義** —— 1080p29.97 同時符合模式 106(hmax 445 / vmax 5398 / 讀出 10.556 ms)
-  與模式 111(hmax 330 / vmax 7280 / 7.828 ms)。捲簾時間差一截,但焦距不受影響。
-  **模式索引欄位還沒找到**(`*(0xC375D840+8)` 讀到 175 和 3,不是有效的模式 id)
-- 這一項擋著 gyro sup 的鏡頭 profile —— 沒有捲簾時間就填不完整
+> ✅ **2026-09-10 已解 —— 而且根本不需要那個「模式索引欄位」。**
+> 模式是由一張表選的,所以去讀那張表。picker 的三個陣列
+> (`0xC0BE5810` / `0xC0BE59B0` / `0xC0BE5B50`,26 筆 ×16 bytes,`+0x08` 是感光元件模式)
+> 排列成 *(讀出幾何 × 幀率)*,而 **FHD 29.97 那一格填的是 106**;
+> **模式 111 在三張表裡都不存在**。實錄後 `0xC343B590` 也讀回 106。
+>
+> **FHD 29.97 CinemaDNG 的捲簾是 10.556 ms。** 這正是 gyro sup 鏡頭 profile 缺的數字。
+> 見 `notes/FRAME_RATE_IS_VMAX.md`。
 
 ---
 

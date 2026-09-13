@@ -918,13 +918,13 @@ html&gt;body{padding:0}&lt;/style&gt;
     #imx410-explainer .dot.otp{background:var(--viz-series-4)}
     #imx410-explainer .controls{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px;border:1px solid var(--border);border-radius:12px;background:color-mix(in srgb,var(--card) 65%,transparent)}
     #imx410-explainer label{display:block;font-size:12px;font-weight:650;margin-bottom:6px}
-    #imx410-explainer select,#imx410-explainer input[type=range]{width:100%}
-    #imx410-explainer select{height:36px;border:1px solid var(--border);border-radius:8px;padding:0 9px;background:var(--background);color:var(--foreground)}
+    #imx410-explainer select,#imx410-explainer input[type=range],#imx410-explainer input[type=number]{width:100%}
+    #imx410-explainer select,#imx410-explainer input[type=number]{height:36px;border:1px solid var(--border);border-radius:8px;padding:0 9px;background:var(--background);color:var(--foreground)}
     #imx410-explainer input[type=range]{accent-color:var(--viz-series-1)}
     #imx410-explainer .scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted-foreground);margin-top:3px}
     #imx410-explainer .readout{font-variant-numeric:tabular-nums;color:var(--viz-series-1);font-weight:750}
     #imx410-explainer .mode-summary{display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:center;margin:14px 0 2px;padding:12px 14px;border:1px solid var(--border);border-radius:12px}
-    #imx410-explainer .raster-box{height:92px;display:grid;place-items:center}
+    #imx410-explainer .raster-box{min-height:130px;display:grid;place-items:center;overflow-wrap:anywhere}
     #imx410-explainer .raster{border:2px solid var(--viz-series-1);background:color-mix(in srgb,var(--viz-series-1) 16%,transparent);display:grid;place-items:center;min-width:70px;min-height:38px;transition:width .25s,height .25s;font-size:11px;font-weight:800}
     #imx410-explainer .mode-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
     #imx410-explainer .metric{border-left:2px solid var(--border);padding-left:9px;font-size:11px;color:var(--muted-foreground)}
@@ -969,13 +969,29 @@ html&gt;body{padding:0}&lt;/style&gt;
     #imx410-explainer .chip{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
     #imx410-explainer .unknown{background:repeating-linear-gradient(135deg,var(--viz-series-4),var(--viz-series-4) 3px,transparent 3px,transparent 6px)}
     #imx410-explainer .sources{font-size:10px;color:var(--muted-foreground);margin-top:12px}
+    #imx410-explainer .compare{margin-top:26px;padding-top:20px;border-top:2px solid var(--border)}
+    #imx410-explainer .compare h3{font-size:19px;margin:0 0 6px}
+    #imx410-explainer .compare-lead{font-size:12px;color:var(--muted-foreground);margin:0 0 14px}
+    #imx410-explainer .compare-grid{display:grid;grid-template-columns:150px 1fr 1fr;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:11px}
+    #imx410-explainer .compare-cell{padding:9px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+    #imx410-explainer .compare-cell:nth-child(3n){border-right:0}
+    #imx410-explainer .compare-cell.head{font-weight:800;background:color-mix(in srgb,var(--muted) 55%,transparent)}
+    #imx410-explainer .compare-cell.key{font-weight:750}
+    #imx410-explainer .evidence-tag{display:inline-block;margin-right:5px;padding:1px 5px;border-radius:999px;background:color-mix(in srgb,var(--viz-series-2) 18%,transparent);color:var(--foreground);font-size:9px;font-weight:800}
+    #imx410-explainer .evidence-tag.infer{background:color-mix(in srgb,var(--viz-series-4) 20%,transparent)}
+    #imx410-explainer .compare-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    #imx410-explainer .compare-notes>div{padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:11px;color:var(--muted-foreground)}
+    #imx410-explainer .compare a{color:var(--viz-series-1)}
+    #imx410-explainer .lang-zh{display:none}
+    #imx410-explainer[data-lang=zh-Hant] .lang-en{display:none}
+    #imx410-explainer[data-lang=zh-Hant] .lang-zh{display:block}
     #imx410-explainer .evidence-note{margin-top:10px;padding:10px 12px;border:1px solid var(--viz-series-4);border-radius:9px;background:color-mix(in srgb,var(--viz-series-4) 9%,transparent);font-size:11px;color:var(--muted-foreground)}
     #imx410-explainer .evidence-note strong{color:var(--foreground)}
     #imx410-explainer details{margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:11px}
     #imx410-explainer summary{cursor:pointer;font-weight:750}
     #imx410-explainer .reg-table{width:100%;border-collapse:collapse;margin-top:9px;font-variant-numeric:tabular-nums}
     #imx410-explainer .reg-table th,#imx410-explainer .reg-table td{padding:6px;border-bottom:1px solid var(--border);text-align:left}
-    @media(max-width:760px){#imx410-explainer .hero{align-items:flex-start;flex-direction:column}#imx410-explainer .mode-summary{grid-template-columns:1fr}#imx410-explainer .mode-metrics{grid-template-columns:1fr 1fr}#imx410-explainer .pipeline{grid-template-columns:1fr;gap:7px}#imx410-explainer .arrow{transform:rotate(90deg);height:20px}#imx410-explainer .stage{min-height:126px}#imx410-explainer .decision{grid-template-columns:1fr}#imx410-explainer .matrix{grid-template-columns:105px repeat(3,1fr)}}
+    @media(max-width:760px){#imx410-explainer .hero{align-items:flex-start;flex-direction:column}#imx410-explainer .mode-summary{grid-template-columns:1fr}#imx410-explainer .mode-metrics{grid-template-columns:1fr 1fr}#imx410-explainer .pipeline{grid-template-columns:1fr;gap:7px}#imx410-explainer .arrow{transform:rotate(90deg);height:20px}#imx410-explainer .stage{min-height:126px}#imx410-explainer .decision{grid-template-columns:1fr}#imx410-explainer .matrix{grid-template-columns:105px repeat(3,1fr)}#imx410-explainer .compare-grid{grid-template-columns:110px minmax(260px,1fr) minmax(260px,1fr);overflow-x:auto}#imx410-explainer .compare-notes{grid-template-columns:1fr}}
     @media(max-width:480px){#imx410-explainer .controls{grid-template-columns:1fr}#imx410-explainer .matrix{font-size:10px;grid-template-columns:86px repeat(3,1fr)}#imx410-explainer .cell{padding:7px 3px}}
   &lt;/style&gt;
 
@@ -985,12 +1001,20 @@ html&gt;body{padding:0}&lt;/style&gt;
   &lt;/div&gt;
 
   &lt;div class=&quot;controls&quot;&gt;
-    &lt;div&gt;&lt;label for=&quot;camera-setting&quot;&gt;① fp 相機設定&lt;/label&gt;&lt;select id=&quot;camera-setting&quot;&gt;&lt;optgroup label=&quot;照片&quot;&gt;&lt;option value=&quot;photo&quot;&gt;照片 · 6000×4000&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;一般影片 · 已驗證 sensor mapping&quot;&gt;&lt;option value=&quot;v4k2997&quot; selected&gt;影片 · 3840×2160 · 29.970p&lt;/option&gt;&lt;option value=&quot;v4k25&quot;&gt;影片 · 3840×2160 · 25.000p&lt;/option&gt;&lt;option value=&quot;v4k2398&quot;&gt;影片 · 3840×2160 · 23.976p&lt;/option&gt;&lt;option value=&quot;vfhd119&quot;&gt;影片 · 1920×1080 · 119.880p&lt;/option&gt;&lt;option value=&quot;vfhd5994&quot;&gt;影片 · 1920×1080 · 59.940p&lt;/option&gt;&lt;option value=&quot;vfhd2997&quot;&gt;影片 · 1920×1080 · 29.970p&lt;/option&gt;&lt;option value=&quot;vfhd2398&quot;&gt;影片 · 1920×1080 · 23.976p&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;CinemaDNG · 已驗證 sensor mapping&quot;&gt;&lt;option value=&quot;cdng4k12&quot;&gt;CinemaDNG RAW12 · 3840×2160 · 29.970p&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;原廠可選 · sensor mapping 待確認&quot; disabled&gt;&lt;option&gt;影片 · 3840×2160 · 24.000p&lt;/option&gt;&lt;option&gt;影片 · 1920×1080 · 100.000p&lt;/option&gt;&lt;option&gt;影片 · 1920×1080 · 50.000p&lt;/option&gt;&lt;option&gt;影片 · 1920×1080 · 25.000p&lt;/option&gt;&lt;option&gt;CinemaDNG RAW8／10／12 · 其他解析度與幀率組合&lt;/option&gt;&lt;/optgroup&gt;&lt;option value=&quot;custom&quot;&gt;自定義／其他&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
-    &lt;div&gt;&lt;label for=&quot;imx-preset&quot;&gt;② 實際 Sensor mode&lt;/label&gt;&lt;select id=&quot;imx-preset&quot;&gt;&lt;optgroup label=&quot;照片 readout&quot;&gt;&lt;option value=&quot;8&quot;&gt;RAW14 mode 0 · 6064×4042 · 19.127p 上限&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;對應 fp 原廠影片輸出&quot;&gt;&lt;option value=&quot;0&quot; selected&gt;3840×2160 29.970p ← 4176×2174 RAW12&lt;/option&gt;&lt;option value=&quot;1&quot;&gt;3840×2160 25.000p ← 4176×2174 RAW12&lt;/option&gt;&lt;option value=&quot;2&quot;&gt;3840×2160 23.976p ← 4176×2174 RAW12&lt;/option&gt;&lt;option value=&quot;3&quot;&gt;1920×1080 59.940p ← 2088×1174 RAW12&lt;/option&gt;&lt;option value=&quot;4&quot;&gt;1920×1080 29.970p ← 2088×1174 RAW12&lt;/option&gt;&lt;option value=&quot;18&quot;&gt;1920×1080 23.976p ← 2088×1174 RAW12&lt;/option&gt;&lt;option value=&quot;5&quot;&gt;1920×1080 119.880p ← 2016×1136 RAW12&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;全部 RAW14 韌體模式&quot;&gt;&lt;option value=&quot;6&quot;&gt;RAW14 mode 6 · 4176×2174 · 29.970p&lt;/option&gt;&lt;option value=&quot;19&quot;&gt;RAW14 mode 122 · 4176×2174 · 25.000p&lt;/option&gt;&lt;option value=&quot;20&quot;&gt;RAW14 mode 100 · 4176×2174 → 3032×2174 · 23.976p&lt;/option&gt;&lt;option value=&quot;7&quot;&gt;RAW14 mode 95 · 5712×3216 · 23.976p&lt;/option&gt;&lt;option value=&quot;21&quot;&gt;RAW14 mode 129 · 3968×2640 · 19.202p&lt;/option&gt;&lt;option value=&quot;22&quot;&gt;RAW14 mode 141 · 6064×4042 · 18.003p&lt;/option&gt;&lt;option value=&quot;23&quot;&gt;RAW14 mode 144 · 3968×2640 · 18.003p&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;其他 RAW12 隱藏模式&quot;&gt;&lt;option value=&quot;9&quot;&gt;6064×4042 RAW12 · 39.157p&lt;/option&gt;&lt;option value=&quot;10&quot;&gt;6064×4042 RAW12 · 29.974p&lt;/option&gt;&lt;option value=&quot;11&quot;&gt;6064×3412 RAW12 · 29.970p&lt;/option&gt;&lt;option value=&quot;12&quot;&gt;6064×2022 RAW12 · 59.925p&lt;/option&gt;&lt;option value=&quot;13&quot;&gt;3968×2640 RAW12 · 39.309p&lt;/option&gt;&lt;option value=&quot;14&quot;&gt;3032×2012 RAW12 · 105.402p&lt;/option&gt;&lt;option value=&quot;15&quot;&gt;3032×1708 RAW12 · 119.880p&lt;/option&gt;&lt;option value=&quot;16&quot;&gt;2016×1344 RAW12 · 119.880p&lt;/option&gt;&lt;option value=&quot;17&quot;&gt;2016×672 RAW12 · 239.760p&lt;/option&gt;&lt;/optgroup&gt;&lt;/select&gt;&lt;/div&gt;
+    &lt;div&gt;&lt;label for=&quot;camera-setting&quot;&gt;① fp 相機設定&lt;/label&gt;&lt;select id=&quot;camera-setting&quot;&gt;&lt;optgroup label=&quot;照片&quot;&gt;&lt;option value=&quot;photo&quot;&gt;照片 · 6000×4000&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;一般影片 · 4K 已確認；FHD 需 runtime Mode ID&quot;&gt;&lt;option value=&quot;v4k2997&quot; selected&gt;影片 · 3840×2160 · 29.970p&lt;/option&gt;&lt;option value=&quot;v4k25&quot;&gt;影片 · 3840×2160 · 25.000p&lt;/option&gt;&lt;option value=&quot;v4k2398&quot;&gt;影片 · 3840×2160 · 23.976p&lt;/option&gt;&lt;option value=&quot;vfhd119&quot;&gt;影片 · 1920×1080 · 119.880p&lt;/option&gt;&lt;option value=&quot;vfhd5994&quot;&gt;影片 · 1920×1080 · 59.940p&lt;/option&gt;&lt;option value=&quot;vfhd2997&quot;&gt;影片 · 1920×1080 · 29.970p&lt;/option&gt;&lt;option value=&quot;vfhd2398&quot;&gt;影片 · 1920×1080 · 23.976p&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;CinemaDNG · 已驗證 sensor mapping&quot;&gt;&lt;option value=&quot;cdng4k12&quot;&gt;CinemaDNG RAW12 · 3840×2160 · 29.970p&lt;/option&gt;&lt;/optgroup&gt;&lt;optgroup label=&quot;原廠可選 · sensor mapping 待確認&quot; disabled&gt;&lt;option&gt;影片 · 3840×2160 · 24.000p&lt;/option&gt;&lt;option&gt;影片 · 1920×1080 · 100.000p&lt;/option&gt;&lt;option&gt;影片 · 1920×1080 · 50.000p&lt;/option&gt;&lt;option&gt;影片 · 1920×1080 · 25.000p&lt;/option&gt;&lt;option&gt;CinemaDNG RAW8／10／12 · 其他解析度與幀率組合&lt;/option&gt;&lt;/optgroup&gt;&lt;option value=&quot;custom&quot;&gt;自定義／其他&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
+    &lt;div&gt;&lt;label for=&quot;imx-preset&quot;&gt;② 實際 Sensor mode（70 個 logical modes）&lt;/label&gt;&lt;select id=&quot;imx-preset&quot;&gt;
+      &lt;optgroup id=&quot;modes-32-full&quot; label=&quot;3:2 · full（韌體旗標）· 21 modes&quot;&gt;&lt;/optgroup&gt;
+      &lt;optgroup id=&quot;modes-32-crop&quot; label=&quot;3:2 · crop（韌體旗標）· 6 modes&quot;&gt;&lt;/optgroup&gt;
+      &lt;optgroup id=&quot;modes-169-full&quot; label=&quot;16:9 · full（韌體旗標）· 18 modes&quot;&gt;&lt;/optgroup&gt;
+      &lt;optgroup id=&quot;modes-169-crop&quot; label=&quot;16:9 · crop（韌體旗標）· 25 modes&quot;&gt;&lt;/optgroup&gt;
+    &lt;/select&gt;&lt;/div&gt;
     &lt;div&gt;&lt;label for=&quot;imx-mode&quot;&gt;拍攝路徑&lt;/label&gt;&lt;select id=&quot;imx-mode&quot;&gt;&lt;option value=&quot;movie&quot;&gt;靜態／一般影片／RAW 8·10-bit&lt;/option&gt;&lt;option value=&quot;raw12&quot;&gt;CinemaDNG RAW12&lt;/option&gt;&lt;option value=&quot;live&quot;&gt;Live View&lt;/option&gt;&lt;option value=&quot;generic&quot;&gt;Generic movie RAW&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
+    &lt;div&gt;&lt;label for=&quot;estimate-fps&quot;&gt;資料率估算幀率：&lt;span class=&quot;readout&quot; id=&quot;estimate-fps-value&quot;&gt;29.970030p&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;estimate-fps&quot; type=&quot;number&quot; min=&quot;0.001&quot; max=&quot;1000&quot; step=&quot;0.001&quot; value=&quot;29.970030&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;可用 VMAX 另設&lt;/span&gt;&lt;span id=&quot;table-fps&quot;&gt;表內 VMAX：29.970030p&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
     &lt;div&gt;&lt;label for=&quot;imx-iso&quot;&gt;ISO：&lt;span class=&quot;readout&quot; id=&quot;imx-iso-value&quot;&gt;640&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;imx-iso&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;14&quot; step=&quot;1&quot; value=&quot;5&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;100&lt;/span&gt;&lt;span&gt;640&lt;/span&gt;&lt;span&gt;3200&lt;/span&gt;&lt;span&gt;12800&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
     &lt;div&gt;&lt;label for=&quot;imx-code&quot;&gt;手動模擬 Analog code：&lt;span class=&quot;readout&quot; id=&quot;imx-code-value&quot;&gt;3000&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;imx-code&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;4094&quot; step=&quot;1&quot; value=&quot;3000&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;0 · 1×&lt;/span&gt;&lt;span&gt;0xDFD · AR 門檻&lt;/span&gt;&lt;span&gt;4094&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;注意：&lt;/strong&gt;這是研究用假設值，不是由 ISO 自動算出的實機值。真正 code 還依賴 LCG/HCG offset、sensor OTP、analog cap 與 gain-state；請勿把畫面組合視為該 ISO 的實際 register 狀態。&lt;/div&gt;&lt;/div&gt;
   &lt;/div&gt;
+
+  &lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;完整模式表：&lt;/strong&gt;選單列出 V5.02 韌體的全部 70 個 logical modes；其中只有 24 組不同的 sensor register payload。full／crop 是韌體 metadata，不代表該模式已能錄影，也不能單獨證明是完整感光面的 Open Gate。選項末尾的 C16–C23 是尚未命名的 metadata class +0x60，只用來區分尺寸與表內幀率相同的不同模式。&lt;br&gt;&lt;strong&gt;幀率不是 mode 的固有屬性：&lt;/strong&gt;選單顯示的是韌體 timing table 的 VMAX 預設值，不是固定格式或硬性上限。實機已驗證 Mode 117 把 VMAX 2184 改為 7280，可由 99.900100p 改成 29.970030p；HMAX 不變，因此 9.221 ms 捲簾讀出不變。上方可另填幀率估算資料率；其他值是否可穩定錄影仍須逐模式驗證。&lt;/div&gt;
 
   &lt;div class=&quot;mode-summary&quot;&gt;&lt;div class=&quot;raster-box&quot;&gt;&lt;div class=&quot;raster&quot; id=&quot;raster&quot;&gt;4176×2174&lt;/div&gt;&lt;div class=&quot;mini&quot; id=&quot;mode-status&quot;&gt;韌體隱藏模式 · 尚未驗證整條錄影管線&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;mode-metrics&quot;&gt;&lt;div class=&quot;metric&quot;&gt;&lt;strong id=&quot;metric-pixels&quot;&gt;9.08 MP&lt;/strong&gt;sensor raster&lt;/div&gt;&lt;div class=&quot;metric&quot;&gt;&lt;strong id=&quot;metric-adc&quot;&gt;14-bit&lt;/strong&gt;ADC／RAW&lt;/div&gt;&lt;div class=&quot;metric&quot;&gt;&lt;strong id=&quot;metric-rate&quot;&gt;476.2 MB/s&lt;/strong&gt;純 pixel bitstream&lt;/div&gt;&lt;div class=&quot;metric&quot;&gt;&lt;strong id=&quot;metric-cap&quot;&gt;571 GB&lt;/strong&gt;20 分鐘／未壓縮&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;
 
@@ -1031,6 +1055,45 @@ html&gt;body{padding:0}&lt;/style&gt;
   &lt;/details&gt;
   &lt;div class=&quot;sources&quot;&gt;已確認位址：gain compose 0xC0323580 · register writer 0xC0323818 · HCG selector 0xC03239C8 · AR threshold analog code 0x0DFD · OTP blob offset 0xC00 / 510 bytes&lt;/div&gt;
 
+  &lt;section class=&quot;compare&quot; aria-labelledby=&quot;a7iii-title&quot;&gt;
+    &lt;div class=&quot;lang-en&quot;&gt;
+      &lt;h3 id=&quot;a7iii-title&quot;&gt;α7 III comparison: an IMX410-family match is not proof of an identical sensor&lt;/h3&gt;
+      &lt;p class=&quot;compare-lead&quot;&gt;This records what is actually different between the ILCE-7M3 and fp. Sony does not publish the α7 III sensor part number, and no α7 III firmware register table has been matched here yet; “IMX410” therefore remains a family-level identification, not proof that the silicon, CFA mask, package, or output protocol is identical.&lt;/p&gt;
+      &lt;div class=&quot;compare-grid&quot;&gt;
+        &lt;div class=&quot;compare-cell head&quot;&gt;Evidence&lt;/div&gt;&lt;div class=&quot;compare-cell head&quot;&gt;Sony α7 III&lt;/div&gt;&lt;div class=&quot;compare-cell head&quot;&gt;SIGMA fp&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;Published geometry&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;OFFICIAL&lt;/span&gt;25.3 MP total, 24.2 MP effective; 6000×4000 still output. Sony names it only “Exmor R CMOS.”&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;FIRMWARE&lt;/span&gt;6064×4042 full readout in V5.02. The public IMX410CQK flyer says 6064×4040 active; the two-line accounting difference does not establish a different die.&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;Exact sensor identity&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;INFERENCE&lt;/span&gt;Pixel count, 5.94 µm-class pitch and readout family are consistent with IMX410, but an official ILCE-7M3 part-number source has not been found.&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;OPEN&lt;/span&gt;The mode geometry strongly matches IMX410CQK. It still does not prove that the fp and α7 III use the same CFA / PDAF-mask variant.&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;Physical phase pixels&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;CONFIRMED&lt;/span&gt;693 focal-plane phase-detect points are official. Repeating masked-PDAF rows are also visible in α7 III RAW artifacts and have camera-specific correction support.&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;UNKNOWN&lt;/span&gt;SIGMA specifies 49-point contrast AF. No periodic masked-row signature has yet been demonstrated from fp CinemaDNG, so presence or absence of a physical PDAF mask remains unresolved.&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;PDAF software path&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;FUNCTIONAL&lt;/span&gt;Fast Hybrid AF consumes phase data in the shipping camera. The exact sensor registers and AF-statistics transport are not extracted here.&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;DEAD CODE&lt;/span&gt;The shared firmware contains PdCaf drive and defocus code, but AF-model vtable slot +0x184 always returns 0; setup, pkcnt writes and availability checks are gated off, and measured_defocus stays at −0x80000000.&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;Phase-data route&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;PARTIAL&lt;/span&gt;Masked-row artifacts prove that PDAF photosites affect the ordinary RAW raster. They do not prove that Sony lacks a second internal tap or auxiliary statistics channel.&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;NOT FOUND&lt;/span&gt;No separate PDAF virtual channel, embedded-data payload, or receiver path has been identified. SLVS-EC capability by itself is not evidence of phase data.&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;Readout / Open Gate&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;OFFICIAL&lt;/span&gt;Still capture is 3:2, but shipping movie formats top out at 3840×2160 or 1920×1080. There is no selectable 3:2 Open Gate movie mode.&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;MEASURED&lt;/span&gt;The firmware exposes 3:2 full modes. Mode 117 has run at 3032×2012 / 29.970p by changing VMAX only; sensor-side mode use is verified, while the final 3:2 recording canvas remains unfinished.&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;compare-notes&quot;&gt;
+        &lt;div&gt;&lt;strong&gt;Current conclusion.&lt;/strong&gt; α7 III proves that an IMX410-family camera can be built with physically masked PDAF pixels. It does not prove that PDAF can be enabled on fp by copying registers. Until the fp RAW raster shows the mask, the leading difference may be sensor hardware rather than a disabled output channel.&lt;/div&gt;
+        &lt;div&gt;&lt;strong&gt;Decisive fp test.&lt;/strong&gt; Capture unprocessed CinemaDNG under strong backlight / flare plus matched flat fields, then search row residuals for a stable periodic pattern across frames and ISOs. A positive pattern locates the physical mask; a negative result narrows the case but only die/package inspection can make absence conclusive.&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;sources&quot;&gt;Sources: &lt;a href=&quot;https://www.sony.com/electronics/support/e-mount-body-ilce-7-series/ilce-7m3/specifications&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;Sony ILCE-7M3 specifications&lt;/a&gt; · &lt;a href=&quot;https://www.sony-semicon.com/files/62/pdf/p-13_IMX410CQK_Flyer.pdf&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;Sony IMX410CQK flyer&lt;/a&gt; · &lt;a href=&quot;https://www.sigma-global.com/en/cameras/fp/&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;SIGMA fp specifications&lt;/a&gt; · &lt;a href=&quot;https://rawpedia.rawtherapee.com/Preprocessing&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;RawTherapee PDAF-line support&lt;/a&gt; · &lt;a href=&quot;https://aggregate.org/DIT/EI2019/karwysr.pdf&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;A7 III masked-pixel artifact study&lt;/a&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;lang-zh&quot;&gt;
+      &lt;h3&gt;α7 III 對照：同屬 IMX410 家族，不代表是完全相同的感光元件&lt;/h3&gt;
+      &lt;p class=&quot;compare-lead&quot;&gt;這裡只記錄 ILCE-7M3 與 fp 已有證據支持的差異。Sony 沒有公開 α7 III 的 sensor part number，而這裡也還沒有把 α7 III 韌體的 register table 對上；因此「IMX410」目前是家族層級的辨識，不能當成 silicon、CFA 遮罩、封裝或輸出協定完全相同的證明。&lt;/p&gt;
+      &lt;div class=&quot;compare-grid&quot;&gt;
+        &lt;div class=&quot;compare-cell head&quot;&gt;證據項目&lt;/div&gt;&lt;div class=&quot;compare-cell head&quot;&gt;Sony α7 III&lt;/div&gt;&lt;div class=&quot;compare-cell head&quot;&gt;SIGMA fp&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;公開幾何&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;官方&lt;/span&gt;總像素 25.3 MP、有效 24.2 MP，照片輸出 6000×4000；Sony 只稱 Exmor R CMOS。&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;韌體&lt;/span&gt;V5.02 的完整讀出是 6064×4042。公開 IMX410CQK flyer 是 active 6064×4040；這兩列的記帳差異不足以證明 die 不同。&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;精確型號&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;推測&lt;/span&gt;像素數、約 5.94 µm pixel pitch 與讀出家族都符合 IMX410，但尚未找到 Sony 官方把 ILCE-7M3 對到該 part number 的資料。&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;未解&lt;/span&gt;mode 幾何高度符合 IMX410CQK，但仍不能證明 fp 和 α7 III 使用相同的 CFA／PDAF mask 版本。&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;物理相位像素&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;已確認&lt;/span&gt;官方明列 693 點焦平面相位偵測；α7 III RAW 也會出現週期性 masked-PDAF rows 的條紋，已有機種專用校正。&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;未知&lt;/span&gt;SIGMA 官方只有 49 點對比 AF。目前尚未從 fp CinemaDNG 證明週期性 masked-row signature，所以物理 PDAF 遮罩存在與否仍未定案。&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;PDAF 軟體路徑&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;運作中&lt;/span&gt;量產機的 Fast Hybrid AF 確實消耗相位資料；但此處尚未抽出它的 sensor registers 或 AF statistics transport。&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;死碼&lt;/span&gt;共用韌體有 PdCaf 驅動與 defocus 程式，但 AF-model vtable slot +0x184 固定回 0；setup、pkcnt 寫入、availability check 全被 gate，measured_defocus 恆為 −0x80000000。&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;相位資料路線&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;部分證據&lt;/span&gt;masked-row artifact 證明 PDAF photosites 會影響普通 RAW raster；但它不能證明 Sony 內部沒有第二個 tap 或輔助統計通道。&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag infer&quot;&gt;尚未找到&lt;/span&gt;目前未識別到獨立 PDAF virtual channel、embedded-data payload 或 receiver path；只有 SLVS-EC 能力不能當成相位資料證據。&lt;/div&gt;
+        &lt;div class=&quot;compare-cell key&quot;&gt;讀出／Open Gate&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;官方&lt;/span&gt;照片可用 3:2，但量產影片只有最高 3840×2160 或 1920×1080，沒有可選的 3:2 Open Gate 錄影。&lt;/div&gt;&lt;div class=&quot;compare-cell&quot;&gt;&lt;span class=&quot;evidence-tag&quot;&gt;實機&lt;/span&gt;韌體有 3:2 full modes。Mode 117 已靠只改 VMAX 跑到 3032×2012／29.970p，sensor-side mode 實錄讀回已確認；最終 3:2 錄影畫布仍未完成。&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;compare-notes&quot;&gt;
+        &lt;div&gt;&lt;strong&gt;目前結論。&lt;/strong&gt;α7 III 證明 IMX410 家族可以做成帶物理 masked PDAF pixels 的版本，但不能證明把 register 搬到 fp 就能開 PDAF。除非先在 fp RAW raster 找到遮罩，首要差異更可能是 sensor hardware，而不是一條被關閉的輸出 channel。&lt;/div&gt;
+        &lt;div&gt;&lt;strong&gt;能定案的 fp 測試。&lt;/strong&gt;用強逆光／flare 拍未處理 CinemaDNG，再配合 flat-field，跨影格與 ISO 搜尋固定週期的 row residual。找到週期即可定位物理遮罩；找不到只能縮小可能性，要宣判完全不存在仍需 die／封裝層級檢查。&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;sources&quot;&gt;來源：&lt;a href=&quot;https://www.sony.com/electronics/support/e-mount-body-ilce-7-series/ilce-7m3/specifications&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;Sony ILCE-7M3 規格&lt;/a&gt; · &lt;a href=&quot;https://www.sony-semicon.com/files/62/pdf/p-13_IMX410CQK_Flyer.pdf&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;Sony IMX410CQK flyer&lt;/a&gt; · &lt;a href=&quot;https://www.sigma-global.com/en/cameras/fp/&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;SIGMA fp 規格&lt;/a&gt; · &lt;a href=&quot;https://rawpedia.rawtherapee.com/Preprocessing&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;RawTherapee PDAF row 校正&lt;/a&gt; · &lt;a href=&quot;https://aggregate.org/DIT/EI2019/karwysr.pdf&quot; target=&quot;_blank&quot; rel=&quot;noreferrer&quot;&gt;A7 III masked-pixel artifact 論文&lt;/a&gt;&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
   &lt;script&gt;
     (()=&gt;{
       const root=document.getElementById(&#x27;imx410-explainer&#x27;);
@@ -1040,13 +1103,13 @@ html&gt;body{padding:0}&lt;/style&gt;
         &#x27;一個 ISO，五個硬體階段&#x27;:&#x27;One ISO, five hardware stages&#x27;,
         &#x27;SIGMA fp Ver.5.02 · Sony IMX410 · ROM 規則與 sensor OTP 分層&#x27;:&#x27;SIGMA fp Ver.5.02 · Sony IMX410 · ROM rules and sensor OTP layers&#x27;,
         &#x27;韌體已確認&#x27;:&#x27;Firmware-confirmed&#x27;,&#x27;OTP／實機值&#x27;:&#x27;OTP / measured value&#x27;,
-        &#x27;① fp 相機設定&#x27;:&#x27;① fp camera setting&#x27;,&#x27;② 實際 Sensor mode&#x27;:&#x27;② Actual sensor mode&#x27;,
-        &#x27;拍攝路徑&#x27;:&#x27;Capture path&#x27;,&#x27;手動模擬 Analog code：&#x27;:&#x27;Manual simulated analog code: &#x27;,
+        &#x27;① fp 相機設定&#x27;:&#x27;① fp camera setting&#x27;,&#x27;② 實際 Sensor mode（70 個 logical modes）&#x27;:&#x27;② Actual sensor mode (70 logical modes)&#x27;,
+        &#x27;拍攝路徑&#x27;:&#x27;Capture path&#x27;,&#x27;資料率估算幀率：&#x27;:&#x27;Frame rate for data estimate: &#x27;,&#x27;可用 VMAX 另設&#x27;:&#x27;Can be set separately with VMAX&#x27;,&#x27;表內 VMAX：29.970030p&#x27;:&#x27;Table VMAX: 29.970030p&#x27;,&#x27;手動模擬 Analog code：&#x27;:&#x27;Manual simulated analog code: &#x27;,
         &#x27;注意：&#x27;:&#x27;Important: &#x27;,&#x27;這是研究用假設值，不是由 ISO 自動算出的實機值。真正 code 還依賴 LCG/HCG offset、sensor OTP、analog cap 與 gain-state；請勿把畫面組合視為該 ISO 的實際 register 狀態。&#x27;:&#x27;This is a research hypothesis, not a camera value calculated from ISO. The real code also depends on the LCG/HCG offset, sensor OTP, analog cap and gain state; do not treat the displayed combination as the camera’s actual register state at that ISO.&#x27;,
         &#x27;ISO：&#x27;:&#x27;ISO: &#x27;,&#x27;0xDFD · AR 門檻&#x27;:&#x27;0xDFD · AR threshold&#x27;,
-        &#x27;照片&#x27;:&#x27;Photo&#x27;,&#x27;一般影片&#x27;:&#x27;Standard video&#x27;,&#x27;一般影片 · 已驗證 sensor mapping&#x27;:&#x27;Standard video · verified sensor mapping&#x27;,&#x27;CinemaDNG · 已驗證 sensor mapping&#x27;:&#x27;CinemaDNG · verified sensor mapping&#x27;,&#x27;原廠可選 · sensor mapping 待確認&#x27;:&#x27;Stock settings · sensor mapping pending&#x27;,&#x27;CinemaDNG RAW8／10／12 · 其他解析度與幀率組合&#x27;:&#x27;CinemaDNG RAW8 / 10 / 12 · other resolution and frame-rate combinations&#x27;,&#x27;照片 readout&#x27;:&#x27;Photo readout&#x27;,
-        &#x27;對應 fp 原廠影片輸出&#x27;:&#x27;Matching stock fp video output&#x27;,&#x27;全部 RAW14 韌體模式&#x27;:&#x27;All RAW14 firmware modes&#x27;,
-        &#x27;其他 RAW12 隱藏模式&#x27;:&#x27;Other hidden RAW12 modes&#x27;,&#x27;自定義／其他&#x27;:&#x27;Custom / other&#x27;,
+        &#x27;照片&#x27;:&#x27;Photo&#x27;,&#x27;一般影片&#x27;:&#x27;Standard video&#x27;,&#x27;一般影片 · 4K 已確認；FHD 需 runtime Mode ID&#x27;:&#x27;Standard video · 4K confirmed; FHD needs runtime Mode ID&#x27;,&#x27;CinemaDNG · 已驗證 sensor mapping&#x27;:&#x27;CinemaDNG · verified sensor mapping&#x27;,&#x27;原廠可選 · sensor mapping 待確認&#x27;:&#x27;Stock settings · sensor mapping pending&#x27;,&#x27;CinemaDNG RAW8／10／12 · 其他解析度與幀率組合&#x27;:&#x27;CinemaDNG RAW8 / 10 / 12 · other resolution and frame-rate combinations&#x27;,&#x27;照片 readout&#x27;:&#x27;Photo readout&#x27;,
+        &#x27;3:2 · full（韌體旗標）· 21 modes&#x27;:&#x27;3:2 · full (firmware flag) · 21 modes&#x27;,&#x27;3:2 · crop（韌體旗標）· 6 modes&#x27;:&#x27;3:2 · crop (firmware flag) · 6 modes&#x27;,
+        &#x27;16:9 · full（韌體旗標）· 18 modes&#x27;:&#x27;16:9 · full (firmware flag) · 18 modes&#x27;,&#x27;16:9 · crop（韌體旗標）· 25 modes&#x27;:&#x27;16:9 · crop (firmware flag) · 25 modes&#x27;,&#x27;自定義／其他&#x27;:&#x27;Custom / other&#x27;,
         &#x27;靜態／一般影片／RAW 8·10-bit&#x27;:&#x27;Still / standard video / RAW 8·10-bit&#x27;,
         &#x27;韌體隱藏模式 · 尚未驗證整條錄影管線&#x27;:&#x27;Hidden firmware mode · full recording pipeline not yet verified&#x27;,
         &#x27;sensor raster&#x27;:&#x27;sensor raster&#x27;,&#x27;ADC／RAW&#x27;:&#x27;ADC / RAW&#x27;,&#x27;純 pixel bitstream&#x27;:&#x27;raw pixel bitstream&#x27;,
@@ -1065,6 +1128,8 @@ html&gt;body{padding:0}&lt;/style&gt;
         &#x27;高增益配套&#x27;:&#x27;High-gain companion mode&#x27;,&#x27;調整讀出 bias／線性／黑位&#x27;:&#x27;Adjusts readout bias / linearity / black level&#x27;,
         &#x27;ISO 區間&#x27;:&#x27;ISO range&#x27;,&#x27;靜態／一般影片&#x27;:&#x27;Still / standard video&#x27;,
         &#x27;每個 ISO 的 AR&#x27;:&#x27;AR at each ISO&#x27;,&#x27;需 OTP／實機 code&#x27;:&#x27;Requires OTP / measured code&#x27;,
+        &#x27;完整模式表：&#x27;:&#x27;Complete mode table: &#x27;,&#x27;選單列出 V5.02 韌體的全部 70 個 logical modes；其中只有 24 組不同的 sensor register payload。full／crop 是韌體 metadata，不代表該模式已能錄影，也不能單獨證明是完整感光面的 Open Gate。選項末尾的 C16–C23 是尚未命名的 metadata class +0x60，只用來區分尺寸與表內幀率相同的不同模式。&#x27;:&#x27;The selector lists all 70 logical modes in the V5.02 firmware; only 24 sensor-register payloads are distinct. The full / crop value is firmware metadata, not proof that the mode can be recorded or that it covers the complete Open Gate sensor area. C16–C23 at the end of each option is the still-unnamed metadata class at +0x60, used only to distinguish modes with the same raster and table frame rate.&#x27;,
+        &#x27;幀率不是 mode 的固有屬性：&#x27;:&#x27;Frame rate is not intrinsic to a mode: &#x27;,&#x27;選單顯示的是韌體 timing table 的 VMAX 預設值，不是固定格式或硬性上限。實機已驗證 Mode 117 把 VMAX 2184 改為 7280，可由 99.900100p 改成 29.970030p；HMAX 不變，因此 9.221 ms 捲簾讀出不變。上方可另填幀率估算資料率；其他值是否可穩定錄影仍須逐模式驗證。&#x27;:&#x27;The selector shows the firmware timing table’s VMAX preset, not a fixed format or hard limit. Hardware testing confirms that changing Mode 117 VMAX from 2184 to 7280 changes 99.900100p to 29.970030p; HMAX is unchanged, so the 9.221 ms rolling readout is unchanged. Enter a separate frame rate above to estimate data rate; stable recording at other values still needs per-mode validation.&#x27;,
         &#x27;已確認位址：gain compose 0xC0323580 · register writer 0xC0323818 · HCG selector 0xC03239C8 · AR threshold analog code 0x0DFD · OTP blob offset 0xC00 / 510 bytes&#x27;:&#x27;Confirmed addresses: gain compose 0xC0323580 · register writer 0xC0323818 · HCG selector 0xC03239C8 · AR threshold analog code 0x0DFD · OTP blob offset 0xC00 / 510 bytes&#x27;
       };
       function translateText(source){return translations[source]||source
@@ -1080,6 +1145,7 @@ html&gt;body{padding:0}&lt;/style&gt;
       groups.forEach(group=&gt;group.dataset.zhLabel=group.label);
       function applyLanguage(){
         const english=lang===&#x27;en&#x27;;
+        root.dataset.lang=lang;
         translatable.forEach(node=&gt;{const source=originalText.get(node),trimmed=source.trim(),padding=source.match(/^\s*/)[0];node.nodeValue=padding+(english?translateText(trimmed):trimmed)});
         groups.forEach(group=&gt;{group.label=english?translateText(group.dataset.zhLabel):group.dataset.zhLabel});
         document.documentElement.lang=english?&#x27;en&#x27;:&#x27;zh-Hant&#x27;;
@@ -1088,29 +1154,111 @@ html&gt;body{padding:0}&lt;/style&gt;
         $(&#x27;lang-toggle&#x27;).setAttribute(&#x27;aria-label&#x27;,english?&#x27;切換為繁體中文&#x27;:&#x27;Switch to English&#x27;);
       }
       const isos=[100,200,320,400,500,640,800,1000,1250,1600,2000,2500,3200,6400,12800];
-      const camera=$(&#x27;camera-setting&#x27;),mode=$(&#x27;imx-mode&#x27;),iso=$(&#x27;imx-iso&#x27;),code=$(&#x27;imx-code&#x27;),preset=$(&#x27;imx-preset&#x27;);
-      const cameraMap={photo:{p:8,m:&#x27;movie&#x27;},v4k2997:{p:0,m:&#x27;movie&#x27;},v4k25:{p:1,m:&#x27;movie&#x27;},v4k2398:{p:2,m:&#x27;movie&#x27;},vfhd119:{p:5,m:&#x27;movie&#x27;},vfhd5994:{p:3,m:&#x27;movie&#x27;},vfhd2997:{p:4,m:&#x27;movie&#x27;},vfhd2398:{p:18,m:&#x27;movie&#x27;},cdng4k12:{p:0,m:&#x27;raw12&#x27;}};
-      const presets=[
-        {w:4176,h:2174,ow:3840,oh:2160,b:12,f:29.970030,s:&#x27;stock&#x27;},{w:4176,h:2174,ow:3840,oh:2160,b:12,f:25.000000,s:&#x27;stock&#x27;},
-        {w:4176,h:2174,ow:3840,oh:2160,b:12,f:23.976024,s:&#x27;stock&#x27;},{w:2088,h:1174,ow:1920,oh:1080,b:12,f:59.940060,s:&#x27;stock&#x27;},
-        {w:2088,h:1174,ow:1920,oh:1080,b:12,f:29.970030,s:&#x27;stock&#x27;},{w:2016,h:1136,ow:1920,oh:1080,b:12,f:119.880120,s:&#x27;stock&#x27;},
-        {w:4176,h:2174,b:14,f:29.970030,s:&#x27;hidden&#x27;},{w:5712,h:3216,b:14,f:23.976024,s:&#x27;hidden&#x27;},
-        {w:6064,h:4042,ow:6000,oh:4000,b:14,f:19.127306,s:&#x27;photo&#x27;},{w:6064,h:4042,b:12,f:39.157249,s:&#x27;hidden&#x27;},
-        {w:6064,h:4042,b:12,f:29.973648,s:&#x27;hidden&#x27;},{w:6064,h:3412,b:12,f:29.970030,s:&#x27;hidden&#x27;},
-        {w:6064,h:2022,b:12,f:59.925000,s:&#x27;hidden&#x27;},{w:3968,h:2640,b:12,f:39.309000,s:&#x27;hidden&#x27;},
-        {w:3032,h:2012,b:12,f:105.402000,s:&#x27;hidden&#x27;},{w:3032,h:1708,b:12,f:119.880000,s:&#x27;hidden&#x27;},
-        {w:2016,h:1344,b:12,f:119.880000,s:&#x27;hidden&#x27;},{w:2016,h:672,b:12,f:239.760000,s:&#x27;hidden&#x27;},
-        {w:2088,h:1174,ow:1920,oh:1080,b:12,f:23.976024,s:&#x27;stock&#x27;},
-        {w:4176,h:2174,b:14,f:25.000000,s:&#x27;hidden&#x27;},
-        {w:4176,h:2174,ow:3032,oh:2174,b:14,f:23.976024,s:&#x27;hidden&#x27;},
-        {w:3968,h:2640,b:14,f:19.201659,s:&#x27;hidden&#x27;},
-        {w:6064,h:4042,b:14,f:18.003196,s:&#x27;hidden&#x27;},
-        {w:3968,h:2640,b:14,f:18.003196,s:&#x27;hidden&#x27;}
+      const camera=$(&#x27;camera-setting&#x27;),mode=$(&#x27;imx-mode&#x27;),iso=$(&#x27;imx-iso&#x27;),code=$(&#x27;imx-code&#x27;),preset=$(&#x27;imx-preset&#x27;),estimateFps=$(&#x27;estimate-fps&#x27;);
+      const cameraMap={photo:{p:0,m:&#x27;movie&#x27;},v4k2997:{p:102,m:&#x27;movie&#x27;},v4k25:{p:124,m:&#x27;movie&#x27;},v4k2398:{p:108,m:&#x27;movie&#x27;},vfhd119:{p:134,m:&#x27;movie&#x27;},vfhd5994:{p:88,m:&#x27;movie&#x27;},vfhd2997:{p:107,m:&#x27;movie&#x27;},vfhd2398:{p:110,m:&#x27;movie&#x27;},cdng4k12:{p:102,m:&#x27;raw12&#x27;}};
+      const firmwareModes=[
+        {id:0,w:6064,h:4042,b:14,f:19.127306036,ms:51.142528,bh:1,bv:1,c:16},
+        {id:97,w:6064,h:4042,b:12,f:39.157248986,ms:24.981806,bh:1,bv:1,c:17},
+        {id:98,w:3032,h:2012,b:12,f:77.267312707,ms:12.435278,bh:2,bv:2,c:18},
+        {id:3,w:6064,h:4042,b:12,f:29.973648168,ms:24.981806,bh:1,bv:1,c:17},
+        {id:121,w:6064,h:4042,b:12,f:24.999652783,ms:24.981806,bh:1,bv:1,c:17},
+        {id:6,w:4176,h:2174,b:14,f:29.970029970,ms:27.507139,bh:1,bv:1,c:16},
+        {id:122,w:4176,h:2174,b:14,f:25.000000000,ms:27.507139,bh:1,bv:1,c:16},
+        {id:95,w:5712,h:3216,b:14,f:23.976023976,ms:40.691333,bh:1,bv:1,c:16},
+        {id:100,w:4176,h:2174,b:14,f:23.976023976,ms:27.507139,bh:1,bv:1,c:16},
+        {id:7,w:6064,h:3412,b:12,f:29.970029970,ms:21.088056,bh:1,bv:1,c:17},
+        {id:123,w:6064,h:3412,b:12,f:25.000000000,ms:21.325000,bh:1,bv:1,c:17},
+        {id:102,w:4176,h:2174,b:12,f:29.970029970,ms:13.436528,bh:1,bv:1,c:17},
+        {id:124,w:4176,h:2174,b:12,f:25.000000000,ms:13.587500,bh:1,bv:1,c:17},
+        {id:101,w:6064,h:3412,b:12,f:23.976023976,ms:21.088056,bh:1,bv:1,c:17},
+        {id:108,w:4176,h:2174,b:12,f:23.976023976,ms:13.436528,bh:1,bv:1,c:17},
+        {id:27,w:3032,h:1708,b:12,f:59.940059940,ms:10.556389,bh:2,bv:2,c:18},
+        {id:115,w:3032,h:1708,b:12,f:50.000000000,ms:10.675000,bh:2,bv:2,c:18},
+        {id:88,w:2088,h:1174,b:12,f:59.940059940,ms:7.255972,bh:2,bv:2,c:18},
+        {id:116,w:2088,h:1174,b:12,f:50.000000000,ms:7.337500,bh:2,bv:2,c:18},
+        {id:106,w:3032,h:1708,b:12,f:29.970029970,ms:10.556389,bh:2,bv:2,c:18},
+        {id:125,w:3032,h:1708,b:12,f:25.000000000,ms:10.675000,bh:2,bv:2,c:18},
+        {id:107,w:2088,h:1174,b:12,f:29.970029970,ms:7.255972,bh:2,bv:2,c:18},
+        {id:126,w:2088,h:1174,b:12,f:25.000000000,ms:7.337500,bh:2,bv:2,c:18},
+        {id:109,w:3032,h:1708,b:12,f:23.976023976,ms:10.556389,bh:2,bv:2,c:18},
+        {id:110,w:2088,h:1174,b:12,f:23.976023976,ms:7.255972,bh:2,bv:2,c:18},
+        {id:58,w:3032,h:1708,b:12,f:119.880119880,ms:7.828333,bh:2,bv:2,c:19},
+        {id:89,w:3032,h:1708,b:12,f:100.000000000,ms:8.540000,bh:2,bv:2,c:19},
+        {id:103,w:2088,h:1174,b:12,f:119.880119880,ms:5.380833,bh:2,bv:2,c:19},
+        {id:118,w:2088,h:1174,b:12,f:100.000000000,ms:5.870000,bh:2,bv:2,c:19},
+        {id:104,w:3032,h:1708,b:12,f:59.940059940,ms:7.828333,bh:2,bv:2,c:19},
+        {id:105,w:2088,h:1174,b:12,f:59.940059940,ms:5.380833,bh:2,bv:2,c:19},
+        {id:111,w:3032,h:1708,b:12,f:29.970029970,ms:7.828333,bh:2,bv:2,c:19},
+        {id:127,w:3032,h:1708,b:12,f:25.000000000,ms:8.540000,bh:2,bv:2,c:19},
+        {id:112,w:2088,h:1174,b:12,f:29.970029970,ms:5.380833,bh:2,bv:2,c:19},
+        {id:128,w:2088,h:1174,b:12,f:25.000000000,ms:5.870000,bh:2,bv:2,c:19},
+        {id:113,w:3032,h:1708,b:12,f:23.976023976,ms:7.828333,bh:2,bv:2,c:19},
+        {id:114,w:2088,h:1174,b:12,f:23.976023976,ms:5.380833,bh:2,bv:2,c:19},
+        {id:139,w:2016,h:1344,b:12,f:59.925093633,ms:8.306667,bh:3,bv:2,c:20},
+        {id:56,w:2016,h:1344,b:12,f:119.880119880,ms:6.160000,bh:3,bv:2,c:21},
+        {id:140,w:2016,h:672,b:12,f:59.925093633,ms:4.153333,bh:3,bv:3,c:22},
+        {id:11,w:3032,h:2012,b:12,f:105.401844532,ms:9.221667,bh:2,bv:2,c:19},
+        {id:117,w:3032,h:2012,b:12,f:99.900099900,ms:9.221667,bh:2,bv:2,c:19},
+        {id:12,w:2016,h:672,b:12,f:239.760239760,ms:3.080000,bh:3,bv:3,c:23},
+        {id:129,w:3968,h:2640,b:14,f:19.201659023,ms:33.403333,bh:1,bv:1,c:16},
+        {id:130,w:3968,h:2640,b:12,f:39.309463753,ms:16.316667,bh:1,bv:1,c:17},
+        {id:131,w:1984,h:1320,b:12,f:78.238758612,ms:8.158333,bh:2,bv:2,c:18},
+        {id:132,w:2088,h:1174,b:12,f:119.880119880,ms:7.255972,bh:2,bv:2,c:18},
+        {id:133,w:2088,h:1174,b:12,f:100.000000000,ms:7.337500,bh:2,bv:2,c:18},
+        {id:134,w:2016,h:1136,b:12,f:119.880119880,ms:7.021111,bh:3,bv:2,c:20},
+        {id:10,w:6064,h:2022,b:12,f:59.925093633,ms:12.497083,bh:1,bv:1,c:17},
+        {id:135,w:3032,h:1708,b:12,f:47.952047952,ms:10.556389,bh:2,bv:2,c:18},
+        {id:136,w:2088,h:1174,b:12,f:47.952047952,ms:7.255972,bh:2,bv:2,c:18},
+        {id:8,w:2016,h:1344,b:12,f:59.940059940,ms:6.160000,bh:3,bv:2,c:21},
+        {id:9,w:2016,h:672,b:12,f:59.940059940,ms:3.080000,bh:3,bv:3,c:23},
+        {id:141,w:6064,h:4042,b:14,f:18.003195567,ms:51.142528,bh:1,bv:1,c:16},
+        {id:142,w:6064,h:4042,b:12,f:18.001530130,ms:24.981806,bh:1,bv:1,c:17},
+        {id:143,w:3032,h:2012,b:12,f:18.001530130,ms:12.435278,bh:2,bv:2,c:18},
+        {id:144,w:3968,h:2640,b:14,f:18.003195567,ms:33.403333,bh:1,bv:1,c:16},
+        {id:145,w:3968,h:2640,b:12,f:18.001530130,ms:16.316667,bh:1,bv:1,c:17},
+        {id:146,w:1984,h:1320,b:12,f:18.001530130,ms:8.158333,bh:2,bv:2,c:18},
+        {id:147,w:2016,h:1344,b:12,f:100.153011545,ms:7.373333,bh:3,bv:2,c:21},
+        {id:148,w:2016,h:1344,b:12,f:69.974925652,ms:6.160000,bh:3,bv:2,c:21},
+        {id:149,w:2016,h:1344,b:12,f:79.978672354,ms:6.160000,bh:3,bv:2,c:21},
+        {id:150,w:2016,h:1344,b:12,f:89.934797272,ms:6.160000,bh:3,bv:2,c:21},
+        {id:151,w:6064,h:3412,b:12,f:24.000000000,ms:21.088056,bh:1,bv:1,c:17},
+        {id:152,w:4176,h:2174,b:12,f:24.000000000,ms:13.436528,bh:1,bv:1,c:17},
+        {id:218,w:3032,h:1708,b:12,f:24.000000000,ms:10.556389,bh:2,bv:2,c:18},
+        {id:219,w:2088,h:1174,b:12,f:24.000000000,ms:7.255972,bh:2,bv:2,c:18},
+        {id:220,w:3032,h:1708,b:12,f:48.000000000,ms:10.556389,bh:2,bv:2,c:18},
+        {id:221,w:2088,h:1174,b:12,f:48.000000000,ms:7.255972,bh:2,bv:2,c:18},
       ];
+      const modeGroups=[
+        {el:&#x27;modes-32-full&#x27;,aspect:&#x27;3:2&#x27;,area:&#x27;full&#x27;,ids:[0,97,98,3,121,139,56,140,11,117,12,10,8,9,141,142,143,147,148,149,150]},
+        {el:&#x27;modes-32-crop&#x27;,aspect:&#x27;3:2&#x27;,area:&#x27;crop&#x27;,ids:[129,130,131,144,145,146]},
+        {el:&#x27;modes-169-full&#x27;,aspect:&#x27;16:9&#x27;,area:&#x27;full&#x27;,ids:[7,123,101,27,115,106,125,109,58,89,104,111,127,113,135,151,218,220]},
+        {el:&#x27;modes-169-crop&#x27;,aspect:&#x27;16:9&#x27;,area:&#x27;crop&#x27;,ids:[6,122,95,100,102,124,108,88,116,107,126,110,103,118,105,112,128,114,132,133,134,136,152,219,221]}
+      ];
+      const outputByMode={0:[6000,4000,&#x27;crop&#x27;],97:[6000,4000,&#x27;crop&#x27;],98:[3000,2000,&#x27;crop&#x27;],100:[3032,2174,&#x27;stage&#x27;],102:[3840,2160,&#x27;record&#x27;],124:[3840,2160,&#x27;record&#x27;],108:[3840,2160,&#x27;record&#x27;],88:[1920,1080,&#x27;record&#x27;],107:[1920,1080,&#x27;record&#x27;],110:[1920,1080,&#x27;record&#x27;],134:[1920,1080,&#x27;record&#x27;],141:[6000,4000,&#x27;crop&#x27;],142:[6000,4000,&#x27;crop&#x27;],143:[3000,2000,&#x27;crop&#x27;]};
+      const stockIds=new Set([102,124,108]);
+      const candidateIds=new Set([88,107,110,134]);
+      const presets=Object.fromEntries(firmwareModes.map(p=&gt;[p.id,p]));
+      modeGroups.forEach(group=&gt;{
+        const target=$(group.el);
+        group.ids.forEach(id=&gt;{presets[id].aspect=group.aspect;presets[id].area=group.area});
+        group.ids.map(id=&gt;presets[id]).sort((a,b)=&gt;b.w-a.w||b.h-a.h||b.f-a.f||a.id-b.id).forEach(p=&gt;{
+          const out=outputByMode[p.id];if(out){p.ow=out[0];p.oh=out[1];p.outKind=out[2]}
+          p.s=p.id===0?&#x27;photo&#x27;:(stockIds.has(p.id)?&#x27;stock&#x27;:(candidateIds.has(p.id)?&#x27;candidate&#x27;:&#x27;hidden&#x27;));
+          const option=document.createElement(&#x27;option&#x27;);
+          const arrow=p.ow?&#x27; → &#x27;+p.ow+&#x27;×&#x27;+p.oh:&#x27;&#x27;;
+          const sampling=p.bh===1&amp;&amp;p.bv===1?&#x27;&#x27;:&#x27; · &#x27;+p.bh+&#x27;×&#x27;+p.bv;
+          option.value=String(p.id);
+          option.textContent=&#x27;M&#x27;+p.id+&#x27; · &#x27;+p.w+&#x27;×&#x27;+p.h+arrow+&#x27; · VMAX &#x27;+p.f.toFixed(6)+&#x27;p · RAW&#x27;+p.b+sampling+&#x27; · &#x27;+p.ms.toFixed(3)+&#x27; ms · C&#x27;+p.c;
+          target.appendChild(option);
+        });
+      });
+      const syncEstimateFps=()=&gt;{estimateFps.value=presets[+preset.value].f.toFixed(6)};
+      const initial=cameraMap[camera.value];preset.value=String(initial.p);mode.value=initial.m;syncEstimateFps();
       const adc=$(&#x27;adc&#x27;);
       for(let i=0;i&lt;8;i++){const b=document.createElement(&#x27;i&#x27;);b.style.height=(22+i*7)+&#x27;%&#x27;;adc.appendChild(b)}
       function update(){
         const iv=isos[+iso.value],cv=+code.value,m=mode.value,p=presets[+preset.value];
+        const requestedFps=Number(estimateFps.value),rateFps=Number.isFinite(requestedFps)&amp;&amp;requestedFps&gt;0?requestedFps:p.f;
         let hcg=false,known=true,threshold=640;
         if(m===&#x27;raw12&#x27;){threshold=3200;hcg=iv&gt;=threshold}
         else if(m===&#x27;movie&#x27;){threshold=640;hcg=iv&gt;=threshold}
@@ -1119,6 +1267,8 @@ html&gt;body{padding:0}&lt;/style&gt;
         const high=cv&gt;=0xDFD;
         const linear=4095/(4095-cv),db=20*Math.log10(linear);
         $(&#x27;imx-iso-value&#x27;).textContent=iv;
+        $(&#x27;estimate-fps-value&#x27;).textContent=rateFps.toFixed(6)+&#x27;p&#x27;;
+        $(&#x27;table-fps&#x27;).textContent=(lang===&#x27;en&#x27;?&#x27;Table VMAX: &#x27;:&#x27;表內 VMAX：&#x27;)+p.f.toFixed(6)+&#x27;p&#x27;;
         $(&#x27;imx-code-value&#x27;).textContent=cv+&#x27; · 0x&#x27;+cv.toString(16).toUpperCase().padStart(3,&#x27;0&#x27;);
         $(&#x27;amp-value&#x27;).textContent=linear.toFixed(2)+&#x27;× · &#x27;+db.toFixed(1)+&#x27; dB&#x27;;
         $(&#x27;bucket&#x27;).style.height=(hcg?62:91)+&#x27;px&#x27;;
@@ -1132,7 +1282,7 @@ html&gt;body{padding:0}&lt;/style&gt;
         $(&#x27;ar-caption&#x27;).textContent=high?(en?&#x27;High: companion mode for high analog gain&#x27;:&#x27;High：高 analog gain 配套&#x27;):(en?&#x27;Normal: low / medium gain operating point&#x27;:&#x27;Normal：低／中增益工作點&#x27;);
         $(&#x27;stage-ar&#x27;).classList.toggle(&#x27;active&#x27;,high);
         $(&#x27;adc-caption&#x27;).innerHTML=en?&#x27;Sensor specification: 11 / 12 / 14-bit&lt;br&gt;fp V5.02 table: RAW12 / RAW14&lt;br&gt;Current mode: RAW&#x27;+p.b:&#x27;Sensor 規格：11／12／14-bit&lt;br&gt;fp V5.02 表內：RAW12／RAW14&lt;br&gt;目前模式：RAW&#x27;+p.b;
-        const bytes=p.w*p.h*p.b/8, rate=bytes*p.f/1e6, cap=bytes*p.f*1200/1e9;
+        const bytes=p.w*p.h*p.b/8, rate=bytes*rateFps/1e6, cap=bytes*rateFps*1200/1e9;
         $(&#x27;raster&#x27;).innerHTML=p.w+&#x27;×&#x27;+p.h+(p.ow?&#x27;&lt;br&gt;→ &#x27;+p.ow+&#x27;×&#x27;+p.oh:&#x27;&#x27;);
         $(&#x27;raster&#x27;).style.width=(70+90*p.w/6064)+&#x27;px&#x27;;
         $(&#x27;raster&#x27;).style.height=(38+50*p.h/4042)+&#x27;px&#x27;;
@@ -1140,7 +1290,10 @@ html&gt;body{padding:0}&lt;/style&gt;
         $(&#x27;metric-adc&#x27;).textContent=p.b+&#x27;-bit&#x27;;
         $(&#x27;metric-rate&#x27;).textContent=rate.toFixed(1)+&#x27; MB/s&#x27;;
         $(&#x27;metric-cap&#x27;).textContent=cap.toFixed(0)+&#x27; GB&#x27;;
-        $(&#x27;mode-status&#x27;).textContent=p.s===&#x27;stock&#x27;?(en?&#x27;Sensor raster above; user recording size follows the arrow&#x27;:&#x27;上方為 sensor raster；箭頭後為使用者錄影尺寸&#x27;):p.s===&#x27;photo&#x27;?(en?&#x27;Single-photo output; 19.127 fps is the continuous sensor-readout limit&#x27;:&#x27;照片單張輸出；19.127 fps 是 sensor 連續讀出上限&#x27;):(en?&#x27;Hidden firmware mode · XZ01 / buffer / recorder / thermals not yet verified&#x27;:&#x27;韌體隱藏模式 · 尚未驗證 XZ01／buffer／錄影器／散熱&#x27;);
+        const modeMeta=en?&#x27;Mode &#x27;+p.id+&#x27; · firmware &#x27;+p.aspect+&#x27;/&#x27;+p.area+&#x27; · VMAX preset &#x27;+p.f.toFixed(6)+&#x27;p · estimate &#x27;+rateFps.toFixed(6)+&#x27;p · sampling &#x27;+p.bh+&#x27;×&#x27;+p.bv+&#x27; · readout &#x27;+p.ms.toFixed(3)+&#x27; ms · C&#x27;+p.c:&#x27;Mode &#x27;+p.id+&#x27; · 韌體 &#x27;+p.aspect+&#x27;/&#x27;+p.area+&#x27; · VMAX 預設 &#x27;+p.f.toFixed(6)+&#x27;p · 估算 &#x27;+rateFps.toFixed(6)+&#x27;p · sampling &#x27;+p.bh+&#x27;×&#x27;+p.bv+&#x27; · 讀出 &#x27;+p.ms.toFixed(3)+&#x27; ms · C&#x27;+p.c;
+        const hiddenRoute=p.outKind===&#x27;crop&#x27;?(en?&#x27;hidden mode; arrow shows the firmware final crop; recording pipeline not verified&#x27;:&#x27;隱藏模式；箭頭為韌體最終裁切；錄影管線尚未驗證&#x27;):p.outKind===&#x27;stage&#x27;?(en?&#x27;hidden mode; arrow shows an intermediate stage output; recording pipeline not verified&#x27;:&#x27;隱藏模式；箭頭為中間 stage 輸出；錄影管線尚未驗證&#x27;):(en?&#x27;hidden mode; XZ01 / buffer / recorder / thermals not verified&#x27;:&#x27;隱藏模式；XZ01／buffer／錄影器／散熱尚未驗證&#x27;);
+        const modeRoute=p.s===&#x27;stock&#x27;?(en?&#x27;confirmed 4K route; user recording size follows the arrow&#x27;:&#x27;已確認的 4K 路徑；箭頭後為使用者錄影尺寸&#x27;):p.s===&#x27;candidate&#x27;?(en?&#x27;representative FHD candidate; capture the runtime Mode ID to choose the exact mode&#x27;:&#x27;FHD 代表候選；需擷取 runtime Mode ID 才能確定實際模式&#x27;):p.s===&#x27;photo&#x27;?(en?&#x27;single-photo output; arrow shows the final crop and the listed frame rate is the table VMAX preset&#x27;:&#x27;照片單張輸出；箭頭為最終裁切，所列幀率是表內 VMAX 預設&#x27;):hiddenRoute;
+        $(&#x27;mode-status&#x27;).textContent=modeMeta+&#x27; · &#x27;+modeRoute;
         $(&#x27;code-marker&#x27;).style.setProperty(&#x27;--pos&#x27;,(cv/4094*100).toFixed(2)+&#x27;%&#x27;);
         $(&#x27;iso-marker&#x27;).style.setProperty(&#x27;--pos&#x27;,(+iso.value/(isos.length-1)*100).toFixed(2)+&#x27;%&#x27;);
         if(!known) $(&#x27;cg-fact&#x27;).innerHTML=en?&#x27;&lt;strong&gt;Current: OTP required&lt;/strong&gt; · The Live View threshold is not fixed in ROM&#x27;:&#x27;&lt;strong&gt;目前：需讀 OTP&lt;/strong&gt; · Live View 門檻不是 ROM 固定值&#x27;;
@@ -1151,10 +1304,10 @@ html&gt;body{padding:0}&lt;/style&gt;
         $(&#x27;cg-left&#x27;).style.width=pct+&#x27;%&#x27;;$(&#x27;cg-right&#x27;).style.width=(100-pct)+&#x27;%&#x27;;
         $(&#x27;cg-right&#x27;).textContent=threshold===Infinity?(en?&#x27;No auto switch&#x27;:&#x27;不自動切換&#x27;):&#x27;HCG&#x27;;
       }
-      camera.addEventListener(&#x27;input&#x27;,()=&gt;{const x=cameraMap[camera.value];if(x){preset.value=String(x.p);mode.value=x.m}update()});
-      preset.addEventListener(&#x27;input&#x27;,()=&gt;{camera.value=&#x27;custom&#x27;;update()});
+      camera.addEventListener(&#x27;input&#x27;,()=&gt;{const x=cameraMap[camera.value];if(x){preset.value=String(x.p);mode.value=x.m;syncEstimateFps()}update()});
+      preset.addEventListener(&#x27;input&#x27;,()=&gt;{camera.value=&#x27;custom&#x27;;syncEstimateFps();update()});
       mode.addEventListener(&#x27;input&#x27;,()=&gt;{camera.value=&#x27;custom&#x27;;update()});
-      [iso,code].forEach(el=&gt;el.addEventListener(&#x27;input&#x27;,update));
+      [iso,code,estimateFps].forEach(el=&gt;el.addEventListener(&#x27;input&#x27;,update));
       $(&#x27;lang-toggle&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{lang=lang===&#x27;en&#x27;?&#x27;zh-Hant&#x27;:&#x27;en&#x27;;try{localStorage.setItem(&#x27;imx410-lang&#x27;,lang)}catch(_error){}applyLanguage();update()});
       applyLanguage();
       update();

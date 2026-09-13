@@ -476,6 +476,40 @@ class Editions(unittest.TestCase):
         i = code.index('B_PTR')
         self.assertRegex(code[i:i + 200], r'str\s+r0, \[r1\], #4')
 
+    def test_the_sidecars_have_somewhere_to_go(self):
+        """v1.11a wrote nothing at all when the take went to an external SSD:
+        the path is \\CINEMA\\<clip>\\<clip>.gcsv, which needs the clip's own
+        folder to exist, and if it does not the open just fails.  Base never
+        showed this because \\GYRO\\<clip>.GYR is created whatever the name.
+
+        Three rungs now, and the one that matters for an SSD take is the
+        middle one -- its log belongs on the SSD, not on whichever card is in
+        the slot.  Each rung records what it got, because a camera with an SSD
+        in its only USB socket cannot be watched while it records."""
+        task = (HERE / 'gcsv_task.S').read_text()
+        code = re.sub(r'/\*.*?\*/', '', task, flags=re.S)
+        code = re.sub(r'@.*', '', code)
+        openf = code[code.index('\nwriter_openfile:'):code.index('\nclip_path:')]
+        for w in ('D_OPEN1', 'D_OPEN2', 'D_OPEN3', 'D_VOL', 'G_FALLBACK'):
+            self.assertIn(w, openf, f'the open never records {w}')
+        self.assertEqual(openf.count('bl      try_open'), 3, 'not three rungs')
+        # the middle rung keeps the recording volume; only the last drops to SD
+        self.assertEqual(openf.count('VOL_SD'), 1,
+                         'more than one rung goes to the SD card')
+        # a failed open must leave nothing built, or every later open fails too
+        tri = code[code.index('\ntry_open:'):code.index('\ndbg_path:')]
+        self.assertIn('F_DTOR', tri, 'try_open leaves the object built on failure')
+        # and nothing makes a directory: doing that at record start froze the
+        # camera on every SSD take, which is why the fallback is a root.
+        for f in ('gcsv_task.S', 'ring_task.S', 'writer_core.inc.S'):
+            src = re.sub(r'/\*.*?\*/', '', (HERE / f).read_text(), flags=re.S)
+            src = re.sub(r'@.*', '', src)
+            self.assertNotIn('MKDIR', src, f'{f} makes a directory')
+        # and the json has to land where the gcsv did
+        js = re.sub(r'/\*.*?\*/', '', (HERE / 'gcsv_json.S').read_text(), flags=re.S)
+        self.assertIn('G_FALLBACK', js, 'the json does not follow the gcsv')
+        self.assertIn('VOL_SD', js)
+
     def test_the_header_names_the_clip(self):
         """Gyroflow matches a log to a clip by videofilename.  The name came out
         of the path with a fixed skip of six -- the length of Base's "\\GYRO\\" --

@@ -4,3 +4,9 @@ gyro/autorun/
 gyro/.pgen.bin
 *.bak
 __pycache__/
+
+# August experiments stay untracked; the reviewed lossless-codec suite is kept.
+raw/*
+!raw/README.md
+!raw/lossless_codec/
+!raw/lossless_codec/**

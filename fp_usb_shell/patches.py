@@ -6,12 +6,24 @@ whichever mode was the default. That happened twice in one evening, once
 replacing a loader build with a classic one nobody asked for.
 """
 
-PATCHES = [
+# Two different jobs, and they used to be one list.  The first patch is what
+# makes the channel reachable at all: with the interface still declaring itself
+# PTP, the host's own PTP stack claims interface 0 before the daemon can, and
+# every command comes back LIBUSB_ERROR_ACCESS.  The other six shape EP 0x83
+# for hook-push, which only a USB-attached development session does.
+#
+# A card that carries the shell needs the first and not the other six.  They
+# were bundled, and --no-ep-patches dropped all seven, so the first debug card
+# anyone tried to talk to could not be talked to (macOS: ptpcamerad had it).
+IFACE = [
     (0xC0CF3740, 0xFFFFFF03,
      "PTP interface template: {bNumEndpoints, class, subclass, protocol}",
      "03/06/01/01 -> 03/ff/ff/ff.  Lengths and the endpoint set are untouched;",
      "this only stops the host's PTP stack from claiming interface 0 before the",
      "shell daemon can."),
+]
+
+PUSH = [
     (0xC0CF3780, 0x02830507, "EP 0x83, SuperSpeed: interrupt -> bulk"),
     (0xC0CF3784, 0x00000400, "EP 0x83, SuperSpeed: wMaxPacketSize 64 -> 1024, bInterval 11 -> 0"),
     (0xC0CF3758, 0x00033006, "its SuperSpeed companion: bMaxBurst 0 -> 3"),
@@ -19,6 +31,8 @@ PATCHES = [
     (0xC0CF3798, 0x02830507, "EP 0x83, full speed: interrupt -> bulk"),
     (0xC0CF379C, 0x00000040, "EP 0x83, full speed: bInterval 100 -> 0"),
 ]
+
+PATCHES = IFACE + PUSH        # both, for a USB development build
 
 SCREEN = [
     (0xC0BB1208, 0xFFFFF8B2, "text colour"),
