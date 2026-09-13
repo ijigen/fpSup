@@ -72,9 +72,27 @@ u8        count - 1
 u16[count] little-endian samples
 ```
 
-Decode a record like this. First write the `count` samples. Then write the last
-sample `run - 1` more times. The samples are 16-bit greyscale, `0x0000` is
-black and `0xFFFF` is white. Rows run from top to bottom and from left to right.
+Decode a record like this. **First repeat the previous pixel `run - 1` more
+times. Then write the `count` samples.** The run extends what came before it; it
+does not repeat what follows. The samples are 16-bit greyscale, `0x0000` is black
+and `0xFFFF` is white. Rows run from top to bottom and from left to right.
+
+**The run comes before the literals, and getting that backwards is invisible to a
+count.** Two earlier versions of this file said the literals come first and the
+last sample then repeats. That produces the identical number of pixels, so it
+passed every check anyone had written, while putting every run on the wrong side
+of its literals. The damage accumulates along the row: each glyph is dragged
+right by the length of the run that should have preceded it, which reads as a
+horizontal smear that grows down the image.
+
+It was twice mistaken for something else — once for a viewer mishandling 16-bit
+PNG, and once for an italic typeface, because the constant leftward creep of the
+glyph edges looks like a slant. The lettering is upright.
+
+The test that separates the two orderings is not a pixel count, because they
+agree. It is whether the image is as smooth down as it is across. Over 260
+blocks, the mean ratio of vertical to horizontal gradient is **1.06** with the
+run first, and **2.40** with the literals first. Real artwork sits near 1.
 
 **The last byte is a run length, not a trailer.** An earlier version of this file
 called it a trailer, and said to pad the tail with the last sample until the
@@ -108,12 +126,10 @@ The test that settles it is equality, not a bound: the records plus the final ru
 byte must come to exactly `width * height`. That is now in `xc_decode.py` as
 `decode(..., strict=True)`, and `dump` reports any block that fails it.
 
-Two further cautions for anyone reading the output. The artwork is **italic
-outlined lettering**, so glyph edges genuinely lean by about one pixel every
-three rows; that is the font, not a decode error. And the blocks are written as
-16-bit greyscale PNG, which some viewers and libraries mishandle — converting
-with a truncating 16-to-8 path makes clean output look sheared and doubled.
-Shift right by 8 instead.
+One caution for anyone reading the output: the blocks are written as 16-bit
+greyscale PNG, which some viewers and libraries mishandle. Converting with a
+truncating 16-to-8 path makes clean output look doubled. Shift right by 8
+instead.
 
 ### Sample values
 

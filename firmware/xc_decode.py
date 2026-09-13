@@ -17,9 +17,8 @@ Eight of Ver 2.03's 1478 raw blocks do not decode cleanly; `docs/XC_CONTAINER.md
 lists them with addresses. `dump` writes what it can and names them on stderr.
 
 Blocks are written as **16-bit** greyscale PNG. Some viewers and libraries
-mishandle that depth and make clean output look sheared or doubled — convert by
-shifting right 8, not with a truncating 16-to-8 path. The artwork is also italic
-outlined lettering, so glyph edges lean by design.
+mishandle that depth and make clean output look doubled — convert by shifting
+right 8, not with a truncating 16-to-8 path.
 """
 
 import argparse
@@ -68,8 +67,17 @@ def decode(payload, width, height, strict=False):
     """Decode a raw payload into height rows of width 16-bit samples.
 
     Payload: u8 format (0x01), then records, then a final run byte.
-    Record:  u8 run, u8 count-1, then count little-endian u16 samples. After the
-             samples the last sample repeats (run - 1) more times.
+    Record:  u8 run, u8 count-1, then count little-endian u16 samples.
+
+    **The run comes before the literals, not after.** Repeat the previous pixel
+    (run - 1) more times, then write the count samples. An earlier version of
+    this file had it the other way round -- literals first, then the last sample
+    repeated -- which produces the identical pixel *count* and so passed every
+    check that existed, while placing every run on the wrong side of its
+    literals. The result was a horizontal smear that grew down the image, and it
+    was mistaken for an italic typeface. Rows and columns are equally smooth
+    under this reading (mean vertical/horizontal gradient ratio 1.06 over 260
+    blocks) and badly skewed under the old one (2.40).
 
     **The last byte is a run length, not a trailer.** An earlier version of this
     file called it a trailer and discarded it, padding the image out to
@@ -93,9 +101,9 @@ def decode(payload, width, height, strict=False):
         if off + 2 + 2 * count > end:
             break
         samples = list(struct.unpack_from('<%dH' % count, payload, off + 2))
-        pixels += samples
         if run > 1:
-            pixels += [samples[-1]] * (run - 1)
+            pixels += [pixels[-1] if pixels else samples[0]] * (run - 1)
+        pixels += samples
         off += 2 + 2 * count
 
     final_run = payload[-1]
