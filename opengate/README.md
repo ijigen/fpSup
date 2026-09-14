@@ -1,8 +1,9 @@
 # fpSup Open Gate — OG3K
 
 **3024×2010 3:2 CinemaDNG at eight frame rates on the SIGMA fp.** The sensor's
-whole 3:2 area instead of the 16:9 window the camera crops to. v0.2.0test adds
-native OG3K labels and choices to Settings and Quick Set.
+whole 3:2 area instead of the 16:9 window the camera crops to. v0.2.1a includes
+the native OG3K Settings and Quick Set UI and fixes OG3K shutter-angle exposure.
+Release package: **`fpsup-og3k-v0.2.1a`**.
 
 Firmware **Ver.5.02 only.** Everything is RAM-only: remove `AutoRun.txt`, fully
 power-cycle, and the camera is stock. Nothing is ever written to flash.
@@ -36,7 +37,8 @@ you are also running the gyro logger — it corrects for exactly this:
 2. Power off, remove the battery, and work on the SD card in a reader.
 3. Copy **`AutoRun.txt`** and **`VSHL.BIN`** to the **root** of the card. Nothing
    else — no folder to make, no file to convert.
-4. Card in, power on. The screen shows a progress bar and then `fpSup-OG3K-v0.2.0!`.
+4. Card in, power on. The screen shows a progress bar and then
+   `fpSup-OG3K-v0.2.1a!`.
 5. Select **OG3K** from **MENU → recording → resolution** or Quick Set **RES.**
 
 To remove it: delete `AutoRun.txt`, power off **completely** (battery out, not
@@ -59,10 +61,12 @@ just the switch — a warm restart does not clear RAM), power on.
   itself, not inferred.
 - **Native CINE UI** (v0.2.0test): the collapsed Settings summary, the Settings
   list, large and small Quick Set OG3K values, cursor, and the UHD/FHD/OG3K
-  three-choice footer all passed on the camera.
-- **Short recording transitions with the full UI runtime:** FHD once, UHD three
-  times, and OG3K three times. UHD and OG3K were stopped at about one second
-  because the test SD card cannot sustain their data rate.
+  three-choice footer all passed on the camera. This evidence carries forward;
+  the full UI suite was not re-run specifically for v0.2.1a.
+- **Short recording transitions with the full UI runtime** (v0.2.0test): FHD
+  once, UHD three times, and OG3K three times. UHD and OG3K were stopped at
+  about one second because the test SD card cannot sustain their data rate.
+  v0.2.1a makes no new recording-test claim.
 
 ## Native ISO — what v0.1.1test fixed
 
@@ -98,20 +102,42 @@ same flag: driving that too made the recording preview flicker green. The
 preview plane is also declared 12-bit, as the factory movie profiles do, rather
 than the 8-bit a stills profile declares.
 
-## v0.2.0test boundaries
+## Shutter angle — what v0.2.1a fixes
 
-- The recording core is byte-for-byte the same 590-word plan as v0.1.1test.
-  v0.2.0test adds the camera-tested 360-record native UI runtime.
-- The camera tests used the equivalent debug build with a USB shell. The shipped
-  pair removes only that shell and its USB patches; an offline section-map check
-  proves the OpenGate and UI payloads are identical. The exact no-shell pair has
-  not yet had its own cold-boot camera run.
+OG3K could be roughly 1.3–2 EV darker than FHD at the same shutter-angle
+setting. One nominal-frame-rate call had been redirected, but resolution
+reconfiguration could later write the stock borrowed profile's nominal rate
+back into exposure state. v0.2.1a redirects all four local consumers at
+`C02092CC`, `C0218AEC`, `C0219260`, and `C03AA568` through the same guarded
+wrapper. It substitutes the selected OG3K frame rate only for the exact OG3K
+timing tuple; every other mode keeps the factory result.
+
+The stage-two loader now publishes generated executable code with D-cache
+maintenance followed by whole I-cache invalidation before entry. This prevents
+the CPU from executing an older cached instruction after the patch has been
+written.
+
+## v0.2.1a boundaries
+
+- **Provisional visual pass for the shutter-angle fix:** after a battery-out
+  cold boot, the user compared real FHD and OG3K at 29.97p, 180°, in idle live
+  view. The earlier exposure offset no longer appeared. This was a visual result,
+  not an exact USB-shell readback, and the other frame rates remain pending.
+- The exact shipped no-shell `AutoRun.txt` + `VSHL.BIN` pair is structurally
+  verified against the corresponding debug build: only the USB shell worker and
+  its patches are removed, while the OpenGate and UI payload bytes are identical.
+  This exact no-shell pair has not itself been cold-booted on the camera.
+- Warm-restart behaviour is unverified. Use a battery-out cold boot for install,
+  retest, and recovery.
+- The recording core grew from the v0.2.0test 590-word plan to 710 words for the
+  four shutter-angle callsites. The camera-tested 360-record native UI runtime is
+  otherwise carried forward unchanged.
 - One earlier OG3K attempt froze after creating a clip. It was not reproduced by
   three later one-second OG3K recordings, but sustained recording on sufficiently
   fast media has not been tested with the new UI runtime.
-- Playback with the v0.2.0test UI runtime and inactive screen/style variants
-  remain untested. Playback of the unchanged recording core was verified on
-  v0.1.0test.
+- Playback with the native UI runtime and inactive screen/style variants remain
+  untested. Playback of the earlier recording core was verified on v0.1.0test;
+  it was not re-tested for v0.2.1a.
 
 ## Do not
 
@@ -129,6 +155,6 @@ than 3032×2012, which profile is borrowed and why, and what was verified when.
 The research is in [`projects/open-gate.md`](../projects/open-gate.md); how the
 answers were found is archived in `../projects/open-gate/notes/OPEN_GATE_EXPLORATION_ARCHIVE.md`.
 
-To put the gyro logger on the same card, merge them with
-[`tools/card-composer`](../tools/card-composer/) — that is the only place merged
-cards are made.
+To put the gyro logger on the same card, use
+[`tools/card-composer`](../tools/card-composer/). Combined versions are generated
+only by that composer; this repository does not ship hand-built combined cards.

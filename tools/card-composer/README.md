@@ -57,7 +57,11 @@ Two facts make browser-side composition exact:
 
 * `VSHL.BIN` is a plain container — `"VBIN"`, a count, the entry, the payload
   length, then one `(dest, len)` record per section, blobs 4-byte aligned.
-  Sections are independent, so merging is concatenation plus checks.
+  Firmware and pool sections are independent, so merging is concatenation plus
+  checks. Destination zero is the loader's stage-two helper: a single card keeps
+  its exact shipped helper, while a combination gets exactly one current helper
+  generated alongside the AutoRun templates. This matters when a newer loader
+  changes cache publication but an older standalone card is also selected.
 * `AutoRun.txt` does not depend on the section list, or even on the entry — the
   loader reads that out of VSHL.BIN's header. Measured: the OG3K-only card
   (entry 0) and the OG3K+gyro card (entry `0xC072E064`) have the same 135
@@ -88,7 +92,7 @@ shell      189 cmds   loader.S without it -- 356 bytes, because the worker
                       68 bytes zeroing the worker's state (a warm restart does
                       not clear RAM) and the interface-class patch, without
                       which the host's PTP stack claims interface 0.
-shellpush  193 cmds   the same, plus the six EP 0x83 patches.
+shellpush  195 cmds   the same, plus the six EP 0x83 patches.
 ```
 
 The page picks between them from whether a selected card carries the worker at

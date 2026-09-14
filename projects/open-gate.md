@@ -3,14 +3,18 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Recording the sensor's full 3:2 area instead of the 16:9 window the camera crops to.
-**Status: v0.2.0test. 3024×2010 3:2 CinemaDNG at eight frame rates, DNG cropped
-to 3008×2000, whole frame. Native Settings and Quick Set UI now pass on camera;
-sustained-media, playback-with-UI and inactive-variant regressions remain.**
+**Status: v0.2.1a alpha. 3024×2010 3:2 CinemaDNG at eight frame rates, DNG
+cropped to 3008×2000, whole frame. Native Settings and Quick Set UI pass on
+camera. The shutter-angle and loader instruction-cache fixes received a
+provisional battery-out cold-boot visual pass at 29.97p/180°; exact readback,
+the other frame rates, sustained-media, playback-with-UI and inactive-variant
+regressions remain.**
 
 用感光元件完整的 3:2 面積錄影,而不是相機裁出來的 16:9 視窗。
-**狀態:v0.2.0test。3024×2010 3:2 CinemaDNG、八個幀率,DNG 裁切
-3008×2000,整張畫面。Settings/QS 原生 UI 已通過實機;持續寫入、UI runtime
-回放與非啟用 variants 尚待回歸。**
+**狀態:v0.2.1a alpha。3024×2010 3:2 CinemaDNG、八個幀率,DNG 裁切
+3008×2000,整張畫面。Settings/QS 原生 UI 已通過實機;快門角度與 loader
+指令快取修正在完整斷電冷開機後,29.97p/180° 取得暫定目視通過。精確讀值、
+其他幀率、持續寫入、UI runtime 回放與非啟用 variants 尚待回歸。**
 
 ---
 
@@ -73,7 +77,7 @@ A full-matrix variant would set the crop pair to 3024×2010 with the origin at z
 and then the edge pixels are worth re-testing: they are inside the readout but have
 never been looked at, because nothing has displayed them.
 
-### Three separate problems
+### Four separate problems
 
 Each needed its own fix, and each was mistaken for the others at some point.
 
@@ -82,6 +86,7 @@ Each needed its own fix, and each was mistaken for the others at some point.
 | **Sensor** | timing table `0xC0B59500` | a frame rate is one u16 — `vmax` — not a property of the mode. Mode 117 at `vmax 7280` is 29.97003 at 0 ppm, and `hmax` is untouched so the rolling shutter does not move |
 | **Canvas** | `0xC043A19C`, inside `FUN_c043a158` | the geometry record at `r4+0x5C`, written after the gather and before anything derives from it. Eight fields, two layers: the allocator sizes the RAW buffer from base, the size getter reads override |
 | **Producer** | RWZM columns, profile 122 | `0x640` is a 1.5625× reduction that pinned the filled region to 1936 wide. Unity `0x400` releases it |
+| **Shutter angle** | four local calls to `FUN_c032c750` | the stock conversion follows the borrowed sensor mode's rate instead of the selected output rate. A narrow wrapper substitutes the requested nominal FPS only for the exact OG3K timing tuple; shutter-speed mode and unknown states stay stock |
 
 ### The patch set
 
@@ -101,6 +106,12 @@ to flash at any point.
 0xC043A19C  0xEB0BD597   arm it last; stock is 0xE1A00004 (mov r0, r4)
 ```
 
+v0.2.1a also redirects the four local shutter-angle callsites at `0xC02092CC`,
+`0xC0218AEC`, `0xC0219260` and `0xC03AA568` to one guarded wrapper. The stage-2
+loader places every section first, then cleans/invalidates D-cache and invalidates
+the whole I-cache before execution, so a previously fetched stock instruction
+cannot hide an installed hook.
+
 The hook conditions on the record's own contents — `base == 1936×1090` — rather
 than on the selector, so it holds for whichever path a take walks and leaves
 every other profile alone.
@@ -110,16 +121,21 @@ The build and its manifest are in [`opengate/`](../opengate/).
 ### Known limits
 
 - **Firmware Ver.5.02 only.** The AutoRun language has no runtime version guard.
-- **v0.2.0test repairs the native CINE UI.** The collapsed Settings summary,
-  three-row Settings list, large and small Quick Set values, cursor, and the
-  UHD/FHD/OG3K footer have all been seen working on the camera.
+- **The native CINE UI, carried forward from v0.2.0test, works.** The collapsed
+  Settings summary, three-row Settings list, large and small Quick Set values,
+  cursor, and the UHD/FHD/OG3K footer have all been seen working on the camera.
+- **v0.2.1a is an alpha shutter-angle fix.** After a battery-out cold boot, the
+  user saw FHD and OG3K idle exposure match at 29.97p/180°, a provisional visual
+  result without exact shell readback. The other frame rates have not yet had
+  the same idle live-view check; this is not a claim that all eight rates passed
+  hardware testing.
 - **The UI recording regression is deliberately short.** With the full UI
   runtime resident, FHD passed once and UHD/OG3K passed three times each; the
   UHD and OG3K takes were stopped at about one second because the available SD
   card is too slow. One earlier OG3K attempt froze and was not reproduced.
   Sustained recording on fast media, playback with the UI runtime, and inactive
   screen/style variants remain untested.
-- The exact release pair is the no-shell form. Its 590 OpenGate words and native
+- The exact release pair is the no-shell form. Its 710 OpenGate words and native
   UI sections are byte-identical to the camera-tested debug form, but the
   no-shell pair has not yet had its own cold-boot camera run.
 - The hook's payload occupies `0xC072F800–0xC072F8E8` and its telemetry
@@ -239,7 +255,7 @@ DNG 裁切 3008 × 2000 @ (8, 5) · strip 9,117,360 bytes · 273.2 MB/s
 若要做完整矩陣的版本,就把 crop pair 設成 3024×2010、原點歸零;
 那時邊緣 pixels 值得重測 —— 它們在讀出範圍內,但從來沒有人看過,因為沒有東西顯示過它們。
 
-### 三個各自獨立的問題
+### 四個各自獨立的問題
 
 每一個都要各自的解法,而且每一個都曾經被誤認成另外兩個。
 
@@ -248,6 +264,7 @@ DNG 裁切 3008 × 2000 @ (8, 5) · strip 9,117,360 bytes · 273.2 MB/s
 | **感光元件** | 時序表 `0xC0B59500` | 幀率是一個 u16 —— `vmax` —— 不是模式的固有屬性。mode 117 設 `vmax 7280` 就是 29.97003(0 ppm),`hmax` 不動所以捲簾不變 |
 | **畫布** | `0xC043A19C`,在 `FUN_c043a158` 裡 | `r4+0x5C` 的 geometry record,在組好之後、任何推導之前寫。八個欄位、兩層:allocator 從 base 算 RAW buffer,尺寸 getter 讀 override |
 | **Producer** | profile 122 的 RWZM 欄 | `0x640` 是 1.5625× 的縮小,把有效區釘在 1936 寬。改成 unity `0x400` 才放開 |
+| **快門角度** | 四個呼叫 `FUN_c032c750` 的本地位置 | 原廠換算跟著借用的感光元件模式幀率,而不是選定的輸出幀率。窄守衛 wrapper 只在精確 OG3K timing tuple 下代入所選 nominal FPS;快門速度模式與未知狀態維持原廠 |
 
 ### 補丁清單
 
@@ -266,6 +283,11 @@ DNG 裁切 3008 × 2000 @ (8, 5) · strip 9,117,360 bytes · 273.2 MB/s
 0xC043A19C  0xEB0BD597   最後才武裝;原指令是 0xE1A00004(mov r0, r4)
 ```
 
+v0.2.1a 另外把 `0xC02092CC`、`0xC0218AEC`、`0xC0219260`、`0xC03AA568`
+四個本地快門角度 callsite 導向同一個有守衛的 wrapper。stage-2 loader 先放完
+全部 section,再 clean/invalidate D-cache 並 invalidate 整個 I-cache 才執行,
+避免 CPU 已取出的原廠指令遮住剛裝上的 hook。
+
 Hook 的條件寫在 record 自己的內容上(`base == 1936×1090`),不是寫在選擇器上 ——
 所以不管某次錄影走哪一條路都會命中,而其他 profile 一概不動。
 
@@ -274,13 +296,16 @@ Hook 的條件寫在 record 自己的內容上(`base == 1936×1090`),不是寫�
 ### 已知限制
 
 - **僅限韌體 Ver.5.02。** AutoRun 語言沒有執行期的版本守衛。
-- **v0.2.0test 已修好 CINE 原生 UI。** Settings 收合摘要、三列選單、QS
-  大小 OG3K 值、游標與 UHD/FHD/OG3K 三選項底欄都已在相機上看見正常運作。
+- **從 v0.2.0test 延續的 CINE 原生 UI 可用。** Settings 收合摘要、三列選單、
+  QS 大小 OG3K 值、游標與 UHD/FHD/OG3K 三選項底欄都已在相機上看見正常運作。
+- **v0.2.1a 是 alpha 快門角度修正。** 使用者完整斷電冷開機後,29.97p/180°
+  的 FHD 與 OG3K idle 曝光取得暫定目視一致,沒有精確 shell 讀值;其他幀率
+  尚未做相同 idle live-view 實測,不能宣稱八個幀率皆已通過硬體驗證。
 - **UI 錄影回歸刻意很短。** full UI runtime 常駐時,FHD 通過 1 次,
   UHD 與 OG3K 各通過 3 次;因手邊 SD 卡太慢,UHD/OG3K 都在約一秒停止。
   先前有一次 OG3K 凍結,之後未重現。快速媒體長時間錄影、新 UI runtime
   的回放與非啟用 screen/style variants 尚未驗證。
-- 真正出貨的是 no-shell 形式;590 筆 OpenGate 與 UI sections 已逐字證明等同
+- 真正出貨的是 no-shell 形式;710 筆 OpenGate 與 UI sections 已逐字證明等同
   實機測過的 debug 形式,但這對 no-shell 檔案本身尚未另做一次冷開機實測。
 - hook 的酬載佔 `0xC072F800–0xC072F8E8`、遙測佔 `0xC072FA00–0xC072FA0F`,
   跟主機工具的暫存區相撞。armed 的時候 `mem get`/`mem set` 沒問題,但

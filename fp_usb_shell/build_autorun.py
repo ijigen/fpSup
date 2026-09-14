@@ -92,6 +92,42 @@ def word_at(seq, i):
     return seq[i]
 
 
+def verify_stage2_cache_publish(code):
+    """Require stage2 to publish placed code to both cache domains.
+
+    AutoRun reaches stage2 only after live view has already executed hot firmware
+    callsites.  A RAM readback can therefore show a new branch while the CPU is
+    still executing its cached stock instruction.  Decode the two immediate
+    loads before each ``blx ip`` from the emitted machine code so a source-only
+    comment or a renamed constant cannot make a build appear safe.
+    """
+    insns = to_words(code)
+
+    def mov_imm(word, opcode):
+        if word & 0x0FF00000 != opcode or (word >> 12) & 0xF != 12:
+            return None
+        return ((word >> 4) & 0xF000) | (word & 0x0FFF)
+
+    calls = []
+    for index, word in enumerate(insns):
+        if word != 0xE12FFF3C or index < 2:  # ARM ``blx ip``
+            continue
+        low = mov_imm(insns[index - 2], 0x03000000)   # movw ip, #imm16
+        high = mov_imm(insns[index - 1], 0x03400000)  # movt ip, #imm16
+        if low is not None and high is not None:
+            calls.append((index, low | high << 16))
+
+    required = [0xC000E91C, 0xC000EABC]
+    if [address for _, address in calls] != required:
+        sys.exit('stage2 must call D-cache maintenance 0xC000E91C followed by '
+                 'whole I-cache invalidate 0xC000EABC after placing sections; '
+                 f'emitted calls were {[hex(address) for _, address in calls]}')
+    entry_load = next((index for index, word in enumerate(insns)
+                       if word == 0xE5960008), None)  # ldr r0, [r6, #8]
+    if entry_load is None or calls[-1][0] >= entry_load:
+        sys.exit('stage2 cache publication must finish before loading its entry')
+
+
 # A measuring build only: one send per update instead of three.
 #
 # The bar keeps every step; each step just costs two commands rather than six.
@@ -409,7 +445,9 @@ if args.loader:
     # The loader's second half rides in the file as the first section, marked
     # with destination zero so it is run where it lands instead of copied. Every
     # word it saves the AutoRun is a `mem set` and about sixty milliseconds.
-    secs = [(0, assemble(HERE / 'templates' / 'stage2.S'))]
+    stage2 = assemble(HERE / 'templates' / 'stage2.S')
+    verify_stage2_cache_publish(stage2)
+    secs = [(0, stage2)]
     if not args.no_shell:
         secs.append((LOAD, code))
     if args.payload:

@@ -8,7 +8,8 @@ and no firmware image at run time.  Two facts make that legitimate:
 
   * `VSHL.BIN` is a plain container -- "VBIN", a count, the entry, the payload
     length, then one (dest, len) record per section and the blobs 4-byte
-    aligned.  Sections are independent; merging is concatenation plus checks.
+    aligned.  Firmware/pool sections are independent; destination zero is the
+    loader-owned stage2 helper and is canonicalized when cards are combined.
   * `AutoRun.txt` does not depend on the section list *or the entry*.  Measured:
     the OG3K-only card (entry 0) and the OG3K+gyro card (entry 0xC072E064) have
     the same 135 commands and differ only in three banner lines.  The loader
@@ -67,7 +68,7 @@ LABELS = {
 #                     borrowed dispatcher task.  135 commands.
 #   --no-ep-patches   the task-creating loader plus the interface-class patch,
 #                     without the six EP 0x83 writes.  189 commands.
-#   (neither)         the same plus the push patches.  193 commands.
+#   (neither)         the same plus the push patches.  195 commands.
 #
 # An earlier version of this file lifted two of them out of merged cards that
 # had been built and left in the tree, which is why a merge tool appeared to
@@ -77,9 +78,9 @@ TEMPLATE_FLAGS = {'plain': ['--no-shell'], 'shell': ['--no-ep-patches'], 'shellp
 
 
 def build_templates():
-    """Run build_autorun.py once per loader configuration, in a temp dir."""
+    """Build each AutoRun template and the current canonical stage2 helper."""
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='tpl-'))
-    out = {}
+    out, stage2 = {}, None
     for name, flags in TEMPLATE_FLAGS.items():
         f = tmp / f'{name}.txt'
         r = subprocess.run([sys.executable,
@@ -91,15 +92,23 @@ def build_templates():
             sys.stderr.write(r.stdout + r.stderr)
             raise SystemExit(f'could not build the {name} template')
         out[name] = f.read_text('utf-8').split('# pad -- see PAD_TO')[0]
+        _, records = parse((tmp / 'VSHL.BIN').read_bytes())
+        helpers = [blob for address, blob in records if address == 0]
+        if len(helpers) != 1:
+            raise SystemExit(f'{name} loader emitted {len(helpers)} stage2 helpers')
+        if stage2 is None:
+            stage2 = helpers[0]
+        elif helpers[0] != stage2:
+            raise SystemExit(f'{name} loader emitted a different stage2 helper')
     shutil.rmtree(tmp, ignore_errors=True)
-    return out
+    return out, stage2
 
 
 # The merge checks are the one thing that still needs the OG3K toolchain: they
 # prove the page's merge is byte-for-byte what build_og3k_gyro.py produces.
-# That builder obtains both the 590-word recording core and the 360-record
+# That builder obtains both the 710-word recording core and the 360-record
 # native Settings/QS UI from build_og3k_ui_candidate.py, the same source used
-# for the standalone v0.2.0test card.  This is a test, not part of the browser
+# for the standalone v0.2.1a card.  This is a test, not part of the browser
 # page's run time.
 REFS = {}
 NATIVE_UI_SECTIONS = {
@@ -149,7 +158,7 @@ PRODUCTS = {
     'gyro':     dict(id='gyro', name='fpGyroSup',
                      desc='Writes .gcsv and .json into the clip folder while '
                           'recording. The released card, unmodified.'),
-    'og3k':     dict(id='og3k', name='OpenGate3K',
+    'og3k':     dict(id='og3k', name='OpenGate',
                      desc='3024×2010, DNG cropped to 3008×2000, eight frame rates. '
                           'Sensor modes 98/117 — the sensor\'s own 2×2-binned 3:2 '
                           'modes, so the ISP scales nothing. Vitaly Li got open '
@@ -157,12 +166,15 @@ PRODUCTS = {
                           'ISP instead. Correct at every ISO since '
                           'v0.1.1test, which fixes the conversion-gain '
                           'misclassification that cost 2.7 stops of highlight '
-                          'headroom above ISO 640. v0.2.0test adds the native '
+                          'headroom above ISO 640. v0.2.0test added the native '
                           'OG3K name and third choice to Recording Settings and '
-                          'Quick Set. The current test boundary covers the CINE '
-                          'UI and short FHD/UHD/OG3K record transitions; sustained '
-                          'fast-media recording, full-UI playback, and inactive '
-                          'screen/style variants are still pending, and one earlier '
+                          'Quick Set. v0.2.1a adds the guarded four-callsite '
+                          'shutter-angle nominal-FPS fix and whole-I-cache publish; '
+                          'after a battery-out cold boot, real 29.97p/180° FHD and '
+                          'OG3K received a provisional idle-view visual pass. Exact '
+                          'readback and other frame rates, sustained fast-media '
+                          'recording, full-UI playback, inactive screen/style variants, '
+                          'and the CINE/STILL transition remain pending. One earlier '
                           'OG3K freeze was not reproduced. Carries no entry section: '
                           'it is all static writes.'),
 }
@@ -311,7 +323,7 @@ def main():
         print(f'  {card["id"]:9} {len(recs):3} sections  entry '
               f'0x{entry:08X}  "{ban}"')
 
-    templates_out = build_templates()
+    templates_out, stage2 = build_templates()
     for name in TEMPLATE_FLAGS:
         n = len([l for l in autorun(templates_out[name], 'X').splitlines()
                  if l.strip() and not l.lstrip().startswith('#')])
@@ -337,7 +349,9 @@ def main():
                dram_image=list(DRAM_IMAGE), pool_size=POOL_SIZE,
                entry_at=0xC072E064, park_at=PARK_AT, worker_at=0xC072F050,
                worker_entry=0xC072F188, templates=templates_out,
-               autorun_template=template, filler=FILLER)
+               autorun_template=template, filler=FILLER,
+               stage2=dict(a=0, b=base64.b64encode(stage2).decode(),
+                           l='stage2 (current loader)', k='stage2'))
 
     # Refuse to ship a catalogue that does not reproduce what it came from.
     print()
@@ -368,12 +382,17 @@ def main():
                 continue
             i = c['id']
             for r in by[i]['records']:
+                # Destination zero is loader-owned, not a product record.  Old
+                # standalone cards can carry an older helper; a combined card
+                # uses the one just built with the current AutoRun templates.
+                if r['a'] == 0:
+                    continue
                 k = (r['a'], r['b'])
                 if k in seen:
                     continue
                 seen.add(k)
                 (tail if r['a'] == cat['entry_at'] else out).append(r)
-        recs = out + tail
+        recs = [cat['stage2']] + out + tail
         entry = (cat['entry_at'] if any(r['a'] == cat['entry_at'] for r in recs)
                  else cat['worker_entry'] if any(r['a'] == cat['worker_at'] for r in recs)
                  else 0)

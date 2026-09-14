@@ -4,6 +4,8 @@
 .global stage2
 
 .equ FRAMEBUF, 0xC3757A7C           /* [0] = the camera's DMA pool */
+.equ F_DCACHE,  0xC000E91C           /* D-cache clean/invalidate + barriers */
+.equ F_ICACHE,  0xC000EABC           /* whole I-cache invalidate + barriers */
 
 /* The second half of the loader, carried in \VSHL.BIN instead of spelled out.
  *
@@ -68,8 +70,16 @@ s2_next:
     sub     r7, r7, #1
     b       s2_place
 s2_done:
-    movw    ip, #:lower16:0xC000E91C    @ cache maintenance, so the placed code
-    movt    ip, #:upper16:0xC000E91C    @ is really at its address
+    /* The loader runs after live view has already exercised some firmware
+     * callsites.  Publishing the new RAM words is not enough: those sites can
+     * still execute their stock instructions from I-cache.  Clean data first,
+     * then invalidate instruction cache before any placed entry is allowed to
+     * run.  This also makes a hook in an early/continuous AE path reliable. */
+    movw    ip, #:lower16:F_DCACHE
+    movt    ip, #:upper16:F_DCACHE
+    blx     ip
+    movw    ip, #:lower16:F_ICACHE
+    movt    ip, #:upper16:F_ICACHE
     blx     ip
     ldr     r0, [r6, #8]                @ entry, or zero
     cmp     r0, #0

@@ -231,18 +231,25 @@ const sel = () => all().filter(c => on.has(c.id));
 
 /* Merge: each card keeps its own record order, the entry section is forced
    last, and a record that is byte-identical to one already taken is folded
-   away -- two cards almost always share the park stub. */
+   away -- two cards almost always share the park stub.  Destination zero is
+   the loader's stage2 helper, not an ordinary product section. A single card
+   keeps its exact shipped helper; a combination uses the current helper built
+   together with the AutoRun templates. */
 function picked(){
+  const chosen = sel();
+  if (chosen.length === 1) return chosen[0].records.slice();
+  if (chosen.length === 0) return [];
   const out = [], seen = new Set();
   const tail = [];
-  for (const c of sel())
+  for (const c of chosen)
     for (const r of c.records){
+      if ((r.a >>> 0) === 0) continue;
       const k = (r.a >>> 0) + ':' + r.b;
       if (seen.has(k)) continue;
       seen.add(k);
       ((r.a >>> 0) === CAT.entry_at ? tail : out).push(r);
     }
-  return out.concat(tail);
+  return [CAT.stage2].concat(out, tail);
 }
 /* The loader branches once, to whatever the VSHL header names.  A gyro payload
    supplies gsup_entry and wins; a shell-only card has nothing but the worker,
@@ -325,7 +332,7 @@ function runChecks(recs, vshl, banner, entry){
      page carries one whole template per configuration and picks between them. */
   c.push({ok:true, t:'AutoRun loader',
           d: {plain:'NOTASK — 135 cmds', shell:'task + state + iface — 189 cmds',
-              shellpush:'task + state + iface + EP 0x83 — 193 cmds'}[templateName()]});
+              shellpush:'task + state + iface + EP 0x83 — 195 cmds'}[templateName()]});
 
   /* Not "every card's own entry matches".  A card's entry is what it needs when
      it is alone: the shell card alone boots into its worker at 0xC072F188, but
@@ -439,7 +446,7 @@ function render(){
       <span><b>EP 0x83 push patches</b>
       <small>Six more firmware writes that open the push endpoint. Needed only if
       the host pulls frames; the development card ships without them.</small>
-      <span class="sz">AutoRun 189 → 193 commands</span></span></label>`;
+      <span class="sz">AutoRun 189 → 195 commands</span></span></label>`;
   }).join('');
   const pb = document.getElementById('push');
   if (pb) pb.onchange = e => { pushOn = e.target.checked; render(); };
