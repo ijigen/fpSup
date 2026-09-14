@@ -131,7 +131,8 @@ PRODUCTS = {
     'og3k':     dict(id='og3k', name='OpenGate3K',
                      desc='3024×2010, DNG cropped to 3008×2000, eight frame rates. '
                           'Sensor modes 98/117 — a native 2×2-binned 3:2 readout, '
-                          'not 6K resampled down. Correct at every ISO since '
+                          'not 6K resampled down — a different route to what '
+                          'Vitaly Li did first. Correct at every ISO since '
                           'v0.1.1test, which fixes the conversion-gain '
                           'misclassification that cost 2.7 stops of highlight '
                           'headroom above ISO 640. Carries no entry section: it '

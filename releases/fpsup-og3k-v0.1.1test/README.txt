@@ -175,6 +175,20 @@ THE THING MOST LIKELY TO BITE
   own benchmark and tells you what it actually does.
 
 ----------------------------------------------------------------
+WITH THANKS TO VITALY LI
+----------------------------------------------------------------
+
+  Vitaly Li was the first person in the world to get open gate out
+  of a SIGMA fp. That came first, and this build stands on it.
+
+  https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/
+
+  What is here is a different route to the same idea — native
+  sensor modes 98 and 117 rather than a 6K readout resampled down —
+  and it exists because his work established that the camera could
+  be made to do this at all. The picture is more complete for it.
+
+----------------------------------------------------------------
 IF SOMETHING GOES WRONG
 ----------------------------------------------------------------
 
