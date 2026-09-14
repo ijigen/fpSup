@@ -378,9 +378,18 @@ function runChecks(recs, vshl, banner, entry){
   c.push({ok: vshl.used <= CAT.pad_to, t:'VSHL.BIN fits',
           d: vshl.used.toLocaleString()+' / '+CAT.pad_to.toLocaleString()+' B'});
 
+  /* DO NOT RELAX THIS TO ALLOW ACCENTS.  The banner is the only text on the
+     page that reaches AutoRun.txt: everything else is one of three templates
+     built by build_autorun.py and verified byte-for-byte against the shipped
+     cards, and an uploaded .BIN contributes VSHL records only -- its own
+     AutoRun is never even read.  So this range check is the whole injection
+     boundary, not a font note.  A banner of "x\ndelall" composes a file with
+     four more commands in it; rejecting anything outside printable ASCII is
+     what stops that, and a failed check disables both download buttons. */
   const bad = /[^\x20-\x7E]/.test(banner) || !banner.length;
-  c.push({ok:!bad, t:'Banner is printable ASCII',
-          d: bad ? 'the OSD font has no glyph for it' : banner.length+' chars'});
+  c.push({ok:!bad, t:'Banner is printable ASCII — the only text that reaches AutoRun.txt',
+          d: bad ? 'a newline here would add commands to the file; also no OSD glyph'
+                 : banner.length+' chars'});
   return c;
 }
 </script>
