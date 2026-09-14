@@ -178,15 +178,44 @@ THE THING MOST LIKELY TO BITE
 WITH THANKS TO VITALY LI
 ----------------------------------------------------------------
 
-  Vitaly Li was the first person in the world to get open gate out
-  of a SIGMA fp. That came first, and this build stands on it.
+  Vitaly Li got open gate out of a SIGMA fp first. FP3K recorded
+  3000 x 2000 12-bit CinemaDNG at 24 fps to an SSD, with the full
+  3:2 height, before anything here existed.
 
   https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/
 
-  What is here is a different route to the same idea — native
-  sensor modes 98 and 117 rather than a 6K readout resampled down —
-  and it exists because his work established that the camera could
-  be made to do this at all. The picture is more complete for it.
+  The two builds reach 3K by different roads, and the difference is
+  only where the 2:1 happens:
+
+     FP3K    sensor mode 151 carrying native full-height mode 3's
+             geometry. The sensor reads its whole 6064 x 4042 window
+             and the ISP reduces 2:1 into 3032 x 2020; the DNG is
+             cropped to 3000 x 2000 at (16, 10). HMAX 445, VMAX 6740,
+             tail 1145 -- 445*(6740-1)+1145 = 3,000,000 cycles, which
+             is exactly 24 fps at 72 MHz.
+
+     OG3K    sensor modes 98 and 117, which are the sensor's own
+             2x2-binned 3:2 modes. The 3032 x 2012 arrives already
+             reduced, so the ISP scales nothing.
+
+  That is the whole of it, and it is what the rolling-shutter numbers
+  in this file are measuring. Line time is the same 445 cycles in
+  both; what differs is how many lines the sensor has to clock out:
+
+     FP3K    445 x 4042 / 72 = 24.98 ms
+     OG3K    445 x 2012 / 72 = 12.44 ms
+
+  The 24.98 ms quoted earlier in this README is FP3K's figure,
+  computed from his own timing constants. Reading fewer lines is the
+  only reason this build is faster -- it is not a better idea, it is
+  a different place to put the same division. His route keeps every
+  photosite in the path, which this one gives up by construction;
+  his own notes are careful to say the exact reduction filter is
+  still unresolved, and that question does not even arise here
+  because the sensor does the binning.
+
+  His technical handoff is what made that comparison possible to
+  write at all. The picture is more complete for it.
 
 ----------------------------------------------------------------
 IF SOMETHING GOES WRONG
