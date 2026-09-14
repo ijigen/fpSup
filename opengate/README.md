@@ -1,9 +1,9 @@
 # fpSup Open Gate — OG3K
 
 **3024×2010 3:2 CinemaDNG at eight frame rates on the SIGMA fp.** The sensor's
-whole 3:2 area instead of the 16:9 window the camera crops to. v0.2.1a includes
-the native OG3K Settings and Quick Set UI and fixes OG3K shutter-angle exposure.
-Release package: **`fpsup-og3k-v0.2.1a`**.
+whole 3:2 area instead of the 16:9 window the camera crops to. v0.2.2a adds
+8-bit and 10-bit CinemaDNG, which v0.2.1a silently recorded as UHD30.
+Release package: **`fpsup-og3k-v0.2.2a`**.
 
 Firmware **Ver.5.02 only.** Everything is RAM-only: remove `AutoRun.txt`, fully
 power-cycle, and the camera is stock. Nothing is ever written to flash.
@@ -16,8 +16,9 @@ power-cycle, and the camera is stock. Nothing is ever written to flash.
 ## What you get
 
 ```
-3024 × 2010 · 3:2 · 12-bit · 29.97003 fps · rolling shutter 9.221 ms
-DNG cropped to 3008 × 2000 at (8, 5) · 273.2 MB/s
+3024 × 2010 · 3:2 · 8/10/12-bit · 29.97003 fps · rolling shutter 9.221 ms
+DNG cropped to 3008 × 2000 at (8, 5)
+per frame  12-bit 9.20 MB · 10-bit 7.68 MB · 8-bit 6.16 MB
 ```
 
 Rolling shutter is **better than any shipping CinemaDNG mode**, which matters if
@@ -38,8 +39,9 @@ you are also running the gyro logger — it corrects for exactly this:
 3. Copy **`AutoRun.txt`** and **`VSHL.BIN`** to the **root** of the card. Nothing
    else — no folder to make, no file to convert.
 4. Card in, power on. The screen shows a progress bar and then
-   `fpSup-OG3K-v0.2.1a!`.
+   `fpSup-OG3K-v0.2.2a!`.
 5. Select **OG3K** from **MENU → recording → resolution** or Quick Set **RES.**
+   Choose the frame rate and the CinemaDNG quality normally.
 
 To remove it: delete `AutoRun.txt`, power off **completely** (battery out, not
 just the switch — a warm restart does not clear RAM), power on.
@@ -59,6 +61,18 @@ just the switch — a warm restart does not clear RAM), power on.
   against 1.81, 2.05 — and `BaselineExposure` is +3.000, as the factory writes.
   The capture is measured to run on `gain_state` 7 at the decision function
   itself, not inferred.
+- **All three bit depths record at OG3K geometry** (v0.2.2a). Measured with the
+  recorder's own per-frame file size, before and after the fix:
+
+  | | v0.2.1a | v0.2.2a | correct |
+  |---|---|---|---|
+  | 12-bit | 9,196,544 ✔ | 9,196,544 ✔ | 3024×2010×1.50 + header |
+  | 10-bit | 12,630,528 ✘ UHD30 | 7,676,928 ✔ | 3024×2010×1.25 + header |
+  | 8-bit | 12,631,552 ✘ UHD30 | 6,158,336 ✔ | 3024×2010×1.00 + header |
+
+  12-bit is unchanged, and the UHD fallback is gone. The recording preview at
+  all three depths showed a full 3:2 frame, correct HUD, 29.97p and no colour
+  shift (centre-region G/R 0.951, 0.962, 0.962).
 - **Native CINE UI** (v0.2.0test): the collapsed Settings summary, the Settings
   list, large and small Quick Set OG3K values, cursor, and the UHD/FHD/OG3K
   three-choice footer all passed on the camera. This evidence carries forward;
@@ -117,7 +131,36 @@ maintenance followed by whole I-cache invalidation before entry. This prevents
 the CPU from executing an older cached instruction after the patch has been
 written.
 
-## v0.2.1a boundaries
+## Bit depth — what v0.2.2a fixes
+
+Choosing 8-bit or 10-bit CinemaDNG quality while OG3K was selected recorded
+**UHD30** instead. The resolution name still read OG3K everywhere, so takes
+could be ruined with nothing on screen to say so.
+
+The format picker has three tables, not one, and the table is chosen by the
+CinemaDNG bit-depth setting — 8-bit and 10-bit each have their own, and all
+three are CinemaDNG. OG3K was registered only in the 12-bit table, so the other
+two missed, and the firmware's error fallback returned that table's **first**
+entry: UHD30 at its 12-bit profile, discarding the chosen resolution, the chosen
+frame rate and the chosen bit depth all at once.
+
+v0.2.2a registers OG3K in all three tables and writes the canvas plane-format
+codes to match the selected depth, so the DNG's `BitsPerSample` and the packed
+data always agree. It adds no new hooks and modifies no factory data.
+
+8-bit OG3K is 6.16 MB per frame against 12-bit's 9.20 MB — about 148 MB/s at 24p
+instead of 221 MB/s — so a slower card has a better chance of sustaining a take.
+
+## v0.2.2a boundaries
+
+- **In-camera playback of 8-bit and 10-bit OG3K clips is not verified.** The
+  playback path splits on the same bit-depth field and its OG3K guards were not
+  extended. Expect this to be broken. 12-bit playback is unaffected.
+- **Highlight headroom at 8-bit and 10-bit is not verified.** The gain dispatch
+  picks its state by bit depth and the OG3K gain hook still answers
+  unconditionally. 12-bit is unaffected and verified.
+- Taking a still photo while OG3K remains selected has not been re-checked
+  against the borrowed photo profile.
 
 - **Provisional visual pass for the shutter-angle fix:** after a battery-out
   cold boot, the user compared real FHD and OG3K at 29.97p, 180°, in idle live
@@ -129,9 +172,9 @@ written.
   This exact no-shell pair has not itself been cold-booted on the camera.
 - Warm-restart behaviour is unverified. Use a battery-out cold boot for install,
   retest, and recovery.
-- The recording core grew from the v0.2.0test 590-word plan to 710 words for the
-  four shutter-angle callsites. The camera-tested 360-record native UI runtime is
-  otherwise carried forward unchanged.
+- The recording core is now 749 words: 590 in v0.2.0test, 710 after the four
+  shutter-angle callsites, and 749 with the bit-depth registration. The
+  camera-tested 360-record native UI runtime is carried forward unchanged.
 - One earlier OG3K attempt froze after creating a clip. It was not reproduced by
   three later one-second OG3K recordings, but sustained recording on sufficiently
   fast media has not been tested with the new UI runtime.
@@ -142,8 +185,9 @@ written.
 ## Do not
 
 - **Do not run this on a firmware other than Ver.5.02.**
-- **Do not expect sustained OG3K or UHD on a slow card.** OG3K30 needs about
-  273.2 MB/s; the test UHS-II card measured 94 MB/s. Insufficient media speed can
+- **Do not expect sustained OG3K or UHD on a slow card.** At 24p OG3K needs
+  about 221 MB/s at 12-bit, 184 MB/s at 10-bit and 148 MB/s at 8-bit; the test
+  UHS-II card measured 94 MB/s. Insufficient media speed can
   fill the camera's buffers and stop or destabilize a take, so use faster media
   and treat every take from this test build as disposable until checked. See
   `tools/storage-benchmark/` to measure yours.

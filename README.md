@@ -36,7 +36,7 @@ card, use the composer rather than copying both.
 | product | version | what it does |
 |---|---|---|
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.11b/) | v1.11b | Writes Gyroflow's `.gcsv` and `.json` into the clip's own folder while recording. Every sample at 2500 Hz, distortion read off the lens, portrait too, no computer afterwards. |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.1a/) | v0.2.1a | The sensor's whole 3:2 area — 3024×2010 CinemaDNG, DNG cropped to 3008×2000, at eight frame rates from 23.976 to 100. **Native OG3K UI works in Settings and Quick Set, including the three-choice footer.** Sensor modes 98 and 117 are the sensor's own 2×2-binned 3:2 modes, so the ISP scales nothing. With thanks to **Vitaly Li**, who got open gate out of an fp [first](https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/). Every ISO records correctly. v0.2.1a routes all four local shutter-angle callsites through the guarded nominal-frame-rate fix and makes the loader invalidate the instruction cache after placing the patch. After a battery-out cold boot, real FHD/OG3K at 29.97p and 180° received a provisional idle-view visual pass; exact readback, the other frame rates, sustained recording, playback with the new UI runtime, and inactive UI variants remain unverified, so this is an alpha build. |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.2a/) | v0.2.2a | The sensor's whole 3:2 area — 3024×2010 CinemaDNG, DNG cropped to 3008×2000, at eight frame rates from 23.976 to 100. **Native OG3K UI works in Settings and Quick Set, including the three-choice footer.** Sensor modes 98 and 117 are the sensor's own 2×2-binned 3:2 modes, so the ISP scales nothing. With thanks to **Vitaly Li**, who got open gate out of an fp [first](https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/). Every ISO records correctly. **v0.2.2a adds 8-bit and 10-bit CinemaDNG** — the format picker has three tables chosen by bit depth, OG3K sat in only one, and the other two fell back to UHD30 while the screen still read OG3K. All three depths now record at OG3K geometry (per-frame 9,196,544 / 7,676,928 / 6,158,336 bytes at 12/10/8-bit, 12-bit unchanged), and 8-bit is a third less data. In-camera playback and highlight headroom at 8/10-bit are not verified. Carried over from v0.2.1a: the four-callsite shutter-angle fix and the loader I-cache invalidation, with a provisional battery-out 29.97p/180° idle-view visual pass; exact readback, the other frame rates, sustained recording, playback with the new UI runtime, and inactive UI variants remain unverified, so this is an alpha build. |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.1.0/) | v3.1.0 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
 
 Named `fpsup-<product>-v<version>`, one directory each, and the tag is spelled
@@ -44,8 +44,9 @@ identically — see [`releases/README.md`](releases/README.md) and
 [`releases/TAGS.md`](releases/TAGS.md).
 
 > **The thing most likely to bite:** CinemaDNG is limited by write speed long
-> before anything else. Open gate at 29.97 is 273 MB/s; a mid-range UHS-II card
-> measured here sustains 94, and plain FHD 12-bit already needs 97. A card that
+> before anything else. Open gate at 24p is about 221 MB/s at 12-bit, 184 at
+> 10-bit and 148 at 8-bit; a mid-range UHS-II card measured here sustains 94,
+> and plain FHD 12-bit already needs 97. A card that
 > cannot keep up buffers in RAM and then stops the take. That is the card, not a
 > bug — [`tools/storage-benchmark/`](tools/storage-benchmark/) measures yours.
 
@@ -58,7 +59,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — v3.1.0. The channel is built on the camera's own PTP gadget, so recording survives it |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html), and the mode-table ambiguity closed |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — two editions; Base writes a raw `.GYR` instead, converted [in a browser](gyro/web/) |
-| 4 | [**open gate**](projects/open-gate.md) | Recording the sensor's full 3:2 area | **v0.2.1a alpha** — native UI plus the four-callsite shutter-angle and loader I-cache fixes; 29.97p/180° received a provisional cold-boot visual pass, exact readback and other regressions remain |
+| 4 | [**open gate**](projects/open-gate.md) | Recording the sensor's full 3:2 area | **v0.2.2a alpha** — 8/10/12-bit CinemaDNG all recording at OG3K geometry, on top of the native UI and the four-callsite shutter-angle and loader I-cache fixes; 8/10-bit playback and highlight headroom, exact shutter readback and other regressions remain |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | Getting the best 6K the link can carry | designed; 8-bit lands within 94–100% of native 6K across every remaining unknown |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
 | 7 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, packaging | researched; the engine's sustained rate is still the one unmeasured number |
@@ -85,11 +86,12 @@ Each page says what has been proven, what is being worked on, and what is open.
   dropped samples over a 15-minute take, timestamps verified row by row.
 - **Open gate works at every ISO, with native Settings and Quick Set UI.**
   3024×2010 of a 3:2 sensor read, edge to edge — verified by unpacking a real
-  take, not inferred. v0.2.1a also corrects the shutter-angle path at four local
-  callsites and synchronizes the loader's instruction cache. A battery-out
-  29.97p/180° idle-view comparison received a provisional visual pass; exact
-  readback, other frame rates, sustained-media and playback-with-UI regressions
-  remain.
+  take, not inferred. v0.2.2a adds 8-bit and 10-bit: all three depths were
+  measured recording at OG3K geometry, where 8 and 10-bit previously fell back
+  to UHD30 without any on-screen sign. v0.2.1a's four-callsite shutter-angle fix
+  and loader instruction-cache synchronization carry forward. 8/10-bit playback
+  and highlight headroom, exact shutter readback, other frame rates,
+  sustained-media and playback-with-UI regressions remain.
 - **The IMX410 ISO and gain chain is fully decompiled**, with an explainer that
   separates firmware-confirmed behaviour from OTP values still needing measurement.
 - **The USB shell does not break recording.** It is built on the camera's own PTP
@@ -124,15 +126,15 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 產品 | 版本 | 做什麼 |
 |---|---|---|
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.11b/) | v1.11b | 錄影當下就把 Gyroflow 要的 `.gcsv` 與 `.json` 寫進片段自己的資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭,直拿也支援,事後不用電腦。 |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.1a/) | v0.2.1a | 感光元件完整的 3:2 面積 —— 3024×2010 CinemaDNG、DNG 裁切 3008×2000,八個幀率從 23.976 到 100。**Settings 與 QS 已有原生 OG3K UI,包括三選項底欄。**mode 98 / 117 是感光元件原生 2×2 binning 的 3:2 讀出,ISP 不做縮放;全 ISO 正確。v0.2.1a 將快門角度的四個本地 callsite 全部導向有嚴格守衛的 nominal FPS 修正,並讓 loader 在放置補丁後清除指令快取。完整斷電冷開機後,29.97p/180° 的真實 FHD/OG3K idle 曝光取得暫定目視通過;精確讀值、其他幀率、長時間錄影、新 UI runtime 回放與非啟用 UI variants 尚未驗證,因此仍是 alpha。 |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.2a/) | v0.2.2a | 感光元件完整的 3:2 面積 —— 3024×2010 CinemaDNG、DNG 裁切 3008×2000,八個幀率從 23.976 到 100。**Settings 與 QS 已有原生 OG3K UI,包括三選項底欄。**mode 98 / 117 是感光元件原生 2×2 binning 的 3:2 讀出,ISP 不做縮放;全 ISO 正確。**v0.2.2a 新增 8-bit 與 10-bit CinemaDNG** —— format picker 依位元深度分三張表,OG3K 只註冊在其中一張,另外兩張會退回 UHD30 而畫面上仍寫 OG3K。三個深度現在都錄在 OG3K 幾何上(12/10/8-bit 每幀 9,196,544 / 7,676,928 / 6,158,336 bytes,12-bit 零退步),8-bit 資料量少三分之一。8/10-bit 的機內回放與高光餘裕未驗證。自 v0.2.1a 延續:四路快門角度修正與 loader 指令快取同步,29.97p/180° 完整斷電冷開機取得暫定目視通過;精確讀值、其他幀率、長時間錄影、新 UI runtime 回放與非啟用 UI variants 尚未驗證,因此仍是 alpha。 |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.1.0/) | v3.1.0 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
 
 命名是 `fpsup-<產品>-v<版本>`,一個版本一個資料夾,tag 逐字相同 ——
 見 [`releases/README.md`](releases/README.md) 與 [`releases/TAGS.md`](releases/TAGS.md)。
 
 > **最可能咬人的一件事:** CinemaDNG 遠在其他東西之前就先被寫入速度卡住。
-> Open gate 29.97 是 273 MB/s;這裡實測一張中階 UHS-II 卡持續寫入 94,
-> 而純 FHD 12bit 就已經要 97。撐不住的卡會先用 RAM 緩衝,然後**停止錄影** ——
+> Open gate 24p 在 12/10/8-bit 各約 221 / 184 / 148 MB/s;這裡實測一張中階
+> UHS-II 卡持續寫入 94,而純 FHD 12bit 就已經要 97。撐不住的卡會先用 RAM 緩衝,然後**停止錄影** ——
 > 那是卡不是 bug。用 [`tools/storage-benchmark/`](tools/storage-benchmark/) 量自己的。
 
 ### 項目
@@ -144,7 +146,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸 | **已釋出** —— v3.1.0。通道建在相機自己的 PTP gadget 上,所以錄影撐得過去 |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、增益、感光元件控制 | **研究完成** —— [互動說明](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html),模式表的歧義也收掉了 |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | 陀螺儀、六軸記錄、Gyroflow 流程 | **已釋出** —— 兩個版本;Base 版寫原始 `.GYR`,[在瀏覽器裡](gyro/web/)轉換 |
-| 4 | [**open gate**](projects/open-gate.md) | 錄下感光元件完整的 3:2 面積 | **v0.2.1a alpha** —— 原生 UI、四路快門角度與 loader I-cache 修正已整合;29.97p/180° 取得暫定冷開機目視通過,精確讀值與其他回歸仍待測 |
+| 4 | [**open gate**](projects/open-gate.md) | 錄下感光元件完整的 3:2 面積 | **v0.2.2a alpha** —— 8/10/12-bit CinemaDNG 都錄在 OG3K 幾何上,加上原生 UI 與四路快門角度、loader I-cache 修正;8/10-bit 的回放與高光餘裕、精確快門讀值與其他回歸仍待測 |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | 把鏈路載得動的最好 6K 拿出來 | 設計完成;8bit 在所有剩餘未知數下都落在原生 6K 的 94–100% |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD、對焦模型、鏡頭控制、跟焦 | AF 深度反編譯完成;收集器還沒做 |
 | 7 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮、封裝 | 研究過;引擎的持續速率仍是唯一沒量到的數字 |
@@ -155,7 +157,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 ### 主要成果
 
 - **相機自己在錄影當下寫出 Gyroflow 要的檔案。** GCSV 邊錄邊串流,JSON 開始幾秒後落地,停止就只是停止。15 分鐘的 take 零掉樣,時間戳逐列驗過。
-- **Open gate 可用,全 ISO,原生 UI 已整合。** 3:2 讀出的 3024×2010,整幅邊到邊 —— 解檔實錄驗證,不是推論。v0.2.1a 另修正快門角度的四個本地 callsite 與 loader 指令快取同步;完整斷電冷開機後,29.97p/180° idle 曝光取得暫定目視通過。精確讀值、其他幀率、長時間寫入與新 UI runtime 回放仍待回歸。
+- **Open gate 可用,全 ISO,原生 UI 已整合。** 3:2 讀出的 3024×2010,整幅邊到邊 —— 解檔實錄驗證,不是推論。v0.2.2a 新增 8-bit 與 10-bit:三個深度都實測錄在 OG3K 幾何上,而先前 8/10-bit 會無聲退回 UHD30。v0.2.1a 的四路快門角度修正與 loader 指令快取同步延續。8/10-bit 的回放與高光餘裕、精確讀值、其他幀率、長時間寫入與新 UI runtime 回放仍待回歸。
 - **IMX410 的 ISO 與增益鏈完整反編譯**,說明頁把「韌體確認的行為」跟「還需要量測的 OTP 值」分開。
 - **USB shell 不會弄壞錄影。** 它建在相機自己的 PTP gadget 上,端點由韌體管,錄影模式重配之後韌體會自己重建。
 
