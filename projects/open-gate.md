@@ -3,12 +3,14 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Recording the sensor's full 3:2 area instead of the 16:9 window the camera crops to.
-**Status: working. 3024×2010 3:2 CinemaDNG at 29.97, DNG cropped to 3008×2000,
-whole frame. Live view, in-camera playback and a menu entry of its own all verified.**
+**Status: v0.2.0test. 3024×2010 3:2 CinemaDNG at eight frame rates, DNG cropped
+to 3008×2000, whole frame. Native Settings and Quick Set UI now pass on camera;
+sustained-media, playback-with-UI and inactive-variant regressions remain.**
 
 用感光元件完整的 3:2 面積錄影,而不是相機裁出來的 16:9 視窗。
-**狀態:可用。3024×2010 3:2 CinemaDNG @29.97,DNG 裁切 3008×2000,整張畫面。
-live view、機內回放、獨立選單項目均已驗證。**
+**狀態:v0.2.0test。3024×2010 3:2 CinemaDNG、八個幀率,DNG 裁切
+3008×2000,整張畫面。Settings/QS 原生 UI 已通過實機;持續寫入、UI runtime
+回放與非啟用 variants 尚待回歸。**
 
 ---
 
@@ -108,15 +110,18 @@ The build and its manifest are in [`opengate/`](../opengate/).
 ### Known limits
 
 - **Firmware Ver.5.02 only.** The AutoRun language has no runtime version guard.
-- **MENU → recording → resolution shows `3` instead of a name.** That column wants
-  a string-resource id (the factory rows use 0313/0314) and we put a literal
-  string there, so it falls back to printing the index. A third row in the factory
-  format needs 111 bytes and the block has 92, so fixing it means moving the CSV
-  into RAM and repointing — and `0xC0F8E7EC` is neither stored as a pointer nor
-  built with movw/movt, so the addressing has not been found.
-- **QS cannot switch to it.** The RES. cell draws garbage and the strip offers only
-  UHD and FHD. `MenuItemMovieRecSize::v3` is eliminated as the cause — a case was
-  added and hit, and nothing changed. Selecting OG3K from MENU works normally.
+- **v0.2.0test repairs the native CINE UI.** The collapsed Settings summary,
+  three-row Settings list, large and small Quick Set values, cursor, and the
+  UHD/FHD/OG3K footer have all been seen working on the camera.
+- **The UI recording regression is deliberately short.** With the full UI
+  runtime resident, FHD passed once and UHD/OG3K passed three times each; the
+  UHD and OG3K takes were stopped at about one second because the available SD
+  card is too slow. One earlier OG3K attempt froze and was not reproduced.
+  Sustained recording on fast media, playback with the UI runtime, and inactive
+  screen/style variants remain untested.
+- The exact release pair is the no-shell form. Its 590 OpenGate words and native
+  UI sections are byte-identical to the camera-tested debug form, but the
+  no-shell pair has not yet had its own cold-boot camera run.
 - The hook's payload occupies `0xC072F800–0xC072F8E8` and its telemetry
   `0xC072FA00–0xC072FA0F`, which collides with the host tools' scratch area.
   While it is armed, plain `mem get`/`mem set` are fine but `getfile.py`,
@@ -269,13 +274,14 @@ Hook 的條件寫在 record 自己的內容上(`base == 1936×1090`),不是寫�
 ### 已知限制
 
 - **僅限韌體 Ver.5.02。** AutoRun 語言沒有執行期的版本守衛。
-- **MENU → 記錄設定 → 解析度 顯示 `3` 而不是名稱。** 那一欄要的是字串資源 ID
-  (原廠是 0313/0314),我們塞了字面字串,解析不到就退回顯示索引。用原廠格式
-  加第三列需要 111 bytes,而該區塊只有 92 bytes,要修得把 CSV 搬到 RAM 再改指標
-  —— 但 `0xC0F8E7EC` 既不是存成指標、也不是用 movw/movt 組出來的,定址方式還沒找到。
-- **QS 切不過去。** RES. 格子是亂圖,底部選項條只有 UHD / FHD 兩格。
-  `MenuItemMovieRecSize::v3` 已排除(加了 case 並實測命中,畫面不變)。
-  從 MENU 選取與使用都正常。
+- **v0.2.0test 已修好 CINE 原生 UI。** Settings 收合摘要、三列選單、QS
+  大小 OG3K 值、游標與 UHD/FHD/OG3K 三選項底欄都已在相機上看見正常運作。
+- **UI 錄影回歸刻意很短。** full UI runtime 常駐時,FHD 通過 1 次,
+  UHD 與 OG3K 各通過 3 次;因手邊 SD 卡太慢,UHD/OG3K 都在約一秒停止。
+  先前有一次 OG3K 凍結,之後未重現。快速媒體長時間錄影、新 UI runtime
+  的回放與非啟用 screen/style variants 尚未驗證。
+- 真正出貨的是 no-shell 形式;590 筆 OpenGate 與 UI sections 已逐字證明等同
+  實機測過的 debug 形式,但這對 no-shell 檔案本身尚未另做一次冷開機實測。
 - hook 的酬載佔 `0xC072F800–0xC072F8E8`、遙測佔 `0xC072FA00–0xC072FA0F`,
   跟主機工具的暫存區相撞。armed 的時候 `mem get`/`mem set` 沒問題,但
   `getfile.py`、`putfile.py`、`inject.py`、`callfn.py` 不行。

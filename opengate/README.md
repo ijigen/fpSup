@@ -1,7 +1,8 @@
 # fpSup Open Gate — OG3K
 
-**3024×2010 3:2 CinemaDNG at 29.97 on the SIGMA fp.** The sensor's whole 3:2 area
-instead of the 16:9 window the camera crops to.
+**3024×2010 3:2 CinemaDNG at eight frame rates on the SIGMA fp.** The sensor's
+whole 3:2 area instead of the 16:9 window the camera crops to. v0.2.0test adds
+native OG3K labels and choices to Settings and Quick Set.
 
 Firmware **Ver.5.02 only.** Everything is RAM-only: remove `AutoRun.txt`, fully
 power-cycle, and the camera is stock. Nothing is ever written to flash.
@@ -35,8 +36,8 @@ you are also running the gyro logger — it corrects for exactly this:
 2. Power off, remove the battery, and work on the SD card in a reader.
 3. Copy **`AutoRun.txt`** and **`VSHL.BIN`** to the **root** of the card. Nothing
    else — no folder to make, no file to convert.
-4. Card in, power on. The screen shows a progress bar and then `fpSup-OG3K-v0.1.1!`.
-5. **MENU → recording → resolution** now offers a third entry. Pick it.
+4. Card in, power on. The screen shows a progress bar and then `fpSup-OG3K-v0.2.0!`.
+5. Select **OG3K** from **MENU → recording → resolution** or Quick Set **RES.**
 
 To remove it: delete `AutoRun.txt`, power off **completely** (battery out, not
 just the switch — a warm restart does not clear RAM), power on.
@@ -56,6 +57,12 @@ just the switch — a warm restart does not clear RAM), power on.
   against 1.81, 2.05 — and `BaselineExposure` is +3.000, as the factory writes.
   The capture is measured to run on `gain_state` 7 at the decision function
   itself, not inferred.
+- **Native CINE UI** (v0.2.0test): the collapsed Settings summary, the Settings
+  list, large and small Quick Set OG3K values, cursor, and the UHD/FHD/OG3K
+  three-choice footer all passed on the camera.
+- **Short recording transitions with the full UI runtime:** FHD once, UHD three
+  times, and OG3K three times. UHD and OG3K were stopped at about one second
+  because the test SD card cannot sustain their data rate.
 
 ## Native ISO — what v0.1.1test fixed
 
@@ -91,21 +98,29 @@ same flag: driving that too made the recording preview flicker green. The
 preview plane is also declared 12-bit, as the factory movie profiles do, rather
 than the 8-bit a stills profile declares.
 
-## Known cosmetic issues — they do not affect recording
+## v0.2.0test boundaries
 
-- **MENU → recording → resolution shows `3` instead of a name.** That column
-  wants a string-resource id and we put a literal string there, so it falls back
-  to printing the index.
-- **QS cannot switch to it.** The RES. cell draws garbage and the strip offers
-  only UHD and FHD. Selecting OG3K from MENU works normally.
+- The recording core is byte-for-byte the same 590-word plan as v0.1.1test.
+  v0.2.0test adds the camera-tested 360-record native UI runtime.
+- The camera tests used the equivalent debug build with a USB shell. The shipped
+  pair removes only that shell and its USB patches; an offline section-map check
+  proves the OpenGate and UI payloads are identical. The exact no-shell pair has
+  not yet had its own cold-boot camera run.
+- One earlier OG3K attempt froze after creating a clip. It was not reproduced by
+  three later one-second OG3K recordings, but sustained recording on sufficiently
+  fast media has not been tested with the new UI runtime.
+- Playback with the v0.2.0test UI runtime and inactive screen/style variants
+  remain untested. Playback of the unchanged recording core was verified on
+  v0.1.0test.
 
 ## Do not
 
 - **Do not run this on a firmware other than Ver.5.02.**
-- **Do not expect it to fit a slow card.** 273.2 MB/s is two and a half times
-  what a mid-range UHS-II card sustains; a card that cannot keep up will buffer
-  in RAM and then stop the take after a few seconds. That is the card, not a bug.
-  See `tools/storage-benchmark/` to measure yours.
+- **Do not expect sustained OG3K or UHD on a slow card.** OG3K30 needs about
+  273.2 MB/s; the test UHS-II card measured 94 MB/s. Insufficient media speed can
+  fill the camera's buffers and stop or destabilize a take, so use faster media
+  and treat every take from this test build as disposable until checked. See
+  `tools/storage-benchmark/` to measure yours.
 
 ## Where this comes from
 

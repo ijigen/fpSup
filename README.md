@@ -36,7 +36,7 @@ card, use the composer rather than copying both.
 | product | version | what it does |
 |---|---|---|
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.11b/) | v1.11b | Writes Gyroflow's `.gcsv` and `.json` into the clip's own folder while recording. Every sample at 2500 Hz, distortion read off the lens, portrait too, no computer afterwards. |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.1.1test/) | v0.1.1test | The sensor's whole 3:2 area — 3024×2010 CinemaDNG, DNG cropped to 3008×2000, at eight frame rates from 23.976 to 100. **Sensor modes 98 and 117 — the sensor's own 2×2-binned 3:2 modes, so the 3032×2012 arrives already reduced and the ISP scales nothing.** With thanks to **Vitaly Li**, who got open gate out of an fp [first](https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/): FP3K reads the whole 6064×4042 window and reduces 2:1 in the ISP instead. Same division, different place — and reading 4042 lines instead of 2012 is the only reason the rolling shutter differs. Rolling shutter 9.2–12.6 ms, against 24.98 ms for a full 6064×4042 read. **v0.1.1test: every ISO now records correctly** — the capture was being classified as a stills acquisition, which moved the dual-native switch to ISO 640 and cost ~2.7 stops of highlight headroom above it. |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.0test/) | v0.2.0test | The sensor's whole 3:2 area — 3024×2010 CinemaDNG, DNG cropped to 3008×2000, at eight frame rates from 23.976 to 100. **Native OG3K UI now works in Settings and Quick Set, including the three-choice footer.** Sensor modes 98 and 117 are the sensor's own 2×2-binned 3:2 modes, so the ISP scales nothing. With thanks to **Vitaly Li**, who got open gate out of an fp [first](https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/). Every ISO records correctly; this remains a test build while sustained recording, playback with the new UI runtime, and inactive UI variants await regression testing. |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.1.0/) | v3.1.0 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
 
 Named `fpsup-<product>-v<version>`, one directory each, and the tag is spelled
@@ -58,7 +58,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — v3.1.0. The channel is built on the camera's own PTP gadget, so recording survives it |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html), and the mode-table ambiguity closed |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — two editions; Base writes a raw `.GYR` instead, converted [in a browser](gyro/web/) |
-| 4 | [**open gate**](projects/open-gate.md) | Recording the sensor's full 3:2 area | **working** — live view, in-camera playback and its own menu entry all verified |
+| 4 | [**open gate**](projects/open-gate.md) | Recording the sensor's full 3:2 area | **v0.2.0test** — recording core plus native Settings and Quick Set UI; sustained-media and UI-variant regressions remain |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | Getting the best 6K the link can carry | designed; 8-bit lands within 94–100% of native 6K across every remaining unknown |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
 | 7 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, packaging | researched; the engine's sustained rate is still the one unmeasured number |
@@ -83,8 +83,10 @@ Each page says what has been proven, what is being worked on, and what is open.
 - **The camera writes its own Gyroflow files while it records.** The GCSV streams
   during the take and the JSON lands a few seconds in; stop is just stop. Zero
   dropped samples over a 15-minute take, timestamps verified row by row.
-- **Open gate works, at every ISO.** 3024×2010 of a 3:2 sensor read, edge to edge — verified by
-  unpacking a real take, not inferred. Live view, playback and the menu entry too.
+- **Open gate works at every ISO, with native Settings and Quick Set UI.**
+  3024×2010 of a 3:2 sensor read, edge to edge — verified by unpacking a real
+  take, not inferred. v0.2.0test passed the UI surfaces and short recording
+  transitions; sustained-media and playback-with-UI regressions remain.
 - **The IMX410 ISO and gain chain is fully decompiled**, with an explainer that
   separates firmware-confirmed behaviour from OTP values still needing measurement.
 - **The USB shell does not break recording.** It is built on the camera's own PTP
@@ -119,7 +121,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 產品 | 版本 | 做什麼 |
 |---|---|---|
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.11b/) | v1.11b | 錄影當下就把 Gyroflow 要的 `.gcsv` 與 `.json` 寫進片段自己的資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭,直拿也支援,事後不用電腦。 |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.1.1test/) | v0.1.1test | 感光元件完整的 3:2 面積 —— 3024×2010 CinemaDNG、DNG 裁切 3008×2000,八個幀率從 23.976 到 100。**用感光元件 mode 98 / 117:原生 2×2 binning 的 3:2 讀出,不是 6K 縮下來的。**捲簾 9.2–12.6 ms,而完整 6064×4042 讀出是 24.98 ms。**v0.1.1test:全 ISO 都正確** —— 先前擷取被歸類成拍照,雙原生切換點落在 ISO 640,640 以上少了約 2.7 檔高光餘裕。 |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.0test/) | v0.2.0test | 感光元件完整的 3:2 面積 —— 3024×2010 CinemaDNG、DNG 裁切 3008×2000,八個幀率從 23.976 到 100。**Settings 與 QS 已有原生 OG3K UI,包括三選項底欄。**mode 98 / 117 是感光元件原生 2×2 binning 的 3:2 讀出,ISP 不做縮放;全 ISO 正確。新 UI runtime 的長時間錄影、回放與非啟用 UI variants 尚待回歸,所以仍標 test。 |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.1.0/) | v3.1.0 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
 
 命名是 `fpsup-<產品>-v<版本>`,一個版本一個資料夾,tag 逐字相同 ——
@@ -139,7 +141,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸 | **已釋出** —— v3.1.0。通道建在相機自己的 PTP gadget 上,所以錄影撐得過去 |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、增益、感光元件控制 | **研究完成** —— [互動說明](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html),模式表的歧義也收掉了 |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | 陀螺儀、六軸記錄、Gyroflow 流程 | **已釋出** —— 兩個版本;Base 版寫原始 `.GYR`,[在瀏覽器裡](gyro/web/)轉換 |
-| 4 | [**open gate**](projects/open-gate.md) | 錄下感光元件完整的 3:2 面積 | **可用** —— live view、機內回放、獨立選單項目都驗證過 |
+| 4 | [**open gate**](projects/open-gate.md) | 錄下感光元件完整的 3:2 面積 | **v0.2.0test** —— 錄影核心與 Settings/QS 原生 UI 已整合;持續寫入與 UI variants 待回歸 |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | 把鏈路載得動的最好 6K 拿出來 | 設計完成;8bit 在所有剩餘未知數下都落在原生 6K 的 94–100% |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD、對焦模型、鏡頭控制、跟焦 | AF 深度反編譯完成;收集器還沒做 |
 | 7 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮、封裝 | 研究過;引擎的持續速率仍是唯一沒量到的數字 |
@@ -150,7 +152,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 ### 主要成果
 
 - **相機自己在錄影當下寫出 Gyroflow 要的檔案。** GCSV 邊錄邊串流,JSON 開始幾秒後落地,停止就只是停止。15 分鐘的 take 零掉樣,時間戳逐列驗過。
-- **Open gate 可用,全 ISO。** 3:2 讀出的 3024×2010,整幅邊到邊 —— 解檔實錄驗證,不是推論。live view、回放、選單項目也都好了;v0.1.1test 修好了原生 ISO 的分類,ISO 640 以上不再少 2.7 檔高光。
+- **Open gate 可用,全 ISO,原生 UI 已整合。** 3:2 讀出的 3024×2010,整幅邊到邊 —— 解檔實錄驗證,不是推論。v0.2.0test 在 Settings 與 QS 顯示 OG3K 並提供三選項底欄;短錄轉換已通過,長時間寫入與新 UI runtime 的回放仍待回歸。
 - **IMX410 的 ISO 與增益鏈完整反編譯**,說明頁把「韌體確認的行為」跟「還需要量測的 OTP 值」分開。
 - **USB shell 不會弄壞錄影。** 它建在相機自己的 PTP gadget 上,端點由韌體管,錄影模式重配之後韌體會自己重建。
 

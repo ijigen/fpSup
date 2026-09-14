@@ -96,9 +96,21 @@ def build_templates():
 
 
 # The merge checks are the one thing that still needs the OG3K toolchain: they
-# prove the page's merge is byte-for-byte what build_og3k_gyro.py produces.  That
-# is a test, not part of building the page -- --no-merge-check skips it.
+# prove the page's merge is byte-for-byte what build_og3k_gyro.py produces.
+# That builder obtains both the 590-word recording core and the 360-record
+# native Settings/QS UI from build_og3k_ui_candidate.py, the same source used
+# for the standalone v0.2.0test card.  This is a test, not part of the browser
+# page's run time.
 REFS = {}
+NATIVE_UI_SECTIONS = {
+    0xC0732700,  # runtime state
+    0xC0732C84,  # UI code + selected-record table
+    0xC0793060,  # private NBR pack
+    0xC05E5B58,  # string resolver hook
+    0xC05E84D8,  # NBR loader hook
+    0xC05E6400,  # NBU record hook
+}
+NATIVE_UI_RECORDS = 360
 
 
 def refs():
@@ -112,6 +124,15 @@ def refs():
         if r.returncode:
             sys.stderr.write(r.stdout + r.stderr)
             raise SystemExit(f'could not build the {name} reference card')
+        _, records = parse((d / 'VSHL.BIN').read_bytes())
+        missing = NATIVE_UI_SECTIONS - {address for address, _ in records}
+        if missing:
+            sites = ', '.join(f'0x{address:08X}' for address in sorted(missing))
+            raise SystemExit(f'{name} reference lacks native UI sections: {sites}')
+        manifest = (d / 'MANIFEST.txt').read_text('utf-8')
+        if f'{NATIVE_UI_RECORDS} selected NBU records' not in manifest:
+            raise SystemExit(
+                f'{name} reference did not attest {NATIVE_UI_RECORDS} UI records')
         REFS[name] = d
     REFS['_tmp'] = tmp
     return REFS
@@ -136,8 +157,14 @@ PRODUCTS = {
                           'ISP instead. Correct at every ISO since '
                           'v0.1.1test, which fixes the conversion-gain '
                           'misclassification that cost 2.7 stops of highlight '
-                          'headroom above ISO 640. Carries no entry section: it '
-                          'is all static writes.'),
+                          'headroom above ISO 640. v0.2.0test adds the native '
+                          'OG3K name and third choice to Recording Settings and '
+                          'Quick Set. The current test boundary covers the CINE '
+                          'UI and short FHD/UHD/OG3K record transitions; sustained '
+                          'fast-media recording, full-UI playback, and inactive '
+                          'screen/style variants are still pending, and one earlier '
+                          'OG3K freeze was not reproduced. Carries no entry section: '
+                          'it is all static writes.'),
 }
 # usbshell first: picked() walks this order, and the development card puts the
 # worker at record 1, which is what makes the merge come out byte-identical to it.

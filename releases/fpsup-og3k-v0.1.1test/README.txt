@@ -3,6 +3,12 @@
  SIGMA fp — 3:2 open gate, eight frame rates
 ================================================================
 
+  SUPERSEDED BY og3k-v0.2.0test. The recording core is unchanged;
+  v0.2.0test adds the native OG3K Settings and Quick Set UI. This
+  directory is kept as the exact earlier release record.
+
+================================================================
+
 WHAT IT IS
 
   The sensor's whole 3:2 area recorded as CinemaDNG, instead of the
