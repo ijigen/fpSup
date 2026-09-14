@@ -341,6 +341,37 @@ function runChecks(recs, vshl, banner, entry){
              : stray.length ? stray[0].name+' wants '+hex(stray[0].entry)+', nothing covers it'
              : entry ? hex(entry) : 'none — static writes only'});
 
+  /* Is this card RAM-only?  The firmware is not in the address space to be
+     modified: FORMAT.md records it sitting on NAND LZSS-compressed, decompressed
+     at boot into DRAM as two contiguous segments at 0xC0000000..0xC2F30800.  A
+     VSHL record is only ever a blob and a destination, so it cannot reach the
+     NAND however it is built.  What is worth checking is the other half -- that
+     every destination really is that DRAM window, so a dropped card cannot be
+     poking a hardware register either.  MMIO below 0x40000000 is caught by the
+     pool check instead, because the loader reads anything there as an offset.
+
+     The honest limit: this is about DESTINATIONS.  It says nothing about what a
+     payload's own code does once the camera runs it. */
+  const [ilo, ihi] = CAT.dram_image;
+  const abs = S.filter(s => s.lo >= 0x40000000);
+  const outside = abs.filter(s => s.lo < ilo || s.hi > ihi);
+  c.push({ok:!outside.length, t:'Every absolute write lands in the firmware image in DRAM',
+          d: outside.length
+             ? outside[0].w+' at '+hex(outside[0].lo)+' is outside '+hex(ilo)+'..'+hex(ihi)
+             : abs.length+' spans inside '+hex(ilo)+'..'+hex(ihi)+' — RAM only; the ROM is NAND and is not mapped'});
+
+  /* The AutoRun asks `memmgr bufmem get` for 1 MiB.  Nothing in the firmware
+     bounds a write against it, so a section past the end silently lands in the
+     next allocation and the symptom turns up somewhere unrelated. */
+  const off = S.filter(s => s.lo < 0x40000000);
+  const past = off.filter(s => s.hi > CAT.pool_size);
+  const top = off.length ? Math.max(...off.map(s => s.hi)) : 0;
+  c.push({ok:!past.length, t:'Pool writes stay inside the 1 MiB the AutoRun asks for',
+          d: past.length
+             ? past[0].w+' ends at pool+0x'+past[0].hi.toString(16).toUpperCase()
+               +', past 0x'+CAT.pool_size.toString(16).toUpperCase()
+             : off.length+' spans, highest pool+0x'+top.toString(16).toUpperCase()});
+
   c.push({ok: sel().length > 0, t:'Something is selected',
           d: sel().length ? sel().length+' card'+(sel().length>1?'s':'') : 'pick at least one'});
 

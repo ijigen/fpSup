@@ -182,6 +182,19 @@ def discover():
     return out
 
 
+# Both derived, never invented:
+#   research/firmware/notes/FORMAT.md -- the DFI carries the firmware LZSS-
+#     compressed and the loader decompresses two segments into DRAM, landing
+#     contiguously at 0xC0000000..0xC2F30800.  The NAND itself is not in the
+#     address space, so a VSHL record (a blob plus a destination) has no way to
+#     reach it.  Checking the destinations is what proves a card is RAM-only.
+#   fp_usb_shell/putfile.py POOL_SIZE -- the AutoRun asks `memmgr bufmem get`
+#     for 1 MiB, and docs/AUDIT.md notes nobody checks writes against it, so a
+#     section past the end lands in whatever the allocator handed out next and
+#     the symptom appears somewhere unrelated.
+DRAM_IMAGE = (0xC0000000, 0xC2F30800)
+POOL_SIZE = 1048576
+
 PAD_TO = 32768
 FILLER = '# pad -- see PAD_TO: mode 7 overwrites but does not truncate\n'
 
@@ -294,6 +307,7 @@ def main():
 
     lo, hi = loader_window()
     cat = dict(cards=out_cards, pad_to=PAD_TO, loader_window=[lo, hi],
+               dram_image=list(DRAM_IMAGE), pool_size=POOL_SIZE,
                entry_at=0xC072E064, park_at=PARK_AT, worker_at=0xC072F050,
                worker_entry=0xC072F188, templates=templates_out,
                autorun_template=template, filler=FILLER)
