@@ -121,11 +121,15 @@ NATIVE_UI_SECTIONS = {
 NATIVE_UI_RECORDS = 360
 
 
-def refs():
-    if REFS:
-        return REFS
-    tmp = pathlib.Path(tempfile.mkdtemp(prefix='og3kref-'))
-    og3k = latest('og3k')
+def refs(product='og3k'):
+    """Independently rebuild <product>+gyro so the browser merge has something to
+    be equal to.  Parametrised because OG2K is a second open-gate card built the
+    same way: shipping it without the check OG3K gets would be the one difference
+    that matters."""
+    if product in REFS:
+        return REFS[product]
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix=f'{product}ref-'))
+    og3k = latest(product)
     og_entry, og_records = parse((og3k / 'VSHL.BIN').read_bytes())
     if og_entry != 0:
         raise SystemExit(f'{og3k.name} unexpectedly carries an entry point')
@@ -149,11 +153,13 @@ def refs():
         path.write_bytes(blob)
         section_args += ['--also-bin', f'0x{address:08X}:{path}']
 
+    out = {}
     for name, debug in (('plain', False), ('shell', True)):
         d = tmp / name
         cmd = [sys.executable, str(GYRO / 'build_base_card.py'),
                '--edition', 'gcsv', '--version', 'catalogue-reference',
-               '--banner', 'fpSup-OG3K-Gyro!', '--out', str(d), *section_args]
+               '--banner', f'fpSup-{product.upper()}-Gyro!', '--out', str(d),
+               *section_args]
         if debug:
             cmd.append('--debug')
         r = subprocess.run(cmd, capture_output=True, text=True)
@@ -165,9 +171,10 @@ def refs():
         if missing:
             sites = ', '.join(f'0x{address:08X}' for address in sorted(missing))
             raise SystemExit(f'{name} reference lacks native UI sections: {sites}')
-        REFS[name] = d
-    REFS['_tmp'] = tmp
-    return REFS
+        out[name] = d
+    out['_tmp'] = tmp
+    REFS[product] = out
+    return out
 
 
 RELEASES = ROOT / 'fpSup' / 'releases'
@@ -181,42 +188,28 @@ PRODUCTS = {
     'gyro':     dict(id='gyro', name='fpGyroSup',
                      desc='Writes .gcsv and .json into the clip folder while '
                           'recording. The released card, unmodified.'),
-    'og3k':     dict(id='og3k', name='OpenGate',
-                     desc='3024×2010, DNG cropped to 3008×2000, eight frame rates. '
-                          'Sensor modes 98/117 — the sensor\'s own 2×2-binned 3:2 '
-                          'modes, so the ISP scales nothing. Vitaly Li got open '
-                          'gate out of an fp first; FP3K puts the same 2:1 in the '
-                          'ISP instead. The 12-bit path is correct at every ISO since '
-                          'v0.1.1test, which fixes the conversion-gain '
-                          'misclassification that cost 2.7 stops of highlight '
-                          'headroom above ISO 640. v0.2.0test added the native '
-                          'OG3K name and third choice to Recording Settings and '
-                          'Quick Set. v0.2.1a adds the guarded four-callsite '
-                          'shutter-angle nominal-FPS fix and whole-I-cache publish; '
-                          'after a battery-out cold boot, real 29.97p/180° FHD and '
-                          'OG3K received a provisional idle-view visual pass. '
-                          'v0.2.2a adds 8-bit and 10-bit CinemaDNG: the format '
-                          'picker has three tables chosen by bit depth, OG3K was '
-                          'registered in only one, and the other two fell back to '
-                          'UHD30 while the screen still read OG3K. All three depths '
-                          'now record at OG3K geometry — 9,196,544 / 7,676,928 / '
-                          '6,158,336 bytes per frame at 12/10/8-bit, 12-bit '
-                          'unchanged — and 8-bit is a third less data. v0.2.3a '
-                          'fixes v0.2.2a\'s format-table pass-through pointer. '
-                          'The exact no-shell VSHL passed all 100 DNG frames from '
-                          'OG3K/UHD/FHD 25p/180° clips at 25.000 fps and 1/50 '
-                          'second with correct geometry. Super35/crop must be '
-                          'off for OG3K. In-camera playback and highlight '
-                          'headroom at 8/10-bit are not verified. Other frame rates, '
-                          'sustained fast-media recording, full-UI playback, '
-                          'inactive screen/style variants, and the CINE/STILL '
-                          'transition remain pending. One earlier OG3K freeze was '
-                          'not reproduced. Carries no entry section: it is all '
-                          'static writes.'),
+    'og3k':     dict(id='og3k', name='OpenGate 3K', excl=['og2k'],
+                     desc='3024×2010, DNG cropped to 3008×2000, eight frame rates, '
+                          '8/10/12-bit CinemaDNG. Sensor modes 98/117 — the sensor\'s '
+                          'own 2×2-binned 3:2 modes, so the ISP scales nothing. Native '
+                          'OG3K entry in Recording Settings and Quick Set. 219 MB/s at '
+                          '24p 12-bit. Super35/crop must be off. Alpha — the release '
+                          'README lists what is and is not verified. Carries no entry '
+                          'section: it is all static writes.'),
+    'og2k':     dict(id='og2k', name='OpenGate 2K', excl=['og3k'],
+                     desc='2016×1344, DNG cropped to 2000×1334 — the same 3:2 field of '
+                          'view at a third of the data. Sensor mode 139, the 3×3 '
+                          'readout, so all eight frame rates including 100p stay on the '
+                          'quiet one; rolling shutter 8.3 ms. 98 MB/s at 24p 12-bit, '
+                          'which an ordinary fast card can sustain. Test build. '
+                          'Not with OpenGate 3K: the resolution menu holds three '
+                          'entries and each of them takes the third.'),
 }
 # usbshell first: picked() walks this order, and the development card puts the
 # worker at record 1, which is what makes the merge come out byte-identical to it.
-ORDER = ['usbshell', 'gyro', 'og3k']
+# og2k last: the merge checks below reproduce cards that predate it, and
+# picked() walks this order, so appending cannot change their bytes.
+ORDER = ['usbshell', 'gyro', 'og3k', 'og2k']
 
 
 def version_key(q):
@@ -349,7 +342,7 @@ def main():
         templates[ban] = ar.split('# pad -- see PAD_TO')[0].replace(ban, '@@BANNER@@')
         out_cards.append(dict(
             id=card['id'], name=card['name'] + '  ' + card['version'],
-            desc=card['desc'],
+            desc=card['desc'], excl=card.get('excl', []),
             banner=ban, entry=entry, shell=bool(card.get('shell')),
             template=card.get('template', 'plain'),
             records=[dict(a=a, b=base64.b64encode(b).decode(),
@@ -438,6 +431,10 @@ def main():
          merge(['gyro', 'og3k']), (refs()['plain'] / 'VSHL.BIN').read_bytes()),
         ('shell+gyro+og3k    == og3k_gyro (dev)',
          merge(['shell', 'gyro', 'og3k']), (refs()['shell'] / 'VSHL.BIN').read_bytes()),
+        ('gyro+og2k          == og2k_gyro (rebuilt)',
+         merge(['gyro', 'og2k']), (refs('og2k')['plain'] / 'VSHL.BIN').read_bytes()),
+        ('shell+gyro+og2k    == og2k_gyro (rebuilt, dev)',
+         merge(['shell', 'gyro', 'og2k']), (refs('og2k')['shell'] / 'VSHL.BIN').read_bytes()),
     ]
     for what, got, want in merges:
         ok = got == want
@@ -486,8 +483,9 @@ def main():
         + css + '</style>\n</head>\n<body>\n' + rest + '\n</body>\n</html>\n')
     print(f'\n  wrote  {HERE / "index.html"}  '
           f'{(HERE / "index.html").stat().st_size:,} bytes')
-    if '_tmp' in REFS:
-        shutil.rmtree(REFS['_tmp'], ignore_errors=True)
+    for product in list(REFS):
+        shutil.rmtree(REFS[product]['_tmp'], ignore_errors=True)
+    if REFS:
         print('  refs   built and discarded (merged cards never land in the tree)')
 
 

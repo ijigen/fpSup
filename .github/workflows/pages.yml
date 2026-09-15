@@ -25,6 +25,12 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      # The tables in index.html and README.md are generated from releases/.
+      # This only checks — it does not rewrite — because GitHub renders
+      # README.md from the commit, not from the Pages artifact, so a fix made
+      # here would never reach the repository's own front page.
+      - name: Releases tables are current
+        run: python3 tools/build_releases.py --check
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .

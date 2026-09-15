@@ -25,11 +25,22 @@ fpsup-usbshell-v1.0.0      USB shell
 ```
 AutoRun.txt   必要
 VSHL.BIN      必要
+ABOUT.txt     必要(給網站用的一行說明,中英各一行)
 README.txt    給使用者
 MANIFEST.txt  可選,雜湊與建置紀錄
 ```
 
 `AutoRun.txt` 與 `VSHL.BIN` 就是卡片的全部 —— 放進 SD 卡根目錄即可。
+
+`ABOUT.txt` 是**首頁表格那一格的唯一來源**:
+
+```
+en: The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.
+zh: 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。
+```
+
+一行就好,寫**這個產品是什麼**,不要寫這一版改了什麼 —— 版本專屬的測試紀錄屬於
+`README.txt`。沒有 `ABOUT.txt` 時會退而取 `README.txt` 橫幅那一行。
 
 ## 版本從哪裡接下去
 
@@ -42,9 +53,28 @@ MANIFEST.txt  可選,雜湊與建置紀錄
 
 ## 加一個新版本
 
-建好卡片,放進 `fpsup-<product>-v<版本>/`,跑一次
-`tools/card-composer/build_catalogue.py`。合併器會自己挑到新的那個 ——
-不需要改程式。
+建好卡片,放進 `fpsup-<product>-v<版本>/`,附上 `ABOUT.txt`,然後:
+
+```sh
+tools/build_releases.py                  # 首頁與 README 的表格
+tools/card-composer/build_catalogue.py   # 合併器的卡片目錄
+```
+
+**`index.html` 和 `README.md` 都不用手動改。** `build_releases.py` 掃 `releases/`,
+每個產品挑最新的一版(用上面那條規則),把表格重新產生在
+`<!-- releases:begin -->` / `<!-- releases:end -->` 之間。
+
+來源是**資料夾不是 tag**:兩者依上面的規則是同一組,但資料夾才是網站真正連出去、
+Pages 真正發佈的東西,而且在 workflow 的淺複製裡就有 —— tag 還要另外 fetch。
+
+CI(`.github/workflows/pages.yml`)跑的是 `--check`:表格過期就讓部署失敗。
+它**不會**自己改檔,因為 GitHub 的專案首頁是拿 commit 裡的 `README.md` 去算的,
+不是拿 Pages 產物 —— 在 CI 裡改好也到不了那裡。
+
+合併器同樣是**加版本不用改程式**(`latest()` 自己挑最新的資料夾);
+只有**新增一個產品**才要在 `build_catalogue.py` 的 `PRODUCTS` 加一筆。
+互斥也寫在那裡 —— 例如 OG2K 與 OG3K 各自 `excl` 指向對方,
+因為解析度選單只有三格,兩者都要佔第三格。頁面會在勾選時自動取消另一個。
 
 ---
 

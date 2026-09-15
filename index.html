@@ -70,7 +70,7 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
   <div class="support">
     <a class="kofi" href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/></svg>
-      Support on Ko-fi</a>
+      supMe on Ko-fi</a>
     <a class="discord" href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
       Discord</a>
@@ -92,17 +92,28 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
 <table>
   <thead><tr><th>product</th><th>version</th><th>what it does</th></tr></thead>
   <tbody>
+<!-- releases:begin -->
     <tr><td><a href="releases/fpsup-gyro-v1.11b/">fpsup-gyro</a></td><td>v1.11b</td>
-        <td>writes Gyroflow's .gcsv and .json while recording</td></tr>
+        <td>Writes Gyroflow's <code>.gcsv</code> and <code>.json</code> while recording — every sample at 2500 Hz, distortion read off the lens.</td></tr>
+    <tr><td><a href="releases/fpsup-og2k-v0.1.0test/">fpsup-og2k</a></td><td>v0.1.0test</td>
+        <td>The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.</td></tr>
     <tr><td><a href="releases/fpsup-og3k-v0.2.3a/">fpsup-og3k</a></td><td>v0.2.3a</td>
-        <td>Alpha: 3:2 open gate, 3024×2010, eight frame rates, native Settings/Quick Set UI, 12-bit verified across every ISO, and 8/10/12-bit CinemaDNG geometry. <strong>v0.2.3a fixes v0.2.2a’s format-table pass-through pointer defect.</strong> The exact no-shell VSHL was cold-booted; all 100 DNGs from OG3K, UHD and FHD 25p/180° clips reported 25.000 fps and 1/50 second with correct geometry. Super35/crop must be off for OG3K. 8/10-bit playback and highlight headroom, other frame rates, sustained recording, and inactive UI variants remain unverified. With thanks to <a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly Li</a>, first to open gate an fp.</td></tr>
+        <td>The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 219 MB/s at 24p 12-bit. Alpha.</td></tr>
     <tr><td><a href="releases/fpsup-usbshell-v3.1.0/">fpsup-usbshell</a></td><td>v3.1.0</td>
-        <td>the shell that answers <code>shl</code> over USB</td></tr>
+        <td>The shell that answers <code>shl</code> over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints.</td></tr>
+<!-- releases:end -->
   </tbody>
 </table>
 <p class="note"><b>Each release is two files.</b> Copy <code>AutoRun.txt</code> and
-<code>VSHL.BIN</code> to the root of the card — no folder to make, no step afterwards.
+<code>VSHL.BIN</code> to the root of the card &mdash; no folder to make, no step afterwards.
 To combine two of them, use the card composer rather than copying both.</p>
+<p class="note"><b>The two open-gate builds see the same picture.</b> OG2K is the whole
+3:2 sensor reduced by three rather than two: a third of the data, an 8.3&nbsp;ms rolling
+shutter instead of 12.4, and the sensor's quiet readout at every frame rate including 100p.
+They cannot share a card &mdash; the resolution menu holds three entries and each build takes
+the third. Both are pre-release: read the release's own <code>README.txt</code> and treat
+takes as disposable until you have checked them. Open gate on an fp was first done by
+<a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly&nbsp;Li</a>.</p>
 
 <h2>Explainers</h2>
 <div class="grid">
