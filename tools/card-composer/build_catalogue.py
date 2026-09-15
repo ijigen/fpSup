@@ -29,7 +29,6 @@ import base64, json, pathlib, re, shutil, struct, subprocess, sys, tempfile, zip
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent
-OG = ROOT / 'projects' / 'open-gate' / 'build'
 GYRO = ROOT / 'fpSup' / 'gyro'
 
 PARK_AT, F_WRITE_AT = 0xC072EFB4, 0xC03660E8
@@ -104,12 +103,12 @@ def build_templates():
     return out, stage2
 
 
-# The merge checks are the one thing that still needs the OG3K toolchain: they
-# prove the page's merge is byte-for-byte what build_og3k_gyro.py produces.
-# That builder obtains both the 710-word recording core and the 360-record
-# native Settings/QS UI from build_og3k_ui_candidate.py, the same source used
-# for the standalone v0.2.1a card.  This is a test, not part of the browser
-# page's run time.
+# The merge checks build from the newest released OG3K artifact, not from the
+# mutable research worktree.  A release can deliberately freeze a
+# camera-tested payload while the source tree moves on to the next experiment.
+# build_base_card.py is an independent combiner and safety checker: feeding it
+# the released sections proves that the browser merge reproduces the same
+# gyro+OG3K and shell+gyro+OG3K cards without rebuilding OG3K.
 REFS = {}
 NATIVE_UI_SECTIONS = {
     0xC0732700,  # runtime state
@@ -126,10 +125,38 @@ def refs():
     if REFS:
         return REFS
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='og3kref-'))
-    for name, args in (('plain', ['--reference', '--release']), ('shell', ['--reference'])):
+    og3k = latest('og3k')
+    og_entry, og_records = parse((og3k / 'VSHL.BIN').read_bytes())
+    if og_entry != 0:
+        raise SystemExit(f'{og3k.name} unexpectedly carries an entry point')
+    helpers = [(address, blob) for address, blob in og_records
+               if address < 0x40000000]
+    if len(helpers) != 1 or helpers[0][0] != 0:
+        raise SystemExit(f'{og3k.name} has an unexpected loader-helper shape')
+    firmware_records = [(address, blob) for address, blob in og_records
+                        if address >= 0x40000000]
+    missing = NATIVE_UI_SECTIONS - {address for address, _ in firmware_records}
+    if missing:
+        sites = ', '.join(f'0x{address:08X}' for address in sorted(missing))
+        raise SystemExit(f'{og3k.name} lacks native UI sections: {sites}')
+    manifest = (og3k / 'MANIFEST.txt').read_text('utf-8')
+    if f'{NATIVE_UI_RECORDS} selected NBU records' not in manifest:
+        raise SystemExit(f'{og3k.name} does not attest {NATIVE_UI_RECORDS} UI records')
+
+    section_args = []
+    for index, (address, blob) in enumerate(firmware_records):
+        path = tmp / f'og3k_{index:02d}_{address:08X}.bin'
+        path.write_bytes(blob)
+        section_args += ['--also-bin', f'0x{address:08X}:{path}']
+
+    for name, debug in (('plain', False), ('shell', True)):
         d = tmp / name
-        r = subprocess.run([sys.executable, str(OG / 'build_og3k_gyro.py'),
-                            *args, '--out', str(d)], capture_output=True, text=True)
+        cmd = [sys.executable, str(GYRO / 'build_base_card.py'),
+               '--edition', 'gcsv', '--version', 'catalogue-reference',
+               '--banner', 'fpSup-OG3K-Gyro!', '--out', str(d), *section_args]
+        if debug:
+            cmd.append('--debug')
+        r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode:
             sys.stderr.write(r.stdout + r.stderr)
             raise SystemExit(f'could not build the {name} reference card')
@@ -138,10 +165,6 @@ def refs():
         if missing:
             sites = ', '.join(f'0x{address:08X}' for address in sorted(missing))
             raise SystemExit(f'{name} reference lacks native UI sections: {sites}')
-        manifest = (d / 'MANIFEST.txt').read_text('utf-8')
-        if f'{NATIVE_UI_RECORDS} selected NBU records' not in manifest:
-            raise SystemExit(
-                f'{name} reference did not attest {NATIVE_UI_RECORDS} UI records')
         REFS[name] = d
     REFS['_tmp'] = tmp
     return REFS
@@ -163,7 +186,7 @@ PRODUCTS = {
                           'Sensor modes 98/117 — the sensor\'s own 2×2-binned 3:2 '
                           'modes, so the ISP scales nothing. Vitaly Li got open '
                           'gate out of an fp first; FP3K puts the same 2:1 in the '
-                          'ISP instead. Correct at every ISO since '
+                          'ISP instead. The 12-bit path is correct at every ISO since '
                           'v0.1.1test, which fixes the conversion-gain '
                           'misclassification that cost 2.7 stops of highlight '
                           'headroom above ISO 640. v0.2.0test added the native '
@@ -178,9 +201,13 @@ PRODUCTS = {
                           'UHD30 while the screen still read OG3K. All three depths '
                           'now record at OG3K geometry — 9,196,544 / 7,676,928 / '
                           '6,158,336 bytes per frame at 12/10/8-bit, 12-bit '
-                          'unchanged — and 8-bit is a third less data. In-camera '
-                          'playback and highlight headroom at 8/10-bit are not '
-                          'verified. Exact shutter readback and other frame rates, '
+                          'unchanged — and 8-bit is a third less data. v0.2.3a '
+                          'fixes v0.2.2a\'s format-table pass-through pointer. '
+                          'The exact no-shell VSHL passed all 100 DNG frames from '
+                          'OG3K/UHD/FHD 25p/180° clips at 25.000 fps and 1/50 '
+                          'second with correct geometry. Super35/crop must be '
+                          'off for OG3K. In-camera playback and highlight '
+                          'headroom at 8/10-bit are not verified. Other frame rates, '
                           'sustained fast-media recording, full-UI playback, '
                           'inactive screen/style variants, and the CINE/STILL '
                           'transition remain pending. One earlier OG3K freeze was '
