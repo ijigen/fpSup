@@ -171,12 +171,21 @@ PRODUCTS = {
                           'Quick Set. v0.2.1a adds the guarded four-callsite '
                           'shutter-angle nominal-FPS fix and whole-I-cache publish; '
                           'after a battery-out cold boot, real 29.97p/180° FHD and '
-                          'OG3K received a provisional idle-view visual pass. Exact '
-                          'readback and other frame rates, sustained fast-media '
-                          'recording, full-UI playback, inactive screen/style variants, '
-                          'and the CINE/STILL transition remain pending. One earlier '
-                          'OG3K freeze was not reproduced. Carries no entry section: '
-                          'it is all static writes.'),
+                          'OG3K received a provisional idle-view visual pass. '
+                          'v0.2.2a adds 8-bit and 10-bit CinemaDNG: the format '
+                          'picker has three tables chosen by bit depth, OG3K was '
+                          'registered in only one, and the other two fell back to '
+                          'UHD30 while the screen still read OG3K. All three depths '
+                          'now record at OG3K geometry — 9,196,544 / 7,676,928 / '
+                          '6,158,336 bytes per frame at 12/10/8-bit, 12-bit '
+                          'unchanged — and 8-bit is a third less data. In-camera '
+                          'playback and highlight headroom at 8/10-bit are not '
+                          'verified. Exact shutter readback and other frame rates, '
+                          'sustained fast-media recording, full-UI playback, '
+                          'inactive screen/style variants, and the CINE/STILL '
+                          'transition remain pending. One earlier OG3K freeze was '
+                          'not reproduced. Carries no entry section: it is all '
+                          'static writes.'),
 }
 # usbshell first: picked() walks this order, and the development card puts the
 # worker at record 1, which is what makes the merge come out byte-identical to it.
