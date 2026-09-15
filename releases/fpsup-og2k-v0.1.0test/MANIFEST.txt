@@ -1,0 +1,99 @@
+SIGMA fp — OG2K 3:2 open gate 2K (v0.1.0test)
+banner: fpSup-OG2K-v0.1.0test!
+firmware: SIGMA fp Ver.5.02 only
+
+AutoRun.txt  32,772B  sha256=8569593165ab4ce3734afb055537a8882f55a24cf6cbec2c20d57a08e367c5cc
+VSHL.BIN     32,768B  sha256=0d9a4aec489b3348ecebac05c86c9fcd95303e3be0ef13dcd0a1b56a0b241394
+reference_firmware sha256=92a8ee993f6c3d66c251e88d45a2ccd5135c6cf7342717784321c2ed506e2fb4
+
+AutoRun 指令 135 條(上限 648);OG2K 的 3464 筆寫入全在 VSHL.BIN 裡。
+
+VSHL magic: VBIN
+VSHL sections: 80
+VSHL body bytes: 14,020
+VSHL used bytes including header/table: 14,676 of 32,768
+VSHL entry: 0x00000000
+USB shell: absent
+
+canonical source: OG_TARGET=og2k build_og3k_ui_candidate.py --release
+OpenGate core 782 words; native UI 2682 words, 360 selected NBU records, 3 hooks.
+UI code sha256=cefc34b3de4ddb7c5bdc646627b93de8235ceb4c9fcceafa93d624bdfe6fc797
+private NBR sha256=9d840d2c4b1b56404650a48aeabe6f1a5f873529e75156757e59f55143801361
+
+卡上放:AutoRun.txt 與 VSHL.BIN(根目錄),沒有別的。
+**OG2K 取代第三個解析度選項,與 OG3K 不能共存於同一張卡。**
+選單只放得下三個選項(CSV block 92 bytes,原廠就佔 89,而且解析器按欄位
+名稱對欄所以標頭不能縮),所以 UHD / FHD / OG3K / OG2K 四選一做不到。
+
+OG2K 錄影幾何:2016x1344,DNG 裁切 2000x1334 @ (8,5)。
+  2016 = 16 x 126 原本就 16 對齊,裁切照 fp 自己的「+16 寬 / +10 高」慣例。
+  感測器模式 **139 = MONIT1_60_LOWP5**,2016x1344 是 6064x4042 的 ÷3
+  geometry reduction —— **全感測器寬,不是裁切**。
+
+八個格率全部掛在 mode 139 上,hmax 一律 445(M139 原廠值):
+
+     key          vmax  tail    實際 fps      誤差      MB/s@12bit
+     OG2K23_98    6748   585    23.97602   0.000ppm        97
+     OG2K24       6741   700    24.00000   0.000ppm        98
+     OG2K25       6471   850    25.00000   0.000ppm       102
+     OG2K30       5398   735    29.97003   0.000ppm       122
+     OG2K48       3370   795    48.00000   0.000ppm       195
+     OG2K50       3235   870    50.00000   0.000ppm       203
+     OG2K60       2699   590    59.94006   0.000ppm       244
+     OG2K100      1617   880   100.00000   0.000ppm       406
+
+  換 hmax 就換了線時,也就換了類比指紋;**quiet 指紋正是選 M139 的全部理由**。
+  OG3K 的 100p 被迫用 mode 117(fast 指紋,實測噪點明顯較差),
+  **OG2K 八個格率全部在 quiet 指紋上。**
+  119.88p 不做:445 x 1344 = 598,080 of 600,600,只剩約 5.7 行。
+
+  捲簾 8.31 ms(OG3K 12.44、UHD 21.09)。每幀 12-bit 4,064,256 bytes。
+
+借用的 profile 是 **p13**。
+  全映像掃過兩種 16-byte 表型 —— {const, profile, mode, key_ptr} 與
+  {profileA, profileB, key_ptr, class} —— 306 個有效 profile 裡
+  **真正沒有被任何表引用的只有 p13 與 p14**。
+  (先前以為 p221 也是自由的,錯了:它是 FHD24CROP / FHD48CROP 的 profile。)
+
+  p13 原廠帶著正確的感測器視窗 2016x1344、3:2 標記、預覽 RWZM unity;
+  畫布 RAM 複本要補的只有錄影矩陣、active、預覽柵格/可見、生產者對、
+  平面格式碼。**原廠 PARAM 列一個位元都不動。**
+
+位元深度:8 / 10 / 12-bit 三個都正確。
+  平面格式碼 +0x080/+0x084 依 eRawBitType 三選一
+  (8-bit 10/10、10-bit 10/9、12-bit 7/7),沿用 og3k v0.2.2a 的機制。
+
+--- 實機已驗證(2026-09-15,fpcam.py 量測,全部讀錄下來的 DNG)---
+
+  錄影幾何    12/10/8-bit 三段:2016x1344,DefaultCropSize (2000,1334)
+  對照組      FHD 1936x1090 (1920,1080) / UHD 3856x2170 (3840,2160) 不受影響
+  來回切換    OG2K → FHD → UHD → OG2K 全部正確,不互相污染
+  錄影 live view  待機 vs 錄影:水平 1.001x、垂直 1.000x、異向比 1.0010
+                  中央區 G/R 1.005,無綠偏,滿幅 3:2
+  機內回放    可進、可播、不凍結
+  選單        記錄設定 → 解析度顯示 "OG2K"
+  回放標籤    左上角顯示 "2000x1334",白字黑邊,與原廠字型一致
+
+--- 尚未驗證 ---
+
+  高光餘裕 / gain_state:og3kgs 對 mode 139 的行為未測。
+    OG3K 當初的問題是擷取類模式拿到 gain_state 3(HCG 門檻 ISO 640)而不是
+    7(門檻 3200),少約 2.7 檔高光餘裕。M139 是 MONIT 類,預期不同,但沒測。
+  快門角度:mode 139 的 metadata 標稱 fps 是 60,八個格率共用同一個欄位,
+    與 mode 98 同樣的結構。og3kfps 的 wrapper 已依目標帶入 M139 的白名單
+    tuple,但**沒有做過任何格率的實機快門讀值**。
+  持續錄影:24p 只要 97 MB/s,這是 open gate 第一次進入一般快卡的範圍,
+    但沒有做過長時間錄影。
+  選著 OG2K 時拍照。
+  CINE/STILL 切換時仍選著 OG2K。
+  熱重開與 hot reinstall 未驗證且不支援;只接受拔電池冷開機。
+
+--- 出貨 pair 的邊界 ---
+
+  這份 no-shell pair 與實機測過的 debug build 逐位元組相同,
+  只移除 USB worker section(verify_og3k_ui_release.py PASS,
+  release 80 sections / debug 81)。**這對檔案本身沒有另做冷開機實測。**
+
+結構驗證:
+  og3k_plan.py 靜態檢查: PASS (782 words)
+  verify_og3k_ui_release.py: PASS

@@ -9,6 +9,7 @@ fpsup-<product>-v<major>.<minor>.<patch>[<qualifier>]
 ```
 fpsup-gyro-v1.11b          機身端陀螺儀記錄器
 fpsup-og3k-v0.2.2a         3:2 全片幅錄影(原生 UI、全 ISO、8/10/12-bit alpha)
+fpsup-og2k-v0.1.0test      3:2 全片幅錄影 2K(mode 139 quiet 讀出、八格率、8/10/12-bit)
 fpsup-usbshell-v1.0.0      USB shell
 ```
 
