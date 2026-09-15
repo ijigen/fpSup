@@ -29,11 +29,25 @@
  *      +0x08  engine result (1 = success)
  *      +0x0C  width         +0x10  height
  *      +0x14  call count -- so a stale slot cannot be read as a fresh result
+ *      +0x18  bitdepth code +0x1C  tileW        +0x20  tileH
+ *
+ * The last three matter because the fit's x-variable is the TILE-ALIGNED pixel
+ * count, not width*height: the engine pads edge tiles to full size and codes
+ * them (its own timeout is computed on the aligned count). The padding fraction
+ * varies with aspect ratio -- 2.7% at 3:2, 6.4% at 16:9 -- which is the same
+ * order as the effect being measured, so it cannot be left to assumption.
+ *
+ * SLOT can be overridden at assembly time with -DSLOT=0x... . The default sits
+ * inside the gyro logger's resident range (0xC072E064..0xC072EFAC); check what
+ * is actually resident before using it.
  */
+
+#ifndef SLOT
+#define SLOT 0xC072E080
+#endif
 
 .equ CLOCK,  0xC002B6E0          /* the logger's batch timestamp */
 .equ ENCODE, 0xC05A6920          /* what the still path meant to call */
-.equ SLOT,   0xC072E080
 
 .macro LDA reg, value
     movw    \reg, #:lower16:\value
@@ -65,6 +79,12 @@ enc_timed:
     str     r2, [r1, #12]
     ldr     r2, [r4, #4]
     str     r2, [r1, #16]
+    ldr     r2, [r4, #8]                @ bitdepth code
+    str     r2, [r1, #24]
+    ldr     r2, [r4, #12]               @ tileW
+    str     r2, [r1, #28]
+    ldr     r2, [r4, #16]               @ tileH
+    str     r2, [r1, #32]
     ldr     r2, [r1, #20]
     add     r2, r2, #1
     str     r2, [r1, #20]

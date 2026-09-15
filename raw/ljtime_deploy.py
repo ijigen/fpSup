@@ -52,25 +52,28 @@ sys.path.insert(0, str(SHELL))
 
 SITE = 0xC037E7AC          # the still path's `bl 0xC05A6920`
 STOCK = 0xEB08A05B         # what that word holds
-SLOT = 0xC072E080          # results, 24 bytes -- matches ljtime.S
+DEFAULT_SLOT = 0xC072E080  # ljtime.S's default -- inside the gyro logger's range
 DEFAULT_ADDR = 0xC072F800  # the templates' routine area
 
 
-def probe_words(addr):
+def probe_words(addr, slot):
     from armasm import assemble, symbols
     src = HERE / 'ljtime.S'
-    blob = assemble(src, ())
-    entry = addr + symbols(src, ())['enc_timed']
+    defs = (f'SLOT=0x{slot:08X}',)
+    blob = assemble(src, defs)
+    entry = addr + symbols(src, defs)['enc_timed']
     words = [int.from_bytes(blob[i:i + 4], 'little')
              for i in range(0, len(blob), 4)]
     disp = (entry - SITE - 8) >> 2
     return words, entry, 0xEB000000 | (disp & 0xFFFFFF)
 
 
-def show(addr):
-    words, entry, bl = probe_words(addr)
-    print(f'  probe   {len(words) * 4} bytes at 0x{addr:08X}, entry 0x{entry:08X}')
-    print(f'  results 0x{SLOT:08X}  t0/t1/result/w/h/count')
+def show(addr, slot):
+    words, entry, bl = probe_words(addr, slot)
+    print(f'  probe   {len(words) * 4} bytes at 0x{addr:08X}..0x{addr+len(words)*4:08X}, '
+          f'entry 0x{entry:08X}')
+    print(f'  results 0x{slot:08X}..0x{slot+36:08X}  '
+          f't0/t1/result/w/h/count/bitdepth/tileW/tileH')
     print()
     print('  would send:')
     for i, w in enumerate(words):
@@ -84,9 +87,9 @@ def show(addr):
         print('       Use --addr 0xC072E0A0 if an open-gate card is in the camera.')
 
 
-def deploy(addr):
+def deploy(addr, slot):
     from putfile import mem_set, mem_get
-    words, entry, bl = probe_words(addr)
+    words, entry, bl = probe_words(addr, slot)
     for i, w in enumerate(words):
         a = addr + i * 4
         for _ in range(8):
@@ -109,17 +112,34 @@ def deploy(addr):
     print('  take a still, then --read')
 
 
-def read():
+BITS = {0: 12, 1: 14, 2: 16, 3: 10}
+
+
+def read(slot, csv_path=None):
     from putfile import mem_get
-    w = mem_get(SLOT, 6)
+    w = mem_get(slot, 9)
     if not w:
         raise SystemExit('  no answer')
-    t0, t1, res, width, height, n = w
+    t0, t1, res, width, height, n, bd, tw, th = w
     us = (t1 - t0) & 0xFFFFFFFF
     px = width * height
-    print(f'  call #{n}  {width}x{height} = {px / 1e6:.2f} Mpix  result={res}')
-    print(f'  {us} us  ->  {px / us:.1f} Mpix/s effective')
-    return px, us
+    # the engine pads edge tiles to full size and codes them, so this is the
+    # pixel count the hardware actually worked on
+    apx = (-(-width // tw) * tw) * (-(-height // th) * th) if tw and th else px
+    print(f'  call #{n}  {width}x{height} = {px / 1e6:.2f} Mpix  result={res}  '
+          f'{BITS.get(bd, "?")}-bit  tile {tw}x{th}')
+    print(f'  tile-aligned {apx / 1e6:.2f} Mpix  (+{100 * (apx - px) / px:.2f}%)')
+    print(f'  {us} us  ->  {apx / us:.1f} Mpix/s on coded samples '
+          f'({px / us:.1f} on real pixels)')
+    if csv_path:
+        import os
+        new = not os.path.exists(csv_path)
+        with open(csv_path, 'a') as f:
+            if new:
+                f.write('call,width,height,tilew,tileh,pixels,aligned,us,result\n')
+            f.write(f'{n},{width},{height},{tw},{th},{px},{apx},{us},{res}\n')
+        print(f'  appended to {csv_path}')
+    return apx, us
 
 
 def restore():
@@ -134,7 +154,9 @@ def restore():
 
 
 def fit(path):
-    rows = [(int(r['pixels']), int(r['us'])) for r in csv.DictReader(open(path))]
+    rows = [(int(r.get('aligned') or r['pixels']), int(r['us']))
+            for r in csv.DictReader(open(path))]
+    rows = sorted(set(rows))
     if len(rows) < 2:
         raise SystemExit('  need at least two sizes')
     n = len(rows)
@@ -159,6 +181,8 @@ def fit(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--addr', type=lambda s: int(s, 0), default=DEFAULT_ADDR)
+    ap.add_argument('--slot', type=lambda s: int(s, 0), default=DEFAULT_SLOT)
+    ap.add_argument('--csv', metavar='CSV', help='--read appends a row here')
     ap.add_argument('--go', action='store_true')
     ap.add_argument('--read', action='store_true')
     ap.add_argument('--restore', action='store_true')
@@ -167,13 +191,13 @@ def main():
     if a.fit:
         fit(a.fit)
     elif a.read:
-        read()
+        read(a.slot, a.csv)
     elif a.restore:
         restore()
     elif a.go:
-        deploy(a.addr)
+        deploy(a.addr, a.slot)
     else:
-        show(a.addr)
+        show(a.addr, a.slot)
         print('  nothing was sent. --go to place it.')
 
 
