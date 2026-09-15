@@ -333,6 +333,32 @@ def load(card):
     return vshl, ar
 
 
+def check_js(page):
+    """Refuse to write a page whose script does not parse.
+
+    A syntax error anywhere in the module takes the whole page down: nothing
+    renders, no card appears, and the only symptom is a user saying the tools
+    are gone.  That has now happened twice -- once from a stale published check
+    and once from a shell one-liner whose replacement text ate a regex
+    terminator -- so the build proves the page parses before it ships it.
+    """
+    blocks = [js for attrs, js in
+              re.findall(r'<script([^>]*)>(.*?)</script>', page, re.S)
+              if 'json' not in attrs.lower()]
+    if not blocks:
+        raise SystemExit('  no script found in the template')
+    if not shutil.which('node'):
+        print('  note: node not found -- the page was NOT syntax-checked')
+        return
+    for i, js in enumerate(blocks):
+        r = subprocess.run(['node', '--check', '-'], input=js,
+                           capture_output=True, text=True)
+        if r.returncode:
+            sys.stderr.write(r.stderr)
+            raise SystemExit(f'  script block {i} does not parse; page not written')
+    print(f'  js     {len(blocks)} script blocks parse')
+
+
 def main():
     out_cards, templates = [], {}
     for card in discover():
@@ -466,6 +492,7 @@ def main():
 
     page = (HERE / 'template.html').read_text().replace(
         '@@CATALOGUE@@', json.dumps(cat, separators=(',', ':')))
+    check_js(page)
     # Two outputs from one template.  The Artifact host supplies the doctype and
     # <head>, so it gets the page as written; a file opened from disk gets
     # neither, and without a charset the section labels come out as mojibake.

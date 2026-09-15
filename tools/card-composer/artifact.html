@@ -437,8 +437,7 @@ function render(){
       <span><b>${c.name}${c.upload?' <button class="x" data-rm="'+c.id+'">×</button>':''}</b>
       <small>${c.desc}</small>
       <span class="sz">${c.records.length} sections · ${by.toLocaleString()} B · entry ${c.entry?hex(c.entry):'none'}${
-        (c.excl||[]).length ? ' · not with ' + (c.excl||[]).map(x => ((all().find(y=>y.id===x)||{name:x}).name).replace(/\s+v[\d.].*
-, '')).join(', ') : ''}</span>
+        (c.excl||[]).length ? ' · not with ' + (c.excl||[]).map(x => ((all().find(y=>y.id===x)||{name:x}).name).split('  ')[0]).join(', ') : ''}</span>
       ${legacy}</span></label>`;
     // The push patches are the shell's option, not a card of their own, so they
     // hang off it and appear only when it is ticked.
