@@ -18,6 +18,10 @@ EXPECTED_SHA256 = {
     "AutoRun.txt": "1e7f75f3d9197fecae946ab95ebc2aeb3dc93fbe55984019da3208b4f092b745",
     "VSHL.BIN": "da1c94e05828c7fec423fed044856d54ba839532d38a5bd2e446942778062cd7",
 }
+EXPECTED_OLD_SHA256 = {
+    "AutoRun.txt": "dc331d55f32cface02d3b44af475b67a17407532f3f71f792b4a24cef205aa47",
+    "VSHL.BIN": "3872e711662af060a5b486252e8741720d1a4800c62b4a6be81b403fb529d898",
+}
 EXPECTED_DELTAS = {
     0xC0730800: (0xE92D5018, 0xE92D5078),
     0xC0730810: (0x03A01000, 0x03A05000),
@@ -100,6 +104,9 @@ def main() -> None:
 
     for name, expected in EXPECTED_SHA256.items():
         require(sha256(NEW / name) == expected, f"{name} hash differs")
+    for name, expected in EXPECTED_OLD_SHA256.items():
+        require(sha256(OLD / name) == expected,
+                f"v0.2.2a {name} reference hash differs")
 
     old = parse_vshl(OLD / "VSHL.BIN")
     new = parse_vshl(NEW / "VSHL.BIN")
