@@ -1,9 +1,9 @@
 # fpSup Open Gate — OG3K
 
 **3024×2010 3:2 CinemaDNG at eight frame rates on the SIGMA fp.** The sensor's
-whole 3:2 area instead of the 16:9 window the camera crops to. v0.2.2a adds
-8-bit and 10-bit CinemaDNG, which v0.2.1a silently recorded as UHD30.
-Release package: **`fpsup-og3k-v0.2.2a`**.
+whole 3:2 area instead of the 16:9 window the camera crops to. v0.2.3a fixes
+the format-table pass-through defect in v0.2.2a while retaining its 8-bit and
+10-bit CinemaDNG support. Release package: **`fpsup-og3k-v0.2.3a`**.
 
 Firmware **Ver.5.02 only.** Everything is RAM-only: remove `AutoRun.txt`, fully
 power-cycle, and the camera is stock. Nothing is ever written to flash.
@@ -39,8 +39,9 @@ you are also running the gyro logger — it corrects for exactly this:
 3. Copy **`AutoRun.txt`** and **`VSHL.BIN`** to the **root** of the card. Nothing
    else — no folder to make, no file to convert.
 4. Card in, power on. The screen shows a progress bar and then
-   `fpSup-OG3K-v0.2.2a!`.
-5. Select **OG3K** from **MENU → recording → resolution** or Quick Set **RES.**
+   `fpSup-OG3K-v0.2.3a!`.
+5. Turn **Super35/crop off**. OG3K cannot create a clip while it is on.
+6. Select **OG3K** from **MENU → recording → resolution** or Quick Set **RES.**
    Choose the frame rate and the CinemaDNG quality normally.
 
 To remove it: delete `AutoRun.txt`, power off **completely** (battery out, not
@@ -48,6 +49,12 @@ just the switch — a warm restart does not clear RAM), power on.
 
 ## Verified
 
+- **25p / 180° on the exact no-shell v0.2.3a VSHL.** After a battery-out cold
+  boot, every frame of three clips was checked: OG3K 12-bit 45/45, UHD 8-bit
+  20/20, and FHD 12-bit 35/35. All 100 DNGs report 25.000 fps and 1/50 second,
+  with the correct 3024×2010, 3856×2170 and 1936×1090 stored geometry and
+  default crops. The final AutoRun has the same 135 functional commands as the
+  tested RC; only its printable version banner and padding changed.
 - **Whole frame is picture.** A001_036 unpacked: header 3024×2010, crop
   3008×2000 at (8, 5), `StripByteCounts` 9,117,360 = 3024 × 2010 × 1.5, sharp
   edge to edge, nothing clipped.
@@ -56,7 +63,7 @@ just the switch — a warm restart does not clear RAM), power on.
   0.9787.
 - **In-camera playback** works, paused and running (A001_037, on v0.1.0test;
   not re-checked on v0.1.1test).
-- **Every ISO records correctly** (v0.1.1test). At ISO 800 the raw level and
+- **The 12-bit path records correctly across every ISO** (v0.1.1test). At ISO 800 the raw level and
   channel balance match a stock FHD clip of the same scene — G/R 1.81, G/B 1.99
   against 1.81, 2.05 — and `BaselineExposure` is +3.000, as the factory writes.
   The capture is measured to run on `gain_state` 7 at the decision function
@@ -151,7 +158,26 @@ data always agree. It adds no new hooks and modifies no factory data.
 8-bit OG3K is 6.16 MB per frame against 12-bit's 9.20 MB — about 148 MB/s at 24p
 instead of 221 MB/s — so a slower card has a better chance of sustaining a take.
 
-## v0.2.2a boundaries
+## Format-table pass-through — what v0.2.3a fixes
+
+v0.2.2a used `r1` as a temporary bit-depth register inside its format-table
+hook, but `r1` is also the factory lookup's table pointer. A non-OG3K FHD/UHD
+key could therefore be passed back to the middle of the factory lookup with
+`r1 = 0`, `3` or `4` instead of the original table address.
+
+v0.2.3a stores the temporary value in preserved register `r5` and adds a
+build-time guard against writing `r1` before pass-through. Compared with public
+v0.2.2a, the VSHL differs in exactly seven 32-bit words, all in this hook; the
+shutter-angle code and every other functional payload are byte-identical.
+
+The controlled camera result above validates the reported 25p/180° case. It
+does not claim that every kind of lighting flicker has this one cause.
+
+## v0.2.3a boundaries
+
+- **Turn Super35/crop off before selecting OG3K.** OG3K with crop enabled has no
+  matching format key and does not create a clip. This is an older, separate
+  limitation and is not changed by v0.2.3a.
 
 - **In-camera playback of 8-bit and 10-bit OG3K clips is not verified.** The
   playback path splits on the same bit-depth field and its OG3K guards were not
@@ -162,14 +188,12 @@ instead of 221 MB/s — so a slower card has a better chance of sustaining a tak
 - Taking a still photo while OG3K remains selected has not been re-checked
   against the borrowed photo profile.
 
-- **Provisional visual pass for the shutter-angle fix:** after a battery-out
-  cold boot, the user compared real FHD and OG3K at 29.97p, 180°, in idle live
-  view. The earlier exposure offset no longer appeared. This was a visual result,
-  not an exact USB-shell readback, and the other frame rates remain pending.
-- The exact shipped no-shell `AutoRun.txt` + `VSHL.BIN` pair is structurally
-  verified against the corresponding debug build: only the USB shell worker and
-  its patches are removed, while the OpenGate and UI payload bytes are identical.
-  This exact no-shell pair has not itself been cold-booted on the camera.
+- **25p has an exact recorded-file pass; the other frame rates remain pending.**
+  At 29.97p the user also compared real FHD and OG3K idle exposure at 180° after
+  a battery-out cold boot and saw no offset, but that remains a visual result.
+- The exact shipped no-shell VSHL is the camera-tested binary. Its paired debug
+  build differs only by the USB worker section. The final AutoRun changes only
+  its printable banner and padding from the tested RC.
 - Warm-restart behaviour is unverified. Use a battery-out cold boot for install,
   retest, and recovery.
 - The recording core is now 749 words: 590 in v0.2.0test, 710 after the four

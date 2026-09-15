@@ -1,16 +1,7 @@
 ================================================================
- OG3K  fpsup-og3k-v0.2.2a
+ OG3K  fpsup-og3k-v0.2.3a
  SIGMA fp — 3:2 open gate, native UI, 8/10/12-bit CinemaDNG
 ================================================================
-
-SUPERSEDED — DO NOT INSTALL
-
-  v0.2.2a has a confirmed format-table pass-through pointer defect
-  affecting non-OG3K FHD/UHD lookups. Install v0.2.3a instead.
-  This directory is retained only so the published artifact and hash
-  remain auditable.
-
-----------------------------------------------------------------
 
 WHAT IT IS
 
@@ -24,13 +15,40 @@ WHAT IT IS
   a 6064 x 4042 image downscaled by the ISP. Eight frame rates are
   available from 23.976 through 100 fps. The 12-bit path uses the
   native CinemaDNG gain path at every ISO, fixed in v0.1.1test;
-  8/10-bit highlight headroom was not verified in this release.
+  8/10-bit highlight headroom is not yet verified.
 
   Native OG3K choices appear in Settings and Quick Set, including
   the UHD/FHD/OG3K three-choice footer.
 
   **Firmware Ver.5.02 only.** RAM only: delete AutoRun.txt, remove
   the battery, and the camera is stock. Nothing is written to flash.
+
+----------------------------------------------------------------
+NEW IN v0.2.3a — SAFE FORMAT-TABLE PASS-THROUGH
+----------------------------------------------------------------
+
+  v0.2.2a used r1 as a temporary bit-depth register inside the
+  format-table hook. r1 is also the factory lookup's table pointer.
+  When a non-OG3K FHD/UHD key passed back to the factory lookup, the
+  pointer could therefore be 0, 3 or 4 instead of the original table.
+
+  v0.2.3a keeps the bit depth in preserved register r5 and adds a
+  build-time guard against writing r1 before the factory pass-through.
+  The shutter-angle code and every other functional payload are
+  unchanged. Compared with public v0.2.2a, VSHL.BIN differs in exactly
+  seven 32-bit words, all inside this one fmttable fix.
+
+  The exact no-shell VSHL.BIN in this folder was cold-booted on a
+  SIGMA fp. Every DNG in three 25 fps / 180-degree clips was checked:
+
+     OG3K  45/45 frames  12-bit  3024x2010  25.000 fps  1/50 s
+     UHD   20/20 frames   8-bit  3856x2170  25.000 fps  1/50 s
+     FHD   35/35 frames  12-bit  1936x1090  25.000 fps  1/50 s
+
+  All 100 frames also carried the expected default crop and no
+  metadata outliers. This validates the reported 25p/180-degree case;
+  it is not a claim that every possible source of lighting flicker is
+  fixed.
 
 ----------------------------------------------------------------
 NEW IN v0.2.2a — 8-bit and 10-bit CinemaDNG
@@ -99,8 +117,9 @@ INSTALL
   2. Power off, REMOVE THE BATTERY, and put the card in a reader.
   3. Copy AutoRun.txt and VSHL.BIN to the ROOT of the SD card.
   4. Insert the card and power on. Wait for the progress bar and
-     the final message: fpSup-OG3K-v0.2.2a!
-  5. Select OG3K from MENU -> recording -> resolution, or from
+     the final message: fpSup-OG3K-v0.2.3a!
+  5. Turn Super35 / crop OFF. OG3K cannot create a clip while it is on.
+  6. Select OG3K from MENU -> recording -> resolution, or from
      Quick Set -> RES. Choose the frame rate and the CinemaDNG
      quality normally.
 
@@ -114,6 +133,16 @@ INSTALL
 ----------------------------------------------------------------
 WHAT HAS BEEN VERIFIED
 ----------------------------------------------------------------
+
+  New in v0.2.3a, on the exact no-shell VSHL.BIN after a battery-out
+  cold boot:
+
+    - OG3K, UHD and FHD all recorded at 25.000 fps and 1/50 second
+      with shutter angle 180 degrees.
+    - all 100 DNG frames were checked, not only representative frames.
+    - OG3K was 3024x2010 / crop 3008x2000; UHD was 3856x2170 /
+      crop 3840x2160; FHD was 1936x1090 / crop 1920x1080.
+    - the tested paths covered 12-bit OG3K/FHD and 8-bit UHD.
 
   New in v0.2.2a, on camera, after a battery-out cold boot:
 
@@ -146,14 +175,29 @@ WHAT HAS BEEN VERIFIED
   selected UI records, hook order, D-cache -> I-cache publication,
   and release/debug section equivalence with the USB shell absent.
 
+  Reproducibility boundary: the research worktree moved on to
+  post-freeze canvas experiments after this camera-tested artifact was
+  frozen. Do not rebuild from that mutable tree and substitute the
+  result for this release. From the repository root, verify this exact
+  artifact with:
+
+    python3 tools/release-audits/verify_og3k_v0_2_3a.py
+
+  That audit checks the immutable hashes, no-shell section shape,
+  current-card copies, and the exact seven-word v0.2.2a -> v0.2.3a
+  allowlist independently of the later source state.
+
 ----------------------------------------------------------------
 WHAT IS NOT VERIFIED — THIS IS AN ALPHA BUILD
 ----------------------------------------------------------------
 
-  The exact no-shell pair in this folder is structurally identical
-  to the product payload in its paired debug build; the only VSHL
-  section removed is the USB worker. This exact pair has not itself
-  had a camera cold-boot run.
+  The final AutoRun.txt differs from the camera-tested RC only in its
+  printable version banner and padding; its 135 functional commands
+  are identical. VSHL.BIN is byte-for-byte the camera-tested binary.
+
+  IMPORTANT: turn Super35 / crop OFF before selecting OG3K. OG3K with
+  crop enabled cannot resolve a valid format key and does not create a
+  clip. This limitation predates v0.2.3a and is not changed here.
 
   Specific to the new 8/10-bit support:
 
@@ -168,7 +212,8 @@ WHAT IS NOT VERIFIED — THIS IS AN ALPHA BUILD
 
   Also still unverified from v0.2.1a:
 
-    - exact shutter readback and idle checks at the other frame rates
+    - exact shutter readback and idle checks at frame rates other than 25p
+    - the 25p pass-through test at 10-bit
     - CINE/STILL transition while OG3K remains selected
     - sustained recording on sufficiently fast media
     - playback with the native v0.2 UI runtime

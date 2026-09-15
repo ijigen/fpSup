@@ -3,21 +3,22 @@
 [English](#english) | [繁體中文](#繁體中文)
 
 Recording the sensor's full 3:2 area instead of the 16:9 window the camera crops to.
-**Status: v0.2.2a alpha. 3024×2010 3:2 CinemaDNG at eight frame rates and now
+**Status: v0.2.3a alpha. 3024×2010 3:2 CinemaDNG at eight frame rates and
 at 8, 10 or 12-bit, DNG cropped to 3008×2000, whole frame. Native Settings and
 Quick Set UI pass on camera. All three bit depths were measured recording at
 OG3K geometry; in-camera playback and highlight headroom at 8/10-bit are not
-verified. The shutter-angle and loader instruction-cache fixes carry a
-provisional battery-out cold-boot visual pass at 29.97p/180°; exact readback,
-the other frame rates, sustained-media, playback-with-UI and inactive-variant
-regressions remain.**
+verified. v0.2.3a fixes v0.2.2a's format-table pass-through pointer. The exact
+no-shell VSHL passed OG3K/UHD/FHD 25p/180° across all 100 recorded DNGs at
+1/50 second. Super35/crop must remain off; other frame rates, sustained-media,
+playback-with-UI and inactive-variant regressions remain.**
 
 用感光元件完整的 3:2 面積錄影,而不是相機裁出來的 16:9 視窗。
-**狀態:v0.2.2a alpha。3024×2010 3:2 CinemaDNG、八個幀率,現在還能選
+**狀態:v0.2.3a alpha。3024×2010 3:2 CinemaDNG、八個幀率,並可選
 8/10/12-bit,DNG 裁切 3008×2000,整張畫面。Settings/QS 原生 UI 已通過實機;
 三個位元深度都實測錄在 OG3K 幾何上,但 8/10-bit 的機內回放與高光餘裕未驗證。
-快門角度與 loader 指令快取修正在完整斷電冷開機後,29.97p/180° 取得暫定目視
-通過。精確讀值、其他幀率、持續寫入、UI runtime 回放與非啟用 variants 尚待回歸。**
+v0.2.3a 修正 v0.2.2a 的 format-table pass-through 指標。精確 no-shell VSHL
+在 OG3K/UHD/FHD 25p/180°三段共100張 DNG 全為1/50秒。Super35/crop 必須關閉;
+其他幀率、持續寫入、UI runtime 回放與非啟用 variants 尚待回歸。**
 
 ---
 
@@ -128,6 +129,17 @@ Those two words are the only difference between the factory profile triplets
 (p131/p151/p171). `BitsPerSample` comes from `eRawBitType` via `FUN_c06a5290`,
 so tag and packed data agree by construction.
 
+v0.2.3a fixes a pass-through defect in that hook. v0.2.2a temporarily stored
+the bit depth in r1, although r1 is also the factory lookup's table pointer;
+a non-OG3K key could be handed back to the factory lookup with r1 = 0, 3 or 4.
+The fixed hook uses preserved r5 and has a build-time guard against writing r1
+before pass-through. The release VSHL differs from v0.2.2a in exactly seven
+words in fmttable, with every other functional byte unchanged.
+
+That exact no-shell VSHL was cold-booted and tested at 25p/180°: every DNG in
+OG3K 12-bit (45/45), UHD 8-bit (20/20) and FHD 12-bit (35/35) reports 25.000 fps,
+1/50 second, and the correct stored/default-crop geometry.
+
 The hook conditions on the record's own contents — `base == 1936×1090` — rather
 than on the selector, so it holds for whichever path a take walks and leaves
 every other profile alone.
@@ -137,6 +149,9 @@ The build and its manifest are in [`opengate/`](../opengate/).
 ### Known limits
 
 - **Firmware Ver.5.02 only.** The AutoRun language has no runtime version guard.
+- **Super35/crop must be off before selecting OG3K.** OG3K+CROP has no matching
+  format key and does not create a clip. This older limitation is not fixed in
+  v0.2.3a.
 - **The native CINE UI, carried forward from v0.2.0test, works.** The collapsed
   Settings summary, three-row Settings list, large and small Quick Set values,
   cursor, and the UHD/FHD/OG3K footer have all been seen working on the camera.
@@ -148,20 +163,19 @@ The build and its manifest are in [`opengate/`](../opengate/).
   the gain dispatch picks its state by bit depth while the OG3K gain hook still
   answers unconditionally. Expect playback and highlight headroom at 8/10-bit
   to need the same treatment.
-- **v0.2.1a is an alpha shutter-angle fix.** After a battery-out cold boot, the
-  user saw FHD and OG3K idle exposure match at 29.97p/180°, a provisional visual
-  result without exact shell readback. The other frame rates have not yet had
-  the same idle live-view check; this is not a claim that all eight rates passed
-  hardware testing.
+- **25p/180° now has an exact recorded-file pass.** The exact no-shell VSHL
+  produced all 100 checked OG3K/UHD/FHD frames at 25.000 fps and 1/50 second.
+  At 29.97p the earlier FHD/OG3K idle comparison remains a visual result; the
+  other frame rates have not passed the same exact hardware test.
 - **The UI recording regression is deliberately short.** With the full UI
   runtime resident, FHD passed once and UHD/OG3K passed three times each; the
   UHD and OG3K takes were stopped at about one second because the available SD
   card is too slow. One earlier OG3K attempt froze and was not reproduced.
   Sustained recording on fast media, playback with the UI runtime, and inactive
   screen/style variants remain untested.
-- The exact release pair is the no-shell form. Its 749 OpenGate words and native
-  UI sections are byte-identical to the camera-tested debug form, but the
-  no-shell pair has not yet had its own cold-boot camera run.
+- The exact release VSHL is the cold-booted, camera-tested no-shell binary. The
+  final AutoRun changes only its printable banner and padding from the tested
+  RC; all 135 functional commands are identical.
 - The hook's payload occupies `0xC072F800–0xC072F8E8` and its telemetry
   `0xC072FA00–0xC072FA0F`, which collides with the host tools' scratch area.
   While it is armed, plain `mem get`/`mem set` are fine but `getfile.py`,
@@ -323,6 +337,15 @@ CinemaDNG。OG3K 原本只註冊在 12-bit 那張,另外兩張查不到,原廠�
 唯一不同的兩欄。`BitsPerSample` 由 `FUN_c06a5290` 從 `eRawBitType` 算,
 所以標籤與資料自動一致。
 
+v0.2.3a 修正這個 hook 的 pass-through 缺陷。v0.2.2a 暫借 r1 保存位元深度,
+但 r1 同時是原廠 lookup 的 table pointer;非 OG3K key 可能帶著 r1 = 0/3/4
+交回原廠。修正版改用 preserved r5,並加上 build-time guard 禁止 pass 前寫
+r1。相較 v0.2.2a,正式 VSHL 只有 fmttable 內七個 word 不同,其他功能 byte
+完全一致。
+
+精確同一份 no-shell VSHL 已冷開實測25p/180°:OG3K 12-bit 45/45、UHD 8-bit
+20/20、FHD 12-bit 35/35,共100張 DNG 全為25.000 fps、1/50秒且幾何正確。
+
 Hook 的條件寫在 record 自己的內容上(`base == 1936×1090`),不是寫在選擇器上 ——
 所以不管某次錄影走哪一條路都會命中,而其他 profile 一概不動。
 
@@ -331,6 +354,8 @@ Hook 的條件寫在 record 自己的內容上(`base == 1936×1090`),不是寫�
 ### 已知限制
 
 - **僅限韌體 Ver.5.02。** AutoRun 語言沒有執行期的版本守衛。
+- **選 OG3K 前必須關閉 Super35/crop。** OG3K+CROP 沒有對應格式 key,不會產生
+  clip。這是舊有的獨立限制,v0.2.3a 尚未修正。
 - **從 v0.2.0test 延續的 CINE 原生 UI 可用。** Settings 收合摘要、三列選單、
   QS 大小 OG3K 值、游標與 UHD/FHD/OG3K 三選項底欄都已在相機上看見正常運作。
 - **8/10-bit 是 v0.2.2a 新增,只驗證了一半。** 三個深度都實測錄在 OG3K 幾何上 ——
@@ -338,15 +363,15 @@ Hook 的條件寫在 record 自己的內容上(`base == 1936×1090`),不是寫�
   8-bit 與 10-bit 都是 12,630,528(UHD30)。12-bit 零退步。但機內回放用同一個
   位元深度欄位分表,OG3K 的守衛沒有跟著擴;增益分派也依位元深度選 gain_state,
   而 OG3K 的增益 hook 仍無條件回答。8/10-bit 的回放與高光餘裕預期需要同樣處理。
-- **v0.2.1a 是 alpha 快門角度修正。** 使用者完整斷電冷開機後,29.97p/180°
-  的 FHD 與 OG3K idle 曝光取得暫定目視一致,沒有精確 shell 讀值;其他幀率
-  尚未做相同 idle live-view 實測,不能宣稱八個幀率皆已通過硬體驗證。
+- **25p/180°已有精確錄製檔案通過。** 精確 no-shell VSHL 的 OG3K/UHD/FHD
+  共100張 DNG 全為25.000 fps、1/50秒。29.97p 的 FHD/OG3K idle 比較仍是目視
+  結果;其他幀率尚未通過同樣的精確實機測試。
 - **UI 錄影回歸刻意很短。** full UI runtime 常駐時,FHD 通過 1 次,
   UHD 與 OG3K 各通過 3 次;因手邊 SD 卡太慢,UHD/OG3K 都在約一秒停止。
   先前有一次 OG3K 凍結,之後未重現。快速媒體長時間錄影、新 UI runtime
   的回放與非啟用 screen/style variants 尚未驗證。
-- 真正出貨的是 no-shell 形式;749 筆 OpenGate 與 UI sections 已逐字證明等同
-  實機測過的 debug 形式,但這對 no-shell 檔案本身尚未另做一次冷開機實測。
+- 正式 VSHL 就是已冷開實測的 no-shell binary。最終 AutoRun 相對實測 RC 只改
+  可列印 banner 與 padding,135條功能指令完全相同。
 - hook 的酬載佔 `0xC072F800–0xC072F8E8`、遙測佔 `0xC072FA00–0xC072FA0F`,
   跟主機工具的暫存區相撞。armed 的時候 `mem get`/`mem set` 沒問題,但
   `getfile.py`、`putfile.py`、`inject.py`、`callfn.py` 不行。
