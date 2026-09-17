@@ -35,11 +35,69 @@ p{margin:.5em 0}
 code,.m{font-family:var(--mono);font-variant-numeric:tabular-nums}
 header{border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:22px}
 header{position:relative}
+/* Back to the site. Hidden when the page is opened from a disk (see the script
+   at the end): this file is meant to be copied and run standalone from a
+   file:// URL, and there a relative link up two directories points at whatever
+   happens to be there. */
+.back{font-family:var(--mono);font-size:.76rem;text-decoration:none;color:var(--dim);
+  display:inline-block;margin-bottom:18px}
+.back:hover{color:var(--sig)}
+.back:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+/* The mark is embedded as a data URI, not linked. This page has to work opened
+   straight off a disk from a file:// URL -- README calls that out -- and a
+   relative <img src> would be a broken icon the moment index.html is copied
+   somewhere on its own. 17.8 KB against a 136 KB page. */
+.brand{display:flex;align-items:center;gap:22px}
+.brand .mark{width:196px;height:auto;flex:none;display:block}
+.brand>div{min-width:0}
+@media(max-width:620px){
+  .brand{flex-direction:column;align-items:flex-start;gap:15px}
+  .brand .mark{width:132px}
+}
 .support{position:absolute;top:0;right:0;display:flex;gap:8px;flex-wrap:wrap;margin:0}
 @media(max-width:620px){header{position:static}.support{position:static;margin:14px 0 0}}
 header p{color:var(--dim);font-size:.92rem;max-width:52ch;margin:.45em 0 0}
 .cols{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:26px;align-items:start}
 @media(max-width:760px){.cols{grid-template-columns:1fr}}
+
+/* Two modes. The default one shows the job -- tick, name, download -- and the
+   single line that says the card is sound. Everything that explains *why* it is
+   sound (the memory map, every check with its addresses, the section table, the
+   hashes, the upload box) is real and stays one click away, but it is not what
+   somebody making their first card needs to read. */
+body.simple .adv{display:none!important}
+/* Narrow the whole page, not just the column. A 440px column inside a 1120px
+   body left 640px of nothing to the right of the cards while the header rule and
+   the footer still ran the full width, and the two support buttons ended up 800px
+   away from anything they related to. One column means one width. */
+body.simple{max-width:620px}
+body.simple .cols{grid-template-columns:minmax(0,1fr)}
+/* The title only needed to dodge the support buttons in the wide layout; here
+   the brand row sits below them. */
+body.simple h1{padding-right:0}
+/* Out of the corner and into the flow. Pinned top-right they landed directly
+   above the title in a 620px header and made the one busy corner on the page. */
+body.simple .support{position:static;margin:15px 0 0}
+body.simple .modebar{margin:-6px 0 10px}
+body.simple .d-full{display:none}
+body:not(.simple) .d-short{display:none}
+.modebar{display:flex;justify-content:flex-end;margin:0 0 12px}
+.mode{font-family:var(--mono);font-size:.74rem;color:var(--dim);background:transparent;
+  border:1px solid var(--line);border-radius:3px;padding:5px 11px;cursor:pointer}
+.mode:hover{border-color:var(--sig);color:var(--sig)}
+.mode:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+/* The one line that replaces the Checks panel when everything passes. A failure
+   is never hidden by a mode: runChecks decides, not the toggle. */
+.status{display:flex;gap:9px;align-items:flex-start;margin-top:14px;padding:11px 12px;
+  border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:3px;
+  font-size:.86rem;background:var(--paper)}
+.status.bad{border-left-color:var(--bad)}
+.status b{font-family:var(--mono);flex:none}
+.status.bad b{color:var(--bad)}
+.status .more{background:none;border:0;padding:0;font:inherit;color:var(--sig);
+  cursor:pointer;text-decoration:underline}
+.status ul{margin:5px 0 0;padding-left:16px}
+.status li{color:var(--bad)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:16px}
 .stack{display:flex;flex-direction:column;gap:18px}
 /* modules */
@@ -52,6 +110,14 @@ header p{color:var(--dim);font-size:.92rem;max-width:52ch;margin:.45em 0 0}
 .mod b{display:block;font-weight:600;font-size:.94rem}
 .mod small{color:var(--dim);font-size:.8rem;display:block;margin-top:2px}
 .mod .sz{font-family:var(--mono);font-size:.74rem;color:var(--dim);margin-top:5px;display:block}
+/* The USB shell is not one of the things you choose between -- it is a tool for
+   talking to the camera from a computer, and it adds nothing you can see on the
+   camera. Grouping it under its own heading says that without a paragraph. */
+.group{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--dim);margin:18px 0 8px;padding-top:14px;
+  border-top:1px solid var(--line);display:flex;justify-content:space-between;
+  align-items:baseline;gap:10px}
+.group em{font-style:normal;text-transform:none;letter-spacing:0;font-size:.74rem}
 label.f{display:block;font-size:.78rem;color:var(--dim);margin:16px 0 5px;
   font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em}
 input[type=text]{width:100%;font-family:var(--mono);font-size:.9rem;padding:8px 9px;
@@ -88,14 +154,19 @@ input[type=text]:focus-visible{outline:2px solid var(--sig);outline-offset:1px}
   vertical-align:baseline}
 /* checks */
 .chk{font-family:var(--mono);font-size:.82rem;display:grid;
-  grid-template-columns:1.4em minmax(0,1fr) auto;gap:9px;padding:6px 0;
+  /* The label column needs a floor. With `auto` for the detail and nowrap on it,
+     one long detail took the whole row and squeezed the label to about one word
+     per line -- a 196px tall row among 33px ones. */
+  grid-template-columns:1.4em minmax(16ch,1fr) minmax(0,auto);gap:9px;padding:6px 0;
   border-bottom:1px solid var(--line);align-items:baseline}
 @media(max-width:560px){.chk{grid-template-columns:1.4em minmax(0,1fr)}
   .chk span{grid-column:2;text-align:left;margin-left:0}}
 .chk:last-child{border-bottom:0}
 .chk b{font-weight:600}
 .chk.p b{color:var(--ok)} .chk.f b{color:var(--bad)}
-.chk span{color:var(--dim);text-align:right;font-size:.76rem;white-space:nowrap}
+/* Wrap at spaces rather than never: the addresses in these details contain no
+   spaces, so they still cannot be split across lines. */
+.chk span{color:var(--dim);text-align:right;font-size:.76rem}
 .chk.f{color:var(--bad)}
 /* table */
 table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.78rem;
@@ -144,12 +215,20 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
 <body>
 
 
+<a class="back" id="back" href="../../">&larr; fpSup</a>
+
 <header>
+  <div class="brand">
+    <img class="mark" src="data:image/webp;base64,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" width="196" height="212" alt="">
+    <div>
   <h1>fpSup-Merge</h1>
-  <p>Pick the cards, get <code>AutoRun.txt</code> and <code>VSHL.BIN</code> for a SIGMA fp
-     boot card. Composition happens here in the page: no assembler, no toolchain. Every
-     combination is checked against the same rules the build scripts use, and the bytes
-     are identical to what those scripts produce.</p>
+  <p>Tick what you want. You get <code>AutoRun.txt</code> and <code>VSHL.BIN</code>;
+     copy both to the root of your SD card and that is the whole job.
+     <span class="adv">Composition happens here in the page: no assembler, no toolchain.
+     Every combination is checked against the same rules the build scripts use, and the
+     bytes are identical to what those scripts produce.</span></p>
+    </div>
+  </div>
   <div class="support">
     <a class="kofi" href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/></svg>
@@ -160,6 +239,10 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
   </div>
 </header>
 
+<div class="modebar">
+  <button class="mode" id="mode" type="button">Show the technical detail</button>
+</div>
+
 <div class="cols">
   <div class="stack">
     <div class="panel">
@@ -167,18 +250,21 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
       <div id="cards"></div>
       <div id="drop" class="drop">
         <input type="file" id="file" accept=".BIN,.bin" multiple hidden>
-        <b>Add your own VSHL.BIN</b>
-        <small>Drop one here, or <u>choose a file</u>. Its sections are parsed and merged with whatever is ticked above; bytes identical to one already taken are folded away, genuine collisions show up as a failed check.</small>
+        <b>Got a VSHL.BIN from someone else?</b>
+        <small class="d-short">Drop it here, or <u>choose a file</u>. It gets merged
+        with whatever is ticked above.</small>
+        <small class="d-full">Drop one here, or <u>choose a file</u>. Its sections are parsed and merged with whatever is ticked above; bytes identical to one already taken are folded away, genuine collisions show up as a failed check.</small>
       </div>
       <label class="f" for="ban">Boot banner</label>
       <input type="text" id="ban" maxlength="24" value="fpSup-OG3K-Gyro!">
       <button class="btn" id="dl-a">Download AutoRun.txt</button>
       <button class="btn ghost" id="dl-v">Download VSHL.BIN</button>
       <p class="note" id="dlnote" hidden></p>
+      <div class="status" id="status"></div>
     </div>
   </div>
 
-  <div class="stack">
+  <div class="stack adv">
     <div class="panel">
       <h2>Result</h2>
       <div class="stats" id="stats"></div>
@@ -423,6 +509,21 @@ function band(el, lo, hi, spans, lock){
 
 let current = null, touchedBanner = false;
 
+// The catalogue writes `code` in backticks because it is also read as text by
+// build_catalogue.py and by anything scripting this page. On screen they should
+// be code, not stray punctuation.
+function md(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                  .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+function setMode(simple){
+  document.body.classList.toggle('simple', simple);
+  document.getElementById('mode').textContent =
+    simple ? 'Show the technical detail' : 'Hide the technical detail';
+  try { localStorage.setItem('fpsup-merge-mode', simple ? 'simple' : 'full'); } catch (e) {}
+}
+
 function render(){
   const recs = picked(), entry = entryOf(recs);
   const one = sel().length === 1 ? sel()[0] : null;
@@ -436,27 +537,45 @@ function render(){
   const ok = checks.every(x => x.ok);
   current = {vshl, autorun, ok};
 
-  document.getElementById('cards').innerHTML = all().map(c => {
+  const cardRow = c => {
     const by = c.records.reduce((s,r) => s + b64(r.b).length, 0);
     const legacy = c.autorun_current === false
-      ? '<span class="sz" style="color:var(--sig)">shipped with the older loader — composed here with the current one</span>' : '';
+      ? '<span class="sz adv" style="color:var(--sig)">shipped with the older loader — composed here with the current one</span>' : '';
+    // The catalogue writes descriptions for a reader who wants the whole story.
+    // The first sentence is the part that helps someone choose; the rest is the
+    // part that helps someone understand, and that belongs with the detail.
+    const desc = md(c.desc);
+    const short = md(c.desc.split(/(?<=[.!?])\s+/)[0]);
+    // Exclusivity is not a technical footnote -- it is the one thing that stops
+    // a card working -- so it stays visible in both modes.
+    const excl = (c.excl||[]).length
+      ? `<span class="sz">not with ${(c.excl||[]).map(x => ((all().find(y=>y.id===x)||{name:x}).name).split('  ')[0]).join(', ')}</span>` : '';
     const row = `<label class="mod ${on.has(c.id)?'on':''}">
       <input type="checkbox" data-c="${c.id}" ${on.has(c.id)?'checked':''}>
       <span><b>${c.name}${c.upload?' <button class="x" data-rm="'+c.id+'">×</button>':''}</b>
-      <small>${c.desc}</small>
-      <span class="sz">${c.records.length} sections · ${by.toLocaleString()} B · entry ${c.entry?hex(c.entry):'none'}${
-        (c.excl||[]).length ? ' · not with ' + (c.excl||[]).map(x => ((all().find(y=>y.id===x)||{name:x}).name).split('  ')[0]).join(', ') : ''}</span>
+      <small class="d-short">${short}</small>
+      <small class="d-full">${desc}</small>
+      ${excl}
+      <span class="sz adv">${c.records.length} sections · ${by.toLocaleString()} B · entry ${c.entry?hex(c.entry):'none'}</span>
       ${legacy}</span></label>`;
     // The push patches are the shell's option, not a card of their own, so they
     // hang off it and appear only when it is ticked.
     if (!carriesWorker(c) || !on.has(c.id)) return row;
-    return row + `<label class="mod sub ${pushOn?'on':''}">
+    return row + `<label class="mod sub adv ${pushOn?'on':''}">
       <input type="checkbox" id="push" ${pushOn?'checked':''}>
       <span><b>EP 0x83 push patches</b>
       <small>Six more firmware writes that open the push endpoint. Needed only if
       the host pulls frames; the development card ships without them.</small>
       <span class="sz">AutoRun 189 → 195 commands</span></span></label>`;
-  }).join('');
+  };
+  // Uploaded cards stay with the ones you pick; they are somebody's card, not a
+  // development tool.
+  const pick = all().filter(c => !c.shell);
+  const dev  = all().filter(c => c.shell);
+  document.getElementById('cards').innerHTML =
+    pick.map(cardRow).join('') +
+    (dev.length ? `<div class="group"><span>Development</span>
+       <em>not needed for shooting</em></div>` + dev.map(cardRow).join('') : '');
   const pb = document.getElementById('push');
   if (pb) pb.onchange = e => { pushOn = e.target.checked; render(); };
   document.querySelectorAll('[data-c]').forEach(i => i.onchange = e => {
@@ -516,6 +635,22 @@ function render(){
       <td><span class="tag ${from&&from.upload?'og3k':'gyro'}">${from?from.id:'—'}</span></td></tr>`;
   }).join('');
 
+  // One line in place of the Checks panel. A failure names itself here whatever
+  // the mode is -- a card that fails a check is a card that does nothing, or
+  // freezes the camera at boot, and hiding that behind a toggle would be the
+  // one thing this page must never do.
+  const failed = checks.filter(x => !x.ok);
+  const st = document.getElementById('status');
+  st.className = 'status' + (ok ? '' : ' bad');
+  st.innerHTML = ok
+    ? `<b>✓</b><span>All ${checks.length} checks passed. These two files are a
+       working card.<br><button class="more" type="button" id="seeall">See what was
+       checked</button></span>`
+    : `<b>✗</b><span><b>Do not use this card.</b> ${failed.length} of
+       ${checks.length} checks failed:<ul>${failed.map(f => `<li>${f.t}${f.d?' — '+f.d:''}</li>`).join('')}</ul></span>`;
+  const sa = document.getElementById('seeall');
+  if (sa) sa.onclick = () => setMode(false);
+
   document.getElementById('dl-a').disabled = !ok;
   document.getElementById('dl-v').disabled = !ok;
   Promise.all([
@@ -528,6 +663,19 @@ function render(){
   });
 }
 document.getElementById('ban').oninput = () => { touchedBanner = true; render(); };
+
+// Opened straight off a disk there is no site to go back to, and "../.." is
+// somebody's Documents folder.
+if (location.protocol === 'file:') document.getElementById('back').hidden = true;
+
+document.getElementById('mode').onclick = () =>
+  setMode(!document.body.classList.contains('simple'));
+// Simple is the default: nobody making their first card should have to opt out
+// of the memory map. localStorage can be empty, or throw outright in a private
+// window, so the mode has to survive not being able to read it at all.
+let startSimple = true;
+try { startSimple = localStorage.getItem('fpsup-merge-mode') !== 'full'; } catch (e) {}
+setMode(startSimple);
 
 function parseVshl(buf){
   const dv = new DataView(buf), u8 = new Uint8Array(buf);
