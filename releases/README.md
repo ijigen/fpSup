@@ -7,14 +7,21 @@ fpsup-<product>-v<major>.<minor>.<patch>[<qualifier>]
 ```
 
 ```
-fpsup-gyro-v1.11b          機身端陀螺儀記錄器
+fpsup-gyro-v1.11b          機身端陀螺儀記錄器(錄影當下寫 .gcsv/.json)
+fpsup-gyro-base-v<版本>    同上的 Base 版,只寫原始 .GYR,事後在瀏覽器轉檔
 fpsup-og3k-v0.2.3a         3:2 全片幅錄影(原生 UI、12-bit 全 ISO、8/10/12-bit alpha)
 fpsup-og2k-v0.1.0test      3:2 全片幅錄影 2K(mode 139 quiet 讀出、八格率、8/10/12-bit)
 fpsup-usbshell-v1.0.0      USB shell
 ```
 
-`<product>` 是一個小寫詞,不帶版本、不帶日期。`<qualifier>` 可省略,
-用來標「還不是正式版」:`test`、`a`/`b` 這類。
+`<product>` 是小寫詞,不帶版本、不帶日期;**可以有連字號** —— `gyro-base`
+是陀螺儀的 Base 版,在這裡算獨立產品,因為它是「選它或選另一個」的另一張卡,
+而不是同一張卡的新版本。`<qualifier>` 可省略,用來標「還不是正式版」:
+`test`、`a`/`b` 這類。
+
+版號的邊界是 `-v<數字>`,所以 `fpsup-gyro-base-v1.2` 的 product 會正確
+收斂成 `gyro-base`。不符合這個格式的 `fpsup-*` 資料夾會被 `build_releases.py`
+**跳過並印出警告** —— 以前是無聲跳過,結果是資料夾在、檔案對,表格裡卻沒有它。
 
 **同一個產品挑最新版的規則**:先比數字(`1.11` > `1.2`,逐段比整數,
 不是字串),數字相同再比 qualifier —— 沒有 qualifier 的最新,

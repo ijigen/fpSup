@@ -28,7 +28,12 @@ import pathlib, re, sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 RELEASES = ROOT / 'releases'
-NAME = re.compile(r'^fpsup-(?P<product>[a-z0-9]+)-v(?P<num>\d+(?:\.\d+)*)(?P<qual>[a-z]*)$')
+# A product may carry hyphens -- `fpsup-gyro-base-v1.2` is the Base edition of the
+# gyro, a separate product here because it is a separate card you choose instead of
+# the other one. The `-v<digit>` boundary is what ends the name, so backtracking
+# settles product on `gyro-base` and not on `gyro-base-v1`.
+NAME = re.compile(
+    r'^fpsup-(?P<product>[a-z0-9]+(?:-[a-z0-9]+)*)-v(?P<num>\d+(?:\.\d+)*)(?P<qual>[a-z]*)$')
 
 
 def rank(qual):
@@ -68,6 +73,12 @@ def latest():
             continue
         m = NAME.match(d.name)
         if not m:
+            # Silence here is how a release goes missing from the site without
+            # anyone noticing: the directory is present, the files are right, and
+            # the table simply does not mention it. Say so instead.
+            if d.name.startswith('fpsup-'):
+                print(f'  ! {d.name}: does not match fpsup-<product>-v<version>, '
+                      f'so it is not on the site', file=sys.stderr)
             continue
         if not (d / 'AutoRun.txt').exists() or not (d / 'VSHL.BIN').exists():
             print(f'  skipping {d.name}: needs both AutoRun.txt and VSHL.BIN', file=sys.stderr)
@@ -85,10 +96,18 @@ def to_html(text):
 
 
 def rows_html(rels):
+    """The site's table. Links land on README.txt, not on the directory.
+
+    Pages serves files but does not generate directory listings, so
+    `releases/<dir>/` is a 404 on the site while every file inside it is fine.
+    The Markdown table below keeps the directory link on purpose: it is read on
+    GitHub, which does list a directory, and that is the more useful landing
+    place there.
+    """
     out = []
     for _, d, m in rels:
         b = blurb(d)
-        out.append(f'    <tr><td><a href="releases/{d.name}/">fpsup-{m["product"]}</a></td>'
+        out.append(f'    <tr><td><a href="releases/{d.name}/README.txt">fpsup-{m["product"]}</a></td>'
                    f'<td>v{m["num"]}{m["qual"]}</td>\n        <td>{to_html(b["en"])}</td></tr>')
     return '\n'.join(out)
 

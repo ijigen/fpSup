@@ -1,0 +1,213 @@
+/* fpSup — shared by index, guide, how-it-works and research.
+   The card composer stays self-contained: it has to run from a file:// URL. */
+
+:root{
+  --paper:#f2f1ed; --panel:#fbfaf8; --ink:#171b1f; --dim:#5d6570; --line:#d6d4cd;
+  /* The logo's red, dropped to 4.88:1 on paper. The artwork itself is #E03858,
+     which is only 3.81:1 and fails on body text. */
+  --sig:#c82545; --sig-soft:#fae6ea; --warn:#8a5a00; --warn-soft:#fbf0d8;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0f1317; --panel:#171c21; --ink:#e4e6e4; --dim:#8b949f; --line:#2b333b;
+  --sig:#f4607f; --sig-soft:#3a1a22; --warn:#e0a848; --warn-soft:#2e2413;
+}}
+:root[data-theme="dark"]{
+  --paper:#0f1317; --panel:#171c21; --ink:#e4e6e4; --dim:#8b949f; --line:#2b333b;
+  --sig:#f4607f; --sig-soft:#3a1a22; --warn:#e0a848; --warn-soft:#2e2413;
+}
+
+*{box-sizing:border-box}
+body{background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:15px; line-height:1.6; margin:0 auto; max-width:860px;
+  padding:0 20px; padding-block:34px 60px; -webkit-font-smoothing:antialiased}
+code{font-family:var(--mono); font-size:.88em}
+a{color:var(--sig)}
+h2{font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.11em;
+  color:var(--dim); margin:40px 0 12px; font-family:var(--mono)}
+h3{font-size:1.02rem; font-weight:600; margin:28px 0 8px; letter-spacing:-.005em}
+.lede{color:var(--dim); max-width:56ch}
+
+/* ---- header ------------------------------------------------------------ */
+/* The front page puts the mark and the text side by side: at 860px a 200px logo
+   on its own line leaves two thirds of the row empty. Inner pages have no mark
+   and .hero simply has one child, which the same flex rules lay out correctly. */
+.hero{display:flex; align-items:center; gap:28px}
+.mark{display:block; width:196px; height:auto; margin:0; flex:none}
+.hero-text{min-width:0}
+.hero h1{margin:0; font-size:1.62rem; font-weight:600; letter-spacing:-.015em}
+.hero .lede{margin:0}
+/* The three facts that decide whether to keep reading. The block below says the
+   same things properly; this is the version you can take in at a glance. */
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:15px 0 0; padding:0; list-style:none}
+.chips li{font-family:var(--mono); font-size:.7rem; letter-spacing:.03em;
+  color:var(--dim); border:1px solid var(--line); border-radius:3px;
+  padding:4px 9px; background:var(--panel); white-space:nowrap}
+.chips li b{color:var(--ink); font-weight:600}
+@media(max-width:620px){
+  .hero{flex-direction:column; align-items:flex-start; gap:18px}
+  .mark{width:148px}
+}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);
+  white-space:nowrap}
+.back{font-family:var(--mono); font-size:.76rem; text-decoration:none; color:var(--dim);
+  display:inline-block; margin-bottom:22px}
+.back:hover{color:var(--sig)}
+
+/* ---- the qualifying block ---------------------------------------------- */
+/* Deliberately plain: this is the part a sceptic reads before trusting the
+   page with a camera, and sober type carries that better than the artwork. */
+.facts{border:1px solid var(--line); border-radius:3px; background:var(--panel);
+  padding:4px 18px; margin:26px 0}
+.facts dl{margin:0; display:grid; grid-template-columns:auto 1fr; gap:0 18px}
+.facts dt{font-family:var(--mono); font-size:.72rem; text-transform:uppercase;
+  letter-spacing:.07em; color:var(--dim); padding:13px 0 0; white-space:nowrap}
+.facts dd{margin:0; padding:12px 0; border-bottom:1px solid var(--line)}
+.facts dt:last-of-type + dd, .facts dd:last-child{border-bottom:0}
+.facts b{font-weight:600}
+@media(max-width:560px){
+  .facts dl{grid-template-columns:1fr; gap:0}
+  .facts dt{padding-top:14px}
+  .facts dd{padding:2px 0 13px}
+}
+
+/* ---- calls to action ---------------------------------------------------- */
+.cta{display:flex; align-items:center; gap:14px; text-decoration:none; color:inherit;
+  background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--sig);
+  border-radius:3px; padding:17px 19px; margin:22px 0 0; transition:background .12s}
+.cta:hover{background:var(--sig-soft)}
+.cta:focus-visible{outline:2px solid var(--sig); outline-offset:2px}
+.cta b{display:block; font-size:1.06rem; font-weight:600; color:var(--sig)}
+.cta small{display:block; color:var(--dim); font-size:.89rem; margin-top:2px}
+.cta .arw{margin-left:auto; color:var(--sig); font-size:1.2rem; flex:none}
+.secondary{display:block; margin:11px 0 0; font-size:.9rem; color:var(--dim)}
+.secondary a{font-weight:500}
+
+/* ---- link rows ---------------------------------------------------------- */
+.grid{display:grid; gap:1px; background:var(--line); border:1px solid var(--line);
+  border-radius:3px; overflow:hidden; margin:14px 0 0}
+a.row{display:block; background:var(--panel); padding:15px 17px; text-decoration:none;
+  color:inherit; transition:background .12s}
+a.row:hover{background:var(--sig-soft)}
+a.row:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+.row b{font-weight:600; font-size:1rem; color:var(--sig)}
+.row small{display:block; color:var(--dim); font-size:.88rem; margin-top:3px}
+.row .m{font-family:var(--mono); font-size:.74rem; color:var(--dim); margin-top:7px; display:block}
+
+/* ---- tables ------------------------------------------------------------- */
+.scroll{overflow-x:auto; margin:14px 0 0}
+table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:.82rem;
+  font-variant-numeric:tabular-nums}
+th{text-align:left; font-weight:500; color:var(--dim); font-size:.68rem;
+  text-transform:uppercase; letter-spacing:.07em; padding:0 10px 7px 0;
+  border-bottom:1px solid var(--line); white-space:nowrap}
+td{padding:7px 10px 7px 0; border-bottom:1px solid var(--line); vertical-align:top}
+tr:last-child td{border-bottom:0}
+td a{text-decoration:none; border-bottom:1px solid transparent}
+td a:hover{border-bottom-color:var(--sig)}
+
+/* ---- notes and warnings ------------------------------------------------- */
+.note{font-size:.9rem; color:var(--dim); border-left:2px solid var(--line);
+  padding-left:13px; margin:16px 0}
+.note b{color:var(--ink)}
+.warn{font-size:.92rem; background:var(--warn-soft); border:1px solid var(--line);
+  border-left:3px solid var(--warn); border-radius:3px; padding:13px 16px; margin:18px 0}
+.warn b{color:var(--ink)}
+
+/* ---- guide steps -------------------------------------------------------- */
+.steps{list-style:none; counter-reset:s; padding:0; margin:22px 0 0}
+.steps > li{counter-increment:s; position:relative; padding:0 0 30px 46px;
+  border-left:1px solid var(--line); margin-left:13px}
+.steps > li:last-child{border-left-color:transparent; padding-bottom:6px}
+.steps > li::before{content:counter(s); position:absolute; left:-13px; top:-2px;
+  width:26px; height:26px; border-radius:50%; background:var(--sig); color:#fff;
+  font-family:var(--mono); font-size:.78rem; font-weight:600;
+  display:flex; align-items:center; justify-content:center}
+.steps h3{margin:0 0 6px; font-size:1.05rem}
+.steps p{margin:7px 0}
+.steps .warn, .steps .note{margin:12px 0}
+/* Sub-headings inside a step: step 7 branches by what is on the card. */
+.steps h4{margin:22px 0 4px; font-size:.95rem; font-weight:600;
+  letter-spacing:-.005em; color:var(--sig)}
+.steps h4 + p{margin-top:4px}
+.note.pad{margin-top:22px}
+
+/* ---- guide media -------------------------------------------------------- */
+/* Screenshots and short clips drop in here. Use MP4/WebM, not GIF: a ten-second
+   screen recording is megabytes as a GIF and a few hundred KB as video, and
+   autoplay+loop+muted+playsinline looks identical to a GIF on every phone. */
+figure.shot{margin:16px 0}
+figure.shot img, figure.shot video{display:block; width:100%; height:auto;
+  border:1px solid var(--line); border-radius:3px; background:var(--panel)}
+/* Some of these are small crops of a Finder window. Blown up to the column width
+   the text turns to mush, so they stay at their own size and sit left. */
+figure.shot img.actual{width:auto; max-width:100%}
+/* A walkthrough, not a loop. preload="metadata" plus a poster means the page
+   costs one small image until somebody actually presses play. */
+figure.shot video[controls]{background:#000}
+figure.shot figcaption{font-size:.84rem; color:var(--dim); margin-top:7px}
+.shot-todo{border:1px dashed var(--line); border-radius:3px; background:var(--panel);
+  color:var(--dim); font-family:var(--mono); font-size:.75rem; line-height:1.6;
+  padding:20px 18px; text-align:center}
+.shot-todo b{display:block; color:var(--ink); font-family:var(--sans);
+  font-size:.9rem; font-weight:600; margin-bottom:5px}
+.shot-todo code{color:var(--sig); font-size:.95em}
+
+/* ---- video ------------------------------------------------------------- */
+/* Click-to-play, not a YouTube iframe on load. An embed pulls in about a
+   megabyte of script and sets cookies before anyone has asked to watch
+   anything, on pages that are otherwise 10 KB. The thumbnails are served from
+   assets/video/, so nothing reaches Google until the play button is pressed. */
+/* No loading="lazy" on these. They sit just under the call to action, so they are
+   at or near the fold on a desktop, and they are the thing people came to look at.
+   All three stills together are 124 KB. */
+.videos{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0 0}
+@media(max-width:620px){.videos{grid-template-columns:1fr}}
+.vid{margin:0}
+.vid button{display:block; width:100%; padding:0; border:1px solid var(--line);
+  border-radius:3px; overflow:hidden; background:var(--panel); cursor:pointer;
+  position:relative; aspect-ratio:16/9; line-height:0}
+.vid button:hover{border-color:var(--sig)}
+.vid button:focus-visible{outline:2px solid var(--sig); outline-offset:2px}
+.vid img{width:100%; height:100%; object-fit:cover; display:block;
+  transition:opacity .15s}
+.vid button:hover img{opacity:.82}
+.vid .play{position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; pointer-events:none}
+.vid .play svg{width:52px; height:52px; filter:drop-shadow(0 2px 6px rgba(0,0,0,.45))}
+.vid .play svg path{fill:#fff}
+.vid .play svg rect{fill:var(--sig)}
+.vid iframe{width:100%; aspect-ratio:16/9; border:1px solid var(--line);
+  border-radius:3px; display:block}
+.vid figcaption{font-size:.87rem; margin-top:8px; line-height:1.45}
+.vid figcaption b{font-weight:600}
+.vid figcaption span{display:block; color:var(--dim); font-size:.8rem;
+  font-family:var(--mono); margin-top:3px}
+
+/* ---- support buttons ---------------------------------------------------- */
+.support{display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin:14px 0 0}
+.support a{display:inline-flex; align-items:center; gap:7px; font-size:.86rem;
+  font-weight:500; text-decoration:none; padding:9px 15px; border-radius:4px;
+  border:1px solid var(--line); color:var(--ink); background:var(--panel);
+  transition:border-color .12s, background .12s}
+.support svg{width:16px; height:16px; flex:none; display:block}
+.support .kofi svg{fill:#FF5E5B}
+.support .discord svg{fill:#5865F2}
+.support .kofi:hover{border-color:#FF5E5B; background:#FF5E5B14}
+.support .discord:hover{border-color:#5865F2; background:#5865F214}
+.support a:focus-visible{outline:2px solid currentColor; outline-offset:2px}
+/* In the hero: smaller, so the two buttons read as a shortcut rather than as the
+   point of the page. Some people arrive only wanting the Discord invite or the
+   Ko-fi link, and they should not have to scroll past the whole funnel to find it. */
+.support.compact{margin-top:14px; gap:7px}
+.support.compact a{font-size:.79rem; padding:6px 11px; gap:6px}
+.support.compact svg{width:14px; height:14px}
+
+/* ---- footer ------------------------------------------------------------- */
+footer{margin-top:44px; padding-top:18px; border-top:1px solid var(--line);
+  font-size:.86rem; color:var(--dim)}
+footer b{color:var(--ink)}
+.removal{background:var(--panel); border:1px solid var(--line); border-radius:3px;
+  padding:14px 17px; margin:0 0 16px; color:var(--ink)}
+.removal b{color:var(--sig)}

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What AutoRun.txt actually is — fpSup</title>
+<meta name="description" content="The SIGMA fp ships with a factory shell of 77 commands and reads a script off the SD card at boot with no permission gate. How that became a recording mode, and what went wrong on the way.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/how-it-works.html">
+<meta property="og:title" content="What AutoRun.txt actually is">
+<meta property="og:description" content="The fp ships with a factory shell of 77 commands and reads a script off the card at boot with no permission gate. How that became a recording mode.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<a class="back" href="./">&larr; fpSup</a>
+
+<header class="hero">
+  <h1>What AutoRun.txt actually is</h1>
+  <p class="lede">Nothing here is an exploit, and nothing is patched into the
+  camera. The fp ships with a factory shell, and it reads a script off the SD card
+  at boot without asking anyone's permission. Everything else follows from that.</p>
+</header>
+
+<h2>The camera already had a shell</h2>
+<p>Inside Ver.5.02 there is a debug and factory shell with <b>77 top-level
+commands</b> &mdash; the thing a service technician would drive over a serial line.
+It is not hidden behind a jumper or a signed unlock. The command table sits at
+<code>0xC0BAC14C</code> as 77 entries of <code>{ char name[0x14]; void *handler; }</code>,
+and the dispatcher tokenises a line, compares the name, and calls the handler.</p>
+<p>Those commands read and write memory, poke hardware registers, drive the sensor's
+readout modes, and set menu values. <a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_COMMANDS.md">The full list is
+written down</a>, with the usage text asked from a live camera rather than
+reconstructed &mdash; that is the firmware's own help, printing itself.</p>
+
+<h2>And it reads a script off the card</h2>
+<p>At boot the firmware calls <code>XC_ShellScriptAutoRun</code>, which looks for
+<code>AutoRun.txt</code> at the root of the SD card and feeds every line of it to
+that same dispatcher, on a shell task, <b>with no permission gate of any kind</b>.</p>
+<p>So a card is not a modified firmware. It is a list of commands the camera was
+always willing to run, in a file the camera always looked for.</p>
+
+<h2>From running commands to adding a recording mode</h2>
+<p>Shell commands alone will not give you a new sensor mode &mdash; there are too
+many writes, and a text file of them would take minutes to execute. So the
+<code>AutoRun.txt</code> is a loader. It writes a small stage-one routine into an
+unused region of RAM, hands it the payload sitting next to it in
+<code>VSHL.BIN</code>, and branches to it.</p>
+<p><code>VSHL.BIN</code> is a plain container: the tag <code>"VBIN"</code>, a section
+count, the entry address, the payload length, then one <code>(destination, length)</code>
+record per section with the blobs aligned to four bytes. The region it writes into is
+mapped out byte by byte:</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>address</th><th>what lives there</th></tr></thead>
+  <tbody>
+    <tr><td>0xC072DE64</td><td>the loader</td></tr>
+    <tr><td>0xC072E064</td><td>payload &mdash; the recording mode, the gyro writer</td></tr>
+    <tr><td>0xC072EFB4</td><td>park stub</td></tr>
+    <tr><td>0xC072F000</td><td>shell state</td></tr>
+    <tr><td>0xC072F050</td><td>the USB worker</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Depending on what is on the card, the AutoRun is 135, 189 or 195 commands, and the
+camera reaches its banner in about ten seconds. The progress bar you watch at boot is
+the loader reporting which block it is on.</p>
+
+<h2>Why the camera is not at risk</h2>
+<p>All of it lands in RAM. There is no flashing step, which is why there is no
+un-flashing step: the camera rebuilds the whole thing from the card on every power-on,
+and a boot without the file is a boot without any of the code.</p>
+<p><b>One thing does survive, and it is worth being precise about.</b> A mode that
+appears in the camera's own menus is selected the way any setting is selected, and the
+camera records that choice in its own settings storage &mdash; the same storage that
+remembers your ISO and your file format, which was always non-volatile and which
+nothing here writes to directly. Delete the card's files and that choice is still
+there, now pointing at a mode with no code behind it. So a clean removal is
+<a href="guide.html#remove">settings back to stock first, file second</a>. It is
+recoverable either way: load the card again and the mode exists again.</p>
+<p>The firmware <i>does</i> have a command that writes non-volatile storage &mdash;
+<code>prom write</code>, which can destroy the camera's calibration. Nothing shipped
+here goes anywhere near it, and the reference marks it accordingly. The worst a
+mistake in RAM can do is require the battery to come out.</p>
+
+<h2 id="freeze">What went wrong: the freeze</h2>
+<p>An early USB shell froze the camera. Not immediately &mdash; it would run, record,
+and then some minutes later lock up hard enough that only pulling the battery helped.
+There were six different observed behaviours, and they contradicted each other. Being
+connected to a host prevented it, unless you recorded. Never connecting a host at all
+also prevented the shutdown case, but not the idle one.</p>
+<p>All six came down to a single mechanism. The worker had claimed two USB endpoints
+by writing the enable register directly, which meant it sat outside the firmware's own
+USB state machine entirely. The camera stayed alive only while the host held the link
+up and the native configuration was never re-run. Anything that tore the link down
+&mdash; idle suspend, the USB reconfiguration that happens when recording starts, the
+soft disconnect at shutdown &mdash; ran into the worker still arming endpoints the
+firmware had just disabled underneath it. The command register never cleared, a
+60-second busy-spin started, and the interrupt storm took the camera with it.</p>
+<p>The fix was to stop owning anything. The shell that ships is <b>parasitic on the
+camera's own PTP gadget</b>: the firmware keeps the endpoints, creates and re-creates
+them across a recording reconfiguration, and the shell simply rides along. Recording
+survives it, and so does unplugging the cable.
+<a href="https://github.com/ijigen/fpSup/blob/main/docs/FREEZE_ROOTCAUSE.md">The full analysis is here</a>, six symptoms to one
+mechanism, every step confirmed in the disassembly.</p>
+
+<h2 id="merge">What went wrong: the card that was quietly wrong</h2>
+<p>A build script used to emit a combined open-gate-plus-gyro card directly, and for
+weeks it emitted the wrong one. It called one builder while the gyro release had been
+built by a different one, and the two produce completely different payloads. The card
+was named as a release. Its manifest said &ldquo;gyro&rdquo;. The gyro inside it was
+not the gyro that had been shipped and tested.</p>
+<p><b>Nothing failed.</b> No error, no crash, no bad footage anyone noticed. It was
+found by comparing the two artefacts section by section, long after the fact.</p>
+<p>That is the reason merged cards are now produced in exactly one place &mdash;
+<a href="tools/card-composer/">fpSup-Merge</a> &mdash; and why it checks its own
+output against the shipping releases byte for byte before it will even render. The
+build scripts can still create a card; what they no longer do is combine two.</p>
+
+<h2>The menus are the camera's own</h2>
+<p>The new resolution is not an overlay drawn on top of the interface. Every menu item
+in the fp carries its own metadata in ROM, immediately after its name string &mdash;
+which means a mode can be given a real entry that behaves like the others, in Settings
+and in Quick Set. <a href="https://github.com/ijigen/fpSup/blob/main/docs/MENU_MODIFICATION.md">How that was worked out</a>.</p>
+
+<h2>Credit</h2>
+<p>Open gate on an fp was first done by
+<a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly&nbsp;Li</a>.
+The work here is a different implementation, and it started from knowing it was
+possible.</p>
+
+<footer>
+  <p>If you want to read further, the
+  <a href="research.html">research pages</a> go subsystem by subsystem, and each one
+  separates what has been proven from what is still open.</p>
+  <p><a href="./">fpSup</a> &middot; <a href="guide.html">How to use it</a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
+</footer>
+
+</body>
+</html>

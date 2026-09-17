@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How to use fpSup — from an empty card to a loaded camera</title>
+<meta name="description" content="Eight steps from an empty SD card to a loaded SIGMA fp: check the firmware, build a card with fpSup-Merge, copy two files, start the camera, use what you loaded, and remove it again.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/guide.html">
+<meta property="og:title" content="How to use fpSup">
+<meta property="og:description" content="Eight steps from an empty SD card to a loaded SIGMA fp — including how to remove it again.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<!--
+  MEDIA
+  Every step is illustrated; there are no empty slots left. The files live in
+  assets/guide/ and that folder's README says where each one came from and how
+  the video was encoded.
+
+  To add another, a still is:
+
+      <figure class="shot">
+        <img src="assets/guide/NN-name.webp" width="W" height="H" alt="what it shows">
+        <figcaption>...</figcaption>
+      </figure>
+
+  and a walkthrough is the same with:
+
+      <video controls preload="metadata" playsinline
+             poster="assets/guide/NN-name-poster.webp"
+             src="assets/guide/NN-name.mp4" width="W" height="H"></video>
+
+  Use MP4, never GIF -- a ten-second screen recording is megabytes as a GIF and a
+  few hundred KB as video. `controls` + `poster` for anything longer than about
+  ten seconds; nothing but the poster is fetched until Play is pressed. Add
+  class="actual" to an <img> that is smaller than the column, so it keeps its own
+  size instead of being blown up into mush.
+-->
+
+<a class="back" href="./">&larr; fpSup</a>
+
+<header class="hero">
+  <h1>How to use it</h1>
+  <p class="lede">This takes you from an empty SD card to a working camera. Steps 1
+  to 6 are the same for everyone. Step 7 depends on what you put on the card. Step 8
+  is how to remove it.</p>
+</header>
+
+<div class="warn">
+  <b>Steps 3 to 5 need a computer.</b> You have to copy two files onto an SD card.
+  A phone cannot do this. If you are reading on a phone, read to the end now, then
+  come back when you have a computer and a card reader. The whole guide is on this
+  one page.
+</div>
+
+<ol class="steps">
+
+<li id="firmware">
+  <h3>Check your camera and firmware</h3>
+  <p>You need a <b>SIGMA fp</b> with firmware <b>Ver.5.02</b>.</p>
+  <p>To check: <code>MENU &rarr; SYSTEM &rarr; Information</code>.</p>
+  <figure class="shot">
+    <img src="assets/guide/01-firmware-menu.webp" width="1024" height="682"
+         alt="The SYSTEM tab of the camera menu, with Information highlighted">
+    <figcaption>In the <b>SYSTEM</b> tab, choose <b>Information</b>. Not
+      &ldquo;Firmware Update&rdquo; &mdash; that is the item below it, and you do not
+      need it.</figcaption>
+  </figure>
+  <figure class="shot">
+    <img src="assets/guide/01-firmware-info.webp" width="1024" height="682"
+         alt="The Information screen showing Model SIGMA fp and Version 5.02">
+    <figcaption><b>Version</b> must say <b>5.02</b>. Model must say
+      <b>SIGMA fp</b>.</figcaption>
+  </figure>
+  <div class="warn"><b>Both things matter.</b><br>
+  The <b>fp L</b> is a different camera with a different sensor. Nothing here works
+  on it.<br>
+  And Ver.5.02 is not a minimum. A card is built for the exact places things sit in
+  Ver.5.02. On any other version it writes to the wrong places, and it can go wrong
+  in bad ways. <b>If your camera is not on Ver.5.02, stop here.</b></div>
+</li>
+
+<li id="card">
+  <h3>Check your card is fast enough</h3>
+  <p>Open gate and the gyro both write to the card while you record. <b>A slow card
+  is the most common reason something here does not work.</b></p>
+  <p>Open gate needs a lot of speed:</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>what you record</th><th>speed needed</th></tr></thead>
+    <tbody>
+      <tr><td>Open gate 3K, 24p, 12-bit</td><td>221 MB/s</td></tr>
+      <tr><td>Open gate 3K, 24p, 10-bit</td><td>184 MB/s</td></tr>
+      <tr><td>Open gate 3K, 24p, 8-bit</td><td>148 MB/s</td></tr>
+      <tr><td>Open gate 2K, 24p, 12-bit</td><td>98 MB/s</td></tr>
+      <tr><td>Normal FHD, 12-bit</td><td>97 MB/s</td></tr>
+      <tr><td><i>a mid-range UHS-II card we measured</i></td><td><i>94 MB/s</i></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>If the card is too slow, the camera <b>stops recording</b> after a few seconds.
+  This is the card, not a bug. No setting can fix it.</p>
+  <p><a href="tools/storage-benchmark/README.txt">The storage benchmark</a> measures
+  your real speed on the camera. The number printed on the card is often higher than
+  the speed you actually get.</p>
+  <p class="note">If your card is around 94 MB/s, you cannot use open gate 3K. You
+  <b>can</b> use <b>OG2K</b>. It shows the same picture and uses a third of the
+  data.</p>
+  <div class="warn"><b>The gyro needs a good card too.</b> It writes its files while
+  you record, so it shares the card with the video. If the card is struggling, the
+  gyro files are the first thing to go missing. You still get the clip, but the
+  motion files are missing or incomplete. If that happens, check the card before you
+  blame the build.</div>
+</li>
+
+<li id="choose">
+  <h3>Choose what goes on the card</h3>
+  <p>Open <a href="tools/card-composer/"><b>fpSup-Merge</b></a> and tick what you
+  want. It all runs in your browser. Nothing is uploaded and you install nothing.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>tick</th><th>what you get</th></tr></thead>
+    <tbody>
+      <tr><td>og3k <i>or</i> og2k</td>
+          <td>The full 3:2 sensor, as a new resolution in the camera menu</td></tr>
+      <tr><td>gyro</td>
+          <td>Gyroflow motion files, written next to your clip as you record</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <figure class="shot">
+    <img src="assets/guide/03-merge.webp" width="1192" height="1694"
+         alt="fpSup-Merge with fpGyroSup and OpenGate 3K ticked, and the two download buttons below">
+    <figcaption>Tick what you want, then download the two files. The line at the
+      bottom turns green when the card is sound.</figcaption>
+  </figure>
+  <p class="note"><b>You will also see <code>shell</code> on the list. Leave it
+  off.</b> It is a tool for developers: it lets a computer talk to the camera over
+  USB, and it adds nothing you can see or use on the camera itself. If you do want
+  it, the setup is in
+  <a href="https://github.com/ijigen/fpSup/tree/main/fp_usb_shell">the fp_usb_shell
+  README</a>.</p>
+  <p>Everything you tick goes on <b>one</b> card and works together.</p>
+  <p>This is the only place that can combine them. <b>Do not</b> try to combine two
+  releases by copying both sets of files yourself. That card will not start.</p>
+  <div class="note"><b>One rule:</b> OG2K and OG3K cannot go on the same card. The
+  camera has three resolution slots and each one needs the third slot. Pick one. The
+  page will not let you tick both.</div>
+</li>
+
+<li id="download">
+  <h3>Download the two files</h3>
+  <p>You get <code>AutoRun.txt</code> and <code>VSHL.BIN</code>. That is the whole
+  card. There is nothing to unzip and nothing to install. This is true no matter how
+  many things you ticked.</p>
+  <p>If you changed the banner text, use plain English letters and numbers only. The
+  camera's screen font cannot show anything else.</p>
+</li>
+
+<li id="copy">
+  <h3>Copy the files to the card</h3>
+  <p>Turn the camera off and <b>take the battery out</b>. Then take the card out and
+  put it in a card reader.</p>
+  <p>Copy both files to the <b>top level</b> of the card:</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>correct</th><th>will not work</th></tr></thead>
+    <tbody>
+      <tr><td><code>/AutoRun.txt</code><br><code>/VSHL.BIN</code></td>
+          <td><code>/fpSup/AutoRun.txt</code><br><code>/DCIM/AutoRun.txt</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <figure class="shot">
+    <img class="actual" src="assets/guide/05-card-root.webp" width="268" height="180"
+         alt="An SD card opened on a computer: AutoRun.txt and VSHL.BIN at the top level,
+              beside the CINEMA and DCIM folders">
+    <figcaption>Both files sit at the top level, beside <code>CINEMA</code> and
+      <code>DCIM</code>. Do not put them in a folder.</figcaption>
+  </figure>
+  <p>Do not make a folder. Do not rename anything. Do not convert anything.</p>
+  <p>Also check the small lock switch on the side of the card is <b>not</b> locked.
+  A locked card is the most common reason nothing happens in step 6.</p>
+</li>
+
+<li id="boot">
+  <h3>Put the card in and turn the camera on</h3>
+  <p>A counter appears in the <b>top left</b> of the screen and fills up:</p>
+  <p><code>fpSup[####....]050</code></p>
+  <p>When it finishes, it is replaced by a banner naming what you loaded, ending
+  with <code>!</code>. The name is whatever you set in fpSup-Merge &mdash; for
+  example <code>fpSup!</code> or <code>fpSup-OG3K-v0.2.3a!</code>.</p>
+  <p>Expect ten to twenty seconds, depending on how much is on the card.</p>
+  <figure class="shot">
+    <video controls preload="metadata" playsinline
+           poster="assets/guide/06-boot-poster.webp"
+           src="assets/guide/06-boot.mp4"
+           width="1000" height="666"></video>
+    <figcaption>The counter runs in the top left, then the banner replaces it.
+      The card in this clip is a development one, so its banner reads
+      <code>fpShell-dbg1!</code> &mdash; yours will say whatever you named it.</figcaption>
+  </figure>
+  <p><b>The banner means it worked.</b> If you see it, go on to step 7. If you do not
+  see it, go to <a href="#trouble">the problems list</a> instead of trying again.</p>
+  <p class="note">This happens every time you turn the camera on, as long as the file
+  is on the card. Nothing is installed. The camera reads the card and builds it all
+  again in memory each time. That is why removing it is easy.</p>
+</li>
+
+<li id="use">
+  <h3>Use what you loaded</h3>
+  <p>This step depends on what you ticked in step 3. If you ticked both, they both
+  work at the same time.</p>
+
+  <h4>Open gate &mdash; OG3K or OG2K</h4>
+  <p><b>First, turn Super35 / crop off.</b> OG3K cannot record while crop is on. You
+  press record and nothing happens, and the camera does not tell you why. Check this
+  before you blame the card.</p>
+  <p>Then choose the new resolution in the camera's normal menu:
+  <code>MENU &rarr; recording &rarr; resolution</code>, or
+  <code>Quick Set &rarr; RES</code>. Choose the frame rate and CinemaDNG quality as
+  you normally would.</p>
+  <figure class="shot">
+    <img src="assets/guide/07-resolution.webp" width="1640" height="1096"
+         alt="Quick Set with RES. set to OG3K 29.97p, and UHD / FHD / OG3K along the bottom">
+    <figcaption>OG3K in Quick Set. Along the bottom are the camera's three
+      resolution slots &mdash; <b>UHD, FHD and OG3K</b>. That third slot is the one
+      the open-gate build takes, which is why OG2K and OG3K cannot share a card.</figcaption>
+  </figure>
+  <p class="note">This is a real menu item, so the camera remembers your choice. That
+  is why <a href="#remove">step 8</a> has an order you need to follow.</p>
+
+  <h4>Gyro</h4>
+  <p>There is nothing to turn on and no menu to find. While you record, it writes two
+  files inside the clip's own folder:</p>
+  <div class="scroll">
+  <table>
+    <tbody>
+      <tr><td><code>A001_037.gcsv</code></td><td>the motion log</td></tr>
+      <tr><td><code>A001_037.json</code></td><td>the lens profile</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <figure class="shot">
+    <img class="actual" src="assets/guide/07-gyro-files.webp" width="590" height="316"
+         alt="A clip folder: the .gcsv and .json sit with the DNG frames and the WAV">
+    <figcaption>Both files appear in the clip folder on their own, beside the DNG
+      frames.</figcaption>
+  </figure>
+  <div class="warn"><b>CinemaDNG only.</b> A MOV take gets no files. MOV records
+  through a different path that this build does not touch.</div>
+  <p>In Gyroflow, load the frames and both files, then <b>run the sync</b>.</p>
+  <p>You cannot skip the sync, and you cannot reuse a number from last time.
+  CinemaDNG has no timecode, and the log starts about half a second after the first
+  frame &mdash; between 470 and 570 ms, and different in every take.</p>
+  <figure class="shot">
+    <video controls preload="metadata" playsinline
+           poster="assets/guide/07-gyroflow-poster.webp"
+           src="assets/guide/07-gyroflow.mp4"
+           width="1280" height="802"></video>
+    <figcaption>The Gyroflow side: load the frames, answer the frame-rate prompt,
+      then sync.</figcaption>
+  </figure>
+  <p class="note">Gyroflow asks for a frame rate when you give it a DNG sequence.
+  Enter the rate you recorded at &mdash; it cannot read that from the frames.</p>
+
+  <h4>If you work in DaVinci Resolve</h4>
+  <p>There is a Gyroflow plugin for Resolve, so you can stabilise on the timeline
+  instead of exporting from Gyroflow first. The two sidecar files are the same
+  ones; the plugin reads them.</p>
+  <figure class="shot">
+    <video controls preload="metadata" playsinline
+           poster="assets/guide/07-resolve-poster.webp"
+           src="assets/guide/07-resolve.mp4"
+           width="1280" height="802"></video>
+    <figcaption>The same clip stabilised inside Resolve with the Gyroflow plugin.</figcaption>
+  </figure>
+
+  <h4>If you use an adapter or a manual lens</h4>
+  <p>The <code>.json</code> is the lens profile. The camera makes it from its own
+  calibration data for the lens that is mounted, so <b>it needs a lens with
+  electronic contacts</b>.</p>
+  <p>With a manual lens, or through an adapter, the camera may not know the lens or
+  may report the wrong one. The <code>.json</code> is then wrong, and Gyroflow will
+  correct the picture in a way that does not match your real lens. The motion log
+  (<code>.gcsv</code>) is not affected &mdash; that part is always correct.</p>
+  <p><b>What to do:</b> do not use the <code>.json</code>. Use <b>Gyroflow's own lens
+  calibration</b> instead. It is built in: you film a calibration target, and
+  Gyroflow works out the real distortion of your lens and saves a profile you can
+  reuse for that lens.</p>
+
+  <p class="note">Portrait takes need nothing special &mdash; the camera records every
+  frame landscape upright, so Gyroflow reads them like any other take. Leave horizon
+  lock off.</p>
+  <p class="note">Some builds write a single raw <code>.GYR</code> file instead of
+  these two. If that is what you have, the <a href="gyro/web/">converter</a> turns it
+  into the same pair, in your browser.</p>
+
+  <div class="note pad"><b>Test before you shoot something important.</b> Everything
+  here is still being tested. Every release has a <code>README.txt</code> that says
+  what was tested and what was not. Read the one for what you loaded. Then record
+  something you do not need, and check it, before you record something you do.</div>
+</li>
+
+<li id="remove">
+  <h3>Removing it &mdash; put your settings back first</h3>
+  <div class="warn"><b>The order matters. This is the step people get wrong.</b><br>
+  The camera remembers menu settings on its own. Deleting the files does not clear
+  them. So if you leave the camera set to an fpSup resolution and then delete the
+  files, the camera is still set to something that is no longer there. It will not
+  record properly.</div>
+  <p><b>First, while the card still works:</b></p>
+  <p>Set the resolution back to a normal one &mdash; UHD or FHD &mdash; in
+  <code>MENU &rarr; recording &rarr; resolution</code> or
+  <code>Quick Set &rarr; RES</code>. If you changed any other fpSup menu item, set
+  that back too.</p>
+  <figure class="shot">
+    <img src="assets/guide/08-reset.webp" width="1640" height="1086"
+         alt="The same Quick Set screen with RES. back on FHD, and FHD highlighted along the bottom">
+    <figcaption>The same screen with <b>FHD</b> chosen again. This is what the camera
+      has to be set to <i>before</i> you delete the files.</figcaption>
+  </figure>
+  <p><b>Then:</b></p>
+  <p>Delete <code>AutoRun.txt</code> from the card. Turn the camera off.
+  <b>Take the battery out.</b> Put it back and turn the camera on.</p>
+  <p>Your camera is now completely normal. Nothing was written to the camera itself,
+  so there is nothing else to undo.</p>
+  <p>Take the battery out, do not just restart. A warm restart has not been tested.</p>
+  <div class="note"><b>Did you already do it in the wrong order?</b> Nothing is
+  broken. Put the card back in with its <code>AutoRun.txt</code>, turn the camera on
+  so the resolution exists again, set it back to a normal one, and then delete the
+  file. The setting is only a problem while the code behind it is missing.</div>
+</li>
+
+</ol>
+
+<h2 id="trouble">If something does not work</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>what happens</th><th>what to do</th></tr></thead>
+  <tbody>
+    <tr><td>Nothing appears on the screen</td>
+        <td>The card did not run. Check the file is called
+        <code>AutoRun.txt</code> and is at the top level of the card. Check the lock
+        switch on the card is off.</td></tr>
+    <tr><td>The progress bar stops in the middle</td>
+        <td>The load failed there. Build the card again instead of reusing it. Bring
+        the text on screen to the Discord.</td></tr>
+    <tr><td>The banner appeared but nothing changed</td>
+        <td>Check where you are looking &mdash; <a href="#use">step 7</a>. Open gate
+        is a resolution in the menu. The gyro has no menu at all; it makes files next
+        to your clip.</td></tr>
+    <tr><td>No new resolution in the menu</td>
+        <td>Super35 / crop is on, or the camera is not set to CinemaDNG.</td></tr>
+    <tr><td>No <code>.gcsv</code> next to the clip</td>
+        <td>Two possible causes. First check the banner really named the gyro build.
+        If it did, the card is probably too slow: these files are written while you
+        record, and a slow card loses them first. See <a href="#card">step 2</a>.</td></tr>
+    <tr><td>Gyroflow stabilises, but the picture looks bent or stretched</td>
+        <td>The lens profile does not match your lens. This happens with adapters and
+        manual lenses. Use Gyroflow's own lens calibration instead of the
+        <code>.json</code> &mdash; <a href="#use">step 7</a>.</td></tr>
+    <tr><td>Recording stops after a few seconds</td>
+        <td>The card is too slow. <a href="#card">Step 2</a>. This is the most common
+        problem, and it is the card.</td></tr>
+    <tr><td>You removed the files and now recording is wrong</td>
+        <td>A setting is still pointing at something that is gone. Put the card back,
+        set the resolution to a normal one, then remove it again &mdash;
+        <a href="#remove">step 8</a>.</td></tr>
+    <tr><td>The camera does not respond at all</td>
+        <td>Take the battery out. Nothing here is permanent, so the next start is
+        clean.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note" style="margin-top:20px"><b>Still stuck?</b> Ask on the
+<a href="https://discord.gg/XeFK5zNZpT">Discord</a>. Tell us the banner text you saw
+on screen, which card you use, your firmware version, and what you ticked in
+fpSup-Merge.</p>
+
+<footer>
+  <p class="removal"><b>Step 8 in short:</b> set the resolution back to a normal one
+  <i>first</i>. <b>Then</b> delete <code>AutoRun.txt</code>, turn the camera off,
+  take the battery out, and turn it on again. The camera remembers your menu choice
+  even after the files are gone, so the order is what makes it clean.</p>
+  <p><a href="./">fpSup</a> &middot; <a href="how-it-works.html">Why this is
+  possible</a> &middot; <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
+</footer>
+
+</body>
+</html>

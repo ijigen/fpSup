@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Firmware research — fpSup</title>
+<meta name="description" content="SIGMA fp firmware research: the IMX410's ISO and gain chain, sensor readout modes, the USB transport, the firmware map. What has been proven and what is still open, kept separate.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/research.html">
+<meta property="og:title" content="SIGMA fp firmware research">
+<meta property="og:description" content="The IMX410's ISO and gain chain, sensor readout modes, the USB transport, the firmware map — with what is proven and what is still open kept separate.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<a class="back" href="./">&larr; fpSup</a>
+
+<header class="hero">
+  <h1>Firmware research</h1>
+  <p class="lede">The products are the part of this that fits on an SD card. Most of
+  the work is reading disassembly, and every project page keeps three things apart:
+  what has been proven on a camera, what is being worked on, and what is still open.</p>
+</header>
+
+<h2>Read this one first</h2>
+<div class="grid">
+  <a class="row" href="explainers/imx410-iso-gain.html">
+    <b>IMX410 ISO and gain</b>
+    <small>Where the sensor's gain is actually applied, what that does to dynamic
+    range at each ISO, and which parts are confirmed in the firmware versus which
+    OTP values still need measuring. Interactive.</small>
+    <span class="m">the most finished piece of research here</span>
+  </a>
+</div>
+
+<h2>Project threads</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>project</th><th>what it is</th><th>status</th></tr></thead>
+  <tbody>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/usb-shell-sup.md">usb shell sup</a></td>
+        <td>USB firmware research and data transport</td>
+        <td>released — v3.1.0, built on the camera's own PTP gadget so recording survives it</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/sensor-lab-sup.md">sensor lab sup</a></td>
+        <td>IMX410 modes, ISO, gain, sensor control</td>
+        <td>research complete — the mode-table ambiguity is closed</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/gyro-sup.md">gyro sup</a></td>
+        <td>Gyro, six-axis logging, Gyroflow workflow</td>
+        <td>released — two editions</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/open-gate.md">open gate</a></td>
+        <td>Recording the sensor's full 3:2 area</td>
+        <td>OG3K v0.2.3a alpha · OG2K v0.1.0test</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/6k-to-ssd.md">6k to ssd</a></td>
+        <td>Getting the best 6K the link can carry</td>
+        <td>designed — 8-bit lands within 94–100% of native 6K</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/focus-sup.md">focus sup</a></td>
+        <td>DFD, focus model, lens control, follow focus</td>
+        <td>AF decompiled in depth; no collector built</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/raw-sup.md">raw sup</a></td>
+        <td>Bayer capture, streaming, compression, packaging</td>
+        <td>researched; the engine's sustained rate is the one unmeasured number</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/ui-sup.md">ui sup</a></td>
+        <td>On-screen display, boot animation</td>
+        <td>text on screen works; colour encoding unsolved</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/power-sup.md">power sup</a></td>
+        <td>USB-C power delivery and power saving</td>
+        <td>charging mechanism solved; the rest untouched</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/firmware-map.md">firmware map</a></td>
+        <td>Format, subsystems, task ABI, state sources</td>
+        <td>ongoing — not a product, the ground the rest stands on</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Reference</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>document</th><th>what is in it</th></tr></thead>
+  <tbody>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_COMMANDS.md">SHELL_COMMANDS</a></td>
+        <td>The firmware shell's 77 commands, with the usage text asked from a live camera</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_CAPABILITIES.md">SHELL_CAPABILITIES</a></td>
+        <td>What those commands reach — memory and I²C writes, menu setters, sensor readout modes</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/docs/MENU_MODIFICATION.md">MENU_MODIFICATION</a></td>
+        <td>Every menu item carries its own metadata in ROM, right after its name string</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/docs/FREEZE_ROOTCAUSE.md">FREEZE_ROOTCAUSE</a></td>
+        <td>Why the first USB shell froze the camera — six symptoms reduced to one mechanism</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note">These are the working documents, not tidied write-ups, and several are
+in Traditional Chinese. They are on GitHub rather than here because GitHub renders
+Markdown and this site does not.</p>
+
+<h2>Stopped or paused</h2>
+<p class="lede">Kept because what they established still holds.</p>
+<div class="scroll">
+<table>
+  <tbody>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/bridge.md">bridge</a></td>
+        <td>The most complete thing built on the fp's PTP surface. Its measurements — why host-side autofocus is hard, and that UHD 12-bit CinemaDNG cannot come over USB — are load-bearing here</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/gimbal.md">gimbal</a></td>
+        <td>SIGMA's <code>0x94xx</code> vendor protocol works during recording, unlike tethered focus. Relative drive only, but absolute position is readable</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/color-sup.md">color sup</a></td>
+        <td>The colour is reproduced; the tool is awkward and nothing is packaged</td></tr>
+    <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/fp-remote.md">fpRemote</a></td>
+        <td>Not started. Wireless bridge and low-resolution streaming through AutoRun rather than PTP</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Helping</h2>
+<p class="lede">The most useful thing anyone can contribute is a measurement: a card's
+sustained write rate, a frame rate nobody has tested, footage from a body other than
+the one everything here was developed on. The
+<a href="https://discord.gg/XeFK5zNZpT">Discord</a> is where that gets coordinated,
+and <a href="https://github.com/ijigen/fpSup">the repository</a> has all of it.</p>
+
+<footer>
+  <p><a href="./">fpSup</a> &middot; <a href="guide.html">How to use it</a> &middot;
+  <a href="how-it-works.html">Why this is possible</a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
+</footer>
+
+</body>
+</html>

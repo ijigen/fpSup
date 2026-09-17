@@ -3,131 +3,235 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>fpSup</title>
+<title>fpSup — open gate and Gyroflow data for the SIGMA fp</title>
+<meta name="description" content="Full-sensor 3:2 open gate recording and Gyroflow motion data on the SIGMA fp, from one file on the SD card. RAM only — no firmware is written and removal is deleting a file. Firmware Ver.5.02.">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/">
+<meta property="og:title" content="Open gate 3:2 on the SIGMA fp">
+<meta property="og:description" content="Full-sensor 3024×2010 recording and Gyroflow motion data, from one file on the SD card. RAM only — no firmware is written to the camera.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="fpSup">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<style>
-:root{--paper:#f2f1ed;--panel:#fbfaf8;--ink:#171b1f;--dim:#5d6570;--line:#d6d4cd;
- --sig:#c25a12;--sig-soft:#f6e4d6;
- --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;--sans:"IBM Plex Sans",system-ui,sans-serif}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
- --paper:#0f1317;--panel:#171c21;--ink:#e4e6e4;--dim:#8b949f;--line:#2b333b;
- --sig:#f08a3c;--sig-soft:#3a2415}}
-:root[data-theme="dark"]{--paper:#0f1317;--panel:#171c21;--ink:#e4e6e4;--dim:#8b949f;
- --line:#2b333b;--sig:#f08a3c;--sig-soft:#3a2415}
-*{box-sizing:border-box}
-body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;
- line-height:1.6;margin:0 auto;max-width:860px;padding:0 20px;padding-block:34px 60px;
- -webkit-font-smoothing:antialiased}
-h1{padding-right:270px;font-size:1.6rem;font-weight:600;margin:0;letter-spacing:-.01em}
-h2{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.11em;
- color:var(--dim);margin:34px 0 12px;font-family:var(--mono)}
-.lede{color:var(--dim);max-width:52ch;margin:.5em 0 0}
-code{font-family:var(--mono);font-size:.88em}
-header{border-bottom:1px solid var(--line);padding-bottom:18px}
-header{position:relative}
-.support{position:absolute;top:0;right:0;display:flex;gap:8px;flex-wrap:wrap;margin:0}
-@media(max-width:620px){header{position:static}.support{position:static;margin:14px 0 0}}
-.grid{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden}
-a.row{display:block;background:var(--panel);padding:15px 17px;text-decoration:none;color:inherit;transition:background .12s}
-a.row:hover{background:var(--sig-soft)}
-a.row:focus-visible{outline:2px solid var(--sig);outline-offset:-2px}
-.row b{font-weight:600;font-size:1rem;color:var(--sig)}
-.row small{display:block;color:var(--dim);font-size:.88rem;margin-top:3px}
-.row .m{font-family:var(--mono);font-size:.74rem;color:var(--dim);margin-top:7px;display:block}
-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.82rem;
- font-variant-numeric:tabular-nums}
-th{text-align:left;font-weight:500;color:var(--dim);font-size:.68rem;text-transform:uppercase;
- letter-spacing:.07em;padding:0 10px 7px 0;border-bottom:1px solid var(--line)}
-td{padding:6px 10px 6px 0;border-bottom:1px solid var(--line)}
-tr:last-child td{border-bottom:0}
-td a{color:var(--sig);text-decoration:none;border-bottom:1px solid transparent}
-td a:hover{border-bottom-color:var(--sig)}
-td a:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
-.note{font-size:.9rem;color:var(--dim);border-left:2px solid var(--line);padding-left:13px;margin:16px 0}
-.note b{color:var(--ink)}
-.support{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:16px 0 0}
-.support a{display:inline-flex;align-items:center;gap:7px;font-family:var(--sans);
-  font-size:.82rem;font-weight:500;text-decoration:none;padding:7px 13px;border-radius:4px;
-  border:1px solid var(--line);color:var(--ink);background:var(--panel);
-  transition:border-color .12s,background .12s}
-.support svg{width:15px;height:15px;flex:none;display:block}
-.support .kofi svg{fill:#FF5E5B}
-.support .discord svg{fill:#5865F2}
-.support .kofi:hover{border-color:#FF5E5B;background:#FF5E5B14}
-.support .discord:hover{border-color:#5865F2;background:#5865F214}
-.support a:focus-visible{outline:2px solid currentColor;outline-offset:2px}
-footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
- font-size:.84rem;color:var(--dim)}
-</style>
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
-<header>
-  <h1>fpSup</h1>
-  <p class="lede">Firmware research and on-camera tools for the SIGMA fp.
-  Everything here runs from <code>AutoRun.txt</code> on the SD card, in RAM only —
-  remove the file, power-cycle, and the camera is stock. Nothing is written to flash.
-  <strong>Firmware Ver.5.02 only.</strong></p>
-  <div class="support">
-    <a class="kofi" href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/></svg>
-      supMe on Ko-fi</a>
-    <a class="discord" href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
-      Discord</a>
+
+<header class="hero">
+  <picture>
+    <source srcset="assets/fpsup-logo.webp" type="image/webp">
+    <img class="mark" src="assets/fpsup-logo.png" width="463" height="500" alt="fpSup">
+  </picture>
+  <div class="hero-text">
+    <h1 class="sr">fpSup</h1>
+    <p class="lede">Record the full 3:2 sensor. Get Gyroflow motion files while you
+    shoot. Your SIGMA fp can already do these things &mdash; it takes one file on the
+    SD card to switch them on.</p>
+    <ul class="chips">
+      <li><b>SIGMA fp</b> &nbsp;not the fp L</li>
+      <li>firmware <b>Ver.5.02</b></li>
+      <li><b>nothing</b> installed on the camera</li>
+    </ul>
+    <div class="support compact">
+      <a class="discord" href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+        Discord</a>
+      <a class="kofi" href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/></svg>
+        supMe on Ko-fi</a>
+    </div>
   </div>
 </header>
+
+<h2>Will this work on my camera</h2>
+<div class="facts">
+  <dl>
+    <dt>Camera</dt>
+    <dd><b>SIGMA fp.</b> Not the fp L. That is a different camera with a different
+      sensor, and nothing here works on it.</dd>
+    <dt>Firmware</dt>
+    <dd><b>Ver.5.02 only.</b> Not "5.02 or newer" &mdash; only this version. A card
+      is built for the exact places things sit in Ver.5.02, and on any other version
+      it writes to the wrong ones. Check under
+      <code>MENU &rarr; SYSTEM &rarr; Information</code>.</dd>
+    <dt>Card</dt>
+    <dd><b>A fast card, for open gate and for the gyro.</b> Open gate at 24p needs
+      about 221&nbsp;MB/s; a mid-range UHS-II card we measured does 94. If the card
+      is too slow the camera stops recording, and gyro files go missing. A slow card
+      is the most common problem people have.</dd>
+    <dt>Risk</dt>
+    <dd><b>Nothing is installed on the camera.</b> It only lives in memory while
+      the power is on, so there is no firmware to flash back. You remove it by
+      deleting a file &mdash; but in the right order. The camera remembers menu
+      settings on its own, so put those back to normal first. The guide shows
+      you how.</dd>
+  </dl>
+</div>
+
+<h2>Start</h2>
+<a class="cta" href="guide.html">
+  <span>
+    <b>How to use it</b>
+    <small>Eight steps, from an empty SD card to a working camera. Whatever you
+      put on it &mdash; and how to remove it again.</small>
+  </span>
+  <span class="arw" aria-hidden="true">&rarr;</span>
+</a>
+<p class="secondary">Done this before? <a href="tools/card-composer/">Go straight to
+fpSup-Merge</a> and make your card.</p>
+
+<h2>See it working</h2>
+<div class="videos">
+  <figure class="vid">
+    <button type="button" data-yt="pSl9yCzgV0E" aria-label="Play: SIGMA fp Open Gate">
+      <img src="assets/video/pSl9yCzgV0E.webp" width="800" height="450" alt="">
+      <span class="play"><svg viewBox="0 0 68 48" aria-hidden="true"><rect width="68" height="48" rx="12"/><path d="M 27,33 27,15 44,24 z"/></svg></span>
+    </button>
+    <figcaption><b>SIGMA fp Open Gate</b><span>the full 3:2 sensor, recorded</span></figcaption>
+  </figure>
+  <figure class="vid">
+    <button type="button" data-yt="07-4N3bhVSo" aria-label="Play: Stabilised in Gyroflow">
+      <img src="assets/video/07-4N3bhVSo.webp" width="800" height="450" alt="">
+      <span class="play"><svg viewBox="0 0 68 48" aria-hidden="true"><rect width="68" height="48" rx="12"/><path d="M 27,33 27,15 44,24 z"/></svg></span>
+    </button>
+    <figcaption><b>Stabilised in Gyroflow</b><span>no extra hardware, no rig</span></figcaption>
+  </figure>
+</div>
+
+<h3 style="margin-top:26px">Someone else's test</h3>
+<p class="lede">Not ours. If you would rather see the footage from a person who is not
+selling you anything, start here.</p>
+<div class="videos">
+  <figure class="vid">
+    <button type="button" data-yt="XOygnvam3QM" aria-label="Play: Sigma fp &mdash; fpSup 3K Open Gate">
+      <img src="assets/video/XOygnvam3QM.webp" width="480" height="270" alt="">
+      <span class="play"><svg viewBox="0 0 68 48" aria-hidden="true"><rect width="68" height="48" rx="12"/><path d="M 27,33 27,15 44,24 z"/></svg></span>
+    </button>
+    <figcaption><b>Sigma fp &mdash; fpSup 3K Open Gate</b><span>a user's own test of OG3K</span></figcaption>
+  </figure>
+</div>
+
+<h2>What you can put on a card</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>product</th><th>version</th><th>what it does</th></tr></thead>
+  <tbody>
+<!-- releases:begin -->
+    <tr><td><a href="releases/fpsup-gyro-v1.11b/README.txt">fpsup-gyro</a></td><td>v1.11b</td>
+        <td>Writes Gyroflow's <code>.gcsv</code> and <code>.json</code> while recording — every sample at 2500 Hz, distortion read off the lens.</td></tr>
+    <tr><td><a href="releases/fpsup-og2k-v0.1.0test/README.txt">fpsup-og2k</a></td><td>v0.1.0test</td>
+        <td>The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.</td></tr>
+    <tr><td><a href="releases/fpsup-og3k-v0.2.3a/README.txt">fpsup-og3k</a></td><td>v0.2.3a</td>
+        <td>The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 219 MB/s at 24p 12-bit. Alpha.</td></tr>
+    <tr><td><a href="releases/fpsup-usbshell-v3.1.0/README.txt">fpsup-usbshell</a></td><td>v3.1.0</td>
+        <td>The shell that answers <code>shl</code> over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints.</td></tr>
+<!-- releases:end -->
+  </tbody>
+</table>
+</div>
+<p class="note"><b>You do not download these one by one.</b> You tick the ones you
+want in fpSup-Merge and it makes a single card with all of them on it. Click a name
+above to read that release's notes &mdash; what was tested, and what was not.</p>
+<p class="note"><b><code>fpsup-usbshell</code> is not for shooting.</b> It is a
+development tool that lets a computer talk to the camera over USB. It adds nothing
+you can see or use on the camera. If you are here to record, you want
+<code>og3k</code> or <code>og2k</code>, and <code>gyro</code>.</p>
+<p class="note"><b>Both open-gate builds show the same picture.</b> OG2K is smaller:
+a third of the data, less rolling shutter (8.3&nbsp;ms instead of 12.4), and the
+sensor's quiet readout at every frame rate including 100p. Pick OG2K if your card is
+not fast enough for OG3K. They cannot go on the same card. Both are still being
+tested. Open gate on an fp was first done by
+<a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly&nbsp;Li</a>.</p>
 
 <h2>Tools</h2>
 <div class="grid">
   <a class="row" href="tools/card-composer/">
     <b>fpSup-Merge</b>
-    <small>Pick the products you want on one card and get <code>AutoRun.txt</code> and
-    <code>VSHL.BIN</code>. Merged cards are produced here and nowhere else; the page
-    checks every combination against the same rules the build scripts use.</small>
-    <span class="m">runs in the browser · no toolchain</span>
+    <small>Tick what you want and get your two files. This is the only place that
+    can put more than one of them on a single card.</small>
+    <span class="m">runs in your browser &middot; before you shoot</span>
   </a>
-  </div>
+  <a class="row" href="gyro/web/">
+    <b>.GYR converter</b>
+    <small>Turns a raw <code>.GYR</code> file into the <code>.gcsv</code> and
+    <code>.json</code> that Gyroflow reads. Use this if what you recorded left you
+    with a <code>.GYR</code> rather than the two files.</small>
+    <span class="m">runs in your browser &middot; after you shoot</span>
+  </a>
+</div>
 
-<h2>Releases</h2>
-<table>
-  <thead><tr><th>product</th><th>version</th><th>what it does</th></tr></thead>
-  <tbody>
-<!-- releases:begin -->
-    <tr><td><a href="releases/fpsup-gyro-v1.11b/">fpsup-gyro</a></td><td>v1.11b</td>
-        <td>Writes Gyroflow's <code>.gcsv</code> and <code>.json</code> while recording — every sample at 2500 Hz, distortion read off the lens.</td></tr>
-    <tr><td><a href="releases/fpsup-og2k-v0.1.0test/">fpsup-og2k</a></td><td>v0.1.0test</td>
-        <td>The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.</td></tr>
-    <tr><td><a href="releases/fpsup-og3k-v0.2.3a/">fpsup-og3k</a></td><td>v0.2.3a</td>
-        <td>The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 219 MB/s at 24p 12-bit. Alpha.</td></tr>
-    <tr><td><a href="releases/fpsup-usbshell-v3.1.0/">fpsup-usbshell</a></td><td>v3.1.0</td>
-        <td>The shell that answers <code>shl</code> over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints.</td></tr>
-<!-- releases:end -->
-  </tbody>
-</table>
-<p class="note"><b>Each release is two files.</b> Copy <code>AutoRun.txt</code> and
-<code>VSHL.BIN</code> to the root of the card &mdash; no folder to make, no step afterwards.
-To combine two of them, use the card composer rather than copying both.</p>
-<p class="note"><b>The two open-gate builds see the same picture.</b> OG2K is the whole
-3:2 sensor reduced by three rather than two: a third of the data, an 8.3&nbsp;ms rolling
-shutter instead of 12.4, and the sensor's quiet readout at every frame rate including 100p.
-They cannot share a card &mdash; the resolution menu holds three entries and each build takes
-the third. Both are pre-release: read the release's own <code>README.txt</code> and treat
-takes as disposable until you have checked them. Open gate on an fp was first done by
-<a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly&nbsp;Li</a>.</p>
-
-<h2>Explainers</h2>
+<h2>Why this is possible</h2>
 <div class="grid">
-  <a class="row" href="explainers/imx410-iso-gain.html">
-    <b>IMX410 ISO and gain</b>
-    <small>How the sensor's gain is actually applied, and what that means for dynamic
-    range at each ISO.</small>
+  <a class="row" href="how-it-works.html">
+    <b>What AutoRun.txt actually is</b>
+    <small>The fp already has a factory shell with 77 commands, and it reads a
+    script from the SD card when it starts &mdash; with nothing asking permission.
+    How that became a recording mode, and what went wrong on the way.</small>
+  </a>
+</div>
+
+<h2>Questions, and things that went wrong</h2>
+<p class="lede">Bugs, cards that will not start, footage that looks wrong &mdash;
+ask on the Discord. New test builds go there first.</p>
+<div class="support">
+  <a class="discord" href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+    Join the Discord</a>
+</div>
+
+<h2>Support the work</h2>
+<p class="lede">This is one person reading disassembly. Everything here is free and
+will stay free. Ko-fi is what pays for the time.</p>
+<div class="support">
+  <a class="kofi" href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/></svg>
+    supMe on Ko-fi</a>
+</div>
+
+<h2>The research underneath</h2>
+<div class="grid">
+  <a class="row" href="research.html">
+    <b>Firmware research</b>
+    <small>How the IMX410's ISO and gain really work, the sensor's readout modes,
+    the USB transport, the firmware map. Nine projects &mdash; each one says what is
+    proven and what is still unknown.</small>
+    <span class="m">for people who want to read, or to help</span>
   </a>
 </div>
 
 <footer>
-  <p style="margin-top:14px">RAM only, Ver.5.02 only, and every card is removable by deleting one file.
-  Recording above FHD needs a medium that can keep up — a card that cannot buffers
-  in RAM and then stops the take, which is the card rather than a bug.</p>
+  <p class="removal"><b>To remove it:</b> first set the resolution back to a normal
+  one. The camera remembers your choice, and deleting the file does not clear it.
+  <b>Then</b> delete <code>AutoRun.txt</code>, turn the camera off, take the battery
+  out, and turn it on again. <a href="guide.html#remove">Full instructions.</a></p>
+  <p>SIGMA fp, firmware Ver.5.02 only. Everything runs from the card, in memory.
+  Everything here is still being tested &mdash; each release has a
+  <code>README.txt</code> saying exactly what was tested and what was not.
+  <a href="https://github.com/ijigen/fpSup">Source on GitHub</a>.</p>
 </footer>
+
+
+<script>
+// Click to play. Until then nothing has been requested from Google: the still is
+// ours, in assets/video/. youtube-nocookie keeps the embed off the tracking domain.
+document.querySelectorAll('.vid button[data-yt]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var f = document.createElement('iframe');
+    f.src = 'https://www.youtube-nocookie.com/embed/' + b.dataset.yt +
+            '?autoplay=1&rel=0';
+    f.title = b.getAttribute('aria-label').replace(/^Play: /, '');
+    f.allow = 'accelerometer; autoplay; encrypted-media; picture-in-picture';
+    f.allowFullscreen = true;
+    b.replaceWith(f);
+  });
+});
+</script>
 </body>
 </html>
