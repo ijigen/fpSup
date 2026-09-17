@@ -9,3 +9,9 @@ raw/*
 !raw/README.md
 !raw/lossless_codec/
 !raw/lossless_codec/**
+
+# Raw guide footage: 30 MB of screen recordings and camera screenshots that get
+# cut down into assets/guide/ before they ship. Pages serves the whole repo, so
+# committing the masters would publish them too. (The logo is the exception and
+# is tracked, in assets/src/ -- tools/build_assets.py reads it on every run.)
+h2u_asess/

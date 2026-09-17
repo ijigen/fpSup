@@ -31,6 +31,12 @@ jobs:
       # here would never reach the repository's own front page.
       - name: Releases tables are current
         run: python3 tools/build_releases.py --check
+      # assets/ is generated too — tools/build_assets.py from assets/src/ — but it
+      # is deliberately NOT checked here. PNG encoding is not byte-reproducible
+      # across Pillow and libpng versions, and the social card's type is fetched
+      # from Google Fonts at build time, so a --check in CI would fail on a runner
+      # image update rather than on anything being wrong. Rerun it by hand after
+      # a redraw; a stale image is cosmetic, not a broken page.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
