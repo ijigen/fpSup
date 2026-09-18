@@ -397,9 +397,13 @@ j_lens:
  * MENU's size and goes stale the moment a mode does not come from the menu --
  * an OG3K take recorded at 3024x2010 produced 1936x1090 on a camera whose menu
  * still said FHD and 3856x2170 on one that still said UHD.  0xC37CE210 reads
- * zero for anything but 1080p.  The live-view param's canvas is the PREVIEW
- * geometry, 1936x1090 through an entire OG3K take by design.  And the
- * recording param is a stack temporary with no address to read at all.
+ * zero for anything but 1080p.  The live-view param's canvas (param + 0x5C,
+ * the row OG3K patches) is the right structure but the wrong instance: the
+ * only field-angle object reachable from a fixed global is the live-view one,
+ * 0xC375D840 + 0x10, and its canvas is PREVIEW geometry, 1936x1090 through an
+ * entire OG3K take by design.  The recording instance is handed to
+ * og3kcanvas.S as r4 at the 0xC043A19C hook and is pool-allocated, so it has
+ * no address to walk to.
  *
  * ⚠ UNCONFIRMED: two writer classes reach tags 0x100/0x101.  Vtables
  * 0xC2E3A838 and 0xC2E3A7D4 delegate to this singleton; 0xC2E3A938 returns
@@ -429,8 +433,8 @@ j_dng_dims:
     mov     r1, #0
     bx      lr
 
-/* j_dims -- the frame the take is recording.  An announcement if there is one
- * (see j_og3k_dims), otherwise the camera's settings.
+/* j_dims -- the frame the take is recording.  What the DNG writer reads if it
+ * is plausible (see j_dng_dims), otherwise the camera's settings.
  * Returns r0 = width, r1 = height, or zeros.  Not 0xC37CE210: that one holds
  * {1936, 1090, ...} at 1080p, reads zero at UHD, and read zero right through a
  * 35 s take here.  CameraMgrSetting has it while the camera is idle too. */

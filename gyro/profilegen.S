@@ -185,66 +185,77 @@ udiv64_32:
  * ------------------------------------------------------------------------- */
 
 /* ---------------------------------------------------------------------------
- * pg_og3k_dims -- the recorded frame size when something announced it.
+ * pg_dng_dims -- the frame size the camera itself puts in the DNG header.
  * r0 = width, r1 = height, or zeros.
  *
- * Nothing the camera exposes tells the truth for every mode:
- *   CameraMgrSetting is the MENU's size, and OG3K never updates it -- a take
- *     recorded at 3024x2010 produced a profile claiming 3856x2170.
- *   0xC37CE210 reads zero for everything but 1080p (two other comments in this
- *     tree already say so; do not go back to it).
- *   The live-view param's canvas is the PREVIEW geometry, which under OG3K sits
- *     at 1936x1090 for the whole take by design -- its RWZM pair is left at the
- *     stock ratio on purpose, because unity there makes the producer emit
- *     3032x2012 and starve the RAW writer.  Measured 2026-09-18: walking to it
- *     replaced one wrong answer with another.
+ * Found by asking what the CinemaDNG writer reads.  FUN_c06A5290 builds the
+ * IFD, and for tags 0x100/0x101 it does:
  *
- * So the only code that knows is the code that changed it.  OG3K's canvas hook
- * publishes {magic, t_us, w, h} at 0xC0731C18 when it patches a take's
- * geometry.  This reads that and nothing else: no clearing, no writing, no
- * knowledge of what OG3K is.  An announcement nobody made is simply absent.
+ *     r5 = (this->vtable[+0x48])(this)      FUN_c06999F0
+ *     ImageWidth  = [r5]                    tag 0x100
+ *     ImageLength = [r5 + 4]                tag 0x101
  *
- * Staleness is settled by the timestamp, not by housekeeping.  The cave
- * survives a warm restart, so yesterday's announcement is still sitting there
- * on a gyro-only boot, and an OG3K take followed by a UHD one leaves one that
- * describes neither.  Both are older than this take's start, and both fail the
- * window.  The clock is FUN_c002B6E0 -- the same one S_START_US came from, so
- * the subtraction is valid even across its 71-minute wrap.
+ * and FUN_c06999F0 returns a fixed singleton, 0xC38250E4.  So these two words
+ * ARE the header: whatever the file says, this said first.  That is the
+ * property none of the other sources had, and it is why this one is asked
+ * first.  gcsv_json.S's j_dng_dims is the same routine for the other edition.
+ *
+ * Every other source was tried and is wrong somewhere:
+ *
+ *   CameraMgrSetting (pg_setting_dims) is the MENU's size.  It goes stale the
+ *     moment a mode does not come from the menu: an OG3K take recorded at
+ *     3024x2010 wrote 3856x2170 into a real profile in the wild, a 27% focal
+ *     length error, because the camera's menu still said UHD.
+ *   0xC37CE210 reads zero for everything but 1080p.  Two other comments in
+ *     this tree already say so; do not go back to it.
+ *   The live-view param's canvas (param + 0x5C, the row OG3K patches) is the
+ *     right structure but the wrong instance.  The only field-angle object
+ *     reachable from a fixed global is the live-view one -- 0xC375D840 + 0x10,
+ *     filled once at manager construction from the configurator singleton
+ *     0xC375E8DC -- and its canvas is PREVIEW geometry, 1936x1090 through an
+ *     entire OG3K take by design.  The recording instance is handed to
+ *     og3kcanvas.S as r4 at the 0xC043A19C hook and is pool-allocated
+ *     (XC_LiveViewFieldAngleTable, 0x16c bytes, via the configurator's
+ *     vtable+0x14 factory), so it has no address to walk to.  Measured
+ *     2026-09-18: walking there replaced one wrong answer with another.
+ *
+ * ⚠ UNCONFIRMED: two writer classes reach tags 0x100/0x101.  Vtables
+ * 0xC2E3A838 and 0xC2E3A7D4 delegate to this singleton; 0xC2E3A938 returns
+ * this+0x18 instead.  Which one CinemaDNG video uses could not be settled
+ * statically -- stills and video may well differ.  The bounds check below and
+ * pg_dims_plausible are what keep a wrong guess from producing a wrong
+ * profile, and pg_build falls back to the settings when this returns zero.
+ *
+ * Removed here, deliberately: a reader for an OG3K announcement at
+ * 0xC0731C18.  Nothing in open-gate ever wrote it -- og3kcanvas.S uses
+ * 0xC0731C08 (flag), 0x0C (playback flag), 0x14 (bit depth) and 0xC0732A00
+ * (its log), and og3k_plan.py puts the playback table entry
+ * {6, 43, 222, "OG3K"} at 0xC0731C10, which makes 0xC0731C18 the word holding
+ * 222.  So that path read og3k's live table and could never fire.  A profile
+ * that depends on another card being loaded is also the wrong shape: the size
+ * has to be right when nothing but this card is installed.
+ * See projects/gyro-sup/notes/LENS_PROFILE_WRONG_SIZE_WITH_OG3K.md.
  * ------------------------------------------------------------------------- */
-.equ OG3K_GEOM,   0xC0731C18
-.equ OG3K_MAGIC,  0x4B33474F      /* 'OG3K' */
-.equ OG3K_WINDOW, 60000000        /* 60 s: the early JSON is written within a
-                                   * block or two of record start, so a real
-                                   * announcement is seconds old at most */
+.equ DNG_DIMS,    0xC38250E4
 
-    .global pg_og3k_dims
-pg_og3k_dims:
-    push    {r4, r5, lr}
-    ldr_addr r4, OG3K_GEOM
-    ldr     r0, [r4]
-    ldr_addr r1, OG3K_MAGIC
-    cmp     r0, r1
-    bne     9f
-    ldr     r5, [r4, #4]                /* when it was announced */
-    ldr     r0, [r10, #S_START_US]      /* when this take began */
-    sub     r0, r5, r0                  /* unsigned: wraps correctly */
-    ldr_addr r1, OG3K_WINDOW
-    cmp     r0, r1
-    bhi     9f                          /* before the take, or far too late */
-    ldr     r1, [r4, #0x0C]             /* height */
-    ldr     r0, [r4, #8]                /* width  */
+    .global pg_dng_dims
+pg_dng_dims:
+    ldr_addr r2, DNG_DIMS
+    ldr     r1, [r2, #4]
+    ldr     r0, [r2]
     cmp     r0, #640
     blo     9f
     cmp     r1, #360
     blo     9f
-    cmp     r0, #0x2000
+    movw    r2, #0x2000
+    cmp     r0, r2
     bhi     9f
-    cmp     r1, #0x2000
+    cmp     r1, r2
     bhi     9f
-    pop     {r4, r5, pc}
+    bx      lr
 9:  mov     r0, #0
     mov     r1, #0
-    pop     {r4, r5, pc}
+    bx      lr
 
     .global pg_dims_plausible
 pg_dims_plausible:
@@ -1064,11 +1075,11 @@ pg_build:
     cmpne   r6, #0
     bne     41f
     /* The latched GEOMETRY global is unreliable in stream mode (0x0 across
-     * whole takes).  Derive the frame the way the camera does: setting + border. */
-    /* The firmware's own canvas first: it is the only source that is right
-     * for every mode including OG3K.  The menu setting is the fallback, and
-     * it is the one that was silently wrong. */
-    bl      pg_og3k_dims
+     * whole takes), so the size has to be asked for rather than caught.
+     * The words the DNG writer reads come first: they are the header itself,
+     * so they are right for every mode including OG3K.  The menu setting is
+     * the fallback, and it is the one that was silently wrong. */
+    bl      pg_dng_dims
     cmp     r0, #0
     bne     42f
     bl      pg_setting_dims
