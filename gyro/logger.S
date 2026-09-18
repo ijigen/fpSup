@@ -300,6 +300,56 @@
 boot_pool:
     .word   0
 
+/* --- the logger's own pool -------------------------------------------------
+ * The AutoRun used to ask for one megabyte with `memmgr bufmem get` and
+ * everything on the card read the address out of 0xC3757A7C: the shell's frame
+ * and capture buffers at +0 and +0x2000, this logger from +0x6000 up, and a
+ * loader that only wanted somewhere to stage a 32 KiB file.  og3k and og2k got
+ * one too and never read a byte of it.
+ *
+ * So the loader stages into a buffer of its own and hands it back, and whoever
+ * needs memory asks the allocator for it.  This is the logger asking.  The word
+ * at 0xC3757A7C still holds the answer, because every source in this directory
+ * and the two host tools read it from there -- what changed is that it now
+ * means "the logger's pool" rather than "the one pool".
+ *
+ * The descriptor form, four arguments in registers: the text command's handler
+ * parses an alignment into the size slot, which is how `get 0 0x20000 0x40`
+ * returns 128 bytes.  Class 0 is USER; NOT class 10, which is the CinemaDNG
+ * frame buffer and the allocation whose failure froze movRec.
+ *
+ * Refusal is a real answer -- playback takes ten megabytes of its own -- and
+ * the answer to it is to stand down, not to write the state block to address
+ * zero plus 0x6000. */
+.equ H_GET,     0xC001D740          /* (desc, class, size, 0)               */
+.equ H_ADDR,    0xC001D7F0          /* (desc) -> address                    */
+.equ POOL_BYTES, 0x100000           /* what the AutoRun asked for, unchanged:
+                                     * every offset in this file is measured
+                                     * against it                           */
+gyro_pool_get:                      @ -> r10, or zero
+    /* The descriptor goes on the stack, which heapalloc.S says not to do --
+     * for its own reason: it frees later and needs the descriptor again.  This
+     * never frees, both calls are in this function, and sixteen bytes of cave
+     * is sixteen bytes we do not have.  gyro_hook has already pushed r3-r11 and
+     * does not keep r0-r2, so only lr needs saving, and r4 with it for the
+     * eight-byte alignment an interrupt's STRD requires. */
+    push    {r4, lr}
+    sub     sp, sp, #16
+    mov     r0, sp
+    mov     r1, #0
+    mov     r2, #POOL_BYTES
+    mov     r3, #0
+    ldr_addr ip, H_GET
+    blx     ip
+    mov     r0, sp
+    ldr_addr ip, H_ADDR
+    blx     ip
+    add     sp, sp, #16
+    mov     r10, r0
+    ldr_addr r1, POOL_PTR
+    str     r10, [r1]
+    pop     {r4, pc}
+
 /* Load the state block address: the bufmem pool, plus the span the USB shell
  * owns (its frame buffer at +0, its capture buffer at +0x2000). */
 .macro pool_state reg
@@ -335,14 +385,26 @@ gyro_hook:
      * every boot that actually runs the AutoRun. First call: remember what the
      * pool was. Later calls: if it moved, the AutoRun did not run, and the only
      * safe thing to do is put the firmware's instruction back and disappear. */
-    ldr_addr r10, POOL_PTR
-    ldr      r10, [r10]
     adr      r9, boot_pool
     ldr      r8, [r9]
+    ldr_addr r10, POOL_PTR
+    ldr      r10, [r10]
     cmp      r8, #0
-    streq    r10, [r9]
-    beq      1f
-    cmp      r8, r10
+    bne      2f                      @ not the first call of this boot
+
+    /* First call of this boot, and it arrives from stage2 rather than from the
+     * callback -- which is the moment to ask for the memory, because the
+     * sections that are offsets into it are placed as soon as we return.  A
+     * pool already published here belongs to whoever ran before us on the same
+     * card and is theirs to keep; we take it rather than ask for a second. */
+    cmp      r10, #0
+    bne      3f                      @ an unconditional `bl`: a conditional one
+    bl       gyro_pool_get           @ is R_ARM_JUMP24, which armasm refuses
+3:  cmp      r10, #0
+    beq      hook_stand_down         @ refused: no memory, no logger
+    str      r10, [r9]
+    b        1f
+2:  cmp      r8, r10
     bne      hook_stand_down
 1:
     pool_state r10
