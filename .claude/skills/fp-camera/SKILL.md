@@ -17,6 +17,18 @@ cd fpSup/fp_usb_shell
 (./fpshd >/tmp/fpshd.log 2>&1 &)          # socket /tmp/fpshd.sock
 ```
 
+**But look at what is already on the socket first.** As of 2026-09-16 the daemon
+in use is `projects/fp-af-assist/diagnostics/fpshd-diag2`, not
+`fp_usb_shell/fpshd` — the user confirmed that is the newer one. It serves the
+same protocol, so `putfile.sh` works through it unchanged (`version` answered
+normally). Starting `./fpshd` on top of it would have produced the two-daemon
+`LIBUSB_ERROR_ACCESS` below, and taken the camera from whoever was already
+using it:
+
+```sh
+ps -o command= -p $(pgrep -f fpshd | head -1)   # which daemon, and whose project
+```
+
 `putfile` resolves its imports from that directory — run python from
 `fp_usb_shell/`, or `sys.path.insert(0, '.../fp_usb_shell')`. A bare
 `ModuleNotFoundError: putfile` means the cwd moved; the tool resets it between

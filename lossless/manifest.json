@@ -1,0 +1,40 @@
+{
+  "product": "fpLossless",
+  "id": "lossless",
+  "status": "development-only",
+  "candidate_release_name": "fpsup-lossless-v0.1.0test",
+  "camera_ready": false,
+  "standalone": true,
+  "dependencies": [],
+  "combined_artifacts_owner": "tools/card-composer",
+  "ui": {
+    "page": "SHOOT 2 (CINE)",
+    "label": "Lossless RAW",
+    "label_zh_TW": "無損壓縮",
+    "values": ["OFF", "ON"],
+    "default": "OFF",
+    "private_binding_name": "MV_fpLossless",
+    "native_binding_installed": false,
+    "offline_resource_candidate": "menu/",
+    "offline_resource_profile": "pure-fixed-gated",
+    "offline_binding_coordinator": "binding/",
+    "offline_native_variable_calls": "native/",
+    "offline_reader_view_lease": "loader/",
+    "native_resource_runtime_verified": false,
+    "persistent_setting_implemented": false
+  },
+  "first_integration_target": {
+    "format": "CinemaDNG",
+    "bits": 12,
+    "raster": [1936, 1090],
+    "fps": [24000, 1001],
+    "media": "SD",
+    "tile": [512, 368],
+    "predictor": 1,
+    "validated_on_camera": false
+  },
+  "reserved_memory": [],
+  "installed_hooks": [],
+  "merge_with_og2k_verified": false,
+  "merge_with_og3k_verified": false
+}

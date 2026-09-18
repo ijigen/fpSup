@@ -11,6 +11,7 @@ firmware image.
 | Power/clock preflight | **Passed, 2026-08-31** | The exact writer task can balance the required domains while the codec is idle |
 | Scratch allocation | **Offline-verified; not yet run on camera** | A guarded, aligned 4 MiB DMA layout can be prepared |
 | Encode and measure | **Design/dry-run only** | Structure and bounds are checked; live execution is deliberately blocked |
+| Exact final flush | **Offline-verified; not yet run on camera** | One-shot read-only capture of the completed writer list and synchronous flush result |
 
 The hardware codec exists and is reachable. The result that still decides UHD
 feasibility is its sustained lossless throughput on real, high-entropy Bayer
@@ -29,7 +30,19 @@ power/clock；4 MiB scratch 目前只有離線驗證，真正 encode 與吞吐�
 | `exact_writer_scratch_preflight.S` | Allocate and guard the proposed 4 MiB DMA layout without calling the codec |
 | `single_frame_codec_probe.py` | Enforce the staged preconditions and keep live encode disabled |
 | `single_frame_encode_discard_probe.S` | Offline-only encode design; not safe to arm yet |
+| `exact_flush_writer_probe.py` / `.S` | Guarded one-shot probe at the final SD flush; observes the exact writer/list shape without modifying it |
 | `test_*.py` | Verify assembly bounds, hook transaction order, proof gates, cleanup policy, and dry-run refusal |
+
+## Playback boundary
+
+Compression is not currently a transparent recording feature.  The still-DNG
+develop path has a hardware decoder branch for `Compression=7`, but the V5.02
+CinemaDngPlay parser reads strip layout and does not parse the tiled lossless-DNG
+tags.  A valid compressed frame therefore does not imply in-camera movie
+playback.  Variable compressed sizes have a separate first-frame-derived buffer
+capacity constraint, and dynamically dropping source frames would additionally
+require explicit timeline semantics.  Until those are solved, this directory
+remains a probe suite, not a release path.
 
 ## Exact CinemaDNG writer probe
 
