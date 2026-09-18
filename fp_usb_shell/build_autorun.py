@@ -38,6 +38,29 @@ ap.add_argument('--no-ep-patches', action='store_true',
                      'patch is NOT one of them and is applied whenever the '
                      'shell is in: it is what stops the host PTP stack taking '
                      'interface 0, and without it the shell cannot be reached')
+ap.add_argument('--abort-always', action='store_true',
+                help='diagnostic: abort the script whether or not the store '
+                     'started us.  On a card with no store that keeps the '
+                     'timing and adds only the abort, which is the other half '
+                     'of the pair the store path changes at once')
+ap.add_argument('--abort-now', action='store_true',
+                help='diagnostic: the loader takes the stop itself instead of '
+                     'arming it, so the banner never draws.  One boot to say '
+                     'whether the arming is what breaks a store card')
+ap.add_argument('--store-boot', action='store_true',
+                help='keep the loader in the settings block and carry only a '
+                     'bootstrap here.  XC_CommonSaveData survives a power cycle '
+                     'where nothing in RAM does (measured: 206 of 207 words), so '
+                     'after one boot has filled it every later boot writes 40 '
+                     '`mem set` instead of 80.  The first boot costs more, once: '
+                     'it carries the bootstrap AND the loader, and the loader '
+                     'publishes itself on its way out')
+ap.add_argument('--retain-ram', action='store_true',
+                help='raise the DRAM self-refresh window from 15 minutes to '
+                     '11.95 hours, so the cave survives a soft power-off long '
+                     'enough for a warm boot to reuse it.  One word, and it is '
+                     'code, so it survives the warm boot itself.  Costs battery: '
+                     'self-refresh draws current the whole time the camera is off')
 ap.add_argument('--banner', default='fpSup!',
                 help='what the screen reads when the load is done.  The bar is '
                      '19 characters wide and the surface is wiped before this '
@@ -71,6 +94,28 @@ DEST = args.out or DEST_DEFAULT
 DEST.parent.mkdir(parents=True, exist_ok=True)
 
 CAVE_LOW = 0xC072DE64
+STORE = 0xC3075264           # XC_CommonSaveData + 0x28: past the u16 the
+                             # firmware clears at +0x024.  Measured safe to
+                             # +0x200 -- see PERSISTENT_STORE_COMMONSAVE.md
+STORE_MAX = (0xC307523C + 0x200) - (STORE + 4)     # what the body may occupy;
+                             # the header is one word (the magic) -- see
+                             # templates/store_boot.S for where the other three
+                             # fields went
+CAVE_END = 0xC0730000        # the cave's top; sections above this are the
+                             # payload's own business, not the loader's
+POOL_DESC     = 0xC072F6D8   # sixteen bytes of scratch for the allocator's
+                             # descriptor, above the worker and below
+                             # STORE_FROM.  The worker ceiling below guards it.
+STORE_VER_AT  = 0xC072F6FC   # the version this card was built with.  One
+                             # `mem set`, written before the bootstrap runs, so
+                             # a loader that came out of the settings block can
+                             # tell whether it is the one this card expects --
+                             # see the note in loader.S.  The cave is zeroed at
+                             # boot, so a stale store can never match by luck.
+STORE_BOOT_AT = 0xC072F700   # cave scratch: above the payload and above
+                             # the shell's worker (which ends 0xC072F698).
+                             # NOT CAVE_LOW -- the bootstrap copies the
+                             # loader there and would overwrite itself.
 LOADER_END = CAVE_LOW + 0x200   # loader.S sits at the bottom; payloads go above
 
 LOAD   = 0xC072F050   # worker code — high, leaving 0xC072DE64..0xC072F000 free
@@ -80,7 +125,7 @@ ECHO_SLOT = 0xC0BAC2F8  # command table entry 17, echo's handler pointer
 ECHO_ORIG = 0xC03D99A0
 HOOK   = 0xC00D0794   # gyro callback, borrowed once to create the task
 
-from patches import IFACE, PUSH, SCREEN, BAR_WIDTH
+from patches import IFACE, PUSH, RETAIN, SCREEN, BAR_WIDTH
 
 # The on-screen readout.  `display text` draws into the OSD surface and
 # `display osd 1` composites it; with a colour argument it fills the layer
@@ -136,6 +181,15 @@ def verify_stage2_cache_publish(code):
 # is spending its time on. If it does not, that stretch belongs to the camera's
 # own start-up and no amount of trimming here will touch it.
 THIN_BAR = __import__('os').environ.get('FPSUP_THIN_BAR') == '1'
+# FPSUP_MIN_BAR=1 draws the opening frame and nothing after it: one bar update
+# and the banner.  For measuring what the readout costs -- the same card twice,
+# differing only in display commands, is the only way to price them.
+MIN_BAR = __import__('os').environ.get('FPSUP_MIN_BAR') == '1'
+# FPSUP_NO_BAR=1 draws nothing until the banner.  Measured 2026-09-18: twelve
+# display commands were worth 3.4 seconds of boot, about 283 ms each, while the
+# `mem set` commands a night was spent shaving are a fraction of that.  The
+# readout is the expensive thing on this card, not the code it announces.
+NO_BAR = __import__('os').environ.get('FPSUP_NO_BAR') == '1'
 
 BAR_WIPED = []      # the surface is cleared once, before the first bar frame
 
@@ -157,6 +211,10 @@ def progress(out, pct: int):
 
     Set FPSUP_THIN_BAR=1 to send once and take the risk.
     """
+    if NO_BAR:
+        return
+    if MIN_BAR and BAR_WIPED:
+        return
     if not BAR_WIPED:
         for _ in range(3):
             out.append("display osd 1 0x00000000")
@@ -173,8 +231,9 @@ WORKER = HERE / 'camera' / 'worker.S'
 code = assemble(WORKER)
 words = to_words(code)
 end = LOAD + len(code)
-if end > 0xC072F700:
-    raise SystemExit(f'worker overruns the one-shot scratch: 0x{end:08X}')
+if end > POOL_DESC:
+    raise SystemExit(f'worker reaches the allocator descriptor at '
+                     f'0x{POOL_DESC:08X}: it ends at 0x{end:08X}')
 
 disp = (LOAD - (HOOK + 8)) >> 2
 if not -(1 << 23) <= disp < (1 << 23):
@@ -224,29 +283,36 @@ if args.no_shell:
     w("# plug a debugger into does not need. The loader sleeps instead of becoming a")
     w("# worker: the loader reads the file from the callback and returns.")
 else:
-    w("# --- patches -----------------------------------------------------------------")
     # The interface patch travels with the shell, not with hook-push: without it
     # the interface still says PTP, the host's own PTP stack claims interface 0
     # first, and every command comes back LIBUSB_ERROR_ACCESS.  A card that
     # carries a shell you cannot talk to is not a debug card.
     fw_patches = ([] if args.no_shell else IFACE) + \
                  ([] if args.no_ep_patches else PUSH)
-    for patch in fw_patches:
-        addr, value, *why = patch
+    w("# --- patches and worker state: in the file, not here -------------------------")
+    w("# Seven descriptor words and seventeen zeroes used to be twenty-four `mem set`")
+    w("# commands.  Every one of them is a fixed value at a fixed address, which is")
+    w("# the definition of a VBIN section -- so they ride in the file and the loader")
+    w("# writes them, and this script is the same length whether the card carries a")
+    w("# shell or not.")
+w("")
+if args.retain_ram:
+    w("# --- DRAM retention ----------------------------------------------------------")
+    w("# 15 minutes -> 11.95 hours, so a soft power-off leaves the cave loaded.")
+    for addr, value, *why in RETAIN:
         for line in why:
             w(f"# {line}")
         w(f"mem set 0x{addr:08X} 0x{value:08X}")
     w("")
-    progress(out, 10)
-    w("")
-    w(f"# --- worker state @0x{STATE:08X}, 16 words, plus the capture length ----------")
-    for i in range(16):
-        w(f"mem set 0x{STATE + i*4:08X} 0x00000000")
-    w(f"mem set 0x{CAPLEN:08X} 0x00000000")
-w("")
 progress(out, 20)
 w("")
-CHUNKS = 6      # progress steps through the loader; each one draws
+# Progress steps through the loader.  Each step is six commands -- text and
+# present, three times, because the layer composites one of three buffers and
+# fewer than three leaves one holding the last frame.  So a step is not free:
+# six was chosen when the loader was four hundred commands and the bar was the
+# only sign the camera had not died.  It is fifty-two now, and two steps still
+# move the bar while it runs.
+CHUNKS = 2      # progress steps through the loader; each one draws
 if not args.loader:
     w(f"# --- worker code @0x{LOAD:08X}..0x{end:08X}, {len(code)} bytes ---------------")
     per = (len(words) + CHUNKS - 1) // CHUNKS
@@ -256,29 +322,83 @@ if not args.loader:
         w("")
         progress(out, 30 + round((c + 1) * 30 / CHUNKS))
     w("")
-w("# --- DMA pool; its address lands in 0xC3757A7C -------------------------------")
-w("# +0x0000 frame buffer 4 KiB   +0x2000 capture buffer 16 KiB")
-w("# +0x6000 free for whatever is loaded alongside   +0x10000 template scratch")
-w("# Reserve the whole span up front rather than writing past the allocation and")
-w("# hoping the tail is free. Everything derives its address from this pointer:")
-w("# asking for 64 KiB instead of 4 already moved the base from 0x44F6ADC0 to")
-w("# 0x45026680, and every hard-coded address went with it.")
-w("# Three arguments, never four. The handler parses the alignment and stores it")
-w("# into the size slot -- `str r3, [sp, #4]` at 0xC03FA580, where the size went")
-w("# at 0xC03FA558; the alignment slot at [sp, #0xc] is only ever written with 0.")
-w("# So `get 0 0x20000 0x40` asked for 64 bytes and was handed the 128-byte")
-w("# minimum, while everything past it belonged to a 256 KiB buffer owned by")
-w("# 0xC03A4EEC that is reinitialised when recording starts. That is where the")
-w("# shell's capture buffer and anything loaded beside it had been living, and why")
-w("# the picture tore and the camera froze at unpredictable moments.")
-w("# 1 MiB. The USER pool reports 18 MB free in MOVIE_REC_DNG, and 128 KiB was")
-w("# not enough to stage a quarter-megabyte file -- which showed up as a verify")
-w("# that never converged rather than as an error, because the overflow landed in")
-w("# memory somebody else kept rewriting.")
-w("memmgr bufmem get 0 1048576")
+w("# --- the pool is the loader's business now -----------------------------------")
+w("# `memmgr bufmem get` lived here, and it was the script asking for something\n# only the loader uses.  The loader asks the allocator itself -- class 0, the\n# same channel -- and still leaves the address at 0xC3757A7C for everything\n# downstream that reads it from there.")
 w("")
 progress(out, 30)   # the allocation is seconds; say so rather than look stalled
 w("")
+if args.store_boot:
+    # After the pool, because a store that verifies branches straight into the
+    # loader and the loader stages the file at pool+0x8000.  Before the loader,
+    # because the whole point is not to write it.
+    # The bootstrap carries the loader's length as a constant rather than
+    # reading it out of the store, so the loader has to be measured first.
+    # Assembling it twice is free next to a wrong length, which the copy loop
+    # would run: it writes past the cave, through the payload and the worker,
+    # for as far as the number says.
+    sprobe = ([f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}']
+              + (['ABORT_NOW=1'] if args.abort_now else [])
+              + ['ABORT_AUTORUN=1', 'STORE_PROVISION=1', 'STORE_LEN=0',
+                 'STORE_MAGIC=0',
+                 f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}'])
+    sbytes = assemble(HERE / 'templates' / 'loader.S', sprobe)
+    slen = len(sbytes)
+    # The magic is a hash of the loader's own bytes, taken from the probe build
+    # whose own STORE_MAGIC is zero -- so the value cannot depend on itself.
+    # It is a literal in a pool either way, so it never changes the size.
+    #
+    # This is what makes "the store holds a DIFFERENT build of the loader"
+    # unreachable rather than merely unlikely: a constant string has to be
+    # bumped by hand, and in one night the loader changed four times while the
+    # string sat still.
+    smagic = int(hashlib.sha256(sbytes).hexdigest()[:8], 16)
+    if slen > STORE_MAX:
+        sys.exit(f'loader is {slen} bytes; the store holds {STORE_MAX}.')
+    ssrc = HERE / 'templates' / 'store_boot.S'
+    scode = assemble(ssrc, [f'STORE_LEN=0x{slen:X}',
+                            f'STORE_MAGIC=0x{smagic:08X}'])
+    swords = to_words(scode)
+    send = STORE_BOOT_AT + len(scode)
+    if send > CAVE_END:
+        sys.exit(f'store bootstrap 0x{STORE_BOOT_AT:08X}..0x{send:08X} leaves the cave')
+    w(f"# --- store bootstrap @0x{STORE_BOOT_AT:08X}..0x{send:08X}, {len(scode)} bytes -----")
+    w("# The loader lives in XC_CommonSaveData, which survives a power cycle.  If")
+    w("# the header and sum check out this copies it into the cave and branches,")
+    w("# and the loader ends by stopping the script -- everything below is then")
+    w("# a slower way to do what has already been done.  If they do not, this")
+    w("# returns having touched nothing and the file carries on.")
+    for i in range(len(swords)):
+        w(f"mem set 0x{STORE_BOOT_AT + i*4:08X} 0x{word_at(swords, i):08X}")
+    w("")
+    w(f"mem set 0x{ECHO_SLOT:08X} 0x{STORE_BOOT_AT:08X}")
+    w("echo")
+    w("")
+    # The banner goes AFTER that line, not before it.  It used to be before,
+    # because a store that verified stopped the script right here and the
+    # banner two hundred commands further down would never be reached -- so it
+    # was moved up, and started announcing a load that had not happened yet.
+    # For a night "thirty per cent, then the banner" was read as the fast path
+    # finishing when it was the slow path carrying on to sixty and ninety
+    # underneath, and three conclusions were overturned by it.
+    #
+    # The loader no longer stops the script; it arms the stop and returns.  So
+    # by the time these lines run the load really is done, on the fast path.
+    w("# The load is finished by now -- the loader returned rather than stopping")
+    w("# the script, which is what lets this line exist at all.")
+    for _ in range(3):
+        w("display osd 1 0x00000000")
+    for _ in range(3):
+        w(f"display text {args.banner}")
+        w("display osd 1")
+    w("")
+    # One line, two meanings.  Fast path: the slot points at the loader's
+    # abort_entry, which puts the handler back and stops the reader, so nothing
+    # below runs.  Slow path: it still points at the bootstrap, which fails its
+    # magic check for the second time and returns having touched nothing.
+    w("echo")
+    for _ in range(3):
+        w(f"mem set 0x{ECHO_SLOT:08X} 0x{ECHO_ORIG:08X}")
+    w("")
 if args.loader:
     # Everything the AutoRun used to spell out goes in a file, and what it
     # spells out instead is the thing that reads the file. Four hundred `mem
@@ -296,12 +416,50 @@ if args.loader:
     # about two seconds off the boot, measured.
     # CALL in the loader needs to know where the loader will be copied to,
     # because the assembler lays it out at zero.
-    ldef = [f'LOADER_BASE={CAVE_LOW}'] + (['NOTASK=1'] if args.no_shell else [])
-    # With a shell in the build the loader hands the callback on to the worker
-    # when it is done, instead of putting the firmware's word back.  Only one
-    # of them can own that address, and until this the loader always won.
-    if not args.no_shell:
-        ldef.append(f'HOOK_RESTORE=0x{WORKER_BL:08X}')
+    # One loader, whatever the card carries: see the note at `boot:` in
+    # loader.S for the task that turned out to be unnecessary.
+    ldef = [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}']
+    if args.abort_always:
+        # ABORT_NOW too: a card with no store has only ONE `echo`, and the three
+        # commands after it put the handler back -- so an ARMED abort is
+        # disarmed before anything can trigger it.  The first build of this test
+        # did exactly that and passed by doing nothing.
+        ldef += ['ABORT_AUTORUN=1', 'ABORT_ALWAYS=1', 'ABORT_NOW=1',
+                 f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}']
+    if args.store_boot:
+        # The stored copy is the one that aborts the script: reaching it means
+        # the settings block was good, and everything after that point in the
+        # file is a slower way to do what has just been done.  The copy the
+        # AutoRun spells out carries the same code -- it has to, because it is
+        # what gets published -- and simply never gets that far on a first boot.
+        #
+        # STORE_LEN has to be the assembled length, which is not known until it
+        # is assembled.  Both constants are movw/movt pairs, so their VALUE
+        # cannot change the size: assemble once to measure, then again for real.
+        probe = ldef + ['ABORT_AUTORUN=1', 'STORE_PROVISION=1', 'STORE_LEN=0',
+                        'STORE_MAGIC=0'] + \
+                       (['ABORT_NOW=1'] if args.abort_now else []) + [
+                        f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}']
+        n = len(assemble(HERE / 'templates' / 'loader.S', probe))
+        # The store's body is the loader itself, so its ceiling is the space
+        # measured safe in XC_CommonSaveData: +0x024..+0x200 of the block, less
+        # the one-word header.  Checked here rather than assumed, because a
+        # loader that outgrows it fails silently -- store_boot copies the wrong
+        # number of bytes and every boot takes the slow path with nothing to
+        # show why.
+        if n > STORE_MAX:
+            sys.exit(f'loader is {n} bytes; the store holds {STORE_MAX}. '
+                     f'Shrink the loader or use a second run of the block.')
+        if n != slen:
+            sys.exit(f'the bootstrap was built for {slen} bytes of loader and '
+                     f'the loader is {n}: the two measurements disagree.')
+        ldef += ['ABORT_AUTORUN=1', 'STORE_PROVISION=1'] + \
+                (['ABORT_NOW=1'] if args.abort_now else []) + [
+                 f'STORE_LEN=0x{n:X}', f'STORE_MAGIC=0x{smagic:08X}',
+                 # The abort skips the three commands that put the echo handler
+                 # back, so the loader has to do it itself, and needs to be told
+                 # what to put there.
+                 f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}']
     lcode = assemble(lsrc, ldef)
     lwords = to_words(lcode)
     # Not at LOAD. The loader's whole job is to write to LOAD, and putting it
@@ -458,6 +616,15 @@ if args.loader:
     for spec in args.also_bin:
         addr_s, _, src_s = spec.partition(':')
         secs.append((int(addr_s, 0), pathlib.Path(src_s).read_bytes()))
+    if not args.no_shell:
+        # The worker's sixteen state words and the capture length, contiguous at
+        # 0xC072F000, and the descriptor patches.  Zeroes, because the cave is
+        # zeroed at boot -- but written rather than assumed: if the image ever
+        # stops being reloaded from NAND, stale state is a worker that answers
+        # with somebody else's buffer length.
+        secs.append((STATE, b'\x00' * 68))
+        for addr, value, *_ in fw_patches:
+            secs.append((addr, struct.pack('<I', value)))
     if args.payload:
         # Point the gyro callback at the payload -- last, so it is written only
         # after the payload itself is in place. A `mem set` in the AutoRun could
@@ -479,7 +646,7 @@ if args.loader:
         table += struct.pack('<II', addr, len(blob))
         body += blob + b'\x00' * (-len(blob) % 4)
     entry = (args.vshl_entry if args.vshl_entry is not None else
-             0 if args.no_shell else LOAD + symbols(WORKER)['serve'])
+             0 if args.no_shell else LOAD + symbols(WORKER)['spawn'])
     binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
     binpath = DEST.parent / 'VSHL.BIN'
     # Padded to a fixed size for the same reason AutoRun.txt is: putfile writes
@@ -543,9 +710,14 @@ if args.payload:
 # Counted from the list that was actually emitted, not recomputed from the
 # flags -- the old line recomputed, and said "0 endpoint" for builds that wrote
 # seven of them.  A summary that can disagree with the file is worse than none.
-print(f"patches: {len(fw_patches) if not args.no_shell else 0} firmware "
+# --retain-ram is emitted outside the shell branch, so it has to be counted
+# outside it too; leaving it out is how this line starts disagreeing with the
+# file again.
+_retain = len(RETAIN) if args.retain_ram else 0
+print(f"patches: {(len(fw_patches) if not args.no_shell else 0) + _retain} firmware "
       f"({'iface' if not args.no_shell else '-'}"
-      f"{'+push' if not args.no_shell and not args.no_ep_patches else ''}), "
+      f"{'+push' if not args.no_shell and not args.no_ep_patches else ''}"
+      f"{'+retain' if _retain else ''}), "
       f"{len(SCREEN)} screen")
 print(f"wrote  : {DEST}  {len(out)} lines  "
       f"sha256={hashlib.sha256(text.encode()).hexdigest()[:16]}")

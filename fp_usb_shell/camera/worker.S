@@ -177,16 +177,48 @@ bootstrap:
     blx     r12
     mov     r4, r0                      @ the displaced call's return value
 
-    LDA     r5, STATE
-    ldr     r0, [r5]
-    LDA     r1, 0x4C485356              @ 'VSHL'
-    cmp     r0, r1
-    beq     bootstrap_done
-    str     r1, [r5]                    @ claim before anything can re-enter
-
+    /* Put the firmware's word back before starting anything: this runs from the
+     * callback, at 50-90 Hz, and a second entry while the first is still
+     * creating the task is a second task. */
     LDA     r0, HOOK_SITE
     LDA     r1, HOOK_ORIG
     str     r1, [r0]
+
+    /* The task itself is `spawn`, which is also the VBIN entry.  It used to be
+     * written out twice -- once here for the callback, once for the file -- and
+     * the second copy is what pushed the worker past the parameter block. */
+    bl      spawn
+
+    mov     r0, r4
+    pop     {r4, r5, pc}
+
+/* --- spawn: the VBIN entry.  Start the worker, and COME BACK. --------------
+ *
+ * stage2 tail-branches to the entry named in the file's header, and the entry
+ * used to be `serve` itself -- which never returns, so stage2 never returned,
+ * so the loader never returned, so the `echo` that started all of it never
+ * returned and the AutoRun sat on that line forever.  The banner at the end of
+ * the script was simply never reached, and the loader grew a task of its own
+ * to work around it: it created a task to run ITSELF in, so that the echo
+ * handler could return while the file was still being read.  Twenty-four words
+ * of loader, in every build, to pay for an entry that did not come back.
+ *
+ * This is that entry doing what every payload should: make whatever has to
+ * outlive the call, then return.  The task is the same one `bootstrap` makes --
+ * same priority, same stack, same name -- minus the gyro-callback plumbing
+ * around it, because nothing drives us from the callback any more.
+ *
+ * Four registers pushed rather than three: an interrupt STRDs into the stack
+ * of whatever it interrupts, so eight-byte alignment is not optional. */
+    .global spawn
+spawn:
+    push    {r4, r5, r6, lr}
+    LDA     r5, STATE
+    ldr     r0, [r5]
+    LDA     r1, 0x4C485356              @ 'VSHL' -- already claimed?
+    cmp     r0, r1
+    beq     2f                          @ yes: one worker, not two
+    str     r1, [r5]
 
     sub     sp, sp, #32
     mov     r0, #0
@@ -209,16 +241,15 @@ bootstrap:
     LDA     r12, FN_CRETSK
     blx     r12
     add     sp, sp, #32
-    str     r0, [r5, #4]
+    str     r0, [r5, #4]                @ task id, for `shl` to report
     cmp     r0, #0
-    ble     bootstrap_done
+    ble     2f
     mov     r1, #0
     LDA     r12, FN_STATSK
     blx     r12
     str     r0, [r5, #8]
-bootstrap_done:
-    mov     r0, r4
-    pop     {r4, r5, pc}
+2:  mov     r0, #0
+    pop     {r4, r5, r6, pc}
 
 /* Ahead of `serve`, not after it.
  *

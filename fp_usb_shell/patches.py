@@ -32,6 +32,43 @@ PUSH = [
     (0xC0CF379C, 0x00000040, "EP 0x83, full speed: bInterval 100 -> 0"),
 ]
 
+
+# DRAM self-refresh is what keeps the injection cave alive across a soft power
+# off, and the firmware's built-in window is 900 seconds: 0xC00239C8,
+# `mov r0, #0x384`, stored to [obj+0x6C] by the SelfRefreshSetting constructor
+# at 0xC0023948.
+#
+# `sys selfStopTime` cannot raise it.  The getter at 0xC0024310 reads the
+# configured value into r4 and then throws it away, because 0xC0024358 is a
+# hardcoded `mov r0, #0` that makes the "use the configured value" test always
+# false.  That reads as a compile-time-disabled feature rather than a bug; the
+# dead branch's own ceiling is 0xA8C0 = 43200 s = 12 h.
+#
+# Patching the constructor's default beats enabling the configured path.  The
+# configured value lives in BSS, which the boot zeroes (0xC3000000..0xC38D6FB0),
+# so a warm boot that skips the AutoRun would silently fall back to 900 seconds
+# -- the exact case this exists to serve.  This is code: it sits in the firmware
+# image in DRAM and survives the warm boot it is for.
+#
+# 0xA800 = 43008 s = 11.95 h, the largest ARM-encodable immediate under the
+# firmware's own 43200-second ceiling.
+#
+# NOT free: self-refresh draws current the whole time the camera is off.  Off
+# by default; --retain-ram turns it on.
+#
+# UNVERIFIED: that 900 s is the power-off retention window at all.  It was read
+# statically out of a config the `sys selfConfig` command prints, next to poff /
+# eco / sleep.  The cheap check is to leave the camera off past the window and
+# see whether the cave survives.  See
+# research/firmware/notes/DRAM_SELF_REFRESH_AND_WARM_BOOT.md.
+RETAIN = [
+    (0xC00239C8, 0xE3A00B2A,
+     "SelfRefreshSetting default stop time: mov r0,#0x384 (900 s, 15 min) ->",
+     "mov r0,#0xA800 (43008 s, 11.95 h).  Holds DRAM in self-refresh across a",
+     "soft power-off for twelve hours instead of fifteen minutes, which is what",
+     "lets a warm boot find the cave already loaded."),
+]
+
 PATCHES = IFACE + PUSH        # both, for a USB development build
 
 SCREEN = [
