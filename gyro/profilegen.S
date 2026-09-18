@@ -160,6 +160,113 @@ udiv64_32:
 .equ SENSOR_ACTIVE_W,  6000
 .equ SENSOR_ACTIVE_MM10, 359          /* 35.9 mm, in tenths */
 
+
+/* ---------------------------------------------------------------------------
+ * pg_dims_plausible -- r0 = mode, r1 = frame width -> r0 = 1 if they can both
+ * be true of the same take.
+ *
+ * A recorded frame is a crop or a downscale of what the sensor mode reads out,
+ * so it can never be WIDER than the readout.  That one invariant catches the
+ * whole class of bug where the mode and the size come from different places and
+ * only one of them is current -- which is exactly what happens under OG3K: the
+ * mode is measured (FUN_c032C720, right), the size is derived from
+ * CameraMgrSetting (stale, still UHD, because OG3K patches the profile canvas
+ * and never touches the setting).  The result was a real file in the wild:
+ * 3856x2170 with "mode 98" and OG3K's 12.435 ms readout in the same JSON, a
+ * 27% focal length error, and nothing anywhere said a word.
+ *
+ * A wrong profile is worse than no profile.  A take with no JSON gets one made
+ * by hand; a take with a plausible-looking wrong one gets used, and the blame
+ * lands on the stabiliser.
+ *
+ * Unknown mode or a row without a width is not a failure: it means we cannot
+ * judge, and refusing on ignorance would throw away profiles that are fine.
+ * See projects/gyro-sup/notes/LENS_PROFILE_WRONG_SIZE_WITH_OG3K.md.
+ * ------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * pg_og3k_dims -- the recorded frame size when something announced it.
+ * r0 = width, r1 = height, or zeros.
+ *
+ * Nothing the camera exposes tells the truth for every mode:
+ *   CameraMgrSetting is the MENU's size, and OG3K never updates it -- a take
+ *     recorded at 3024x2010 produced a profile claiming 3856x2170.
+ *   0xC37CE210 reads zero for everything but 1080p (two other comments in this
+ *     tree already say so; do not go back to it).
+ *   The live-view param's canvas is the PREVIEW geometry, which under OG3K sits
+ *     at 1936x1090 for the whole take by design -- its RWZM pair is left at the
+ *     stock ratio on purpose, because unity there makes the producer emit
+ *     3032x2012 and starve the RAW writer.  Measured 2026-09-18: walking to it
+ *     replaced one wrong answer with another.
+ *
+ * So the only code that knows is the code that changed it.  OG3K's canvas hook
+ * publishes {magic, t_us, w, h} at 0xC0731C18 when it patches a take's
+ * geometry.  This reads that and nothing else: no clearing, no writing, no
+ * knowledge of what OG3K is.  An announcement nobody made is simply absent.
+ *
+ * Staleness is settled by the timestamp, not by housekeeping.  The cave
+ * survives a warm restart, so yesterday's announcement is still sitting there
+ * on a gyro-only boot, and an OG3K take followed by a UHD one leaves one that
+ * describes neither.  Both are older than this take's start, and both fail the
+ * window.  The clock is FUN_c002B6E0 -- the same one S_START_US came from, so
+ * the subtraction is valid even across its 71-minute wrap.
+ * ------------------------------------------------------------------------- */
+.equ OG3K_GEOM,   0xC0731C18
+.equ OG3K_MAGIC,  0x4B33474F      /* 'OG3K' */
+.equ OG3K_WINDOW, 60000000        /* 60 s: the early JSON is written within a
+                                   * block or two of record start, so a real
+                                   * announcement is seconds old at most */
+
+    .global pg_og3k_dims
+pg_og3k_dims:
+    push    {r4, r5, lr}
+    ldr_addr r4, OG3K_GEOM
+    ldr     r0, [r4]
+    ldr_addr r1, OG3K_MAGIC
+    cmp     r0, r1
+    bne     9f
+    ldr     r5, [r4, #4]                /* when it was announced */
+    ldr     r0, [r10, #S_START_US]      /* when this take began */
+    sub     r0, r5, r0                  /* unsigned: wraps correctly */
+    ldr_addr r1, OG3K_WINDOW
+    cmp     r0, r1
+    bhi     9f                          /* before the take, or far too late */
+    ldr     r1, [r4, #0x0C]             /* height */
+    ldr     r0, [r4, #8]                /* width  */
+    cmp     r0, #640
+    blo     9f
+    cmp     r1, #360
+    blo     9f
+    cmp     r0, #0x2000
+    bhi     9f
+    cmp     r1, #0x2000
+    bhi     9f
+    pop     {r4, r5, pc}
+9:  mov     r0, #0
+    mov     r1, #0
+    pop     {r4, r5, pc}
+
+    .global pg_dims_plausible
+pg_dims_plausible:
+    push    {r4, r5, lr}
+    mov     r5, r1                      /* frame width */
+    mov     r4, r0                      /* mode */
+    ldr_addr r0, MODE_OBJ
+    mov     r1, r4
+    ldr_addr ip, F_GEOM
+    blx     ip
+    cmp     r0, #0
+    beq     8f                          /* no geometry row: cannot judge */
+    ldr     r1, [r0, #4]                /* the mode's readout width */
+    cmp     r1, #0
+    beq     8f
+    cmp     r5, r1
+    movhi   r0, #0
+    movls   r0, #1
+    pop     {r4, r5, pc}
+8:  mov     r0, #1
+    pop     {r4, r5, pc}
+
     .global pg_focal_milli
 pg_focal_milli:
     push    {r4, r5, r6, r7, r8, lr}
@@ -958,12 +1065,24 @@ pg_build:
     bne     41f
     /* The latched GEOMETRY global is unreliable in stream mode (0x0 across
      * whole takes).  Derive the frame the way the camera does: setting + border. */
+    /* The firmware's own canvas first: it is the only source that is right
+     * for every mode including OG3K.  The menu setting is the fallback, and
+     * it is the one that was silently wrong. */
+    bl      pg_og3k_dims
+    cmp     r0, #0
+    bne     42f
     bl      pg_setting_dims
-    mov     r5, r0
+42: mov     r5, r0
     mov     r6, r1
 41: cmp     r5, #0
     beq     pg_fail
     cmp     r6, #0
+    beq     pg_fail
+    /* Both halves have to describe the same take.  See pg_dims_plausible. */
+    mov     r0, r4                      /* the take's sensor mode */
+    mov     r1, r5                      /* the frame width about to be written */
+    bl      pg_dims_plausible
+    cmp     r0, #0
     beq     pg_fail
 
 #ifdef FPGYRO_RECOVERY

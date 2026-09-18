@@ -380,12 +380,66 @@ j_lens:
     pop     {r4, r5, r6, lr}
     bx      lr
 
-/* j_dims -- the frame the take is recording, from the camera's settings.
+/* j_dng_dims -- the frame size the camera itself puts in the DNG header.
+ * r0 = width, r1 = height, or zeros.
+ *
+ * Found by asking what the CinemaDNG writer reads.  FUN_c06A5290 builds the
+ * IFD, and for tags 0x100/0x101 it does:
+ *
+ *     r5 = (this->vtable[+0x48])(this)      FUN_c06999F0
+ *     ImageWidth  = [r5]                    tag 0x100
+ *     ImageLength = [r5 + 4]                tag 0x101
+ *
+ * and FUN_c06999F0 returns a fixed singleton, 0xC38250E4.  So these two words
+ * ARE the header: whatever the file says, this said first.
+ *
+ * That is the property none of the other sources had.  CameraMgrSetting is the
+ * MENU's size and goes stale the moment a mode does not come from the menu --
+ * an OG3K take recorded at 3024x2010 produced 1936x1090 on a camera whose menu
+ * still said FHD and 3856x2170 on one that still said UHD.  0xC37CE210 reads
+ * zero for anything but 1080p.  The live-view param's canvas is the PREVIEW
+ * geometry, 1936x1090 through an entire OG3K take by design.  And the
+ * recording param is a stack temporary with no address to read at all.
+ *
+ * ⚠ UNCONFIRMED: two writer classes reach tags 0x100/0x101.  Vtables
+ * 0xC2E3A838 and 0xC2E3A7D4 delegate to this singleton; 0xC2E3A938 returns
+ * this+0x18 instead.  Which one CinemaDNG video uses could not be settled
+ * statically -- stills and video may well differ.  The bounds check below is
+ * what keeps a wrong guess from producing a wrong profile, and the caller
+ * falls back to the settings when this returns zero.
+ */
+.equ DNG_DIMS, 0xC38250E4
+
+j_dng_dims:
+    movw    r2, #:lower16:DNG_DIMS
+    movt    r2, #:upper16:DNG_DIMS
+    ldr     r1, [r2, #4]
+    ldr     r0, [r2]
+    cmp     r0, #640
+    blo     8f
+    cmp     r1, #360
+    blo     8f
+    movw    r2, #0x2000
+    cmp     r0, r2
+    bhi     8f
+    cmp     r1, r2
+    bhi     8f
+    bx      lr
+8:  mov     r0, #0
+    mov     r1, #0
+    bx      lr
+
+/* j_dims -- the frame the take is recording.  An announcement if there is one
+ * (see j_og3k_dims), otherwise the camera's settings.
  * Returns r0 = width, r1 = height, or zeros.  Not 0xC37CE210: that one holds
  * {1936, 1090, ...} at 1080p, reads zero at UHD, and read zero right through a
  * 35 s take here.  CameraMgrSetting has it while the camera is idle too. */
 j_dims:
     push    {r4, lr}
+    bl      j_dng_dims
+    cmp     r0, #0
+    popne   {r4, lr}
+    bxne    lr
     movw    ip, #:lower16:F_CAMSETTING
     movt    ip, #:upper16:F_CAMSETTING
     blx     ip
