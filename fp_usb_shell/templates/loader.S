@@ -37,8 +37,6 @@
 
 .equ HOOK_SITE,   0xC00D0794
 
-.equ FRAMEBUF,    0xC3757A7C    /* [0] = the DMA pool, where everything
-                                 * downstream still looks for it            */
 /* The allocator, the way gyro's writer and heapalloc.S use it -- the
  * descriptor form, whose four arguments all fit in registers.  Class 0 is
  * USER, which is where `memmgr bufmem get` was taking this same megabyte from;
@@ -46,14 +44,22 @@
  * whose failure is what froze movRec for a week. */
 .equ H_GET,       0xC001D740    /* (desc, class, size, 0)                   */
 .equ H_ADDR,      0xC001D7F0    /* (desc) -> address                        */
+.equ H_FREE,      0xC001D7A0    /* (desc, 2)                                */
 .equ POOL_CLASS,  0            /* USER                                      */
-.equ POOL_BYTES,  0x100000     /* 1 MiB: what the AutoRun used to ask for,
-                                * unchanged, because payloads carve it up by
-                                * hand and this is not the night to move
-                                * their furniture                          */
-.equ O_FOBJ,      0x7000        /* clear of the frame and capture buffers */
-.equ O_BUF,       0x8000
-.equ MAXLEN,      0x20000       /* ask for more than the file can be */
+/* 64 KiB, and it is STAGING, not a pool.
+ *
+ * This was a megabyte, held for the life of the camera, and every card got one
+ * whether it wanted it or not: og3k and og2k never read a byte of it.  What the
+ * loader actually needs is somewhere to put a file that is padded to 32 KiB and
+ * the file object that reads it -- so it asks for that, and gives it back on the
+ * way out.  A payload that needs memory asks the allocator itself, in its entry,
+ * and stage2 places the sections that are offsets into it afterwards. */
+.equ POOL_BYTES,  0x10000
+.equ O_FOBJ,      0x0000        /* the file object, about 3 KiB             */
+.equ O_BUF,       0x1000        /* the file: 32 KiB of it, BIN_PAD          */
+.equ MAXLEN,      0xF000        /* what is left of the buffer past O_BUF --
+                                 * ask for more than the file can be, but
+                                 * never for more than there is room for   */
 
 .equ F_MGR,       0xC0444658
 .equ F_VOL,       0xC0444698
@@ -134,7 +140,12 @@ boot:
     b       load
 
 load:
-    push    {r4, r5, r6, r7, r8, lr}
+    /* r9 carries the descriptor's address all the way to the free at the end.
+     * Two registers more in the push costs nothing -- it is one instruction
+     * either way -- and it saves the movw/movt pair that reloading the address
+     * down there would take.  The loader is 468 bytes and the store holds 468,
+     * so a spare word is not a nicety here. */
+    push    {r4, r5, r6, r7, r8, r9, r10, lr}
 
 
     /* Ask for the staging buffer here instead of having the AutoRun ask.
@@ -148,25 +159,24 @@ load:
      * The descriptor is sixteen bytes of cave scratch that has to outlive the
      * call: the address is read out of it afterwards.  It sits above the worker
      * and below STORE_FROM; build_autorun refuses a worker that reaches it. */
-    movw    r4, #:lower16:POOL_DESC
-    movt    r4, #:upper16:POOL_DESC
-    mov     r0, r4
+    movw    r9, #:lower16:POOL_DESC
+    movt    r9, #:upper16:POOL_DESC
+    mov     r0, r9
     mov     r1, #POOL_CLASS
     mov     r2, #POOL_BYTES
     mov     r3, #0
     CALL    H_GET
-    mov     r0, r4
+    mov     r0, r9
     CALL    H_ADDR
     cmp     r0, #0
-    beq     load_stop                   @ refused: place nothing rather than
+    beq     load_fail                   @ refused: place nothing rather than
     mov     r4, r0                      @ stage a file at address zero
-    movw    r0, #:lower16:FRAMEBUF
-    movt    r0, #:upper16:FRAMEBUF
-    str     r4, [r0]
-    add     r5, r4, #O_FOBJ             @ file object scratch.  Both offsets are
-    add     r6, r4, #O_BUF              @ single ARM immediates (0x7000 = 7 ror
-                                        @ 10, 0x8000 = 2 ror 9), so the movw and
-                                        @ the add they used to take are one word
+    /* 0xC3757A7C is NOT written here any more.  It is where everything reads a
+     * pool address from, and what it holds now is whatever the payload's entry
+     * published -- the worker's, the logger's -- not a buffer that is about to
+     * be handed back. */
+    add     r5, r4, #O_FOBJ             @ file object scratch
+    add     r6, r4, #O_BUF
 
     /* Keep the firmware's normal media-manager initialisation in the boot path:
      * skipping these calls was the only loader-side change in the first native
@@ -258,7 +268,8 @@ load_shut:
 #ifdef STORE_PROVISION
     /* Publish, or stand down -- one read decides both this and the abort below.
      * store_boot sets STORE_FROM before it branches here; the cave is zeroed at
-     * boot, so a one can only have come from it. */
+     * boot, so a one can only have come from it.  It lives past this loader's
+     * own body, not above the worker -- the worker needed that gap. */
     /* Four constants, one pool, and the order chosen so each value lands in the
      * register the code below already wants it in -- the same trick as the
      * abort block, and the same reason it pays: a pool that needs `mov`s
@@ -337,7 +348,19 @@ load_shut:
  * entry is undefined here -- tk_ext_tsk is not in the syscall table -- so it
  * sits still instead. */
 load_stop:
-    pop     {r4, r5, r6, r7, r8, pc}
+    /* Hand the staging buffer back.  stage2 ran from inside it and has
+     * returned, the payload's entry has been called and has returned, and the
+     * sections that were offsets into the payload's own pool are placed -- so
+     * nothing of ours is left in here.
+     *
+     * Reached only from below the allocation; `load_fail` is the path for a
+     * refusal, because freeing a descriptor that never held anything is not a
+     * no-op. */
+    mov     r0, r9
+    mov     r1, #2
+    CALL    H_FREE
+load_fail:
+    pop     {r4, r5, r6, r7, r8, r9, r10, pc}
 
 
 #ifdef ABORT_AUTORUN
@@ -386,7 +409,8 @@ path:
 
 #ifdef STORE_PROVISION
 stpool:
-    .word   0xC072F6F8                  @ STORE_FROM
+    .word   STORE_FROM                  @ passed in: the tail of the loader's own
+                                        @ reserved 512 bytes -- see store_boot.S
     .word   0xC3075264                  @ STORE
     .word   LOADER_BASE
     .word   STORE_MAGIC                 @ derived from these very bytes: see

@@ -58,6 +58,9 @@
  *     0xC072F000..0xC072F040   this worker's state
  *     0xC072F050..0xC072F700   this worker's code
  *     0xC072F700..0xC072F700   the one-shot template's scratch and code
+ *     0xC072F050..0xC072F058   the pool's address and size: the whole of what
+ *                              this worker leaves in the cave, and what the
+ *                              host tools find everything else through
  *     pool +0x0000             FPSH frame buffer, 4 KiB
  *     pool +0x2000             shell capture buffer, 16 KiB (derived from the
  *                              pool pointer, never hard-coded)
@@ -87,7 +90,30 @@
 .equ FN_VSNPRINT, 0xC0013F48      /* vsnprintf(buf, size, fmt, va)            */
 
 /* --- firmware data -------------------------------------------------------- */
-.equ FRAMEBUF,    0xC3757A7C      /* `memmgr bufmem get` result: [0] = address */
+/* --- the worker's own pool ------------------------------------------------
+ * The worker used to read 0xC3757A7C, the one pool the AutoRun asked for and
+ * everything on the card shared.  It asks the allocator for its own now, in
+ * `spawn`, and nothing else on the card has to know: the six sites below still
+ * load a pointer out of a fixed word, only a different one.
+ *
+ * Sharing was not free.  The gyro logger's file object lives at pool+0x6400
+ * for three kilobytes and POOL_FAULTS below is ten words at pool+0x6800 --
+ * they overlapped, on every card that carried both, and nothing said so.
+ *
+ * Fixed addresses in the cave, NOT words inside the worker's own image:
+ * swapworker.py rewrites that image while the worker is running, and a live
+ * pool pointer inside it would be swapped out from under the task. */
+.equ FRAMEBUF,    0xC072F050      /* the address, or zero if refused           */
+.equ WPOOL_SIZE,  0xC072F054      /* what was asked for -- putfile reads it    */
+.equ WCODE_PTR,   0xC072F058      /* the SECOND allocation: this worker's own
+                                   * code.  Its own block, not an offset inside
+                                   * the first one -- see the note in spawn     */
+.equ WPOOL_BYTES, 0x100000        /* 1 MiB, as before: putfile stages files at
+                                     +0x10000 and check_fits needs the ceiling */
+.equ H_GET,       0xC001D740      /* (desc, class, size, 0)                    */
+.equ H_ADDR,      0xC001D7F0      /* (desc) -> address                         */
+.equ F_DCACHE,    0xC000E91C      /* D-cache clean/invalidate + barriers       */
+.equ F_ICACHE,    0xC000EABC      /* whole I-cache invalidate + barriers       */
 .equ TRB_OUT,     0xC31E3268      /* endpoint TRB table [1]: EP 0x01 OUT      */
 .equ TRB_IN,      0xC31E326C      /* endpoint TRB table [2]: EP 0x82 IN       */
 .equ USB_STATE,   0xC31E3748      /* 4 means the link is suspended            */
@@ -212,7 +238,7 @@ bootstrap:
  * of whatever it interrupts, so eight-byte alignment is not optional. */
     .global spawn
 spawn:
-    push    {r4, r5, r6, lr}
+    push    {r4, r5, r6, r7, r8, lr}
     LDA     r5, STATE
     ldr     r0, [r5]
     LDA     r1, 0x4C485356              @ 'VSHL' -- already claimed?
@@ -220,12 +246,100 @@ spawn:
     beq     2f                          @ yes: one worker, not two
     str     r1, [r5]
 
+    /* TWO allocations, not one pool with an agreed offset inside it.
+     *
+     * The first draft put this worker's code at pool+0x8000 and wrote down that
+     * nothing else uses that offset.  That is the shape of the bug this tree
+     * has hit most often -- USB_SHELL_HOOK_WORK_POSTMORTEM.md opens with three
+     * of them in one evening, one of which was a file object placed into the
+     * worker's own code.  An offset kept free by a comment is kept free until
+     * somebody does not read the comment.
+     *
+     * So the code gets an allocation of its own.  The allocator will not hand
+     * the same bytes to two callers, which is a guarantee no convention can
+     * make, and it is the whole point of asking it rather than carving up one
+     * block by hand.
+     *
+     * Class 0 is USER, the same channel the AutoRun's `memmgr bufmem get` took
+     * its megabyte from; NOT class 10, which is the CinemaDNG frame buffer.
+     *
+     * Both descriptors live on the stack.  heapalloc.S says not to do that --
+     * for its own reason, which is that it frees later and needs the descriptor
+     * again.  Neither of these is ever freed: they last as long as the worker,
+     * which is as long as the camera is on. */
+    sub     sp, sp, #32                 @ two descriptors, sixteen bytes each
+    mov     r0, sp
+    mov     r1, #0
+    mov     r2, #WPOOL_BYTES
+    mov     r3, #0
+    LDA     r12, H_GET
+    blx     r12
+    mov     r0, sp
+    LDA     r12, H_ADDR
+    blx     r12
+    mov     r6, r0                      @ the buffers, or zero
+
+    add     r0, sp, #16
+    mov     r1, #0
+    ldr     r2, wbody_len               @ exactly what the body needs
+    mov     r3, #0
+    LDA     r12, H_GET
+    blx     r12
+    add     r0, sp, #16
+    LDA     r12, H_ADDR
+    blx     r12
+    add     sp, sp, #32
+    mov     r7, r0                      @ the code, or zero
+
+    /* Published before they are checked, so a zero in either word is what says
+     * which one the allocator refused.  Refusal is a real answer -- playback
+     * takes ten megabytes of its own -- and the answer to it is no worker at
+     * all, rather than one whose replies are written to address zero.
+     *
+     * A refusal of the second leaks the first.  There is no worker either way,
+     * and freeing it here would cost more words than the leak costs bytes. */
+    LDA     r4, FRAMEBUF
+    str     r6, [r4]
+    str     r7, [r4, #8]                @ WCODE_PTR
+    cmp     r6, #0
+    cmpne   r7, #0
+    beq     2f
+    mov     r0, #WPOOL_BYTES
+    str     r0, [r4, #4]                @ WPOOL_SIZE
+
+    /* Copy the body into its own allocation.
+     *
+     * Everything from `wbody` down is position-independent and is running,
+     * right now, out of the loader's staging buffer -- which the loader hands
+     * back to the allocator as soon as stage2 returns.  So it has to be
+     * somewhere of our own before then.
+     *
+     * The cave is not somewhere of our own.  It is firmware RAM nobody
+     * allocated to us, it is full, and three separate things hit its ceiling in
+     * one evening. */
+8:  add     r8, pc, #(wbody - 8b - 8)   @ source, here in the staging buffer
+    ldr     r5, wbody_len
+    mov     r0, r7                      @ walking destination
+1:  ldr     ip, [r8], #4
+    str     ip, [r0], #4
+    subs    r5, r5, #4
+    bne     1b
+
+    /* Data to the caches until this runs, and the I-cache may hold whatever
+     * used to be at those addresses. */
+    LDA     r12, F_DCACHE
+    blx     r12
+    LDA     r12, F_ICACHE
+    blx     r12
+
+    LDA     r5, STATE                   @ reloaded: r5 was the copy's counter
     sub     sp, sp, #32
     mov     r0, #0
     str     r0, [sp, #0]                @ exinf
     mov     r0, #0x41
     str     r0, [sp, #4]                @ tskatr
-    adr     r0, serve
+    ldr     r0, serve_off               @ serve, in the code allocation
+    add     r0, r0, r7
     str     r0, [sp, #8]                @ entry
     mov     r0, #TASK_PRIO
     str     r0, [sp, #12]
@@ -249,7 +363,34 @@ spawn:
     blx     r12
     str     r0, [r5, #8]
 2:  mov     r0, #0
-    pop     {r4, r5, r6, pc}
+    pop     {r4, r5, r6, r7, r8, pc}
+
+    .align  2
+wbody_len:  .word   wbody_end - wbody
+serve_off:  .word   serve - wbody      @ NOT `+ CODE_OFF`: mixing a label
+                                        @ difference with an .equ makes GAS
+                                        @ emit a relocation against an absolute
+                                        @ symbol, and armasm refuses anything
+                                        @ that is not in .text
+
+/* ==========================================================================
+ * wbody -- everything below here is copied into the pool and runs from there.
+ *
+ * Nothing above this line is: `bootstrap` and `spawn` run wherever they were
+ * placed, which on a --loader card is the loader's staging buffer and on the
+ * fallback card is the cave.  Both are gone or idle by the time the task runs.
+ *
+ * THE RULE FOR EVERYTHING BELOW: it may not name its own address.  Branches,
+ * `adr` and literal-pool loads are pc-relative and move with the code;
+ * firmware addresses and the two cave words above are absolute and do not
+ * move; the pool is read from FRAMEBUF at run time.  A `.word some_label_of_
+ * ours` would need a relocation, and armasm.py refuses every relocation that
+ * is not pc-relative -- so this rule is enforced by the build, not by reading.
+ * The one thing it cannot catch is an address written as a bare number, and
+ * there is none below: `grep 0xC072F` says so.
+ * ========================================================================== */
+wbody:
+
 
 /* Ahead of `serve`, not after it.
  *
@@ -733,4 +874,9 @@ arm_in:
     blx     r12
     pop     {r4, r5, r6, r7, pc}
 
-
+    .align  2
+wbody_end:
+    .word   0                           @ a label at the very end of .text comes
+                                        @ out as a relocation armasm refuses;
+                                        @ this word keeps it inside, and is not
+                                        @ copied (the length stops at the label)

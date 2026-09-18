@@ -62,7 +62,18 @@ CHUNK     = 240                 # bytes per command; the line holds about 502 ch
 P         = 0xC072F700          # parameter block
 ECHO_SLOT = 0xC0BAC2F8          # command table entry 17, echo's handler pointer
 ECHO_ORIG = 0xC03D99A0
-POOL_PTR  = 0xC3757A7C          # where the AutoRun's pool address lands
+# The WORKER's pool, not the card's.  0xC3757A7C was the one pool the AutoRun
+# asked for and everything shared; the worker asks the allocator for its own in
+# `spawn` now and leaves the address here, in the tail of the loader's reserved
+# 512 bytes.  A payload that needs memory does the same and publishes wherever
+# its own code reads -- the gyro logger still uses 0xC3757A7C, and that word now
+# means "the logger's pool" rather than "everybody's".
+# FPSUP_POOL_PTR overrides it, for talking to a card built before the worker
+# asked for its own pool -- on those the loader published one at 0xC3757A7C and
+# everything shared it.  Being able to drive both is what makes an A/B between
+# an old card and a new one one variable instead of two.
+POOL_PTR  = int(__import__('os').environ.get('FPSUP_POOL_PTR', '0xC072F050'), 0)
+POOL_SIZE_AT = POOL_PTR + 4     # what the worker asked for
 POOL_OFF  = 0x10000             # the templates' own scratch, past shell and gyro
 FOBJ_ROOM = 0x400
 
@@ -164,11 +175,13 @@ def staging_area():
     """
     got = mem_get(POOL_PTR)
     if not got or not 0x40000000 <= got[0] < 0x50000000:
-        raise SystemExit(f'0x{POOL_PTR:08X} does not hold a pool address ({got})')
+        raise SystemExit(f'0x{POOL_PTR:08X} does not hold a pool address ({got}). '
+                         f'The worker publishes it when it starts; zero there '
+                         f'means the allocator refused it and there is no worker.')
     return got[0] + POOL_OFF
 
 
-POOL_SIZE = 1048576             # must match the AutoRun's `memmgr bufmem get`
+POOL_SIZE = 1048576             # the fallback, and worker.S's WPOOL_BYTES
 
 
 def pool_end():
@@ -180,7 +193,13 @@ def pool_end():
     is a constant here and in build_autorun.py, and the two have to agree; the
     check below is a guard against a stale one, not a discovery.
     """
-    return mem_get(POOL_PTR)[0] + POOL_SIZE
+    # Read the size the worker actually asked for rather than trusting the
+    # constant above.  The comment under `pool()` is right that memmgr is not
+    # safe to issue live -- this is not memmgr, it is a word the worker wrote
+    # once, and reading it is what stops this file and worker.S from drifting
+    # apart the way this and build_autorun.py used to.
+    size = mem_get(POOL_SIZE_AT)
+    return mem_get(POOL_PTR)[0] + (size[0] if size and size[0] else POOL_SIZE)
 
 
 def check_fits(addr, length, what):

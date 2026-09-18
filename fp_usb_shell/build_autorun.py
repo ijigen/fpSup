@@ -103,22 +103,45 @@ STORE_MAX = (0xC307523C + 0x200) - (STORE + 4)     # what the body may occupy;
                              # fields went
 CAVE_END = 0xC0730000        # the cave's top; sections above this are the
                              # payload's own business, not the loader's
-POOL_DESC     = 0xC072F6D8   # sixteen bytes of scratch for the allocator's
-                             # descriptor, above the worker and below
-                             # STORE_FROM.  The worker ceiling below guards it.
-STORE_VER_AT  = 0xC072F6FC   # the version this card was built with.  One
-                             # `mem set`, written before the bootstrap runs, so
-                             # a loader that came out of the settings block can
-                             # tell whether it is the one this card expects --
-                             # see the note in loader.S.  The cave is zeroed at
-                             # boot, so a stale store can never match by luck.
+# The worker's code leaves the cave: it is copied into the pool it asks for,
+# and what stays here is the directory the host tools find it through.  That
+# frees 0xC072F058..0xC072F6D8 -- everything below is back where it was before
+# the worker briefly grew into it.
+POOL_DESC     = 0xC072F6D8   # the loader's allocator descriptor, boot-only
+WPOOL_PTR     = 0xC072F050   # the worker's pool address, next to its state
+WPOOL_SIZE    = 0xC072F054   # and what it asked for -- putfile reads both
+WCODE_PTR     = 0xC072F058   # its code's own allocation, separate from the
+                             # buffers: an offset inside one block is a
+                             # convention, and conventions are what this tree's
+                             # address collisions have all been made of
+
+def _equ(path, name):
+    """An .equ from a source file.  `.equ` constants are not in the symbol
+    table, so the only way to check that this file and worker.S agree about
+    where the pool address lives is to read the line.  The same constant in two
+    places is this tree's recurring bug -- it is what made every boot fail
+    silently when the store bootstrap and the builder disagreed about the
+    loader's length."""
+    import re
+    m = re.search(rf'^\.equ\s+{name},\s*(0x[0-9A-Fa-f]+)', path.read_text(), re.M)
+    return int(m.group(1), 16) if m else None
+STORE_FROM    = 0xC072F6F8   # store_boot -> loader handshake, boot-only
 STORE_BOOT_AT = 0xC072F700   # cave scratch: above the payload and above
-                             # the shell's worker (which ends 0xC072F698).
-                             # NOT CAVE_LOW -- the bootstrap copies the
-                             # loader there and would overwrite itself.
+                             # the shell's worker.  NOT CAVE_LOW -- the
+                             # bootstrap copies the loader there and would
+                             # overwrite itself.
 LOADER_END = CAVE_LOW + 0x200   # loader.S sits at the bottom; payloads go above
 
-LOAD   = 0xC072F050   # worker code — high, leaving 0xC072DE64..0xC072F000 free
+# Where the worker's code goes on the FALLBACK card, the one that spells the
+# whole thing out with `mem set` and hooks `bootstrap`.  It used to go at
+# 0xC072F050, in the 1704 bytes between the state block and the one-shot
+# template block -- and the worker no longer fits there, because it grew the
+# code that asks the allocator for a pool.  On a --loader card that is moot: the
+# worker is not placed in the cave at all.  So the fallback build puts it low
+# instead, in the stretch that build leaves empty (no loader, and a payload
+# there is refused below).
+LOAD   = 0xC072F050   # --loader: the pool words; fallback: see WORKER_AT
+WORKER_AT = 0xC072E800
 STATE  = 0xC072F000   # worker state, 16 words
 CAPLEN = 0xC072F040   # capture length
 ECHO_SLOT = 0xC0BAC2F8  # command table entry 17, echo's handler pointer
@@ -169,8 +192,44 @@ def verify_stage2_cache_publish(code):
                  f'emitted calls were {[hex(address) for _, address in calls]}')
     entry_load = next((index for index, word in enumerate(insns)
                        if word == 0xE5960008), None)  # ldr r0, [r6, #8]
-    if entry_load is None or calls[-1][0] >= entry_load:
-        sys.exit('stage2 cache publication must finish before loading its entry')
+    if entry_load is None:
+        sys.exit('stage2 no longer loads its entry from the header')
+
+    # The publication moved into a routine called from two places, because the
+    # sections are placed in two passes now with the entry in between: what has
+    # to be proved is no longer "the calls come before the entry load" -- that
+    # is a statement about where the routine happens to sit in the file -- but
+    # that the routine is REACHED before the entry runs and again after the
+    # pass that follows it.
+    push_r4_lr = 0xE92D4010
+    publish = calls[0][0]
+    while publish > 0 and insns[publish] != push_r4_lr:
+        publish -= 1
+    if insns[publish] != push_r4_lr:
+        sys.exit('stage2 cache publication is not a routine that can be called')
+
+    def bl_target(index):
+        word = insns[index]
+        if word & 0xFF000000 != 0xEB000000:      # ARM ``bl``
+            return None
+        offset = word & 0x00FFFFFF
+        if offset & 0x00800000:
+            offset -= 0x01000000
+        return index + 2 + offset
+
+    reaches = [i for i in range(len(insns)) if bl_target(i) == publish]
+    if not any(i < entry_load for i in reaches):
+        sys.exit('stage2 must publish the sections it placed before it calls '
+                 'the entry that runs them')
+    if not any(i > entry_load for i in reaches):
+        sys.exit('stage2 must publish again after the pass that follows the '
+                 'entry, or the pool sections it placed are data to the CPU')
+
+    # And the entry has to be CALLED.  It used to be a tail branch, which is
+    # what made a second pass impossible: nothing came back to run it.
+    if not any(insns[i] == 0xE12FFF3C and insns[i - 1] == 0xE1A0C000  # mov ip, r0
+               for i in range(entry_load, len(insns))):
+        sys.exit('stage2 must call its entry and come back, not branch to it')
 
 
 # A measuring build only: one send per update instead of three.
@@ -228,14 +287,26 @@ def progress(out, pct: int):
 
 
 WORKER = HERE / 'camera' / 'worker.S'
+for _name, _want in (('FRAMEBUF', WPOOL_PTR), ('WPOOL_SIZE', WPOOL_SIZE),
+                     ('WCODE_PTR', WCODE_PTR)):
+    _got = _equ(WORKER, _name)
+    if _got != _want:
+        raise SystemExit(f'worker.S has {_name} = '
+                         f'{_got if _got is None else hex(_got)} and this builder '
+                         f'has {hex(_want)}; putfile.py reads the builder\'s')
 code = assemble(WORKER)
 words = to_words(code)
-end = LOAD + len(code)
-if end > POOL_DESC:
-    raise SystemExit(f'worker reaches the allocator descriptor at '
-                     f'0x{POOL_DESC:08X}: it ends at 0x{end:08X}')
+end = (LOAD if args.loader else WORKER_AT) + len(code)
+# Only the fallback build puts the worker in the cave; a --loader card carries
+# it in the file and copies it into the pool, so the cave ceiling is not its
+# problem any more.  The host writes into the one-shot template block at
+# 0xC072F700 while the worker is running, which is why that is the ceiling.
+TEMPLATE_BLOCK = 0xC072F700
+if not args.loader and end > STATE:
+    raise SystemExit(f'the fallback build\'s worker reaches the state block at '
+                     f'0x{STATE:08X}: it ends at 0x{end:08X}')
 
-disp = (LOAD - (HOOK + 8)) >> 2
+disp = (WORKER_AT - (HOOK + 8)) >> 2
 if not -(1 << 23) <= disp < (1 << 23):
     raise SystemExit('bootstrap branch out of range')
 hook_bl = 0xEB000000 | (disp & 0xFFFFFF)
@@ -314,11 +385,11 @@ w("")
 # move the bar while it runs.
 CHUNKS = 2      # progress steps through the loader; each one draws
 if not args.loader:
-    w(f"# --- worker code @0x{LOAD:08X}..0x{end:08X}, {len(code)} bytes ---------------")
+    w(f"# --- worker code @0x{WORKER_AT:08X}..0x{end:08X}, {len(code)} bytes ------------")
     per = (len(words) + CHUNKS - 1) // CHUNKS
     for c in range(CHUNKS):
         for i in range(c * per, min((c + 1) * per, len(words))):
-            w(f"mem set 0x{LOAD + i*4:08X} 0x{words[i]:08X}")
+            w(f"mem set 0x{WORKER_AT + i*4:08X} 0x{words[i]:08X}")
         w("")
         progress(out, 30 + round((c + 1) * 30 / CHUNKS))
     w("")
@@ -339,7 +410,7 @@ if args.store_boot:
     sprobe = ([f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}']
               + (['ABORT_NOW=1'] if args.abort_now else [])
               + ['ABORT_AUTORUN=1', 'STORE_PROVISION=1', 'STORE_LEN=0',
-                 'STORE_MAGIC=0',
+                 'STORE_MAGIC=0', f'STORE_FROM=0x{STORE_FROM:08X}',
                  f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}'])
     sbytes = assemble(HERE / 'templates' / 'loader.S', sprobe)
     slen = len(sbytes)
@@ -356,7 +427,8 @@ if args.store_boot:
         sys.exit(f'loader is {slen} bytes; the store holds {STORE_MAX}.')
     ssrc = HERE / 'templates' / 'store_boot.S'
     scode = assemble(ssrc, [f'STORE_LEN=0x{slen:X}',
-                            f'STORE_MAGIC=0x{smagic:08X}'])
+                            f'STORE_MAGIC=0x{smagic:08X}',
+                            f'STORE_FROM=0x{STORE_FROM:08X}'])
     swords = to_words(scode)
     send = STORE_BOOT_AT + len(scode)
     if send > CAVE_END:
@@ -437,7 +509,7 @@ if args.loader:
         # is assembled.  Both constants are movw/movt pairs, so their VALUE
         # cannot change the size: assemble once to measure, then again for real.
         probe = ldef + ['ABORT_AUTORUN=1', 'STORE_PROVISION=1', 'STORE_LEN=0',
-                        'STORE_MAGIC=0'] + \
+                        'STORE_MAGIC=0', f'STORE_FROM=0x{STORE_FROM:08X}'] + \
                        (['ABORT_NOW=1'] if args.abort_now else []) + [
                         f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}']
         n = len(assemble(HERE / 'templates' / 'loader.S', probe))
@@ -453,7 +525,8 @@ if args.loader:
         if n != slen:
             sys.exit(f'the bootstrap was built for {slen} bytes of loader and '
                      f'the loader is {n}: the two measurements disagree.')
-        ldef += ['ABORT_AUTORUN=1', 'STORE_PROVISION=1'] + \
+        ldef += ['ABORT_AUTORUN=1', 'STORE_PROVISION=1',
+                 f'STORE_FROM=0x{STORE_FROM:08X}'] + \
                 (['ABORT_NOW=1'] if args.abort_now else []) + [
                  f'STORE_LEN=0x{n:X}', f'STORE_MAGIC=0x{smagic:08X}',
                  # The abort skips the three commands that put the echo handler
@@ -597,6 +670,17 @@ if args.loader:
         sys.exit(f'--payload-addr 0x{args.payload_addr:08X} is inside the loader '
                  f'(0x{CAVE_LOW:08X}..0x{LOADER_END:08X}), which is executing from '
                  f'there while it places sections: it would overwrite itself')
+    if args.payload:
+        # And the top, which nothing checked on this path -- only the fallback
+        # build did.  It never fired because the logger fitted; it fits by
+        # thirty-odd bytes, and the first thing to push it over would have
+        # landed in the worker's state block, silently, as a section placed
+        # before the zeroes that the state section writes over it.
+        _pend = args.payload_addr + len(assemble(pathlib.Path(args.payload)))
+        if _pend > STATE:
+            sys.exit(f'{pathlib.Path(args.payload).name} at '
+                     f'0x{args.payload_addr:08X}..0x{_pend:08X} runs into the '
+                     f"worker's state block at 0x{STATE:08X}")
     import struct
     # No worker in the release build, and with NOTASK no task to park in it
     # either, so nothing goes to LOAD at all -- the sleeper is debug-only now.
@@ -606,8 +690,15 @@ if args.loader:
     stage2 = assemble(HERE / 'templates' / 'stage2.S')
     verify_stage2_cache_publish(stage2)
     secs = [(0, stage2)]
+    worker_sec = None
     if not args.no_shell:
-        secs.append((LOAD, code))
+        # Destination zero, like stage2: not placed anywhere.  The worker's
+        # bootstrap runs where it lands -- in the loader's staging buffer --
+        # asks the allocator for a pool of its own, and copies the rest of
+        # itself into that.  Nothing of it stays in the cave but the two words
+        # at 0xC072F050 that say where the pool is.
+        worker_sec = len(secs)
+        secs.append((0, code))
     if args.payload:
         secs.append((args.payload_addr, assemble(pathlib.Path(args.payload))))
     for spec in args.also:
@@ -622,7 +713,10 @@ if args.loader:
         # zeroed at boot -- but written rather than assumed: if the image ever
         # stops being reloaded from NAND, stale state is a worker that answers
         # with somebody else's buffer length.
-        secs.append((STATE, b'\x00' * 68))
+        # Sixteen state words, the capture length, the swap words, and the
+        # three that say where the worker's two allocations are:
+        # 0xC072F000..0xC072F060.
+        secs.append((STATE, b'\x00' * 96))
         for addr, value, *_ in fw_patches:
             secs.append((addr, struct.pack('<I', value)))
     if args.payload:
@@ -639,14 +733,23 @@ if args.loader:
         secs.append((HOOK, struct.pack('<I', 0xEB000000 | (gdisp & 0xFFFFFF))))
     table = b''
     body = b''
-    for addr, blob in secs:
+    at = {}
+    for i, (addr, blob) in enumerate(secs):
         if len(blob) % 4:
             sys.exit(f'section for 0x{addr:08X} is {len(blob)} bytes; the loader '
                      f'copies whole words, so every section must be a multiple of four')
         table += struct.pack('<II', addr, len(blob))
+        at[i] = len(body)
         body += blob + b'\x00' * (-len(blob) % 4)
-    entry = (args.vshl_entry if args.vshl_entry is not None else
-             0 if args.no_shell else LOAD + symbols(WORKER)['spawn'])
+    # An entry below 0x40000000 is an offset into the staging buffer, which is
+    # the only way to name a place in a file whose address the allocator decides
+    # at run time.  stage2 adds the buffer to it.
+    if args.vshl_entry is not None:
+        entry = args.vshl_entry
+    elif args.no_shell:
+        entry = 0
+    else:
+        entry = 16 + 8 * len(secs) + at[worker_sec] + symbols(WORKER)['spawn']
     binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
     binpath = DEST.parent / 'VSHL.BIN'
     # Padded to a fixed size for the same reason AutoRun.txt is: putfile writes
@@ -693,11 +796,15 @@ DEST.write_text(text)
 
 if args.no_shell:
     print("worker : none -- no task either, the loader runs in the callback")
+elif args.loader:
+    _wb = symbols(WORKER)['wbody']
+    print(f"worker : {len(code)} bytes = {_wb} bootstrap (runs in the staging "
+          f"buffer) + {len(code) - _wb} copied to an allocation of its own")
 else:
-    print(f"worker : {len(code)} bytes, {len(words)} words, 0x{LOAD:08X}..0x{end:08X}")
+    print(f"worker : {len(code)} bytes, {len(words)} words, 0x{WORKER_AT:08X}..0x{end:08X}")
 print(f"start  : echo handler 0x{ECHO_SLOT:08X} -> 0x{lboot:08X} (loader)"
       if args.loader else
-      f"start  : 0x{HOOK:08X} = 0x{hook_bl:08X} -> 0x{LOAD:08X}")
+      f"start  : 0x{HOOK:08X} = 0x{hook_bl:08X} -> 0x{WORKER_AT:08X}")
 if args.payload:
     # In loader mode the payload is a section of the binary, not a run of `mem
     # set`, so the sizes come from there rather than from the emitting branch.

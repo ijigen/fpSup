@@ -40,7 +40,13 @@
  * ========================================================================== */
 
 .equ P,        0xC072F700
-.equ FRAMEBUF, 0xC3757A7C     /* [0] = the DMA pool, where the buffers live   */
+/* The WORKER's pool, not the card's.  0xC3757A7C was the one pool the AutoRun
+ * asked for and everything shared; nothing publishes it on a card built after
+ * the worker started asking the allocator for its own, so reading it there
+ * gives zero -- and this template would then treat 0x00000000 as its buffer and
+ * write into the bottom of the firmware.  That is what wedged the camera twice
+ * on 2026-09-19, through `getfile`, which uses this to verify what it wrote. */
+.equ FRAMEBUF, 0xC072F050     /* [0] = the worker's pool: its frame buffer   */
 .equ CAP_OFF,  0x2000         /* the reply buffer, past the frame             */
 .equ CAP_LEN,  0xC072F040     /* how much of it the worker will send          */
 .equ CAP_MAX,  0x4000

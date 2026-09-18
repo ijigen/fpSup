@@ -91,8 +91,13 @@
 /* The loader publishes itself into the store on the boot it was spelled out,
  * and must NOT do it again on every boot afterwards -- this is flash.  Setting
  * this word is how it knows: the cave is zeroed at boot, so a one here can only
- * have come from the code below. */
-.equ STORE_FROM,  0xC072F6F8
+ * have come from the code below.
+ *
+ * STORE_FROM is passed in.  It used to be 0xC072F6F8, above the worker -- and
+ * the worker grew into that gap when it started asking for its own pool, so
+ * these boot-only words moved into the tail of the loader's own reserved 512
+ * bytes.  It has to sit PAST the STORE_LEN bytes copied below, which is what
+ * build_autorun's LOADER_FLOOR check is for. */
 
 .equ F_DCACHE,    0xC000E91C
 .equ F_ICACHE,    0xC000EABC
