@@ -123,6 +123,19 @@ stage2:
 #endif
     /* Arm the stop, now that there is something to stop for.
      *
+     * Only on a card that has a fast path.  This was unconditional, and that
+     * meant every gyro and open-gate release placed the abort in the cave and
+     * pointed the echo slot at it, on a card with nothing to stop early for --
+     * the script restored the slot three commands later and the abort never
+     * ran.  Harmless there only because of how that AutoRun happens to be laid
+     * out: a script with an `echo` after the loader would have been cut off.
+     * Safety that depends on the caller's line order is not safety.
+     *
+     * So a plain card places sections, calls the entry and returns, and that
+     * is all it does; the fast path -- writing the loader into flash and
+     * stopping the script that has just been made redundant -- belongs to the
+     * build that asked for one.
+     *
      * The loader used to do this on its way out, which is one call too early:
      * at that point the file has been read but nothing is placed.  Here every
      * section is down and the payload's entry has been and returned, so the
@@ -137,11 +150,13 @@ stage2:
      *
      * ABORT_AT is a section of this same file, placed in the cave -- somewhere
      * that outlives the staging buffer, which the loader hands back. */
+#ifdef ARM_ABORT
     movw    r0, #:lower16:ABORT_AT
     movt    r0, #:upper16:ABORT_AT
     movw    r1, #:lower16:ECHO_SLOT
     movt    r1, #:upper16:ECHO_SLOT
     str     r0, [r1]
+#endif
 
     mov     r0, #0
     pop     {r4, r5, r6, r7, r8, pc}

@@ -15,16 +15,16 @@ made the old logger four kilobytes with nothing to spare.
 HOW IT GETS THERE
 
     \\AutoRun.txt   about ninety commands: the loader, spelled out
-    \\VSHL.BIN      everything else, as sections
+    \\fpSup.BIN     everything else, as sections
 
-The loader reads VSHL.BIN into the camera's DMA pool and branches to stage2,
+The loader reads fpSup.BIN into the camera's DMA pool and branches to stage2,
 which places every section and then branches to the file's entry.  Sections
 whose destination is below 0x40000000 are OFFSETS into that pool -- the pool's
 address is decided at boot, so a build cannot name it, but it can name an
 offset.  That is how four kilobytes of writer gets somewhere the two-kilobyte
 cave could never hold it.
 
-The entry is gsup_entry, fifty-six bytes at the bottom of the cave, which reads
+The entry is gsup_launch, which runs where the file lands and which reads
 the routine table at the top of the blob and calls gsup_boot in the pool.
 gsup_boot does exactly what the two deploy scripts do over USB: wire every
 pointer word, build the job free list, take the eight buffers from the
@@ -66,7 +66,7 @@ READMES = {}
 
 READMES['base'] = """fpGyroSup Base {version} -- SIGMA fp firmware Ver.5.02 only
 
-Put AutoRun.txt and VSHL.BIN in the root of the SD card the camera boots
+Put AutoRun.txt and fpSup.BIN in the root of the SD card the camera boots
 from, and make sure there is a folder called
 
     GYRO
@@ -103,7 +103,7 @@ in the same folder.
 
 READMES['gcsv'] = """fpGyroSup {version} -- SIGMA fp firmware Ver.5.02 only
 
-Put AutoRun.txt and VSHL.BIN in the root of the SD card the camera boots
+Put AutoRun.txt and fpSup.BIN in the root of the SD card the camera boots
 from, and record CinemaDNG.  Nothing else: no folder to make, no file to
 convert, no step after the take.
 
@@ -179,36 +179,35 @@ def sections(edition='base'):
              drain_at + symbols(HERE / 'gyro_drain.S', ())['gyro_drain'], 'gyro_drain')):
         out.append((word, struct.pack('<I', addr), f'-> {why}'))
 
-    # The writer, in the pool, by offset.  Patched with its own routine table:
-    # the same function the USB deploy uses, so the two blobs are the same bytes.
-    src = EDITIONS[edition]
-    code = assemble(HERE / src, ())
-    code = R.patch_offsets(code, symbols(HERE / src, ()))
-    out.append((R.CODE_POOL_OFF, code, f'{src[:-2]} (pool)'))
-
-    out.append((ENTRY_AT, assemble(HERE / 'gsup_entry.S', ()), 'gsup_entry'))
+    # The writer is NOT here any more.  It used to be a section whose
+    # destination was a pool offset, which meant somebody had to have published
+    # a pool before it could be placed -- and nobody does that any more except
+    # the payload that wants one.  It travels inside launch() instead, appended
+    # to the code that asks for the pool and copies it in.  See gsup_launch.S.
     return out
 
 
-def loader_window():
-    """The pool bytes the loader is using while stage2 places sections.
+def launch(edition):
+    """The logger's bootstrap with the edition's writer appended to it.
 
-    Read out of loader.S rather than written down here.  stage2 runs from the
-    read buffer and reads the remaining sections out of it, so a pool-relative
-    section landing inside this window overwrites the code that is copying it:
-    a freeze at boot with nothing printed and nothing on the card.  Nothing
-    does today -- the writer blob sits at 0x44000, clear by 112 KB -- and this
-    exists so that stays true when something moves.
+    One destination-zero section: stage2 leaves it where the file landed and
+    runs it, and it drives its own order from there -- ask the allocator, copy
+    the writer to pool + 0x44000, make it runnable, call it.  The same shape the
+    USB shell's worker has used since it left the cave.
+
+    The writer is patched with its own routine table first: the same function
+    the USB deploy uses, so the two blobs are the same bytes.
     """
-    source = (SHELL / 'templates' / 'loader.S').read_text()
-    equs = dict(re.findall(r'^\.equ\s+(\w+),\s*(0x[0-9A-Fa-f]+)', source, re.M))
-    missing = {'O_FOBJ', 'O_BUF', 'MAXLEN'} - equs.keys()
-    if missing:
-        raise SystemExit(f'loader.S no longer defines {sorted(missing)}; the '
-                         f'pool window this checks against cannot be derived')
-    lo = int(equs['O_FOBJ'], 0)         # the file object scratch sits below it
-    hi = int(equs['O_BUF'], 0) + int(equs['MAXLEN'], 0)
-    return lo, hi
+    src = EDITIONS[edition]
+    code = assemble(HERE / src, ())
+    code = R.patch_offsets(code, symbols(HERE / src, ()))
+    code += b'\x00' * (-len(code) % 4)
+    boot = assemble(HERE / 'gsup_launch.S', [f'BLOB_LEN=0x{len(code):X}'])
+    at = symbols(HERE / 'gsup_launch.S', [f'BLOB_LEN=0x{len(code):X}'])
+    if len(boot) != at['blob']:
+        raise SystemExit('gsup_launch.S has bytes after `blob`; the writer must '
+                         'be the tail of the section, not the middle of it')
+    return boot + code, len(code)
 
 
 def check(secs):
@@ -219,17 +218,20 @@ def check(secs):
         for blo, bhi, bw in spans[i + 1:]:
             if alo < bhi and blo < ahi:
                 raise SystemExit(f'{aw} and {bw} overlap')
-    win_lo, win_hi = loader_window()
     for lo, hi, w in spans:
         if lo < 0x40000000:             # pool-relative: an offset, not an address
-            if lo < win_hi and win_lo < hi:
-                raise SystemExit(
-                    f'{w} at pool+0x{lo:X}..0x{hi:X} lands in the loader\'s read '
-                    f'window (pool+0x{win_lo:X}..0x{win_hi:X}).  stage2 executes '
-                    f'from there and reads the other sections out of it, so this '
-                    f'would overwrite itself mid-copy: the camera freezes at boot '
-                    f'with nothing to show for it.')
-            continue
+            raise SystemExit(
+                f'{w} wants to be placed at pool+0x{lo:X}, and nothing publishes '
+                f'a pool before sections are placed.  The AutoRun used to ask for '
+                f'one with `memmgr bufmem get`; it does not any more, and the only '
+                f'pool on the card is the one a payload asks the allocator for in '
+                f'its own entry -- which runs after this would have been placed. '
+                f'Put the blob inside that entry instead, the way launch() does: '
+                f'one destination-zero section that copies itself in. '
+                f'(This check used to compare pool offsets against the window the '
+                f'loader staged the file in; that window is inside a buffer the '
+                f'loader now allocates for itself and hands back, so the two were '
+                f'not the same address space and the comparison meant nothing.)')
         if not (0xC072D000 <= lo < 0xC0730000):
             continue                    # a patch in the firmware, not the cave
         if lo < ENTRY_AT:
@@ -264,9 +266,8 @@ def main():
     a = ap.parse_args()
     out = a.out or (HERE / 'release' / a.edition)
     secs = sections(a.edition)
-    # Extras go in front of gsup_entry, which sections() deliberately appends
-    # last.  Order inside the binary is the order they are placed in, and the
-    # entry section is what the loader branches to when the placing is done.
+    # sections() no longer ends with an entry section -- the entry is the
+    # destination-zero blob launch() makes -- so extras simply go on the end.
     extra = []
     for spec in a.also_bin:
         at, _, path = spec.partition(':')
@@ -274,8 +275,7 @@ def main():
             raise SystemExit(f'--also-bin wants 0xADDR:FILE, got {spec!r}')
         f = pathlib.Path(path)
         extra.append((int(at, 0), f.read_bytes(), f'extra {f.name}'))
-    if extra:
-        secs = secs[:-1] + extra + secs[-1:]
+    secs = secs + extra
     check(secs)
 
     tmp = pathlib.Path(tempfile.mkdtemp())
@@ -296,7 +296,6 @@ def main():
     cmd = [sys.executable, str(SHELL / 'build_autorun.py'),
            '--loader', '--banner', banner] + (
                ['--no-ep-patches'] if a.debug else ['--no-shell']) + [
-           '--vshl-entry', f'0x{ENTRY_AT:08X}',
            # A soft power cycle can leave a previous session's diagnostic patch
            # in the F_WRITE prologue.  Every ordinary image puts it back.
            '--also', f'0x{F_WRITE_AT:08X}:{HERE / "phase_fwrite_restore.S"}',
@@ -306,6 +305,14 @@ def main():
         f = tmp / f'{at:08x}.bin'
         f.write_bytes(blob)
         cmd += ['--also-bin', f'0x{at:08X}:{f}']
+    # The bootstrap and the writer, as one run-in-place section whose entry is
+    # its first byte.  build_autorun puts it in the file and names it in the
+    # header -- or, on a card that also carries the shell, in the trampoline
+    # that calls both.
+    boot_blob, writer_len = launch(a.edition)
+    bf = tmp / 'gsup_launch.bin'
+    bf.write_bytes(boot_blob)
+    cmd += ['--boot-bin', f'{bf}:0']
     out.mkdir(parents=True, exist_ok=True)
     r = subprocess.run(cmd, capture_output=True, text=True)
     sys.stdout.write(r.stdout)
@@ -320,7 +327,7 @@ def main():
         print(f'  {where:>16s}  {len(blob):5d}  {why}')
     (out / 'README.txt').write_text(
         READMES[a.edition].format(version=a.version))
-    vshl = out / 'VSHL.BIN'
+    vshl = out / 'fpSup.BIN'
     autorun = out / 'AutoRun.txt'
     print(f'\n  {autorun}  {len(autorun.read_text().splitlines())} commands')
     print(f'  {vshl}  {vshl.stat().st_size} bytes')

@@ -44,8 +44,16 @@ ap.add_argument('--store-boot', action='store_true',
                      'where nothing in RAM does (measured: 206 of 207 words), so '
                      'after one boot has filled it every later boot writes 40 '
                      '`mem set` instead of 80.  The first boot costs more, once: '
-                     'it carries the bootstrap AND the loader, and the loader '
-                     'publishes itself on its way out')
+                     'it carries the bootstrap AND the loader, and stage2 '
+                     'publishes it once it has been used rather than merely '
+                     'read.  A card built with this is a FINISHED card, not an '
+                     'input to fpSup-Merge: the bootstrap checks a hash of the '
+                     'loader this same AutoRun spells out, so re-laying the file '
+                     'out would mean recomputing that hash -- and a hash the '
+                     'tool may recompute is a check that always agrees with '
+                     'itself.  Merge adds the fast start on the way out instead, '
+                     'from templates built with this flag, and refuses a card '
+                     'that already has it')
 ap.add_argument('--retain-ram', action='store_true',
                 help='raise the DRAM self-refresh window from 15 minutes to '
                      '11.95 hours, so the cave survives a soft power-off long '
@@ -78,9 +86,26 @@ ap.add_argument('--vshl-entry', type=lambda s: int(s, 0), default=None,
                      'stage2 branches there once every section is placed, with '
                      'lr still pointing back into the loader, so a routine that '
                      'returns lets the boot carry on')
+ap.add_argument('--boot-bin', action='append', default=[], metavar='FILE:OFFSET',
+                help='a blob that runs where the file lands -- destination '
+                     'zero, like stage2 and the shell worker -- with OFFSET '
+                     'the entry within it. For a payload that drives its own '
+                     'order: ask the allocator, copy itself in, run. A '
+                     'destination that is a pool offset cannot do that, '
+                     'because somebody has to have published a pool first.')
+ap.add_argument('--bin-name', default='fpSup.BIN',
+                help='the payload container this card carries and the loader '
+                     'opens. Every line writes fpSup.BIN; the option exists '
+                     'because the name is assembled into the loader rather than '
+                     'written in loader.S, and because releases published before '
+                     '2026-09-19 carry VSHL.BIN and stay readable.')
 ap.add_argument('--loader', action='store_true',
                 help='put the code in fpSup.BIN and have the AutoRun read it')
 args = ap.parse_args()
+# The loader's path string, as the C preprocessor wants it: one backslash in
+# the file means two here.  Assembled into the loader rather than written in
+# loader.S, so the two build lines are one file.
+BIN_PATH_DEF = f'BIN_PATH="\\\\{args.bin_name}"'
 DEST = args.out or DEST_DEFAULT
 DEST.parent.mkdir(parents=True, exist_ok=True)
 
@@ -417,7 +442,8 @@ if args.store_boot:
     # while the string sat still.  Any of those builds would have found a store
     # whose magic matched and branched into the wrong bytes.
     sbytes = assemble(HERE / 'templates' / 'loader.S',
-                      [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}'])
+                      [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}',
+                       BIN_PATH_DEF])
     slen = len(sbytes)
     smagic = int(hashlib.sha256(sbytes).hexdigest()[:8], 16)
     if slen > STORE_MAX:
@@ -526,7 +552,8 @@ if args.loader:
     # because the assembler lays it out at zero.
     # One loader, whatever the card carries: see the note at `boot:` in
     # loader.S for the task that turned out to be unnecessary.
-    ldef = [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}']
+    ldef = [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}',
+            BIN_PATH_DEF]
     if args.store_boot:
         # The stored copy is the one that aborts the script: reaching it means
         # the settings block was good, and everything after that point in the
@@ -716,14 +743,22 @@ if args.loader:
         # compiled in at all -- see the note in stage2.S about what a length of
         # zero would do to the copy loop.
         _sd += ['STORE_MAGIC=0', 'STORE_LEN=0']
+    if args.store_boot:
+        _sd.append('ARM_ABORT=1')
     stage2 = assemble(HERE / 'templates' / 'stage2.S', _sd)
     verify_stage2_cache_publish(stage2)
     secs = [(0, stage2)]
     # The routine stage2 points the echo handler at.  A section like any other,
     # so it lands at a fixed cave address that outlives the staging buffer.
-    secs.append((ABORT_AT, assemble(HERE / 'templates' / 'abort.S',
-                                    [f'ECHO_SLOT=0x{ECHO_SLOT:08X}',
-                                     f'ECHO_ORIG=0x{ECHO_ORIG:08X}'])))
+    #
+    # Only on a card with a fast path.  A plain card has nothing to stop early
+    # for -- it runs its script to the end -- and carrying the abort anyway is
+    # 152 bytes in the cave plus a window where the echo slot points at code
+    # the script is about to point away from again.  See stage2.S.
+    if args.store_boot:
+        secs.append((ABORT_AT, assemble(HERE / 'templates' / 'abort.S',
+                                        [f'ECHO_SLOT=0x{ECHO_SLOT:08X}',
+                                         f'ECHO_ORIG=0x{ECHO_ORIG:08X}'])))
     worker_sec = None
     if not args.no_shell:
         # Destination zero, like stage2: not placed anywhere.  The worker's
@@ -741,6 +776,16 @@ if args.loader:
     for spec in args.also_bin:
         addr_s, _, src_s = spec.partition(':')
         secs.append((int(addr_s, 0), pathlib.Path(src_s).read_bytes()))
+    # Run-in-place payloads, each with an entry of its own.  After --also-bin so
+    # that a card's ordinary sections are placed before anything is called.
+    boot_secs = []
+    for spec in args.boot_bin:
+        src_s, _, off_s = spec.rpartition(':')
+        blob = pathlib.Path(src_s).read_bytes()
+        if len(blob) % 4:
+            sys.exit(f'{src_s} is {len(blob)} bytes; sections are whole words')
+        boot_secs.append((len(secs), int(off_s, 0)))
+        secs.append((0, blob))
     if not args.no_shell:
         # The worker's sixteen state words and the capture length, contiguous at
         # 0xC072F000, and the descriptor patches.  Zeroes, because the cave is
@@ -765,6 +810,21 @@ if args.loader:
         gentry = args.payload_addr + symbols(gsrc)[args.entry]
         gdisp = (gentry - HOOK - 8) >> 2
         secs.append((HOOK, struct.pack('<I', 0xEB000000 | (gdisp & 0xFFFFFF))))
+    # More than one entry, and a VBIN header has one word for it.  The card
+    # carries a trampoline that calls them all -- see templates/entries.S for
+    # why that is out here rather than each payload calling the next.  Added
+    # before the offsets are computed because it is a section like any other
+    # and moves everything after it; its length is known without its contents
+    # (the table is one word per entry plus a terminator), so nothing is
+    # circular.  Its words are patched below, once the offsets exist.
+    entry_count = ((worker_sec is not None) + len(boot_secs)
+                   + (args.vshl_entry is not None))
+    tramp_sec = None
+    if entry_count > 1:
+        tramp = assemble(HERE / 'templates' / 'entries.S', [])
+        tramp_tbl = symbols(HERE / 'templates' / 'entries.S', [])['table']
+        tramp_sec = len(secs)
+        secs.append((0, tramp + b'\x00' * (4 * (entry_count + 1))))
     table = b''
     body = b''
     at = {}
@@ -778,14 +838,34 @@ if args.loader:
     # An entry below 0x40000000 is an offset into the staging buffer, which is
     # the only way to name a place in a file whose address the allocator decides
     # at run time.  stage2 adds the buffer to it.
+    def file_off(i):
+        return 16 + 8 * len(secs) + at[i]
+
+    # The worker first, when there is more than one.  If a later entry hangs,
+    # the shell is already answering and the camera can be asked what happened;
+    # the other way round there is nothing to ask.
+    entries = []
+    if worker_sec is not None:
+        entries.append(file_off(worker_sec) + symbols(WORKER)['spawn'])
+    for sec_i, off in boot_secs:
+        entries.append(file_off(sec_i) + off)
     if args.vshl_entry is not None:
-        entry = args.vshl_entry
-    elif args.no_shell:
-        entry = 0
+        entries.append(args.vshl_entry)
+
+    if tramp_sec is not None:
+        tbl_at = file_off(tramp_sec) + tramp_tbl
+        words = struct.pack(f'<{len(entries) + 2}I', tbl_at, *entries, 0)
+        body = bytearray(body)
+        body[at[tramp_sec] + tramp_tbl:
+             at[tramp_sec] + tramp_tbl + len(words)] = words
+        body = bytes(body)
+        entry = file_off(tramp_sec)
+    elif entries:
+        entry = entries[0]
     else:
-        entry = 16 + 8 * len(secs) + at[worker_sec] + symbols(WORKER)['spawn']
+        entry = 0
     binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
-    binpath = DEST.parent / 'fpSup.BIN'
+    binpath = DEST.parent / args.bin_name
     # Padded to a fixed size for the same reason AutoRun.txt is: putfile writes
     # over USB and cannot shorten a file, so a smaller binary would leave the
     # tail of the last one behind.  Thirty-two kilobytes because an edition that

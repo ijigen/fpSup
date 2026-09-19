@@ -278,7 +278,13 @@ load_fail:
 
 
 path:
-    .asciz  "\\fpSup.BIN"
+    /* Passed in, not written here.  This line decides the name of the file a
+     * card must carry, and every build line now writes fpSup.BIN -- but it is
+     * still a build-time value rather than a constant, because the name was
+     * VSHL.BIN until 2026-09-19 and every release published before then carries
+     * that name as frozen bytes.  Rebuilding one of those needs its own name,
+     * and one loader that takes the name is better than two loaders. */
+    .asciz  BIN_PATH
     .align  2
 
 

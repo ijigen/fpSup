@@ -415,18 +415,35 @@ class ImageLayoutTests(unittest.TestCase):
         file_object_at = 0x400
         self.assertEqual(queue_at + metadata + jobs, file_object_at)
 
-    # These check the images load.sh places over USB, which start at load.py's
-    # CAVE_BASE.  They used to spell that base as 0xC072E064 -- which is
-    # build_base_card.py's ENTRY_AT, where the VSHL *card* image starts, 512
-    # bytes higher.  Two different images, two different bases, one constant
-    # copied between them: the tests went red the week logger.S grew past the
-    # margin that 512-byte error had eaten, and stayed red reading like a real
-    # overrun.  Both bases are read from their own build script now.
+    # Two bases, and they are not interchangeable.
+    #
+    # CAVE_BASE is the first byte the injection region owns, and loader.S sits
+    # there: load.py spells the rest as CAVE_LOW = LOADER_END = CAVE_BASE +
+    # 0x200, build_autorun.py refuses a --payload-addr below it, and
+    # imu_stream_deploy.py's CAVE_LO is the same number.  So a payload placed
+    # over USB starts at LOADER_END, not at CAVE_BASE.
+    #
+    # An earlier pass through these tests read the opposite: 0xC072E064 was
+    # taken for build_base_card.py's ENTRY_AT alone -- it is that too, the two
+    # images happen to clear the same loader by the same 0x200 -- and the
+    # logger tests were moved down to CAVE_BASE, which handed them the 512
+    # bytes the loader is executing from.  That is why two of them read green
+    # while the third, still spelling the literal, read red.  The red one was
+    # right.  Both constants are read from their own build script; which one a
+    # test wants depends on what it is placing.
 
     def _cave_base(self):
+        """The injection region's first byte: where loader.S itself sits."""
+        return self._load_const("CAVE_BASE")
+
+    def _payload_base(self):
+        """Where an image placed over USB starts, which is above the loader."""
+        return self._load_const("CAVE_BASE") + 0x200
+
+    def _load_const(self, name):
         source = (ROOT / "fp_usb_shell" / "load.py").read_text()
-        m = re.search(r"^CAVE_BASE = (0x[0-9A-Fa-f]+)", source, re.M)
-        self.assertIsNotNone(m, "CAVE_BASE is gone from load.py")
+        m = re.search(rf"^{name} = (0x[0-9A-Fa-f]+)", source, re.M)
+        self.assertIsNotNone(m, f"{name} is gone from load.py")
         return int(m.group(1), 0)
 
     def test_logger_ends_before_parking_stub(self):
@@ -434,15 +451,15 @@ class ImageLayoutTests(unittest.TestCase):
         park = assemble(ROOT / "fp_usb_shell" / "templates" / "park.S")
         park_at = 0xC072EFB4
         cave_end = 0xC072F000
-        self.assertLessEqual(self._cave_base() + len(logger), park_at)
+        self.assertLessEqual(self._payload_base() + len(logger), park_at)
         self.assertLessEqual(park_at + len(park), cave_end)
 
     def test_stream_logger_ends_before_parking_stub(self):
         logger = assemble(HERE / "logger_stream.S")
         conservative_end = 0xC072EF00
         park_at = 0xC072EFB4
-        self.assertLessEqual(self._cave_base() + len(logger), conservative_end)
-        self.assertLessEqual(self._cave_base() + len(logger), park_at)
+        self.assertLessEqual(self._payload_base() + len(logger), conservative_end)
+        self.assertLessEqual(self._payload_base() + len(logger), park_at)
 
     def test_the_autorun_arms_the_loader_only_after_writing_it(self):
         """The order the AutoRun writes things in, which has no second chance.
@@ -509,43 +526,49 @@ class ImageLayoutTests(unittest.TestCase):
         """0x44000 is written down twice and assembly cannot see across files.
 
         ring_task_deploy.py tells stage2 where to put the writer blob;
-        gsup_entry.S, forty bytes in the cave, adds the same offset to the pool
-        base to find it again.  If one moves, gsup_entry reads a word out of
+        gsup_launch.S copies the writer to that same offset, and gsup_boot
+        recomputes its own address from it.  If one moves, the launcher reads a word out of
         whatever is at the old offset instead of the routine table -- and its
         only guard is that the word is exactly zero, so anything else becomes
         a blx into garbage.
         """
         deploy = (HERE / "ring_task_deploy.py").read_text()
-        entry = (HERE / "gsup_entry.S").read_text()
+        entry = (HERE / "gsup_launch.S").read_text()
         m = re.search(r"^CODE_POOL_OFF = (0x[0-9A-Fa-f]+)", deploy, re.M)
-        n = re.search(r"^\.equ CODE_POOL_OFF,\s*(0x[0-9A-Fa-f]+)", entry, re.M)
+        n = re.search(r"^\.equ CODE_OFF,\s*(0x[0-9A-Fa-f]+)", entry, re.M)
         self.assertIsNotNone(m, "CODE_POOL_OFF is gone from ring_task_deploy.py")
-        self.assertIsNotNone(n, "CODE_POOL_OFF is gone from gsup_entry.S")
+        self.assertIsNotNone(n, "CODE_OFF is gone from gsup_launch.S")
         self.assertEqual(int(m.group(1), 0), int(n.group(1), 0))
 
-    def test_the_pool_blob_clears_the_loader_read_window(self):
-        """stage2 runs from the loader's read buffer and reads the remaining
-        sections out of it, so a pool section landing there overwrites itself
-        mid-copy -- a boot freeze with nothing printed.  build_base_card.check
-        enforces this; that it is enforced at all is what is asserted here."""
-        import build_base_card
-        lo, hi = build_base_card.loader_window()
-        deploy = (HERE / "ring_task_deploy.py").read_text()
-        blob = int(re.search(r"^CODE_POOL_OFF = (0x[0-9A-Fa-f]+)",
-                             deploy, re.M).group(1), 0)
-        self.assertGreaterEqual(blob, hi)
+    def test_the_writer_travels_with_its_own_bootstrap(self):
+        """A pool-offset section can only be placed once somebody has published
+        a pool, and nobody does that any more except the payload that wants one.
 
+        The writer used to be such a section.  The AutoRun's `memmgr bufmem get`
+        published the pool before anything else ran; when that line went, the
+        pointer was zero by the time stage2 looked, the section was skipped, and
+        the card logged nothing -- with no symptom, because doing nothing is
+        exactly what the entry is supposed to do when there is no pool.
+
+        So the writer travels appended to gsup_launch, as one destination-zero
+        section that asks for the pool itself and copies itself in.  Asserted
+        here: nothing has gone back to the old shape, the writer really is the
+        tail of that section, and check() refuses a pool section if one returns.
+        """
+        import build_base_card
         secs = build_base_card.sections("gcsv")
         pool = [(a, a + len(b), w) for a, b, w in secs if a < 0x40000000]
-        self.assertTrue(pool, "no pool-relative section: this test has nothing "
-                              "left to guard and should be re-examined")
-        for a, b, w in pool:
-            self.assertFalse(a < hi and lo < b,
-                             "%s at pool+0x%X..0x%X is in the window" % (w, a, b))
+        self.assertEqual(pool, [], "a pool-relative section is back")
 
-        moved = [(lo if a < 0x40000000 else a, b, w) for a, b, w in secs]
+        blob, writer_len = build_base_card.launch("gcsv")
+        self.assertGreater(writer_len, 0)
+        boot = assemble(HERE / "gsup_launch.S", ("BLOB_LEN=0x%X" % writer_len,))
+        self.assertEqual(len(blob), len(boot) + writer_len,
+                         "the writer is not the tail of the launch section")
+        self.assertEqual(blob[:len(boot)], boot)
+
         with self.assertRaises(SystemExit):
-            build_base_card.check(moved)
+            build_base_card.check(secs + [(0x44000, b"\x00" * 4, "a pool section")])
 
     def test_the_card_image_starts_above_the_loader(self):
         """ENTRY_AT is not CAVE_BASE -- what the two tests above got wrong.
@@ -562,14 +585,15 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertIsNotNone(m)
         entry_at = int(m.group(1), 0)
         loader = assemble(ROOT / "fp_usb_shell" / "templates" / "loader.S",
-                          ("LOADER_BASE=0x%X" % self._cave_base(),))
+                          ("LOADER_BASE=0x%X" % self._cave_base(),
+                           "POOL_DESC=0xC072F6D8",
+                           'BIN_PATH="\\\\fpSup.BIN"'))
         self.assertGreaterEqual(entry_at - self._cave_base(), len(loader))
 
     def test_stream_probe_logger_ends_before_parking_stub(self):
         logger = assemble(HERE / "logger_stream_probe.S")
-        load_at = 0xC072E064
         park_at = 0xC072EFB4
-        self.assertLessEqual(load_at + len(logger), park_at)
+        self.assertLessEqual(self._payload_base() + len(logger), park_at)
 
     def test_the_shipping_build_guards_the_park_stub_itself(self):
         source = (HERE / "build_base_card.py").read_text()
