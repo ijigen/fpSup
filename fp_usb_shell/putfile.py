@@ -12,7 +12,16 @@ them, `dir` confirms the result.  Only the write itself is code, because nothing
 in the shell writes arbitrary content to a path -- that is templates/putfile.S,
 run by borrowing the `echo` command's handler.
 
-Roughly 20 words a second over USB, so a 14 KB AutoRun takes a few minutes.
+Measured 2026-09-19: a 32 KB file in 10 seconds the first time and half a
+second after that -- the first call pays for putting the bulk loader itself in,
+one word per command, and every call after it moves 240 bytes a round trip at
+65-70 KiB/s.  "Roughly 20 words a second, so a 14 KB AutoRun takes a few
+minutes" was this file's own description of itself and had been wrong since the
+bulk loader was added.
+
+`mem set` drops whole commands, so what is staged is read back and repaired.
+The loss is not steady: one run repaired 2,673 words of 8,193 and the next
+repaired none.
 """
 import argparse, pathlib, re, socket, struct, sys, time
 
