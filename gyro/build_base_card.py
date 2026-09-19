@@ -140,9 +140,19 @@ the card, or pull the battery, and the camera is exactly as it was.
 """
 
 
+# One source, two products.  Base used to be its own file and that is exactly
+# how it went stale: the 2026-09-19 profile-size fix landed in gcsv and base
+# kept writing the menu's size, because nobody edits a file that is not in
+# front of them.  A define cannot be forgotten the way a second file can.
+#
+# What the define changes is spelled out at the top of gcsv_task.S: where the
+# log goes (base writes to the volume root -- no folder for anyone to forget
+# to make), what goes in it (base writes the records untouched), and the
+# header (twenty bytes, only what is needed to read them).  The .json is the
+# same file in the same format either way.
 EDITIONS = {
-    'base': 'ring_task.S',
-    'gcsv': 'gcsv_task.S',
+    'base': ('gcsv_task.S', ('FPGYRO_EDITION_BASE=1',)),
+    'gcsv': ('gcsv_task.S', ()),
 }
 BANNER = {'base': 'Base', 'gcsv': 'Gyro'}
 
@@ -198,9 +208,9 @@ def launch(edition):
     The writer is patched with its own routine table first: the same function
     the USB deploy uses, so the two blobs are the same bytes.
     """
-    src = EDITIONS[edition]
-    code = assemble(HERE / src, ())
-    code = R.patch_offsets(code, symbols(HERE / src, ()))
+    src, defines = EDITIONS[edition]
+    code = assemble(HERE / src, defines)
+    code = R.patch_offsets(code, symbols(HERE / src, defines))
     code += b'\x00' * (-len(code) % 4)
     boot = assemble(HERE / 'gsup_launch.S', [f'BLOB_LEN=0x{len(code):X}'])
     at = symbols(HERE / 'gsup_launch.S', [f'BLOB_LEN=0x{len(code):X}'])
@@ -245,6 +255,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', type=pathlib.Path, default=None)
     ap.add_argument('--edition', choices=sorted(EDITIONS), default='base')
+    ap.add_argument('--store-boot', action='store_true',
+                    help='keep the loader in the camera\'s settings block, so '
+                         'every boot after the first is twenty-six commands. '
+                         'A packaging choice, not a product one: the four '
+                         'pieces of a fast start -- the bootstrap, the stage2 '
+                         'that writes flash, the abort, and the magic -- have '
+                         'to come from ONE build, because the magic is a hash '
+                         'of the loader that same AutoRun spells out. This is '
+                         'that build. Release cards do not pass it; a merged '
+                         'card gets fast start from whoever packages it, the '
+                         'composer page or --dev-card --fast.')
     ap.add_argument('--debug', action='store_true',
                     help='keep the USB shell in, so the camera can be asked '
                          'what happened; never for a release')
@@ -295,6 +316,7 @@ def main():
     banner = a.banner or f'fpSup-{BANNER[a.edition]}-{a.version}!'
     cmd = [sys.executable, str(SHELL / 'build_autorun.py'),
            '--loader', '--banner', banner] + (
+               ['--store-boot'] if a.store_boot else []) + (
                ['--no-ep-patches'] if a.debug else ['--no-shell']) + [
            # A soft power cycle can leave a previous session's diagnostic patch
            # in the F_WRITE prologue.  Every ordinary image puts it back.

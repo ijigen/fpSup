@@ -87,6 +87,20 @@ def check_sections(path, edition):
         raise SystemExit(f'{path} has {len(runs)} run-in-place sections, not '
                          f'two (stage2 and the launcher)')
     lo, ln = runs[1]
+    # A release must not carry a fast start.  --store-boot exists on the card
+    # builder because a DEV card packaged by --dev-card --fast needs it, and a
+    # flag that exists gets passed: the abort routine at 0xC072F080 is what a
+    # fast card places and nothing else does, so it is what this looks for.
+    #
+    # The rule is not aesthetic.  A fast card writes its loader into
+    # XC_CommonSaveData, which survives a battery pull -- the one thing on these
+    # cards that outlives deleting AutoRun.txt, and not something to hand
+    # someone without them choosing it.  They choose it on the composer page.
+    if 0xC072F080 in dests:
+        raise SystemExit(f'{path} carries the abort routine, so it was built '
+                         f'with --store-boot: a release must not start fast. '
+                         f'Fast start is packaging, and the person installing '
+                         f'the card chooses it on the composer page.')
     if not lo <= entry < lo + ln:
         raise SystemExit(f'{path} names entry 0x{entry:08X}, which is not '
                          f'inside the launcher at 0x{lo:X}..0x{lo + ln:X}')
