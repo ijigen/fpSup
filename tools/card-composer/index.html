@@ -378,7 +378,8 @@ function composed(){
      the abort.  That re-lays the file out, so its entry has to be recomputed
      like any merge's, and the path below is the one that does that. */
   if (chosen.length === 1 && !fastOn)
-    return {recs: chosen[0].records.slice(), entry: chosen[0].entry >>> 0};
+    return {recs: chosen[0].records.slice(), entry: chosen[0].entry >>> 0,
+            entries: (chosen[0].entry >>> 0) ? [chosen[0].entry >>> 0] : []};
   const out = [], runs = [], tail = [], seen = new Map(), kept = new Map(), entries = [];
   for (const c of chosen){
     c.records.forEach((r, i) => {
@@ -407,9 +408,10 @@ function composed(){
   if (entries.length < 2){
     const offs = offsetsOf(recs);
     const at = r => offs[recs.indexOf(kept.get(r))];
-    return {recs, entry: entries.length === 0 ? 0
-              : (entries[0].abs !== undefined ? entries[0].abs
-                 : at(entries[0].rec) + entries[0].delta)};
+    const one = entries.length === 0 ? 0
+      : (entries[0].abs !== undefined ? entries[0].abs
+         : at(entries[0].rec) + entries[0].delta);
+    return {recs, entry: one, entries: one ? [one] : []};
   }
   /* One header word, several entries: carry the stub that calls them all.  Last,
      so nothing it may be asked to call moves after it. */
@@ -427,7 +429,9 @@ function composed(){
     (e.abs !== undefined ? e.abs : at(e.rec) + e.delta) >>> 0, true));
   dv.setUint32(tbl + 4 + 4 * entries.length, 0, true);
   recs[recs.length - 1].b = b64enc(blob);
-  return {recs, entry: offs[offs.length - 1]};
+  return {recs, entry: offs[offs.length - 1],
+          entries: entries.map(e => (e.abs !== undefined ? e.abs
+                                     : at(e.rec) + e.delta) >>> 0)};
 }
 const carriesWorker = c => !!c.shell || c.records.slice(1).some(r => (r.a >>> 0) === 0);
 function hasShell(){ return sel().some(carriesWorker); }
@@ -474,7 +478,7 @@ function composeAutorun(banner){
 const cmdCount = banner => composeAutorun(banner).split('\n')
   .filter(l => l.trim() && !l.trimStart().startsWith('#')).length;
 
-function runChecks(recs, vshl, banner, entry){
+function runChecks(recs, vshl, banner, entry, entriesNow){
   /* Destination zero is not a placement -- the section is left where the file
      landed and run there -- so it has no span to overlap with.  A card can carry
      several: stage2, the shell's worker bootstrap, the entry trampoline.  They
@@ -559,7 +563,12 @@ function runChecks(recs, vshl, banner, entry){
                     v >= foff[i] && v < foff[i] + b64(r.b).length);
   const reached = v => !v ? true
         : (v >= 0x40000000 ? S.some(s => v >= s.lo && v < s.hi) : inFile(v));
-  const want = sel().map(x => x.entry >>> 0).filter(Boolean);
+  /* The entries as this card names them, not as each card named them alone.
+     A card's entry can be an offset into ITS file; merging re-lays the file out
+     and composed() re-expresses it.  Reading the raw values back out of the
+     catalogue here compared one layout's offsets against another's, and refused
+     a gyro+open-gate card that the camera had already been running. */
+  const want = (entriesNow || []).map(v => v >>> 0).filter(Boolean);
   const missed = want.filter(v => !reached(v));
   /* With one entry the header names it directly; with several the header names
      the trampoline and the entries are words in its table. */
@@ -672,7 +681,7 @@ function setMode(simple){
 }
 
 function render(){
-  const {recs, entry} = composed();
+  const {recs, entry, entries} = composed();
   const one = sel().length === 1 ? sel()[0] : null;
   const ban = document.getElementById('ban');
   if (!touchedBanner) ban.value = one ? one.banner : 'fpSup-Merged!';
@@ -686,7 +695,7 @@ function render(){
   if (fn) fn.innerHTML = fastOn
     ? ' — except the loader, which Fast start puts in the settings block'
     : ' — nothing is ever written to flash';
-  const checks = runChecks(recs, vshl, banner, entry);
+  const checks = runChecks(recs, vshl, banner, entry, entries);
   const ok = checks.every(x => x.ok);
   current = {vshl, autorun, ok};
 
