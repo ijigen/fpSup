@@ -31,13 +31,13 @@ fpsup-usbshell-v1.0.0      USB shell
 
 ```
 AutoRun.txt   必要
-VSHL.BIN      必要
+fpSup.BIN     必要(2026-09-19 之前的版本叫 VSHL.BIN,讀的人兩個名字都認)
 ABOUT.txt     必要(給網站用的一行說明,中英各一行)
 README.txt    給使用者
 MANIFEST.txt  可選,雜湊與建置紀錄
 ```
 
-`AutoRun.txt` 與 `VSHL.BIN` 就是卡片的全部 —— 放進 SD 卡根目錄即可。
+`AutoRun.txt` 與 `fpSup.BIN` 就是卡片的全部 —— 放進 SD 卡根目錄即可。
 
 `ABOUT.txt` 是**首頁表格那一格的唯一來源**:
 

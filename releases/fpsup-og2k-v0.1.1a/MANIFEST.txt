@@ -1,0 +1,84 @@
+SIGMA fp — OG3K 3:2 open gate (release-format candidate)
+banner: fpSup-OG2K-v0.1.1a!
+
+AutoRun.txt  32,772B  sha256=842980f7441599f2399de06cf007515526fcdc4545a5251ccef19cd09bc85daf
+fpSup.BIN    32,768B  sha256=e7b6c2bc95c025c043a4169c2e5d508b5cc7219a8661ab1485a00caa55befe85
+reference_firmware sha256=92a8ee993f6c3d66c251e88d45a2ccd5135c6cf7342717784321c2ed506e2fb4
+
+AutoRun 指令 103 條(上限 648);OG3K 的 3464 筆寫入全在 fpSup.BIN 裡,
+所以未來加格率/模式不會增加開機指令數。
+
+canonical source: build_og3k_ui_candidate.py --release
+OpenGate core 782 words; native UI 2682 words, 360 selected NBU records, 3 hooks.
+UI code sha256=cefc34b3de4ddb7c5bdc646627b93de8235ceb4c9fcceafa93d624bdfe6fc797
+private NBR sha256=9d840d2c4b1b56404650a48aeabe6f1a5f873529e75156757e59f55143801361
+
+卡上放:AutoRun.txt 與 fpSup.BIN(根目錄),沒有別的。
+
+OG3K 錄影幾何:3024x2010,DNG 裁切 3008x2000 @ (8,5)。
+  遵守 fp 自己的影片邊界慣例:原廠三個錄影 profile 全是
+  「裁切 +16 寬 / +10 高」而且寬度 16 對齊
+  (p171 3856x2170/3840x2160、p173 1936x1090/1920x1080)。
+
+  2026-09-13 解檔驗證(A001_036):標頭 3024x2010、裁切 3008x2000 @ (8,5)、
+  StripByteCounts 9,117,360 = 3024x2010x1.5,整幅清晰、邊到邊、無剪切。
+
+借用的 profile 是 **p83**(S 尺寸 12-bit 照片的拍攝 profile)。
+  它的 PARAM 列與 p43 只差 +0x030,而張數原廠就是 3,所以不需要
+  寫畫格率。**所有幾何都只改畫布的 RAM 複本,原廠 PARAM 列一個位元都不動。**
+  早先借 p43 要寫畫格率,那會讓 S 尺寸照片檢視多要三張 RAW 緩衝 ——
+  拍一張 S 尺寸照片就會凍結。改用 p83 之後已驗證消失。
+
+live view:待機、半按、錄影三個狀態都已驗證正確。
+  錄影期截圖 SS__0413 對比待機 SS__0408:水平 1.000x、垂直 1.000x、
+  異向比 1.0000、相關 0.9787。
+
+機內回放:**正常**(2026-09-13 解決)。
+  兩個原因:(1) 記錄尺寸沒遵守 +16/+10 慣例,3032 只有 8 對齊;
+  (2) 回放 profile 的柵格就是來源列距,而原廠柵格正好等於該格式片子的
+  記錄尺寸(p53 1936x1090 = FHD 片、p51 3856x2170 = UHD 片),
+  我們的片子沒有對應 profile,退回值與實際寬度不符。
+  修法 og3kcanvas.S:一個 hook 兩個 case,只改畫布 RAM 複本。
+  播放中的畫面比例由 og3kout 處理(守衛擴成 FLAG 或 PBFLAG)。
+  驗證:A001_037 回放截圖 SS__0426(暫停)與 SS__0427 之後(播放中)均正常。
+  詳見 notes/OG3K_PLAYBACK_PROFILE_CLASSES.md 第 14 節。
+
+原生 ISO / 高光餘裕:**已修正**(2026-09-14)。
+  OG3K 的擷取原本拿到 gain_state 3(雙原生 HCG 門檻 ISO 640),
+  在 ISO 640 以上就切到高轉換增益 —— 比原廠 12-bit CinemaDNG
+  (gain_state 7,門檻 3200)**少約 2.7 檔高光餘裕**,而且因為機內回放
+  固定補 +3 EV,回放會過曝 2.7 檔。
+  實測:修正前 raw 比原廠 FHD 亮 2.675 EV、BaselineExposure +0.322;
+  修正後兩者完全一致(+3.000,同場景中位−黑階 3.0 vs 3.0)。
+  修法 og3kgs.S:只 hook 增益分派的判斷 FUN_c03a6dd8,不動感測器模式。
+  同時把預覽平面格式 +0x080 補成 12-bit(原廠影片是 7,照片 profile 是 10),
+  否則錄影預覽會偏綠並閃爍。
+
+快門角度曝光:**29.97/180° 冷開機目視通過，其他幀率待驗證**(2026-09-15)。
+  mode98 的共用 nominal-fps metadata 是 78，角度路徑因此把 29.97/180°
+  算成約 1/156（-1.380 EV）。fmttable 只接受 CinemaDNG table3，並把
+  timing pair 當成一個 transaction；og3kfps.S 先完整呼叫原 getter，
+  再依 FLAG 與精確 timing tuple 覆寫回傳值，混合/未知 tuple 皆 fail-open。
+  四條已確認的角度換算/同步 BL 都導向同一個窄 wrapper；全域
+  getter 與快門速度路徑不動。離開 OG3K 時會先撤 FLAG 並還原 mode98 stock timing；
+  mode98 metadata 與 p83 照片欄位零寫入；
+  stage2 完成所有 section 寫入後，依序同步 D-cache 並清 I-cache，
+  避免 AutoRun 較慢時 CPU 繼續執行舊的 stock 指令。
+  782-word core 已與生成的 VSHL 離線逐字對帳。
+  使用者已在拔電池冷開機後目視確認 29.97/180° 的 FHD/OG3K
+  idle live-view 曝光一致；當時 USB 未連線，因此尚無精確 shutter readback。
+  23.976/24/25/48/50/59.94/100 的 idle 實機驗證仍未完成，故版本標 a。
+
+  CINE/STILL 切換時若仍選著 OG3K 尚未實機驗證；完成前請先切回 FHD/UHD。
+
+  熱重開與 hot reinstall 未驗證且不支援；目前只接受拔電池冷開機。
+
+原生 Settings / Quick Set UI (v0.1.1a):
+  - MENU 收合摘要與三選項清單的 OG3K 名稱已在實機驗證。
+  - QS 大/小 OG3K 值與 UHD/FHD/OG3K 底列、游標已在實機驗證。
+  - 這是 alpha build:實機測的是含 USB shell 但 UI payload 逐位元相同的版本;
+    精確 no-shell 出貨 pair 還需一次實機冷開 smoke test。
+  - 短轉場通過 FHD 1 次、UHD 3 次、OG3K 3 次;UHD/OG3K 約 1 秒。
+    2026-09-14 A001_082 曾凍結且未能重現;這不是本次新回報的事件。
+    慢 SD 卡不足以驗證持續錄影。
+  - v0.2 full-UI 回放、非當前 screen/style variants 與快速媒體長時錄影尚未回歸。

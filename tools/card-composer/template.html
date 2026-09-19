@@ -324,6 +324,10 @@ const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const b64enc = u => btoa(String.fromCharCode(...u));
 const hex = n => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(8, '0');
 const all = () => CAT.cards.concat(uploads);
+/* A card's name carries its version -- "fpSup-OG3K v0.2.4a" -- and the places
+   that name one card inside another's row want just the product.  This used to
+   split on the two spaces that separated them; the separator is " v" now. */
+const bare = n => n.replace(/ v[\d].*$/, '');
 const sel = () => all().filter(c => on.has(c.id));
 
 /* Merge: each card keeps its own record order, the entry section is forced
@@ -367,14 +371,17 @@ function composed(){
      like any merge's, and the path below is the one that does that. */
   if (chosen.length === 1 && !fastOn)
     return {recs: chosen[0].records.slice(), entry: chosen[0].entry >>> 0};
-  const out = [], tail = [], seen = new Map(), kept = new Map(), entries = [];
+  const out = [], runs = [], tail = [], seen = new Map(), kept = new Map(), entries = [];
   for (const c of chosen){
     c.records.forEach((r, i) => {
       if (i === 0) return;
       const k = (r.a >>> 0) + ':' + r.b;
       if (seen.has(k)){ kept.set(r, seen.get(k)); return; }
       seen.set(k, r); kept.set(r, r);
-      ((r.a >>> 0) === CAT.entry_at ? tail : out).push(r);
+      /* Run-in-place payloads last: --boot-bin is appended after --also-bin, so
+         a card built directly has its launcher at the end. */
+      ((r.a >>> 0) === 0 ? runs
+        : (r.a >>> 0) === CAT.entry_at ? tail : out).push(r);
     });
     // `continue`, not `return`: this is a for..of over the cards, and a card
     // with no entry -- OG3K is all static writes -- must not end the loop.
@@ -388,7 +395,7 @@ function composed(){
     entries.push({rec: c.records[hit], delta: e - offs[hit]});
   }
   let recs = (fastOn ? [CAT.fast.stage2, CAT.fast.abort] : [CAT.stage2])
-               .concat(out, tail);
+               .concat(out, tail, runs);
   if (entries.length < 2){
     const offs = offsetsOf(recs);
     const at = r => offs[recs.indexOf(kept.get(r))];
@@ -687,7 +694,7 @@ function render(){
     // Exclusivity is not a technical footnote -- it is the one thing that stops
     // a card working -- so it stays visible in both modes.
     const excl = (c.excl||[]).length
-      ? `<span class="sz">not with ${(c.excl||[]).map(x => ((all().find(y=>y.id===x)||{name:x}).name).split('  ')[0]).join(', ')}</span>` : '';
+      ? `<span class="sz">not with ${(c.excl||[]).map(x => bare((all().find(y=>y.id===x)||{name:x}).name)).join(', ')}</span>` : '';
     const row = `<label class="mod ${on.has(c.id)?'on':''}">
       <input type="checkbox" data-c="${c.id}" ${on.has(c.id)?'checked':''}>
       <span><b>${c.name}${c.upload?' <button class="x" data-rm="'+c.id+'">×</button>':''}</b>

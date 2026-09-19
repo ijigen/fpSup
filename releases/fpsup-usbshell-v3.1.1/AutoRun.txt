@@ -18,7 +18,7 @@
 # that has not run yet, so no stale instruction-cache line can shadow them.
 #
 # The screen reads fpSup[........]0 through fpSup[########]100 while this runs
-# and fpSup-Gyro-v1.12.0! when it is done.  A bar that stops means the load stopped there.
+# and fpSup-Shell-v3.1.1! when it is done.  A bar that stops means the load stopped there.
 # ============================================================================
 
 # --- screen ------------------------------------------------------------------
@@ -40,11 +40,12 @@ display osd 1
 display text fpSup[........]000
 display osd 1
 
-# --- no shell ----------------------------------------------------------------
-# The endpoint patches and the worker's state block are the USB shell's, and
-# there is no shell here: forty-two commands that a camera nobody is going to
-# plug a debugger into does not need. The loader sleeps instead of becoming a
-# worker: the loader reads the file from the callback and returns.
+# --- patches and worker state: in the file, not here -------------------------
+# Seven descriptor words and seventeen zeroes used to be twenty-four `mem set`
+# commands.  Every one of them is a fixed value at a fixed address, which is
+# the definition of a VBIN section -- so they ride in the file and the loader
+# writes them, and this script is the same length whether the card carries a
+# shell or not.
 
 
 # --- the pool is the loader's business now -----------------------------------
@@ -149,11 +150,11 @@ mem set 0xC0BAC2F8 0xC03D99A0
 display osd 1 0x00000000
 display osd 1 0x00000000
 display osd 1 0x00000000
-display text fpSup-Gyro-v1.12.0!
+display text fpSup-Shell-v3.1.1!
 display osd 1
-display text fpSup-Gyro-v1.12.0!
+display text fpSup-Shell-v3.1.1!
 display osd 1
-display text fpSup-Gyro-v1.12.0!
+display text fpSup-Shell-v3.1.1!
 display osd 1
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
@@ -601,5 +602,4 @@ display osd 1
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
-# pad -- see PAD_TO: mode 7 overwrites but does not truncate
-########
+##########################################

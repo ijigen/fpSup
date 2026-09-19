@@ -295,18 +295,29 @@ def refs(product='og3k'):
 # is by design -- a release freezes a camera-tested payload -- so a difference
 # here is news about the releases, not about the merge.
 STALE = {
-    'gyro+og3k': 'the gyro pool blob at 0x44000 is 10,552 bytes in '
-                 'fpsup-gyro-v1.11b and 10,640 in the source tree: cut a gyro '
-                 'release, or point refs() at the released blob',
-    'gyro+og2k': 'same as gyro+og3k -- the frozen gyro blob is 88 bytes older',
-    'shell+gyro+og3k': 'fpsup-usbshell-v3.1.0 is two generations old: its '
-                       'worker lives at 0xC072F050 in the cave (1,608 bytes) '
-                       'and its state words and descriptor patch are `mem set` '
-                       'lines in its AutoRun.  The current shell puts all three '
-                       'in the file -- a destination-zero bootstrap that asks '
-                       'the allocator for its own memory, a 96-byte state '
-                       'section and a patch section -- so the two cannot '
-                       'reproduce each other.  Cut a usbshell release.',
+    'shell+gyro+og3k': 'two different configurations, compared as if they were '
+                       'one.  The catalogue\'s shell card is the release, which '
+                       'is the shellpush build and carries the six EP 0x83 '
+                       'descriptor patches; refs() builds its reference with '
+                       'build_base_card --debug, which passes --no-ep-patches '
+                       'deliberately.  Strip those six and give the reference '
+                       'the trampoline it is compared against and the two carry '
+                       'the same ninety-seven sections exactly -- what is left '
+                       'is the order build_autorun puts them in (the worker '
+                       'before --also-bin, a --boot-bin payload after it), '
+                       'which a merge cannot reproduce without rebuilding the '
+                       'option matrix this file opens by refusing to rebuild.\n'
+                       '\n'
+                       'It passed until the patches and the worker\'s state '
+                       'words stopped being `mem set` lines and became sections: '
+                       'the difference was always there and a payload '
+                       'comparison could not see it.  So this is not a check '
+                       'that went stale, it is a check that was weaker than it '
+                       'looked.  Making it mean something needs refs() to build '
+                       'the configuration the catalogue actually ships, and one '
+                       'place in build_autorun where run-in-place payloads are '
+                       'appended -- which changes the bytes of every released '
+                       'card, so not in the same breath as cutting four.',
     'shell+gyro+og2k': 'same as shell+gyro+og3k',
 }
 
@@ -326,16 +337,20 @@ def payload(d):
 
 RELEASES = ROOT / 'fpSup' / 'releases'
 
+# Named the way the card names itself.  The page used to say "OpenGate 3K" and
+# "fpGyroSup" while the banner said fpSup-OG3K and the tag said fpsup-og3k --
+# three vocabularies for one product.  What is on the screen when the card boots
+# is what the tick box says now, so the two can be matched without translating.
 PRODUCTS = {
-    'usbshell': dict(id='shell', name='USB shell', shell=True, template='shellpush',
+    'usbshell': dict(id='shell', name='fpSup-Shell', shell=True, template='shellpush',
                      desc='The worker that answers `shl` over USB. Selecting it '
                           'switches the AutoRun to the loader that creates a task, '
                           'because the worker blocks on the endpoint and cannot run '
                           'in a borrowed callback.'),
-    'gyro':     dict(id='gyro', name='fpGyroSup',
+    'gyro':     dict(id='gyro', name='fpSup-Gyro',
                      desc='Writes .gcsv and .json into the clip folder while '
                           'recording. The released card, unmodified.'),
-    'og3k':     dict(id='og3k', name='OpenGate 3K', excl=['og2k'],
+    'og3k':     dict(id='og3k', name='fpSup-OG3K', excl=['og2k'],
                      desc='3024×2010, DNG cropped to 3008×2000, eight frame rates, '
                           '8/10/12-bit CinemaDNG. Sensor modes 98/117 — the sensor\'s '
                           'own 2×2-binned 3:2 modes, so the ISP scales nothing. Native '
@@ -343,7 +358,7 @@ PRODUCTS = {
                           '24p 12-bit. Super35/crop must be off. Alpha — the release '
                           'README lists what is and is not verified. Carries no entry '
                           'section: it is all static writes.'),
-    'og2k':     dict(id='og2k', name='OpenGate 2K', excl=['og3k'],
+    'og2k':     dict(id='og2k', name='fpSup-OG2K', excl=['og3k'],
                      desc='2016×1344, DNG cropped to 2000×1334 — the same 3:2 field of '
                           'view at a third of the data. Sensor mode 139, the 3×3 '
                           'readout, so all eight frame rates including 100p stay on the '
@@ -563,7 +578,7 @@ def main():
         ban = banner_of(ar)
         templates[ban] = ar.split('# pad -- see PAD_TO')[0].replace(ban, '@@BANNER@@')
         out_cards.append(dict(
-            id=card['id'], name=card['name'] + '  ' + card['version'],
+            id=card['id'], name=card['name'] + ' v' + card['version'],
             desc=card['desc'], excl=card.get('excl', []),
             banner=ban, entry=entry, shell=bool(card.get('shell')),
             template=card.get('template', 'plain'),
@@ -648,7 +663,7 @@ def main():
         # Mirror the page's picked() exactly: it walks the *catalogue* order,
         # not the order the ids were given.  These were allowed to differ once
         # and the check passed while the page produced different bytes.
-        out, tail, seen, kept, entries = [], [], {}, {}, []
+        out, runs, tail, seen, kept, entries = [], [], [], {}, {}, []
         for c in out_cards:
             if c['id'] not in ids:
                 continue
@@ -672,7 +687,12 @@ def main():
                     continue
                 seen[k] = r
                 kept[id(r)] = r
-                (tail if r['a'] == cat['entry_at'] else out).append(r)
+                # Run-in-place payloads go last, the order build_autorun puts
+                # them in: --boot-bin is appended after --also-bin, so a card
+                # built directly has its launcher at the end and a merged one
+                # has to agree or the two cannot be compared.
+                (runs if r['a'] == 0 else
+                 tail if r['a'] == cat['entry_at'] else out).append(r)
             # This card's entry, as something that survives being re-laid-out.
             e = by[c['id']]['entry']
             if e == 0:
@@ -688,7 +708,7 @@ def main():
             else:
                 raise SystemExit(f'{c["id"]}: entry 0x{e:08X} is in no section')
 
-        recs = [cat['stage2']] + out + tail
+        recs = [cat['stage2']] + out + tail + runs
         if len(entries) > 1:
             # One header word, several entries: carry the stub that calls them
             # all.  Last, so nothing it might be asked to call moves after it.

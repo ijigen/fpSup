@@ -25,13 +25,11 @@ FILES = ('AutoRun.txt', 'fpSup.BIN', 'README.txt')
 # Every section the card must carry, and what it is.  A build that drops one
 # still produces a perfectly valid AutoRun and a camera that does nothing.
 SHARED = {
-    0xC072E064: 'gsup_entry, the cave trampoline',
     0xC072E200: 'the accelerometer hook',
     0xC072E300: 'the gyro drain',
     0xC072E4E0: 'the record start hook',
     0xC072E620: 'the record stop hook',
     0xC072EC60: 'the space provider',
-    0x00044000: 'the writer, in the pool',
     0xC072EC38: '-> stream_claim',
     0xC072EC3C: '-> stream_commit',
     0xC072EC40: '-> gyro_drain',
@@ -65,9 +63,35 @@ def check_sections(path, edition):
     missing = [f'0x{a:08X} ({w})' for a, w in want.items() if a not in dests]
     if missing:
         raise SystemExit(f'{path} is missing:\n  ' + '\n  '.join(missing))
-    if entry != 0xC072E064:
-        raise SystemExit(f'{path} names entry 0x{entry:08X}, not gsup_entry')
-    print(f'  sections: {n}, entry 0x{entry:08X}, all {len(want)} accounted for')
+
+    # The writer used to be checked by address -- a section at pool + 0x44000 --
+    # and the entry by address too, gsup_entry in the cave at 0xC072E064.
+    # Neither exists now.  The writer travels appended to the bootstrap that
+    # asks for the pool and copies it in, as one destination-zero section, so
+    # what is checked is that the card carries it and that the header really
+    # points into it: a release whose entry misses the launcher boots, places
+    # every section, and logs nothing.
+    #
+    # Destination zero means "run where the file landed".  The FIRST such
+    # section is the loader's own second half -- loader.S branches to the end of
+    # the table -- and a release card carries exactly one more, the launcher.
+    # A debug card carries the shell's worker and a trampoline as well, which is
+    # why this is a release check and not a general one.
+    off, runs = 16 + n * 8, []
+    for i in range(n):
+        dest, ln = struct.unpack_from('<II', d, 16 + i * 8)
+        if dest == 0:
+            runs.append((off, ln))
+        off += ln + (-ln % 4)
+    if len(runs) != 2:
+        raise SystemExit(f'{path} has {len(runs)} run-in-place sections, not '
+                         f'two (stage2 and the launcher)')
+    lo, ln = runs[1]
+    if not lo <= entry < lo + ln:
+        raise SystemExit(f'{path} names entry 0x{entry:08X}, which is not '
+                         f'inside the launcher at 0x{lo:X}..0x{lo + ln:X}')
+    print(f'  sections: {n}, entry 0x{entry:08X} in the {ln}-byte launcher, '
+          f'all {len(want)} accounted for')
 
 
 def main():
