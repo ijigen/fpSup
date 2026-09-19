@@ -380,67 +380,105 @@ j_lens:
     pop     {r4, r5, r6, lr}
     bx      lr
 
-/* j_dng_dims -- the frame size the camera itself puts in the DNG header.
- * r0 = width, r1 = height, or zeros.
+/* j_geom_dims -- ask the camera what geometry it is capturing, the way its own
+ * CinemaDNG writer does.  r0 = width, r1 = height, or zeros.
  *
- * Found by asking what the CinemaDNG writer reads.  FUN_c06A5290 builds the
- * IFD, and for tags 0x100/0x101 it does:
+ *     owner = FUN_c0021C00()              the singleton 0xC30751D4
+ *     ctx   = FUN_c0021C40(owner)         *(owner + 0x5C), the live context
+ *             FUN_c0437140(&out, 2, ctx, 3)
+ *     w = [out][0]   h = [out][1]         crop origin at [out][6]/[out][7]
+ *             FUN_c022EDB0(&out, 2)       or 0xC0 bytes leak per profile
  *
- *     r5 = (this->vtable[+0x48])(this)      FUN_c06999F0
- *     ImageWidth  = [r5]                    tag 0x100
- *     ImageLength = [r5 + 4]                tag 0x101
+ * That object is what FUN_c06a6418 copies into the DNG format object at +0x18,
+ * and FUN_c06A5290 writes its first two words as tags 0x100 and 0x101.  So this
+ * IS the header the take's frames will carry.
  *
- * and FUN_c06999F0 returns a fixed singleton, 0xC38250E4.  So these two words
- * ARE the header: whatever the file says, this said first.
+ * ★ Not a table read, which is the whole point.  OG3K records 3024x2010, and
+ * that pair appears NOWHERE in the 49 MB image -- og3kcanvas.S writes it into
+ * the canvas at run time, and this query carries it out.  Measured 2026-09-19,
+ * camera in standby: 3024 x 2010, crop origin 8 5, four readings identical.
+ * So a future custom geometry made the same way is visible here too, and none
+ * of it requires knowing that open gate exists.
  *
- * That is the property none of the other sources had.  CameraMgrSetting is the
- * MENU's size and goes stale the moment a mode does not come from the menu --
- * an OG3K take recorded at 3024x2010 produced 1936x1090 on a camera whose menu
- * still said FHD and 3856x2170 on one that still said UHD.  0xC37CE210 reads
- * zero for anything but 1080p.  The live-view param's canvas (param + 0x5C,
- * the row OG3K patches) is the right structure but the wrong instance: the
- * only field-angle object reachable from a fixed global is the live-view one,
- * 0xC375D840 + 0x10, and its canvas is PREVIEW geometry, 1936x1090 through an
- * entire OG3K take by design.  The recording instance is handed to
- * og3kcanvas.S as r4 at the 0xC043A19C hook and is pool-allocated, so it has
- * no address to walk to.
+ * ⚠ kind is 2, and the two neighbours are traps.
+ *   kind 3 is the stills full raster: 6064x4042 in standby AND right through a
+ *     CINE take, 200 readings without exception.  It is what the earlier
+ *     version of this asked, and it tracks nothing.
+ *   The context MUST come from FUN_c0021C40(owner).  It takes an argument --
+ *     it returns *(owner + 0x5C) -- and calling it with r0 = 0 hands the query
+ *     a null that FUN_c0436b80 walks (param_3[0x16d], param_3[0xcd]).  With
+ *     kind 2 that is the branch `param_1 == 2 && param_3[3] == 0`, and it froze
+ *     the camera.  Hence the null check below: no context, no call.
  *
- * ⚠ UNCONFIRMED: two writer classes reach tags 0x100/0x101.  Vtables
- * 0xC2E3A838 and 0xC2E3A7D4 delegate to this singleton; 0xC2E3A938 returns
- * this+0x18 instead.  Which one CinemaDNG video uses could not be settled
- * statically -- stills and video may well differ.  The bounds check below is
- * what keeps a wrong guess from producing a wrong profile, and the caller
- * falls back to the settings when this returns zero.
+ * Everything the earlier sources got wrong is in section 6 and 9 of
+ * projects/gyro-sup/notes/LENS_PROFILE_WRONG_SIZE_WITH_OG3K.md.
  */
-.equ DNG_DIMS, 0xC38250E4
+.equ F_CTX_OWNER,   0xC0021C00
+.equ F_CTX_GET,     0xC0021C40
+.equ F_GEOM_QUERY,  0xC0437140
+.equ F_GEOM_FREE,   0xC022EDB0
+.equ GEOM_KIND_MOV, 2
 
-j_dng_dims:
-    movw    r2, #:lower16:DNG_DIMS
-    movt    r2, #:upper16:DNG_DIMS
-    ldr     r1, [r2, #4]
-    ldr     r0, [r2]
+j_geom_dims:
+    push    {r4, r5, r6, lr}
+    sub     sp, sp, #8                  @ the moved pointer, and 8-byte alignment
+    mov     r0, #0
+    str     r0, [sp]
+    movw    ip, #:lower16:F_CTX_OWNER
+    movt    ip, #:upper16:F_CTX_OWNER
+    blx     ip
+    cmp     r0, #0
+    beq     9f
+    movw    ip, #:lower16:F_CTX_GET
+    movt    ip, #:upper16:F_CTX_GET
+    blx     ip
+    cmp     r0, #0
+    beq     9f                          @ never hand the query a null context
+    mov     r2, r0
+    mov     r0, sp
+    mov     r1, #GEOM_KIND_MOV
+    mov     r3, #3
+    movw    ip, #:lower16:F_GEOM_QUERY
+    movt    ip, #:upper16:F_GEOM_QUERY
+    blx     ip
+    mov     r5, #0
+    mov     r6, #0
+    ldr     r4, [sp]
+    cmp     r4, #0
+    beq     8f
+    ldr     r5, [r4]
+    ldr     r6, [r4, #4]
+8:  mov     r0, sp                      @ unconditional: the firmware's own
+    mov     r1, #2                      @ callers release the same way
+    movw    ip, #:lower16:F_GEOM_FREE
+    movt    ip, #:upper16:F_GEOM_FREE
+    blx     ip
+    mov     r0, r5
+    mov     r1, r6
     cmp     r0, #640
-    blo     8f
+    blo     9f
     cmp     r1, #360
-    blo     8f
+    blo     9f
     movw    r2, #0x2000
     cmp     r0, r2
-    bhi     8f
+    bhi     9f
     cmp     r1, r2
-    bhi     8f
-    bx      lr
-8:  mov     r0, #0
+    bhi     9f
+    add     sp, sp, #8
+    pop     {r4, r5, r6, pc}
+9:  mov     r0, #0
     mov     r1, #0
-    bx      lr
+    add     sp, sp, #8
+    pop     {r4, r5, r6, pc}
 
-/* j_dims -- the frame the take is recording.  What the DNG writer reads if it
- * is plausible (see j_dng_dims), otherwise the camera's settings.
+/* j_dims -- the frame the take is recording.  What the camera says it is
+ * capturing (see j_geom_dims), otherwise the camera's settings.
  * Returns r0 = width, r1 = height, or zeros.  Not 0xC37CE210: that one holds
  * {1936, 1090, ...} at 1080p, reads zero at UHD, and read zero right through a
  * 35 s take here.  CameraMgrSetting has it while the camera is idle too. */
 j_dims:
     push    {r4, lr}
-    bl      j_dng_dims
+    bl      j_geom_dims
     cmp     r0, #0
     popne   {r4, lr}
     bxne    lr

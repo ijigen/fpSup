@@ -219,6 +219,14 @@ udiv64_32:
  *     vtable+0x14 factory), so it has no address to walk to.  Measured
  *     2026-09-18: walking there replaced one wrong answer with another.
  *
+ * ⚠ 2026-09-19: THIS NEVER FIRES.  0xC38250E4 is reached only by
+ * XC_StillFileFormatExif::v16 and XC_StillFileFormatDummy::v16 -- the JPEG
+ * stills path.  CinemaDNG's vtable is 0xC2E3A938, whose +0x48 is
+ * XC_StillFileFormatDng::v16 = "return this + 0x18", a per-file heap object
+ * (FUN_c06a64f8(0x8c)).  And the singleton is built with size {0,0} and is
+ * never written, so this returns zero and the caller falls back to the
+ * settings -- exactly the behaviour that was there before.  Kept only until
+ * the replacement lands; see section 6 of the note.
  * ⚠ UNCONFIRMED: two writer classes reach tags 0x100/0x101.  Vtables
  * 0xC2E3A838 and 0xC2E3A7D4 delegate to this singleton; 0xC2E3A938 returns
  * this+0x18 instead.  Which one CinemaDNG video uses could not be settled
