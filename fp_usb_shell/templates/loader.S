@@ -21,7 +21,7 @@
  * the worker, by branching to the entry the file names. One task, and nothing
  * left parked with nowhere to return to.
  *
- *     \VSHL.BIN
+ *     \fpSup.BIN
  *      +0x00  "VBIN"
  *      +0x04  section count
  *      +0x08  entry, an absolute address to branch to when everything is placed
@@ -184,7 +184,7 @@ load:
      *
      * But F_VOL names the volume the camera is CURRENTLY pointed at, and with
      * an external SSD plugged in that is the SSD -- which does not have
-     * \VSHL.BIN on it.  The card boots, the AutoRun runs, the loader opens
+     * \fpSup.BIN on it.  The card boots, the AutoRun runs, the loader opens
      * nothing, and the camera ends up with no logger at all: every take that
      * session is missing its sidecars, with no sign that anything is wrong.
      * With a shell in the build it is worse -- load_stop spins and the progress
@@ -195,7 +195,7 @@ load:
      * boots repeatedly.
      *
      * So: whatever F_VOL says first, then the card.  The card is where AutoRun
-     * was read from, so it is where VSHL.BIN is. */
+     * was read from, so it is where fpSup.BIN is. */
     CALL    F_MGR
     mov     r1, #0
     CALL    F_VOL
@@ -247,93 +247,6 @@ load_shut:
      * the buffer holds instructions now -- then hand it the buffer.  It places
      * every section, cleans the cache again, and comes back, unless the file
      * names an entry, which is how the debug build's worker takes the task. */
-    /* --- publish and arm, BEFORE the payload runs ---------------------------
-     *
-     * Both of these used to sit after the `blx` below, and both were wrong
-     * there for the same reason: a payload is not required to come back.  The
-     * shell's worker enters its serve loop and stays in it, so a store card
-     * carrying it would never publish and never stop the script -- and a
-     * payload whose whole job is to wipe the store would have it written
-     * straight back, four instructions later.
-     *
-     * It is also the better moment on its own terms.  Everything in this loader
-     * that can fail has already happened: the pool, the volume, the open, the
-     * read, the magic.  What gets published here is a loader that has just
-     * demonstrated it works, and whether the PAYLOAD then works is a different
-     * question that has no business deciding it.
-     *
-     * r4..r7 are live -- r6 is the buffer the branch below needs -- and the
-     * publish clobbers all four. */
-    push    {r4, r5, r6, r7}
-#ifdef STORE_PROVISION
-    /* Publish, or stand down -- one read decides both this and the abort below.
-     * store_boot sets STORE_FROM before it branches here; the cave is zeroed at
-     * boot, so a one can only have come from it.  It lives past this loader's
-     * own body, not above the worker -- the worker needed that gap. */
-    /* Four constants, one pool, and the order chosen so each value lands in the
-     * register the code below already wants it in -- the same trick as the
-     * abort block, and the same reason it pays: a pool that needs `mov`s
-     * afterwards costs exactly what it saved.  Everything r4..r7 held is dead
-     * by now, because stage2 has returned. */
-9:  add     r3, pc, #(stpool - 9b - 8)
-    ldmia   r3, {r0, r4, r5, r6}        @ STORE_FROM, STORE, LOADER_BASE, MAGIC
-    ldr     r8, [r0]
-    mov     r2, #0
-    str     r2, [r0]                    @ consume it
-    cmp     r8, #0
-    bne     8f                          @ store is current: nothing to write
-
-    movw    r1, #:lower16:STORE_LEN     @ movw alone: the loader is under 64 KiB
-    add     r7, r4, #4                  @ the body starts right after the magic
-7:  ldr     r2, [r5], #4
-    str     r2, [r7], #4
-    subs    r1, r1, #4
-    bne     7b
-    /* No sum, no length, no version.  The header is one word now: see
-     * store_boot.S for why three of the four fields went away. */
-    str     r6, [r4]                    @ magic LAST, and the only header field
-                                        @ left: a half-written store must never
-                                        @ look valid to the next boot
-8:
-#endif
-
-#ifdef ABORT_AUTORUN
-    /* ARM the stop; do not take it.
-     *
-     * Stopping here means the script's last line is the one that ran us, and
-     * the banner is two lines further down -- so the banner had to be moved
-     * ABOVE us, where it is drawn before the load it is announcing.  That is
-     * not a cosmetic problem: for a whole night "thirty per cent then the
-     * banner" was read as the fast path finishing, when it was the slow path
-     * announcing itself early and carrying on to sixty and ninety underneath.
-     * Three conclusions were overturned by a banner that was simply drawn too
-     * soon.
-     *
-     * So the echo handler is pointed at `abort_entry` and we return normally.
-     * The script draws the banner -- by now the load really is done -- and the
-     * `echo` after it is what ends things.  On the slow path that same `echo`
-     * still points at store_boot, which fails its magic check for the second
-     * time and returns having touched nothing.  One line, two meanings, in a
-     * language with no conditionals. */
-#ifndef ABORT_ALWAYS
-    cmp     r8, #0
-    beq     6f
-#endif
-#ifdef ABORT_NOW
-    /* Diagnostic build: take the stop here instead of arming it.  The banner
-     * is two lines below the `echo` that got us here, so it never draws -- the
-     * bar simply stops.  It exists to answer one question with one boot: does
-     * the shell come up when the arming is out of the way? */
-    bl      abort_entry
-#else
-    adr     r0, abort_entry
-    movw    r1, #:lower16:ECHO_SLOT
-    movt    r1, #:upper16:ECHO_SLOT
-    str     r0, [r1]
-#endif
-6:
-#endif
-    pop     {r4, r5, r6, r7}
 
     CALL    F_CACHE
     ldr     r1, [r6, #4]                @ section count
@@ -363,63 +276,9 @@ load_fail:
     pop     {r4, r5, r6, r7, r8, r9, r10, pc}
 
 
-#ifdef ABORT_AUTORUN
-/* --- abort_entry: the echo handler, once, after the banner -----------------
- * (ctx, argc, argv) like any other, and it calls nothing, so lr needs no
- * saving.  Placed past every exit above, so nothing falls into it. */
-abort_entry:
-    /* The handler goes back BEFORE the script stops, because the three commands
-     * that would have done it are among the ones about to be skipped.  We are
-     * inside that handler; writing the slot we were reached through is safe,
-     * the return is already in lr. */
-    push    {r4, lr}                    @ r4 carries the context across AR_POP
-7:  add     r3, pc, #(arpool - 7b - 8)
-    ldmia   r3, {r0, r1, r2, ip}        @ AR_TABLE, ECHO_ORIG, ECHO_SLOT, AR_LINEFN
-    str     r1, [r2]
-
-    /* Stop the reader.  0xC03DA600 tests this byte first and answers EOF when
-     * it is zero; the context is found by walking the registration table for
-     * the entry whose per-line callback is the script's. */
-    ldr     r1, [r0, #0x21C]            @ AR_DEPTH
-4:  cmp     r1, #1
-    blt     5f
-    add     r2, r0, r1, lsl #5          @ entry = table + depth * 36
-    add     r2, r2, r1, lsl #2
-    ldr     r3, [r2, #4]
-    cmp     r3, ip
-    beq     3f
-    subs    r1, r1, #1
-    b       4b
-3:  ldr     r4, [r2, #0x0C]             @ AR_CTX
-    cmp     r4, #0
-    beq     5f
-    /* Pop the registration FIRST.  The teardown does it only when the byte
-     * below is still set, and the byte below is what stops the script -- so
-     * whoever zeroes it owes the pop. */
-    CALL    AR_POP
-    mov     r3, #0
-    strb    r3, [r4, #0x90]             @ AR_RUNNING: next getchar answers EOF
-5:  mov     r0, #0
-    pop     {r4, pc}
-#endif
 
 path:
-    .asciz  "\\VSHL.BIN"
+    .asciz  "\\fpSup.BIN"
     .align  2
 
-#ifdef STORE_PROVISION
-stpool:
-    .word   STORE_FROM                  @ passed in: the tail of the loader's own
-                                        @ reserved 512 bytes -- see store_boot.S
-    .word   0xC3075264                  @ STORE
-    .word   LOADER_BASE
-    .word   STORE_MAGIC                 @ derived from these very bytes: see
-#endif                                  @ store_boot.S
 
-#ifdef ABORT_AUTORUN
-arpool:
-    .word   0xC2F20FC0                  @ AR_TABLE
-    .word   ECHO_ORIG
-    .word   ECHO_SLOT
-    .word   0xC03DA7A8                  @ AR_LINEFN
-#endif

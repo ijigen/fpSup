@@ -67,7 +67,7 @@
  *     pool +0x6000             free, for the logger's own buffers
  *
  * STATE.  Sixteen words at 0xC072F000, readable with
- *     shl mem save \VSHL.BIN 0xC072F000,,0x40
+ *     shl mem save \WSTATE.BIN 0xC072F000,,0x40
  *
  *     +00 'VSHL'      +04 task id      +08 last round faulted   +0C rounds
  *     +10 OUT arm     +14 OUT wait     +18 IN arm        +1C IN wait
@@ -181,7 +181,7 @@
  * ========================================================================== */
 /* Not used by the loader build, and not dead either.
  *
- * `build_autorun.py --loader` puts the worker in VSHL.BIN and hooks loader.S
+ * `build_autorun.py --loader` puts the worker in fpSup.BIN and hooks loader.S
  * instead, which places this code and branches straight to `serve` -- so on a
  * card built that way nothing here ever runs, and STATE+0x00 stays zero rather
  * than reading "VSHL".
@@ -452,7 +452,7 @@ next_round:
      *
      * The way out is not to do the copying here. loader.S sits at the bottom of
      * the cave, well clear of this code, and its `load` entry already reads
-     * VSHL.BIN, places what it says and branches to the entry named in it. This
+     * fpSup.BIN, places what it says and branches to the entry named in it. This
      * task jumping there replaces the worker with itself, from outside itself.
      *
      * Two words rather than one: an address alone is a jump to whatever

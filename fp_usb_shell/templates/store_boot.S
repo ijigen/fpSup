@@ -6,11 +6,10 @@
  * it out.
  * ============================================================================
  *
- * The AutoRun's expensive part is seventy-six `mem set` commands writing three
- * hundred and four bytes of loader into the cave, one word each, about sixty-
- * five milliseconds apiece.  The loader exists precisely so the count stops
- * growing with the payload; this is the same trick applied to the loader
- * itself.
+ * The AutoRun's expensive part is sixty-four `mem set` commands writing two
+ * hundred and fifty-six bytes of loader into the cave, one word each.  The
+ * loader exists precisely so the count stops growing with the payload; this is
+ * the same trick applied to the loader itself.
  *
  * XC_CommonSaveData at 0xC307523C is 0x410 bytes of settings, flash-backed:
  * written into its free space, a value comes back after a power cycle with no
@@ -19,24 +18,27 @@
  * research/firmware/notes/PERSISTENT_STORE_COMMONSAVE.md.
  *
  * So the loader lives there, and the AutoRun carries only this: check the
- * header, checksum the body, copy it into the cave, publish it to the caches,
- * and branch.  Thirty-odd words instead of seventy-six.
+ * magic, copy the body into the cave, publish it to the caches, and branch.
+ * Twenty-six words instead of sixty-four, and they are the only words of the
+ * two that a fast boot pays for -- the loader's own two hundred and fifty-six
+ * bytes come out of flash and cost the script nothing.
  *
  * WHY IT VERIFIES BEFORE IT BRANCHES.  Those bytes are free today.  They belong
  * to a settings block whose unused fields may stop being unused -- a feature
  * nobody on this camera has triggered, a firmware that ships later.  A wrong
  * word here is not a wrong setting, it is a branch into whatever the bytes
- * happen to spell, at boot, with no shell to recover with.  Magic, length and
- * a sum of the body, and any of them failing means this does nothing at all:
- * it returns, the rest of the AutoRun runs, and the camera loads the slow way.
- * The worst case is the boot time we have today.
+ * happen to spell, at boot, with no shell to recover with.  There is no such
+ * thing as a failed branch: `bx` into the camera's own settings executes them.
+ * So the check has to happen before, and if it fails this does nothing at all
+ * -- it returns, the rest of the AutoRun runs, and the camera loads the slow
+ * way.  The worst case is the boot time we had before any of this.
  *
  *     store layout, at STORE:
- *       +0x00  magic   'fpLD'
+ *       +0x00  magic   sha256(loader bytes)[0:4], passed in as STORE_MAGIC
  *       +0x04  body    the loader, verbatim, to be copied to CAVE_LOW
  *
  * There was a sixteen-byte header here -- magic, version, length, sum -- and
- * three of those four fields are gone.
+ * three of those four fields are gone.  ONE CHECK IS LEFT, and it is the magic.
  *
  * LENGTH is now baked in at build time instead of read out of the store.  A
  * length read from the thing being checked is a length that can be garbage,
@@ -45,13 +47,25 @@
  * #STORE_MAX` that used to guard that is not a guard we need if the number
  * cannot be wrong in the first place.
  *
- * SUM and VERSION are gone because the check that matters moved.  A checksum
- * computed HERE, against a value baked into THIS build, is what caught a stale
- * store -- and that job now belongs to the loader, which compares the card's
- * declared version against its own.  Doing it there rather than here is not a
- * saving of five instructions, it is the difference between a check the store
- * can satisfy by being self-consistent and a check whose reference comes from
- * outside.  See loader.S.
+ * SUM and VERSION are gone because the magic absorbed both of them.  It is not
+ * a string any more, it is a hash of the loader's own bytes computed by the
+ * build (see build_autorun.py), so one comparison answers all three questions
+ * at once: is this ours, is it THIS build of the loader, and is it intact.  A
+ * sum would only have repeated what a mismatching hash already says.
+ *
+ * And the reference comes from the card, not from the store.  That is the part
+ * that matters and the part that is easy to lose: a store cannot pass this by
+ * being self-consistent, because nothing it contains is used to check it.
+ *
+ * WHAT NOBODY CHECKS.  There was briefly a second, opposite check -- the loader
+ * comparing a version word the AutoRun wrote against one baked into itself
+ * (2026-09-17).  It is gone, and for the store it is no loss: hashing the
+ * loader's bytes made it redundant.  But it also covered something this file
+ * never did and still does not -- AutoRun.txt and fpSup.BIN being from
+ * different builds.  The loader checks that file's "VBIN" magic and nothing
+ * else, so a mismatched pair loads and misbehaves rather than refusing.  If
+ * that is ever wanted back it belongs in loader.S against the fpSup.BIN header, not
+ * here: this file has already branched by then.
  *
  * What is left here is the one question the loader cannot answer, because
  * answering it is what lets the loader run at all: is there anything of ours
@@ -88,16 +102,6 @@
  * above the payload and above the shell's worker (which ends at 0xC072F698). */
 .equ BOOT_AT,     0xC072F700
 
-/* The loader publishes itself into the store on the boot it was spelled out,
- * and must NOT do it again on every boot afterwards -- this is flash.  Setting
- * this word is how it knows: the cave is zeroed at boot, so a one here can only
- * have come from the code below.
- *
- * STORE_FROM is passed in.  It used to be 0xC072F6F8, above the worker -- and
- * the worker grew into that gap when it started asking for its own pool, so
- * these boot-only words moved into the tail of the loader's own reserved 512
- * bytes.  It has to sit PAST the STORE_LEN bytes copied below, which is what
- * build_autorun's LOADER_FLOOR check is for. */
 
 .equ F_DCACHE,    0xC000E91C
 .equ F_ICACHE,    0xC000EABC
@@ -145,13 +149,14 @@ _start:                                 /* runs as the borrowed echo handler:
     /* Publish before branching: written words are data to the caches until
      * 0xC000E91C runs, and the I-cache may still hold what used to be here.
      * r6 carries CAVE_LOW across both calls -- see the note above. */
-    ldmia   r7, {r4, r5, r7}            @ F_DCACHE, F_ICACHE, STORE_FROM
+    ldmia   r7, {r4, r5}                @ F_DCACHE, F_ICACHE
     blx     r4
     blx     r5
 
-    mov     r0, #1                      @ tell the loader the store is current,
-    str     r0, [r7]                    @ so it does not rewrite flash
-
+    /* No handshake word.  The loader used to be told "you came from the store,
+     * do not rewrite flash"; stage2 publishes now, and it answers that by
+     * comparing the store's magic with the one it was built with -- a direct
+     * question instead of a flag somebody has to remember to set. */
     mov     r0, r6
     pop     {r4-r7, lr}
     bx      r0                          @ tail into the loader, in the echo
@@ -167,4 +172,3 @@ _start:                                 /* runs as the borrowed echo handler:
     .word   CAVE_LOW
     .word   F_DCACHE
     .word   F_ICACHE
-    .word   STORE_FROM

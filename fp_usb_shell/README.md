@@ -194,7 +194,7 @@ v2 put the code on the camera by spelling it out, and moved data by copying it
 through a staging buffer. v3 changes both, and what follows from them.
 
 **The AutoRun no longer carries the code.** It writes a 512-byte loader
-(`templates/loader.S`) which reads `\VSHL.BIN` off the card, places what the
+(`templates/loader.S`) which reads `\fpSup.BIN` off the card, places what the
 file says, and becomes the worker. 503 commands became 248, and the count no
 longer grows with what is being loaded — a worker change costs nothing in the
 script. There is no `mem load`; the shell can save memory to a file and not the
@@ -415,7 +415,7 @@ v2 把程式碼「一個字一個命令」寫進相機,把資料複製過暫存�
 v3 改掉這兩件事,以及由它們衍生的一切。
 
 **AutoRun 不再帶程式碼。** 它只寫一個 512 位元組的載入器(`templates/loader.S`),
-載入器去讀卡上的 `\VSHL.BIN`、把每個 section 放到指定位址,然後自己變成 worker。
+載入器去讀卡上的 `\fpSup.BIN`、把每個 section 放到指定位址,然後自己變成 worker。
 503 個命令變成 248,而且**不再隨載入的東西增加** —— 改 worker 對腳本長度毫無影響。
 shell 有 `mem save`(記憶體→檔案)但沒有反向的,所以 AutoRun 拼出來的是「去讀檔的那個東西」。
 

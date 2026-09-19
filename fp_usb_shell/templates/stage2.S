@@ -14,7 +14,7 @@
 .equ F_DCACHE,  0xC000E91C           /* D-cache clean/invalidate + barriers */
 .equ F_ICACHE,  0xC000EABC           /* whole I-cache invalidate + barriers */
 
-/* The second half of the loader, carried in \VSHL.BIN instead of spelled out.
+/* The second half of the loader, carried in \fpSup.BIN instead of spelled out.
  *
  * Everything the AutoRun writes costs a `mem set` and about sixty milliseconds,
  * so the first half is kept to what has to exist before the file is in memory:
@@ -74,6 +74,75 @@ stage2:
 1:  mov     r8, #0                      @ pass 2: offsets into the entry's pool
     bl      s2_pass
     bl      s2_publish                  @ the pool code just landed; publish it too
+    /* Put the loader in the settings block, if what is there is not already
+     * this one.
+     *
+     * The loader used to do this to itself, on its way out, and it needed a
+     * handshake word to know whether to: store_boot set a flag before it
+     * branched, and a set flag meant "you came out of the store, do not write
+     * flash again".  An indirect answer to a question that can be asked
+     * directly -- so it is asked directly here.  The magic in the store is
+     * compared with the one this build baked in, and those are equal exactly
+     * when the store already holds this loader.  The handshake word is gone.
+     *
+     * Here rather than in the loader for the same reason the abort is: the
+     * loader has to fit in 468 bytes of settings block, and this was 72 of
+     * them.  Out here it costs nothing.  It is also a better moment -- the
+     * loader has not just been read, it has been used: the file opened, every
+     * section is placed, the entry has returned.  What gets written to flash
+     * is a loader that has demonstrated it works.
+     *
+     * Compiled in only for a card that has a store.  The copy is a
+     * `subs`/`bne` countdown, and a length of zero counts down from -4 for
+     * about a billion iterations before it comes round to zero -- a card with
+     * nothing to publish must not carry this code at all rather than carry it
+     * with a harmless-looking constant.
+     *
+     * The magic goes LAST.  A store half written by a power cut must not look
+     * valid to the next boot, and the magic is the only thing that boot
+     * checks. */
+#ifdef STORE_PROVISION
+    movw    r4, #:lower16:STORE
+    movt    r4, #:upper16:STORE
+    movw    r0, #:lower16:STORE_MAGIC
+    movt    r0, #:upper16:STORE_MAGIC
+    ldr     r1, [r4]
+    cmp     r1, r0
+    beq     2f                          @ already this loader: leave flash alone
+
+    movw    r2, #:lower16:LOADER_BASE
+    movt    r2, #:upper16:LOADER_BASE
+    movw    r3, #:lower16:STORE_LEN
+    add     r5, r4, #4                  @ the body starts past the magic
+1:  ldr     ip, [r2], #4
+    str     ip, [r5], #4
+    subs    r3, r3, #4
+    bne     1b
+    str     r0, [r4]                    @ magic last
+2:
+#endif
+    /* Arm the stop, now that there is something to stop for.
+     *
+     * The loader used to do this on its way out, which is one call too early:
+     * at that point the file has been read but nothing is placed.  Here every
+     * section is down and the payload's entry has been and returned, so the
+     * script really has nothing left worth reading -- and the `echo` two lines
+     * further on ends it.
+     *
+     * The loader needed a handshake word to know whether to arm at all (arming
+     * on a boot that had not come from the store would stop the script before
+     * the loader had been written out).  This needs none: stage2 runs only
+     * after a read that worked, on either path, and on the slow path the
+     * script restores this slot a few lines later anyway.
+     *
+     * ABORT_AT is a section of this same file, placed in the cave -- somewhere
+     * that outlives the staging buffer, which the loader hands back. */
+    movw    r0, #:lower16:ABORT_AT
+    movt    r0, #:upper16:ABORT_AT
+    movw    r1, #:lower16:ECHO_SLOT
+    movt    r1, #:upper16:ECHO_SLOT
+    str     r0, [r1]
+
     mov     r0, #0
     pop     {r4, r5, r6, r7, r8, pc}
 

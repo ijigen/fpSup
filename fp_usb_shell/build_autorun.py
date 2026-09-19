@@ -38,15 +38,6 @@ ap.add_argument('--no-ep-patches', action='store_true',
                      'patch is NOT one of them and is applied whenever the '
                      'shell is in: it is what stops the host PTP stack taking '
                      'interface 0, and without it the shell cannot be reached')
-ap.add_argument('--abort-always', action='store_true',
-                help='diagnostic: abort the script whether or not the store '
-                     'started us.  On a card with no store that keeps the '
-                     'timing and adds only the abort, which is the other half '
-                     'of the pair the store path changes at once')
-ap.add_argument('--abort-now', action='store_true',
-                help='diagnostic: the loader takes the stop itself instead of '
-                     'arming it, so the banner never draws.  One boot to say '
-                     'whether the arming is what breaks a store card')
 ap.add_argument('--store-boot', action='store_true',
                 help='keep the loader in the settings block and carry only a '
                      'bootstrap here.  XC_CommonSaveData survives a power cycle '
@@ -88,7 +79,7 @@ ap.add_argument('--vshl-entry', type=lambda s: int(s, 0), default=None,
                      'lr still pointing back into the loader, so a routine that '
                      'returns lets the boot carry on')
 ap.add_argument('--loader', action='store_true',
-                help='put the code in VSHL.BIN and have the AutoRun read it')
+                help='put the code in fpSup.BIN and have the AutoRun read it')
 args = ap.parse_args()
 DEST = args.out or DEST_DEFAULT
 DEST.parent.mkdir(parents=True, exist_ok=True)
@@ -110,6 +101,11 @@ CAVE_END = 0xC0730000        # the cave's top; sections above this are the
 POOL_DESC     = 0xC072F6D8   # the loader's allocator descriptor, boot-only
 WPOOL_PTR     = 0xC072F050   # the worker's pool address, next to its state
 WPOOL_SIZE    = 0xC072F054   # and what it asked for -- putfile reads both
+ABORT_AT      = 0xC072F080   # the routine that stops the interpreter, placed
+                             # here by fpSup.BIN rather than carried in the
+                             # loader: it was 128 of the loader's 464 bytes,
+                             # and the loader is the one thing that has to fit
+                             # in the 468 the settings block holds
 WCODE_PTR     = 0xC072F058   # its code's own allocation, separate from the
                              # buffers: an offset inside one block is a
                              # convention, and conventions are what this tree's
@@ -409,33 +405,26 @@ if args.store_boot:
     # After the pool, because a store that verifies branches straight into the
     # loader and the loader stages the file at pool+0x8000.  Before the loader,
     # because the whole point is not to write it.
-    # The bootstrap carries the loader's length as a constant rather than
-    # reading it out of the store, so the loader has to be measured first.
-    # Assembling it twice is free next to a wrong length, which the copy loop
-    # would run: it writes past the cave, through the payload and the worker,
-    # for as far as the number says.
-    sprobe = ([f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}']
-              + (['ABORT_NOW=1'] if args.abort_now else [])
-              + ['ABORT_AUTORUN=1', 'STORE_PROVISION=1', 'STORE_LEN=0',
-                 'STORE_MAGIC=0', f'STORE_FROM=0x{STORE_FROM:08X}',
-                 f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}'])
-    sbytes = assemble(HERE / 'templates' / 'loader.S', sprobe)
-    slen = len(sbytes)
-    # The magic is a hash of the loader's own bytes, taken from the probe build
-    # whose own STORE_MAGIC is zero -- so the value cannot depend on itself.
-    # It is a literal in a pool either way, so it never changes the size.
+    # One assembly, not two.  The loader used to carry the magic and its own
+    # length as literals, so measuring it meant building a probe with those set
+    # to zero and then building it again for real; now it carries neither --
+    # store_boot compares the magic and stage2 writes it -- so its bytes are
+    # simply its bytes and the hash of them is the magic.
     #
-    # This is what makes "the store holds a DIFFERENT build of the loader"
-    # unreachable rather than merely unlikely: a constant string has to be
-    # bumped by hand, and in one night the loader changed four times while the
-    # string sat still.
+    # Hashing rather than a string constant is what makes "the store holds a
+    # DIFFERENT build of the loader" unreachable rather than unlikely: a string
+    # has to be bumped by hand, and in one night the loader changed four times
+    # while the string sat still.  Any of those builds would have found a store
+    # whose magic matched and branched into the wrong bytes.
+    sbytes = assemble(HERE / 'templates' / 'loader.S',
+                      [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}'])
+    slen = len(sbytes)
     smagic = int(hashlib.sha256(sbytes).hexdigest()[:8], 16)
     if slen > STORE_MAX:
         sys.exit(f'loader is {slen} bytes; the store holds {STORE_MAX}.')
     ssrc = HERE / 'templates' / 'store_boot.S'
     scode = assemble(ssrc, [f'STORE_LEN=0x{slen:X}',
-                            f'STORE_MAGIC=0x{smagic:08X}',
-                            f'STORE_FROM=0x{STORE_FROM:08X}'])
+                            f'STORE_MAGIC=0x{smagic:08X}'])
     swords = to_words(scode)
     send = STORE_BOOT_AT + len(scode)
     if send > CAVE_END:
@@ -509,7 +498,12 @@ if args.store_boot:
     # the banner up.  So this frame is the one that takes the premature banner
     # back off the screen, and it costs the fast path nothing because the fast
     # path never reads it.
-    progress(out, 30)
+    # Only the slow path gets here -- the fast one stopped on the line above
+    # with the banner up -- so this frame does two jobs: it takes the premature
+    # banner back off the screen, and it starts the bar at fifty rather than
+    # where it left off, which is the one place in the boot that says out loud
+    # "this is not the fast path".
+    progress(out, 50)
     for _ in range(3):
         w(f"mem set 0x{ECHO_SLOT:08X} 0x{ECHO_ORIG:08X}")
     w("")
@@ -533,13 +527,6 @@ if args.loader:
     # One loader, whatever the card carries: see the note at `boot:` in
     # loader.S for the task that turned out to be unnecessary.
     ldef = [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}']
-    if args.abort_always:
-        # ABORT_NOW too: a card with no store has only ONE `echo`, and the three
-        # commands after it put the handler back -- so an ARMED abort is
-        # disarmed before anything can trigger it.  The first build of this test
-        # did exactly that and passed by doing nothing.
-        ldef += ['ABORT_AUTORUN=1', 'ABORT_ALWAYS=1', 'ABORT_NOW=1',
-                 f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}']
     if args.store_boot:
         # The stored copy is the one that aborts the script: reaching it means
         # the settings block was good, and everything after that point in the
@@ -550,11 +537,7 @@ if args.loader:
         # STORE_LEN has to be the assembled length, which is not known until it
         # is assembled.  Both constants are movw/movt pairs, so their VALUE
         # cannot change the size: assemble once to measure, then again for real.
-        probe = ldef + ['ABORT_AUTORUN=1', 'STORE_PROVISION=1', 'STORE_LEN=0',
-                        'STORE_MAGIC=0', f'STORE_FROM=0x{STORE_FROM:08X}'] + \
-                       (['ABORT_NOW=1'] if args.abort_now else []) + [
-                        f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}']
-        n = len(assemble(HERE / 'templates' / 'loader.S', probe))
+        n = len(assemble(HERE / 'templates' / 'loader.S', ldef))
         # The store's body is the loader itself, so its ceiling is the space
         # measured safe in XC_CommonSaveData: +0x024..+0x200 of the block, less
         # the one-word header.  Checked here rather than assumed, because a
@@ -567,14 +550,6 @@ if args.loader:
         if n != slen:
             sys.exit(f'the bootstrap was built for {slen} bytes of loader and '
                      f'the loader is {n}: the two measurements disagree.')
-        ldef += ['ABORT_AUTORUN=1', 'STORE_PROVISION=1',
-                 f'STORE_FROM=0x{STORE_FROM:08X}'] + \
-                (['ABORT_NOW=1'] if args.abort_now else []) + [
-                 f'STORE_LEN=0x{n:X}', f'STORE_MAGIC=0x{smagic:08X}',
-                 # The abort skips the three commands that put the echo handler
-                 # back, so the loader has to do it itself, and needs to be told
-                 # what to put there.
-                 f'ECHO_SLOT=0x{ECHO_SLOT:08X}', f'ECHO_ORIG=0x{ECHO_ORIG:08X}']
     lcode = assemble(lsrc, ldef)
     lwords = to_words(lcode)
     # Not at LOAD. The loader's whole job is to write to LOAD, and putting it
@@ -591,7 +566,7 @@ if args.loader:
     hook_bl = 0xEB000000 | (ldisp & 0xFFFFFF)
 
     w(f"# --- loader @0x{LOADER:08X}..0x{lend:08X}, {len(lcode)} bytes --------------")
-    w("# Reads \\VSHL.BIN and places what it says. The worker itself is in there.")
+    w("# Reads \\fpSup.BIN and places what it says. The worker itself is in there.")
     per = (len(lwords) + CHUNKS - 1) // CHUNKS
     for c in range(CHUNKS):
         for i in range(c * per, min((c + 1) * per, len(lwords))):
@@ -729,9 +704,26 @@ if args.loader:
     # The loader's second half rides in the file as the first section, marked
     # with destination zero so it is run where it lands instead of copied. Every
     # word it saves the AutoRun is a `mem set` and about sixty milliseconds.
-    stage2 = assemble(HERE / 'templates' / 'stage2.S')
+    # stage2 publishes the loader into the settings block and arms the stop, so
+    # it needs to know where both live and what the loader's bytes hash to.
+    _sd = [f'ABORT_AT=0x{ABORT_AT:08X}', f'ECHO_SLOT=0x{ECHO_SLOT:08X}',
+           f'STORE=0x{STORE:08X}', f'LOADER_BASE=0x{CAVE_LOW:08X}']
+    if args.store_boot:
+        _sd += ['STORE_PROVISION=1', f'STORE_MAGIC=0x{smagic:08X}',
+                f'STORE_LEN=0x{slen:X}']
+    else:
+        # Nothing to publish on a card with no store, so the publish is not
+        # compiled in at all -- see the note in stage2.S about what a length of
+        # zero would do to the copy loop.
+        _sd += ['STORE_MAGIC=0', 'STORE_LEN=0']
+    stage2 = assemble(HERE / 'templates' / 'stage2.S', _sd)
     verify_stage2_cache_publish(stage2)
     secs = [(0, stage2)]
+    # The routine stage2 points the echo handler at.  A section like any other,
+    # so it lands at a fixed cave address that outlives the staging buffer.
+    secs.append((ABORT_AT, assemble(HERE / 'templates' / 'abort.S',
+                                    [f'ECHO_SLOT=0x{ECHO_SLOT:08X}',
+                                     f'ECHO_ORIG=0x{ECHO_ORIG:08X}'])))
     worker_sec = None
     if not args.no_shell:
         # Destination zero, like stage2: not placed anywhere.  The worker's
@@ -793,7 +785,7 @@ if args.loader:
     else:
         entry = 16 + 8 * len(secs) + at[worker_sec] + symbols(WORKER)['spawn']
     binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
-    binpath = DEST.parent / 'VSHL.BIN'
+    binpath = DEST.parent / 'fpSup.BIN'
     # Padded to a fixed size for the same reason AutoRun.txt is: putfile writes
     # over USB and cannot shorten a file, so a smaller binary would leave the
     # tail of the last one behind.  Thirty-two kilobytes because an edition that
