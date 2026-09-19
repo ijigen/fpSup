@@ -55,6 +55,37 @@ The order differs because `build_autorun.py` appends the worker *before*
 catalogue order and cannot tell those two apart. That is also what the two
 remaining STALE checks in `build_catalogue.py` are about.
 
+## A dev card never starts fast, and that is the design
+
+`--dev-card` produces a slow-load card, always. Nothing in the chain passes
+`--store-boot`, and it should not: fast start is added by the step that packages
+a card, not by the build that makes one.
+
+The reason is in the bytes. A fast card's four pieces -- the AutoRun with
+`store_boot` in it, a stage2 that writes the loader to flash, the abort routine,
+and the magic -- all have to come from one `--store-boot` build, because the
+magic is a sha256 of the loader that same AutoRun spells out. Mix a `store_boot`
+from one build with a loader from another and they verify against each other and
+disagree; at boot, that is a branch into the settings block with no shell to
+recover with. So one build owns all four, and the page swaps them in as a set.
+
+**To test fast start on a combined card, use the page.** Tick the products, tick
+Fast start, download both files. The page builds those four pieces from one
+`--store-boot` build and a check in `build_catalogue.py` refuses to write the
+page if the magic does not match the loader beside it.
+
+A card that already starts fast is the wrong file to feed back into the page:
+taking its fast start apart means recomputing that hash, and a hash the tool may
+recompute is a check that always agrees with itself.
+
+**Not yet booted on a combined card.** As of 2026-09-20 fast start has been
+written, booted and confirmed on a shell-only card: first boot slow and seeds
+the settings block, every boot after it twenty-six commands, and the banner
+drawn once instead of twice. The same three pieces go onto a combined card and
+nothing about them is card-specific, but nobody has powered one on. Closing it
+is two boots: the first seeds, the second should show the banner once and no
+`fpSup[####....]050` frame.
+
 ## Rebuilding does not give you what you tested
 
 ```
