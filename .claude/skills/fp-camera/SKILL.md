@@ -84,6 +84,14 @@ understood.
   to work, not a boundary.
 - **Freshly written code is data to the caches** until `0xC000E91C` runs.
 - **A soft power cycle does not clear RAM**; a battery pull does.
+- **Never kill `putfile.py` (or any transfer) mid-write.** `pkill` cancels the
+  in-flight OUT transfer and wedges the vendor endpoint: the device still
+  enumerates, the node id is unchanged, but every command comes back
+  `frame0 ... moved=0/64` and restarting the daemon does not help. Recovery is a
+  cable replug (a cold boot is not needed -- the worker survives, its counters
+  carry on). This is the failure `putfile.py`'s own comments describe: "the
+  host's cancelled transfer was what took the USB device off the bus". If a
+  transfer is too slow, make the file smaller next time -- do not kill it.
 
 ### Seen once
 
