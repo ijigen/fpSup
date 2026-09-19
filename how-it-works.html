@@ -55,8 +55,8 @@ always willing to run, in a file the camera always looked for.</p>
 many writes, and a text file of them would take minutes to execute. So the
 <code>AutoRun.txt</code> is a loader. It writes a small stage-one routine into an
 unused region of RAM, hands it the payload sitting next to it in
-<code>VSHL.BIN</code>, and branches to it.</p>
-<p><code>VSHL.BIN</code> is a plain container: the tag <code>"VBIN"</code>, a section
+<code>fpSup.BIN</code>, and branches to it.</p>
+<p><code>fpSup.BIN</code> is a plain container: the tag <code>"VBIN"</code>, a section
 count, the entry address, the payload length, then one <code>(destination, length)</code>
 record per section with the blobs aligned to four bytes. The region it writes into is
 mapped out byte by byte:</p>

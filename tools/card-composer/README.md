@@ -2,8 +2,9 @@
 
 **Policy, 2026-09-13: merged cards are produced here and nowhere else.**
 
-Tick the cards you want, get `AutoRun.txt` and `VSHL.BIN`. Drop in someone
-else's `VSHL.BIN` to merge that too.
+Tick the cards you want, get `AutoRun.txt` and `fpSup.BIN`. Drop in someone
+else's payload container to merge that too — a card published before
+2026-09-19 names it `VSHL.BIN`, and either is read.
 
 ## Which copy to open
 
@@ -55,7 +56,7 @@ baseline, not for putting in a camera.
 
 Two facts make browser-side composition exact:
 
-* `VSHL.BIN` is a plain container — `"VBIN"`, a count, the entry, the payload
+* `fpSup.BIN` is a plain container — `"VBIN"`, a count, the entry, the payload
   length, then one `(dest, len)` record per section, blobs 4-byte aligned.
   Firmware and pool sections are independent, so merging is concatenation plus
   checks. Destination zero is the loader's stage-two helper: a single card keeps
@@ -63,7 +64,7 @@ Two facts make browser-side composition exact:
   generated alongside the AutoRun templates. This matters when a newer loader
   changes cache publication but an older standalone card is also selected.
 * `AutoRun.txt` does not depend on the section list, or even on the entry — the
-  loader reads that out of VSHL.BIN's header. Measured: the OG3K-only card
+  loader reads that out of the container's header. Measured: the OG3K-only card
   (entry 0) and the OG3K+gyro card (entry `0xC072E064`) have the same 135
   commands and differ in three banner lines.
 
@@ -116,7 +117,7 @@ The same rules `build_base_card.py`'s `check()` runs, plus two the merge needs:
   > and the park stub lives *at* the bound it would be tested against.
 
 - every selected card branches to the same entry
-- VSHL.BIN fits in 32,768 bytes
+- the payload fits in 32,768 bytes
 - the banner is printable ASCII (the OSD font has no glyph for anything else)
 
 ## Using it from a script, or from an agent
@@ -151,7 +152,7 @@ const auto   = api.composeAutorun(banner);
 const bad = api.runChecks(recs, vshl, banner, entry).filter(c => !c.ok);
 if (bad.length) throw new Error(bad.map(c => c.t + ': ' + c.d).join('\n'));
 
-fs.writeFileSync('VSHL.BIN', Buffer.from(vshl.bytes));
+fs.writeFileSync('fpSup.BIN', Buffer.from(vshl.bytes));
 fs.writeFileSync('AutoRun.txt', auto);
 ```
 

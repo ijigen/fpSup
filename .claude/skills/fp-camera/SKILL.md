@@ -133,7 +133,7 @@ unplug, attach the SSD, record, detach, reattach, read.
 ```sh
 python3 build_base_card.py --edition gcsv --debug --version 'vX debug' --out DIR
 python3 release_card.py gcsv vX.Y            # a release, section-checked
-cp DIR/AutoRun.txt DIR/VSHL.BIN /Volumes/fpSup/ && sync
+cp DIR/AutoRun.txt DIR/fpSup.BIN /Volumes/fpSup/ && sync
 diskutil eject /Volumes/fpSup                # Spotlight often dissents; sync is
                                              # what matters, Finder can eject
 ```

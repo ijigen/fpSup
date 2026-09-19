@@ -23,13 +23,14 @@ happens to be at those addresses on another.
 releases and the reference, in one page.
 
 **[fpSup-Merge](https://ijigen.github.io/fpSup/tools/card-composer/)** — pick the
-products you want on one card and get `AutoRun.txt` and `VSHL.BIN`. Merged cards are
+products you want on one card and get `AutoRun.txt` and `fpSup.BIN`. Merged cards are
 produced here and nowhere else, and every combination is checked against the same
 rules the build scripts use. Runs in the browser — no toolchain, no camera.
 
 ### Releases
 
-Two files each — copy `AutoRun.txt` and `VSHL.BIN` to the root of the card. No
+Two files each — copy `AutoRun.txt` and the payload container to the root of
+the card (`fpSup.BIN`; releases published before 2026-09-19 name it `VSHL.BIN`). No
 folder to make, nothing to convert, no step afterwards. To put two of them on one
 card, use the composer rather than copying both.
 
@@ -128,12 +129,12 @@ Each page says what has been proven, what is being worked on, and what is open.
 **[ijigen.github.io/fpSup](https://ijigen.github.io/fpSup/)** —— 工具、釋出版、參考資料都在一頁。
 
 **[fpSup-Merge](https://ijigen.github.io/fpSup/tools/card-composer/)** —— 勾選要的產品,
-產生 `AutoRun.txt` 與 `VSHL.BIN`。**合併版只在這裡產生**,而且每個組合都用建置腳本
+產生 `AutoRun.txt` 與 `fpSup.BIN`。**合併版只在這裡產生**,而且每個組合都用建置腳本
 同一套規則檢查過。在瀏覽器裡跑 —— 不用工具鏈,不用相機。
 
 ### 釋出版
 
-每份就兩個檔 —— `AutoRun.txt` 與 `VSHL.BIN` 放進卡片根目錄。不用建資料夾、不用轉檔、事後沒有步驟。要把兩份放同一張卡,用合併器,不要兩份都複製。
+每份就兩個檔 —— `AutoRun.txt` 與 `fpSup.BIN`(2026-09-19 之前發布的版本叫 `VSHL.BIN`)放進卡片根目錄。不用建資料夾、不用轉檔、事後沒有步驟。要把兩份放同一張卡,用合併器,不要兩份都複製。
 
 | 產品 | 版本 | 做什麼 |
 |---|---|---|

@@ -9,7 +9,7 @@ carry are really in the binary, and writes the archive and its checksums.
 Nothing is assembled by hand: v1.4 of the older line shipped once without its
 two orientation sections because a rebuild silently dropped two arguments
 somebody had been passing on the command line, and the only visible sign was a
-VSHL.BIN that hashed differently.
+payload container that hashed differently.
 """
 import argparse
 import hashlib
@@ -20,7 +20,7 @@ import sys
 import zipfile
 
 HERE = pathlib.Path(__file__).resolve().parent
-FILES = ('AutoRun.txt', 'VSHL.BIN', 'README.txt')
+FILES = ('AutoRun.txt', 'fpSup.BIN', 'README.txt')
 
 # Every section the card must carry, and what it is.  A build that drops one
 # still produces a perfectly valid AutoRun and a camera that does nothing.
@@ -59,7 +59,7 @@ def check_sections(path, edition):
     d = pathlib.Path(path).read_bytes()
     magic, n, entry, _ = struct.unpack_from('<4sIII', d, 0)
     if magic != b'VBIN':
-        raise SystemExit(f'{path} is not a VSHL binary: {magic!r}')
+        raise SystemExit(f'{path} is not a VBIN container: {magic!r}')
     dests = {struct.unpack_from('<II', d, 16 + i * 8)[0] for i in range(n)}
     want = EXPECT[edition]
     missing = [f'0x{a:08X} ({w})' for a, w in want.items() if a not in dests]
@@ -86,7 +86,7 @@ def main():
         sys.stderr.write(r.stdout + r.stderr)
         raise SystemExit('build_base_card failed')
     print(r.stdout.rstrip().splitlines()[-1].strip())
-    check_sections(out / 'VSHL.BIN', a.edition)
+    check_sections(out / 'fpSup.BIN', a.edition)
 
     name = f'{STEM[a.edition]}-{a.version}'
     zpath = HERE / 'release' / f'{name}.zip'

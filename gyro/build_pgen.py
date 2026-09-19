@@ -6,7 +6,7 @@
     "PGEN" | u32 post-process entry | u32 gcsv entry | u32 length | the code
 
 The generator lives in the pool, whose address is only known at run time, so it
-cannot be a section of VSHL.BIN like the logger is.  It goes on the card as a
+cannot be a section of fpSup.BIN like the logger is.  It goes on the card as a
 file instead and pgenload.S reads it in at boot -- the same shape the lens table
 already uses.  The header carries the entry offset so the loader never has to
 know anything about the code it is placing.

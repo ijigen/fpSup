@@ -138,7 +138,7 @@ This one cost two weeks of a red test suite reading like a real overrun:
 | constant | value | whose |
 |---|---|---|
 | `CAVE_BASE` (`load.py:93`) | `0xC072DE64` | images injected over USB (`load.sh`) |
-| `ENTRY_AT` (`build_base_card.py:58`) | `0xC072E064` | the card's VSHL image — the loader owns the 512 below |
+| `ENTRY_AT` (`build_base_card.py:58`) | `0xC072E064` | the card's payload image — the loader owns the 512 below |
 | `PARK_AT` | `0xC072EFB4` | the park stub; nothing of ours may reach it |
 | — | `0xC072F000` | the shell's own state starts here |
 
@@ -230,7 +230,7 @@ cd fpSup/fp_usb_shell
 | `getfile.py <remote> [local] --size N` | read one back |
 | `memprobe.py <base> <size> [--check]` | mark a region, then see what survived |
 | `swapworker.py` | replace the resident worker without a battery pull, ~1 s |
-| `build_autorun.py` | build `AutoRun.txt` (+ `VSHL.BIN` with `--loader`) |
+| `build_autorun.py` | build `AutoRun.txt` (+ `fpSup.BIN` with `--loader`; `--bin-name` renames it) |
 
 Run python from `fp_usb_shell/` — imports resolve from there.
 
@@ -253,7 +253,7 @@ The worker checks two words every round, so the swap is just the boot path
 asked for a second time:
 
 ```
-putfile VSHL.BIN                     the new code, onto the card
+putfile fpSup.BIN                    the new code, onto the card
 mem_set 0xC072F048 <loader `load`>   SWAP_ADDR — address first
 mem_set 0xC072F044 0x50415753        SWAP_MAGIC "SWAP" — magic second
 ```
@@ -338,7 +338,7 @@ current and which were overturned.
 
 ## Cards
 
-The AutoRun spells out a small loader; the loader reads `\VSHL.BIN` off the
+The AutoRun spells out a small loader; the loader reads `\fpSup.BIN` off the
 card and becomes it. That is why command count stopped growing with payload
 size — 38 ms per command, so every word the AutoRun does not have to spell out
 is real boot time.
@@ -346,7 +346,7 @@ is real boot time.
 ```
 AutoRun  patches → memmgr bufmem get → write the loader → point `echo` at it
          → echo → restore the handler ×3 → banner
-loader   (in the dispatcher's task) open \VSHL.BIN, else the card; read; "VBIN"?
+loader   (in the dispatcher's task) open \fpSup.BIN, else the card; read; "VBIN"?
 stage2   (runs in place in the read buffer) place every section, clean the cache
 entry    card: gsup_entry, which RETURNS -- so the loader reaches load_stop and
          hands 0xC00D0794 to the worker

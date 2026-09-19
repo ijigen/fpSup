@@ -982,7 +982,7 @@ writer_clip:
 
 /* gsup_boot -- everything the two deploy scripts do, done by the camera.
  *
- * Runs once, from the VSHL entry, with the camera idle at the end of boot.  It
+ * Runs once, from the card's entry, with the camera idle at the end of boot.  It
  * is in the POOL rather than the cave because the cave has no room for it and
  * because it belongs with the code it is wiring up; a forty-byte trampoline in
  * the cave reads the pool pointer and branches here.

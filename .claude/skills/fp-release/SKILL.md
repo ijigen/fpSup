@@ -17,11 +17,11 @@ checksums. Two guards in it exist because of real losses:
 
 - **Section list.** v1.4 shipped without its two orientation sections because a
   rebuild silently dropped two arguments someone had been passing by hand. The
-  only visible sign was a VSHL.BIN that hashed differently.
+  only visible sign was a payload container that hashed differently.
 - **It refuses to overwrite an existing archive.** `release/<edition>/` is a
   build directory and drifts from the archive as the shared core moves —
   rebuilding an old version there produces a *different* card under the same
-  version number. Rebuilding Base v1 once produced a VSHL.BIN 240 bytes longer
+  version number. Rebuilding Base v1 once produced a payload 240 bytes longer
   than the one in its zip.
 
 `--force` exists. It discards a version somebody may already have. Do not.
@@ -29,7 +29,7 @@ checksums. Two guards in it exist because of real losses:
 ## Verify the thing that ships
 
 Not a rebuild, not a debug card, not the USB deploy — **write the release
-build's own `AutoRun.txt` and `VSHL.BIN` to the card and test that**. Confirm
+build's own `AutoRun.txt` and payload to the card and test that**. Confirm
 the hashes match `SHA256SUMS-<version>.txt` before handing it over.
 
 Then run the procedure that reproduces whatever is being fixed, plus the paths

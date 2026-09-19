@@ -13,7 +13,7 @@ import argparse, hashlib, pathlib, shutil, subprocess, sys, zipfile
 HERE = pathlib.Path(__file__).resolve().parent
 REL = HERE / 'release'
 CARD = REL / 'card'
-FILES = ('AutoRun.txt', 'VSHL.BIN', 'PGEN.BIN')
+FILES = ('AutoRun.txt', 'fpSup.BIN', 'PGEN.BIN')
 
 
 def sha(p):
@@ -32,7 +32,7 @@ def build():
             raise SystemExit(f'{pathlib.Path(cmd[1]).name} failed')
         print('  ' + r.stdout.strip().splitlines()[-1].strip())
     return {'AutoRun.txt': HERE / 'autorun' / 'AutoRun.txt',
-            'VSHL.BIN':    HERE / 'autorun' / 'VSHL.BIN',
+            'fpSup.BIN':   HERE / 'autorun' / 'fpSup.BIN',
             'PGEN.BIN':    HERE / '.pgen.bin'}
 
 
@@ -51,7 +51,7 @@ def check_sections(path):
     v1.4 was packaged once without the two orientation sections: v1.3 had been
     given them as --also arguments by hand, and rebuilding from build_card.py
     silently dropped portrait support. Nothing about the build failed, and the
-    only visible sign was a VSHL.BIN that hashed differently.
+    only visible sign was a payload container that hashed differently.
     """
     import struct
     d = pathlib.Path(path).read_bytes()
@@ -60,7 +60,7 @@ def check_sections(path):
     missing = [f'0x{a:08X} ({w})' for a, w in EXPECT_SECTIONS.items()
                if a not in dests]
     if missing:
-        raise SystemExit('VSHL.BIN is missing:\n  ' + '\n  '.join(missing))
+        raise SystemExit('the payload is missing:\n  ' + '\n  '.join(missing))
     print(f'  sections      {n}, all of the expected destinations present')
 
 
@@ -71,7 +71,7 @@ def main():
     name = f'fp-gyro-sup-v{a.version}'
 
     src = build()
-    check_sections(src['VSHL.BIN'])
+    check_sections(src['fpSup.BIN'])
     CARD.mkdir(parents=True, exist_ok=True)
     for f in FILES:
         shutil.copyfile(src[f], CARD / f)

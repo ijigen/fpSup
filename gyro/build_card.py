@@ -25,7 +25,7 @@ ORIENT_AT = 0xC072EF00      # the call-through that suppresses the DNG rotation
 ORIENT_PATCH_AT = 0xC00C32C8
 ORIENT_AT_ANCHOR = 0xC072EF40   # the frame-anchor payload is 64 bytes longer and
                                 # runs past 0xC072EF00; only that build moves it,
-                                # so the shipping VSHL stays byte for byte the one
+                                # so the shipping payload stays byte for byte the one
                                 # that was tested
 TABLE_LOAD_AT = 0xC072F800  # the shell's template slot: nothing uses it at boot,
                             # and the worker sits below it at 0xC072F050
@@ -77,7 +77,7 @@ if __name__ == '__main__':
         '--out', str(HERE / 'autorun' / 'AutoRun.txt'),
     ]
     if phase_probe:
-        # Place the trampoline before the four-byte firmware patch.  The VSHL
+        # Place the trampoline before the four-byte firmware patch.  The card
         # loader preserves section order and invalidates the instruction cache
         # after all of them are present, so F_WRITE can never branch into a
         # half-copied probe.

@@ -246,6 +246,7 @@ class ControlTests(unittest.TestCase):
         self.assertFalse(manifest['ui']['native_binding_installed'])
         self.assertFalse((HERE / 'AutoRun.txt').exists())
         self.assertFalse((HERE / 'VSHL.BIN').exists())
+        self.assertFalse((HERE / 'fpSup.BIN').exists())
 
 
 if __name__ == '__main__':

@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-FILES = ('AutoRun.txt', 'VSHL.BIN', 'PGEN.BIN')
+FILES = ('AutoRun.txt', 'fpSup.BIN', 'PGEN.BIN')
 
 
 def find_card(explicit):
@@ -114,7 +114,7 @@ def main():
     print('  ' + r.stdout.strip().splitlines()[-1].strip())
 
     src = {'AutoRun.txt': HERE / 'autorun' / 'AutoRun.txt',
-           'VSHL.BIN': HERE / 'autorun' / 'VSHL.BIN',
+           'fpSup.BIN': HERE / 'autorun' / 'fpSup.BIN',
            'PGEN.BIN': HERE / '.pgen.bin'}
     # Remove before writing, which is why --no-pad above is safe.
     #

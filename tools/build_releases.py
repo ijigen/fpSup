@@ -80,8 +80,12 @@ def latest():
                 print(f'  ! {d.name}: does not match fpsup-<product>-v<version>, '
                       f'so it is not on the site', file=sys.stderr)
             continue
-        if not (d / 'AutoRun.txt').exists() or not (d / 'VSHL.BIN').exists():
-            print(f'  skipping {d.name}: needs both AutoRun.txt and VSHL.BIN', file=sys.stderr)
+        # Either name: a build writes fpSup.BIN, and every release published
+        # before 2026-09-19 carries VSHL.BIN as frozen bytes.
+        if not (d / 'AutoRun.txt').exists() or not any(
+                (d / n).exists() for n in ('fpSup.BIN', 'VSHL.BIN')):
+            print(f'  skipping {d.name}: needs AutoRun.txt and the payload',
+                  file=sys.stderr)
             continue
         key = tuple(int(x) for x in m['num'].split('.')), rank(m['qual'])
         p = m['product']

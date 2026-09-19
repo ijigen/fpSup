@@ -59,7 +59,7 @@ gyro/makecard.py release
 ```
 
 This builds the no-shell native lifecycle image, copies `AutoRun.txt`,
-`VSHL.BIN` and `PGEN.BIN`, creates `GYRO/`, verifies every byte and ejects.
+`fpSup.BIN` and `PGEN.BIN`, creates `GYRO/`, verifies every byte and ejects.
 `gyro/makecard.py debug` adds the USB shell but uses the same logger and pool
 source.
 
