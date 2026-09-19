@@ -259,6 +259,7 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
       <div id="startopt"></div>
       <label class="f" for="ban">Boot banner</label>
       <input type="text" id="ban" maxlength="24" value="fpSup-Custom!">
+      <!-- maxlength mirrors build_autorun's bound; the CHECK derives it. -->
       <button class="btn" id="dl-a">Download AutoRun.txt</button>
       <button class="btn ghost" id="dl-v">Download fpSup.BIN</button>
       <p class="note" id="dlnote" hidden></p>
@@ -635,10 +636,18 @@ function runChecks(recs, vshl, banner, entry, entriesNow){
      boundary, not a font note.  A banner of "x\ndelall" composes a file with
      four more commands in it; rejecting anything outside printable ASCII is
      what stops that, and a failed check disables both download buttons. */
-  const bad = /[^\x20-\x7E]/.test(banner) || !banner.length;
-  c.push({ok:!bad, t:'Banner is printable ASCII — the only text that reaches AutoRun.txt',
-          d: bad ? 'a newline here would add commands to the file; also no OSD glyph'
-                 : banner.length+' chars'});
+  /* Length as well as content.  build_autorun refuses a banner past
+     CAT.banner_max -- read from it, not typed here -- and the input's maxlength
+     only limits what is typed into it, so nothing caught a longer one. */
+  const bad = /[^\x20-\x7E]/.test(banner) || !banner.length
+              || banner.length > CAT.banner_max;
+  c.push({ok:!bad, t:'Banner is printable ASCII, and fits the readout',
+          d: !banner.length ? 'empty'
+             : banner.length > CAT.banner_max
+               ? banner.length + ' chars; the readout holds ' + CAT.banner_max
+             : /[^\x20-\x7E]/.test(banner)
+               ? 'a newline here would add commands to the file; also no OSD glyph'
+             : banner.length + ' of ' + CAT.banner_max + ' chars'});
   return c;
 }
 </script>

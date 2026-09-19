@@ -509,6 +509,24 @@ def banner_of(text):
     return last
 
 
+def banner_max():
+    """How long a banner build_autorun will accept, read from build_autorun.
+
+    The page's input carries maxlength="24" and that number was typed there by
+    hand.  An HTML attribute only limits typing, so nothing checked it, and a
+    banner that got past it -- a longer default in a future build, a script
+    filling the field -- would have produced a card build_autorun refuses and a
+    page that said all ten checks passed.
+    """
+    import re
+    src = (SHELL_DIR / 'build_autorun.py').read_text()
+    m = re.search(r'if len\(args\.banner\) > (\d+):', src)
+    if not m:
+        raise SystemExit('build_autorun.py no longer bounds --banner; the '
+                         'length this page offers cannot be derived')
+    return int(m.group(1))
+
+
 def read_cap():
     """How many bytes of the card the loader will read, from loader.S.
 
@@ -614,6 +632,7 @@ def main():
 
     cap = read_cap()
     cat = dict(cards=out_cards, pad_to=PAD_TO, read_cap=cap,
+               banner_max=banner_max(),
                dram_image=list(DRAM_IMAGE), pool_size=POOL_SIZE,
                entry_at=0xC072E064, park_at=PARK_AT,
                # worker_at/worker_entry used to live here: 0xC072F050 and
