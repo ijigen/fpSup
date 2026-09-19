@@ -258,7 +258,7 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
       </div>
       <div id="startopt"></div>
       <label class="f" for="ban">Boot banner</label>
-      <input type="text" id="ban" maxlength="24" value="fpSup-OG3K-Gyro!">
+      <input type="text" id="ban" maxlength="24" value="fpSup-Custom!">
       <button class="btn" id="dl-a">Download AutoRun.txt</button>
       <button class="btn ghost" id="dl-v">Download fpSup.BIN</button>
       <p class="note" id="dlnote" hidden></p>
@@ -676,7 +676,10 @@ function render(){
   const {recs, entry, entries} = composed();
   const one = sel().length === 1 ? sel()[0] : null;
   const ban = document.getElementById('ban');
-  if (!touchedBanner) ban.value = one ? one.banner : 'fpSup-Merged!';
+  /* A combination is nobody's release, so it says so.  It used to default to
+     fpSup-Merged!, and before that to whatever was in the markup -- which on a
+     first load was one product's banner on a card that was not that product. */
+  if (!touchedBanner) ban.value = one ? one.banner : 'fpSup-Custom!';
   const banner = ban.value;
   const vshl = composeVshl(recs, entry);
   const autorun = composeAutorun(banner);
