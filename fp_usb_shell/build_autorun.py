@@ -375,7 +375,11 @@ if args.retain_ram:
             w(f"# {line}")
         w(f"mem set 0x{addr:08X} 0x{value:08X}")
     w("")
-progress(out, 20)
+    # This frame marks the firmware patches, and on a --loader card there are
+    # none here -- they ride in the file.  Drawing it there put three frames on
+    # screen back to back with no work between them, which is what a progress
+    # bar is for.
+    progress(out, 20)
 w("")
 # Progress steps through the loader.  Each step is six commands -- text and
 # present, three times, because the layer composites one of three buffers and
@@ -396,7 +400,10 @@ if not args.loader:
 w("# --- the pool is the loader's business now -----------------------------------")
 w("# `memmgr bufmem get` lived here, and it was the script asking for something\n# only the loader uses.  The loader asks the allocator itself -- class 0, the\n# same channel -- and still leaves the address at 0xC3757A7C for everything\n# downstream that reads it from there.")
 w("")
-progress(out, 30)   # the allocation is seconds; say so rather than look stalled
+# There used to be a frame here, left over from when the script asked for the
+# pool and that took seconds.  The script does not ask any more -- the loader
+# does -- so nothing happens between the frame before this one and the frame
+# after it, and it was drawn for nothing.
 w("")
 if args.store_boot:
     # After the pool, because a store that verifies branches straight into the
@@ -439,10 +446,48 @@ if args.store_boot:
     w("# and the loader ends by stopping the script -- everything below is then")
     w("# a slower way to do what has already been done.  If they do not, this")
     w("# returns having touched nothing and the file carries on.")
+    # Frames where the work is.  These twenty-nine words are what the fast path
+    # actually spends its commands on, and they had no marker at all: the bar
+    # drew 0/20/30 back to back before any of them and then sat still.
+    half = len(swords) // 2
     for i in range(len(swords)):
         w(f"mem set 0x{STORE_BOOT_AT + i*4:08X} 0x{word_at(swords, i):08X}")
+        if i == half - 1:
+            w("")
+            progress(out, 30)
+    w("")
+    progress(out, 60)
     w("")
     w(f"mem set 0x{ECHO_SLOT:08X} 0x{STORE_BOOT_AT:08X}")
+    # The last frame before the load.  Everything after this line happens
+    # inside our own code, where the script cannot report: if the camera stops
+    # with the bar here, it stopped in the loader, and that is worth being able
+    # to say.
+    progress(out, 90)
+    # The banner goes BEFORE the load, not after.
+    #
+    # On the fast path the echo below is the whole load -- seconds of it -- and
+    # whatever is on screen when it starts is what the screen shows while it
+    # runs.  Leaving the bar there froze it at its last frame; the banner
+    # carries the wait instead, and the script stops two lines later with it
+    # still up, which is the correct final state.
+    #
+    # On the slow path that echo does nothing, so the banner is premature --
+    # and the frame straight after the abort point wipes it before anyone
+    # reads it.  That line is only reachable on the slow path, which is what
+    # makes this work in a language with no conditionals.
+    #
+    # It cannot be drawn from our own code.  stage2 runs inside this echo, and
+    # a shell line run from inside another shell command executes, returns
+    # zero, prints its reply and does not reach the screen (measured both ways,
+    # 2026-09-19).  The worker's task can -- but og3k, og2k and anyone else's
+    # payload have no worker, and the banner has to be the same on every card.
+    for _ in range(3):
+        w("display osd 1 0x00000000")
+    for _ in range(3):
+        w(f"display text {args.banner}")
+        w("display osd 1")
+    w("")
     w("echo")
     w("")
     # The banner goes AFTER that line, not before it.  It used to be before,
@@ -455,19 +500,16 @@ if args.store_boot:
     #
     # The loader no longer stops the script; it arms the stop and returns.  So
     # by the time these lines run the load really is done, on the fast path.
-    w("# The load is finished by now -- the loader returned rather than stopping")
-    w("# the script, which is what lets this line exist at all.")
-    for _ in range(3):
-        w("display osd 1 0x00000000")
-    for _ in range(3):
-        w(f"display text {args.banner}")
-        w("display osd 1")
-    w("")
     # One line, two meanings.  Fast path: the slot points at the loader's
     # abort_entry, which puts the handler back and stops the reader, so nothing
     # below runs.  Slow path: it still points at the bootstrap, which fails its
     # magic check for the second time and returns having touched nothing.
     w("echo")
+    # Only the slow path gets here: the fast one stopped on the line above with
+    # the banner up.  So this frame is the one that takes the premature banner
+    # back off the screen, and it costs the fast path nothing because the fast
+    # path never reads it.
+    progress(out, 30)
     for _ in range(3):
         w(f"mem set 0x{ECHO_SLOT:08X} 0x{ECHO_ORIG:08X}")
     w("")
