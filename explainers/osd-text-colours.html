@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>On-screen text colours — fpSup</title>
+<meta name="description" content="The SIGMA fp's on-screen text colour is a palette index, not a colour value. All 256 indices: 0-29 computed exactly from the firmware's ROM table, 161-255 measured on a camera.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/osd-text-colours.html">
+<meta property="og:title" content="SIGMA fp on-screen text colours">
+<meta property="og:description" content="The colour word is a palette index in its low byte. All 256 indices, with what is exact and what is measured kept apart.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+/* Swatches. The sub-layer composites over live video, so an entry with alpha
+   below 255 is drawn at that alpha over the page ground, the way it lands on
+   the screen -- not as an opaque block that would misreport it. */
+.sw{display:block; width:34px; height:19px; border-radius:2px; background:var(--c);
+  opacity:var(--a); outline:1px solid rgba(128,128,128,.4); outline-offset:-1px}
+.sw--void{opacity:1; background:repeating-linear-gradient(45deg,
+  var(--line) 0 4px, transparent 4px 8px)}
+table.pal td:nth-child(2){width:1%}
+table.pal td.n{text-align:right; color:var(--dim)}
+table.pal tr.key td:first-child{color:var(--sig); font-weight:600}
+table.pal tr.key td:nth-child(3){font-weight:600}
+.swatches{list-style:none; padding:0; margin:14px 0 0; display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:9px}
+.swatches li{background:var(--panel); border:1px solid var(--line); border-radius:3px;
+  padding:7px; display:flex; flex-direction:column; gap:4px}
+.swatches .sw{width:100%; height:26px}
+.swatches b{font-family:var(--mono); font-size:.8rem; font-weight:600}
+.swatches code{font-size:.72rem; color:var(--dim)}
+</style>
+</head>
+<body>
+
+<a class="back" href="../research.html">&larr; Firmware research</a>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1>On-screen text colours</h1>
+    <p class="lede">The fp's <code>display text</code> colour is not a colour value.
+    It is a palette index, one byte wide, and the other three bytes of the word are
+    ignored. Here is what all 256 indices actually are.</p>
+  </div>
+</header>
+
+<ul class="chips">
+  <li><b>0&ndash;29</b> exact, from ROM</li>
+  <li><b>30&ndash;160</b> empty</li>
+  <li><b>161&ndash;255</b> measured on a camera</li>
+</ul>
+
+<div class="facts">
+  <dl>
+    <dt>0xC0BB1208</dt><dd><b>Ink</b> &mdash; the glyph strokes. Low byte = palette index.</dd>
+    <dt>0xC0BB120C</dt><dd><b>Background</b> &mdash; the rest of the glyph cell. Same
+      encoding; ships as 0, which is transparent.</dd>
+    <dt>white text</dt><dd><code>mem set 0xC0BB1208 0x00000001</code></dd>
+  </dl>
+</div>
+
+<h2>Why it is an index</h2>
+<p>The OSD sub-layer is 8&nbsp;bits per pixel through a colour lookup table. The glyph
+blitter (<code>FUN_c052b620</code>) writes <em>one byte</em> per pixel &mdash; the low byte
+of the colour word for a stroke pixel, the low byte of the background word for the rest.
+Whatever you put in the upper three bytes never reaches the screen.</p>
+
+<p>That is why the stock value looks arbitrary. <code>display text</code> ships with
+<code>0xFFFFF8B2</code>, whose low byte is <code>0xB2</code> &mdash; <b>index 178</b>.
+The firmware's own palette is thirty entries long. 178 is not in it.</p>
+
+<h2>The firmware palette &mdash; 0 to 29</h2>
+<p>This is what <code>display palette 2 0</code> prints. The table itself is a ROM
+constant at <code>0xC0B520BC</code>, thirty AYUV quads, so the RGB below is computed
+from the firmware image rather than measured &mdash; it is exact. U and V are signed
+offsets from 128. <b>The usable solid colours are 1, 3, 4, 5 and 7</b>; 17&ndash;29 are
+a green ramp the camera uses to antialias its own green text.</p>
+<div class="scroll">
+<table class="pal">
+  <thead><tr><th>idx</th><th></th><th>colour</th><th>RGB</th><th>A</th><th>Y</th><th>U</th><th>V</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td><span class="sw sw--void"></span></td><td>transparent</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr class="key"><td>1</td><td><span class="sw" style="--c:#FFFFFF;--a:1.000"></span></td><td>white</td><td>#FFFFFF</td><td class="n">255</td><td class="n">255</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>2</td><td><span class="sw" style="--c:#000000;--a:1.000"></span></td><td>black</td><td>#000000</td><td class="n">255</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr class="key"><td>3</td><td><span class="sw" style="--c:#FF0103;--a:1.000"></span></td><td>red</td><td>#FF0103</td><td class="n">255</td><td class="n">77</td><td class="n">-42</td><td class="n">127</td></tr>
+    <tr class="key"><td>4</td><td><span class="sw" style="--c:#00FE00;--a:1.000"></span></td><td>green</td><td>#00FE00</td><td class="n">255</td><td class="n">149</td><td class="n">-84</td><td class="n">-106</td></tr>
+    <tr class="key"><td>5</td><td><span class="sw" style="--c:#0100FE;--a:1.000"></span></td><td>blue</td><td>#0100FE</td><td class="n">255</td><td class="n">29</td><td class="n">127</td><td class="n">-20</td></tr>
+    <tr><td>6</td><td><span class="sw" style="--c:#000000;--a:0.733"></span></td><td>black, 73% alpha</td><td>#000000</td><td class="n">187</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr class="key"><td>7</td><td><span class="sw" style="--c:#444444;--a:1.000"></span></td><td>dark grey</td><td>#444444</td><td class="n">255</td><td class="n">68</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>8</td><td><span class="sw sw--void"></span></td><td>unset</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>9</td><td><span class="sw sw--void"></span></td><td>unset</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>10</td><td><span class="sw sw--void"></span></td><td>unset</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>11</td><td><span class="sw sw--void"></span></td><td>unset</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>12</td><td><span class="sw sw--void"></span></td><td>unset</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>13</td><td><span class="sw sw--void"></span></td><td>unset</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>14</td><td><span class="sw sw--void"></span></td><td>unset</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>15</td><td><span class="sw sw--void"></span></td><td>unset</td><td>—</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>16</td><td><span class="sw" style="--c:#000000;--a:0.729"></span></td><td>black, 73% alpha</td><td>#000000</td><td class="n">186</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>17</td><td><span class="sw" style="--c:#275225;--a:0.812"></span></td><td>green ramp</td><td>#275225</td><td class="n">207</td><td class="n">64</td><td class="n">-15</td><td class="n">-18</td></tr>
+    <tr><td>18</td><td><span class="sw" style="--c:#306A30;--a:0.839"></span></td><td>green ramp</td><td>#306A30</td><td class="n">214</td><td class="n">82</td><td class="n">-19</td><td class="n">-24</td></tr>
+    <tr><td>19</td><td><span class="sw" style="--c:#3B813B;--a:0.867"></span></td><td>green ramp</td><td>#3B813B</td><td class="n">221</td><td class="n">100</td><td class="n">-23</td><td class="n">-29</td></tr>
+    <tr><td>20</td><td><span class="sw" style="--c:#469544;--a:0.890"></span></td><td>green ramp</td><td>#469544</td><td class="n">227</td><td class="n">116</td><td class="n">-27</td><td class="n">-33</td></tr>
+    <tr><td>21</td><td><span class="sw" style="--c:#4A9F4A;--a:0.910"></span></td><td>green ramp</td><td>#4A9F4A</td><td class="n">232</td><td class="n">124</td><td class="n">-28</td><td class="n">-36</td></tr>
+    <tr><td>22</td><td><span class="sw" style="--c:#4FAC51;--a:0.925"></span></td><td>green ramp</td><td>#4FAC51</td><td class="n">236</td><td class="n">134</td><td class="n">-30</td><td class="n">-39</td></tr>
+    <tr><td>23</td><td><span class="sw" style="--c:#55B754;--a:0.941"></span></td><td>green ramp</td><td>#55B754</td><td class="n">240</td><td class="n">142</td><td class="n">-33</td><td class="n">-41</td></tr>
+    <tr><td>24</td><td><span class="sw" style="--c:#59BF59;--a:0.953"></span></td><td>green ramp</td><td>#59BF59</td><td class="n">243</td><td class="n">149</td><td class="n">-34</td><td class="n">-43</td></tr>
+    <tr><td>25</td><td><span class="sw" style="--c:#5ECB5E;--a:0.969"></span></td><td>green ramp</td><td>#5ECB5E</td><td class="n">247</td><td class="n">158</td><td class="n">-36</td><td class="n">-46</td></tr>
+    <tr><td>26</td><td><span class="sw" style="--c:#62D262;--a:0.984"></span></td><td>green ramp</td><td>#62D262</td><td class="n">251</td><td class="n">164</td><td class="n">-37</td><td class="n">-47</td></tr>
+    <tr><td>27</td><td><span class="sw" style="--c:#66DD67;--a:1.000"></span></td><td>green ramp</td><td>#66DD67</td><td class="n">255</td><td class="n">172</td><td class="n">-39</td><td class="n">-50</td></tr>
+    <tr><td>28</td><td><span class="sw" style="--c:#6EEF6E;--a:1.000"></span></td><td>green ramp</td><td>#6EEF6E</td><td class="n">255</td><td class="n">186</td><td class="n">-43</td><td class="n">-54</td></tr>
+    <tr><td>29</td><td><span class="sw" style="--c:#75FF74;--a:1.000"></span></td><td>green ramp</td><td>#75FF74</td><td class="n">255</td><td class="n">198</td><td class="n">-46</td><td class="n">-58</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Everything above 29</h2>
+<p><b>30&ndash;160 are empty</b> &mdash; nothing has ever written them, and text drawn in
+one of those indices is invisible. <b>161&ndash;255 are not</b>. The hardware CLUT is 256
+entries (<code>0x20D00000 + idx*4</code>, packed <code>U&lt;&lt;24 | V&lt;&lt;16 |
+Y&lt;&lt;8 | A</code>), and the block above 160 is populated by the camera's own GUI,
+not by the thirty-entry table.</p>
+
+<div class="warn">
+<b>These are measured, and they are not ours.</b> The CLUT window is write-only from the
+shell &mdash; it reads back zero in every plane access mode &mdash; so the only way to see
+what is in it is to draw each index and photograph the screen. The hex below comes from
+screenshots against a black backdrop, so it runs slightly dark and desaturated compared
+to the real entry. And nothing here belongs to the thirty-entry table: the camera's GUI
+can reload this block at any time. <b>For anything that has to stay put, use 1, 3, 4, 5
+or 7.</b>
+</div>
+
+<p>The stock pink lives here. Index 178, measured off the shipped
+<code>display text</code> output rather than off a swatch, is <b>#FF6568</b>. It is not a
+chosen colour &mdash; it is an out-of-range index that happens to land on a slot somebody
+else filled in.</p>
+
+<ul class="swatches">
+  <li><span class="sw" style="--c:#FFFFFF;--a:1"></span><b>161</b><code>#FFFFFF</code></li>
+  <li><span class="sw" style="--c:#D01415;--a:1"></span><b>162</b><code>#D01415</code></li>
+  <li><span class="sw" style="--c:#D01415;--a:1"></span><b>164</b><code>#D01415</code></li>
+  <li><span class="sw" style="--c:#FAF82C;--a:1"></span><b>165</b><code>#FAF82C</code></li>
+  <li><span class="sw" style="--c:#FAF82C;--a:1"></span><b>166</b><code>#FAF82C</code></li>
+  <li><span class="sw" style="--c:#C0C263;--a:1"></span><b>167</b><code>#C0C263</code></li>
+  <li><span class="sw" style="--c:#13F013;--a:1"></span><b>168</b><code>#13F013</code></li>
+  <li><span class="sw" style="--c:#58AE57;--a:1"></span><b>169</b><code>#58AE57</code></li>
+  <li><span class="sw" style="--c:#2EEAEB;--a:1"></span><b>170</b><code>#2EEAEB</code></li>
+  <li><span class="sw" style="--c:#4EB1B1;--a:1"></span><b>171</b><code>#4EB1B1</code></li>
+  <li><span class="sw" style="--c:#6E6E8C;--a:1"></span><b>173</b><code>#6E6E8C</code></li>
+  <li><span class="sw" style="--c:#B435B6;--a:1"></span><b>174</b><code>#B435B6</code></li>
+  <li><span class="sw" style="--c:#75D475;--a:1"></span><b>175</b><code>#75D475</code></li>
+  <li><span class="sw" style="--c:#75D475;--a:1"></span><b>176</b><code>#75D475</code></li>
+  <li><span class="sw" style="--c:#895087;--a:1"></span><b>178</b><code>#895087</code></li>
+  <li><span class="sw" style="--c:#81539F;--a:1"></span><b>180</b><code>#81539F</code></li>
+  <li><span class="sw" style="--c:#943F92;--a:1"></span><b>181</b><code>#943F92</code></li>
+  <li><span class="sw" style="--c:#9A66A0;--a:1"></span><b>182</b><code>#9A66A0</code></li>
+  <li><span class="sw" style="--c:#8D4C7D;--a:1"></span><b>184</b><code>#8D4C7D</code></li>
+  <li><span class="sw" style="--c:#9066B3;--a:1"></span><b>185</b><code>#9066B3</code></li>
+  <li><span class="sw" style="--c:#804B73;--a:1"></span><b>186</b><code>#804B73</code></li>
+  <li><span class="sw" style="--c:#964A9C;--a:1"></span><b>188</b><code>#964A9C</code></li>
+  <li><span class="sw" style="--c:#8F58AA;--a:1"></span><b>189</b><code>#8F58AA</code></li>
+  <li><span class="sw" style="--c:#A267AB;--a:1"></span><b>192</b><code>#A267AB</code></li>
+  <li><span class="sw" style="--c:#8F537C;--a:1"></span><b>194</b><code>#8F537C</code></li>
+  <li><span class="sw" style="--c:#597882;--a:1"></span><b>197</b><code>#597882</code></li>
+  <li><span class="sw" style="--c:#61828D;--a:1"></span><b>198</b><code>#61828D</code></li>
+  <li><span class="sw" style="--c:#45829C;--a:1"></span><b>199</b><code>#45829C</code></li>
+  <li><span class="sw" style="--c:#408BAA;--a:1"></span><b>200</b><code>#408BAA</code></li>
+  <li><span class="sw" style="--c:#6D8565;--a:1"></span><b>202</b><code>#6D8565</code></li>
+  <li><span class="sw" style="--c:#4C889E;--a:1"></span><b>203</b><code>#4C889E</code></li>
+  <li><span class="sw" style="--c:#825093;--a:1"></span><b>204</b><code>#825093</code></li>
+  <li><span class="sw" style="--c:#408BAA;--a:1"></span><b>205</b><code>#408BAA</code></li>
+  <li><span class="sw" style="--c:#9D779D;--a:1"></span><b>210</b><code>#9D779D</code></li>
+  <li><span class="sw" style="--c:#825B89;--a:1"></span><b>211</b><code>#825B89</code></li>
+  <li><span class="sw" style="--c:#80487E;--a:1"></span><b>213</b><code>#80487E</code></li>
+  <li><span class="sw" style="--c:#93479C;--a:1"></span><b>214</b><code>#93479C</code></li>
+  <li><span class="sw" style="--c:#68526E;--a:1"></span><b>215</b><code>#68526E</code></li>
+  <li><span class="sw" style="--c:#355F24;--a:1"></span><b>216</b><code>#355F24</code></li>
+  <li><span class="sw" style="--c:#496D3F;--a:1"></span><b>218</b><code>#496D3F</code></li>
+  <li><span class="sw" style="--c:#628158;--a:1"></span><b>220</b><code>#628158</code></li>
+  <li><span class="sw" style="--c:#6E7FA0;--a:1"></span><b>221</b><code>#6E7FA0</code></li>
+  <li><span class="sw" style="--c:#546F4E;--a:1"></span><b>222</b><code>#546F4E</code></li>
+  <li><span class="sw" style="--c:#48733C;--a:1"></span><b>224</b><code>#48733C</code></li>
+  <li><span class="sw" style="--c:#8C5F8B;--a:1"></span><b>225</b><code>#8C5F8B</code></li>
+  <li><span class="sw" style="--c:#A170AE;--a:1"></span><b>228</b><code>#A170AE</code></li>
+  <li><span class="sw" style="--c:#906F9D;--a:1"></span><b>229</b><code>#906F9D</code></li>
+  <li><span class="sw" style="--c:#006B00;--a:1"></span><b>232</b><code>#006B00</code></li>
+  <li><span class="sw" style="--c:#2E5A20;--a:1"></span><b>235</b><code>#2E5A20</code></li>
+  <li><span class="sw" style="--c:#2E601D;--a:1"></span><b>236</b><code>#2E601D</code></li>
+  <li><span class="sw" style="--c:#845890;--a:1"></span><b>237</b><code>#845890</code></li>
+  <li><span class="sw" style="--c:#1D6104;--a:1"></span><b>238</b><code>#1D6104</code></li>
+  <li><span class="sw" style="--c:#96438B;--a:1"></span><b>239</b><code>#96438B</code></li>
+  <li><span class="sw" style="--c:#7B5A83;--a:1"></span><b>240</b><code>#7B5A83</code></li>
+  <li><span class="sw" style="--c:#6E4C6F;--a:1"></span><b>242</b><code>#6E4C6F</code></li>
+  <li><span class="sw" style="--c:#4B7642;--a:1"></span><b>247</b><code>#4B7642</code></li>
+  <li><span class="sw" style="--c:#5B787D;--a:1"></span><b>249</b><code>#5B787D</code></li>
+  <li><span class="sw" style="--c:#3E819D;--a:1"></span><b>250</b><code>#3E819D</code></li>
+  <li><span class="sw" style="--c:#006A00;--a:1"></span><b>255</b><code>#006A00</code></li>
+</ul>
+<p class="note">Indices in this range that read back as flat grey are left out: those are
+the live picture showing through a transparent entry, not a colour.</p>
+
+<h2>How it was measured</h2>
+<p>Each index was drawn as text and photographed with the camera's own screenshot key,
+eighteen rows to a frame &mdash; the text's Y position is an immediate in the
+<code>display text</code> handler (<code>MOV r8,#imm</code> at <code>0xC03E4698</code>),
+and <code>mem set</code> can rewrite firmware code in place, effective immediately, with no
+cache maintenance needed. Thirteen frames covered all 256.</p>
+<p class="note"><b>One trap, paid for twice.</b> <code>mem set</code> drops writes
+silently, so the Y immediate has to be read back and retried. The first pass did not,
+and the rows whose write went missing measured the live scene instead. The tell was that
+those "colours" tracked <em>row position</em> rather than index &mdash; every eighteenth
+index repeated the same value. That periodicity is also what identified 30&ndash;160 as
+empty.</p>
+
+<h2>While you are in here</h2>
+<p>There is one font and one size: 16&times;32 cells, 96 glyphs, 1&nbsp;bpp, with
+<b>0 meaning ink and 1 meaning background</b>. The second font object shares the same
+descriptor, so it is not a second size. The descriptor is in RAM at
+<code>0xC37830E8</code> &mdash; glyph width at +2, height at +4, bytes per row at +6,
+bitmap pointer at +0xC &mdash; so a larger font is a matter of uploading a scaled bitmap
+and repointing it. A 2&times; version is 24&nbsp;KB and lands in under a second. The draw
+rectangle has to grow with it: <code>DrawTextSimpleFont::v1</code> opens with
+<code>if (rect.h &lt; glyphHeight) return 0</code>, so a taller font with the stock
+32-pixel rectangle draws nothing at all.</p>
+
+<footer>
+  <p><a href="../research.html">Firmware research</a> &middot;
+  <a href="../">fpSup</a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
+</footer>
+
+</body>
+</html>

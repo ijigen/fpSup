@@ -32,14 +32,21 @@
   what has been proven on a camera, what is being worked on, and what is still open.</p>
 </header>
 
-<h2>Read this one first</h2>
+<h2>Explainers</h2>
 <div class="grid">
   <a class="row" href="explainers/imx410-iso-gain.html">
     <b>IMX410 ISO and gain</b>
     <small>Where the sensor's gain is actually applied, what that does to dynamic
     range at each ISO, and which parts are confirmed in the firmware versus which
     OTP values still need measuring. Interactive.</small>
-    <span class="m">the most finished piece of research here</span>
+    <span class="m">read this one first &middot; the most finished piece of research here</span>
+  </a>
+  <a class="row" href="explainers/osd-text-colours.html">
+    <b>On-screen text colours</b>
+    <small>The colour of <code>display text</code> is a palette index, not a colour
+    value, and the stock pink is an out-of-range one. All 256 indices, with the
+    thirty that come from ROM kept apart from the ones that had to be photographed.</small>
+    <span class="m">reference &middot; 0&ndash;29 exact, 161&ndash;255 measured</span>
   </a>
 </div>
 
@@ -71,7 +78,7 @@
         <td>researched; the engine's sustained rate is the one unmeasured number</td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/ui-sup.md">ui sup</a></td>
         <td>On-screen display, boot animation</td>
-        <td>text on screen works; colour encoding unsolved</td></tr>
+        <td>text, colour and a hardware overlay line all work on a camera</td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/power-sup.md">power sup</a></td>
         <td>USB-C power delivery and power saving</td>
         <td>charging mechanism solved; the rest untouched</td></tr>
