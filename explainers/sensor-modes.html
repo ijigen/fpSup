@@ -653,10 +653,15 @@ speed group, plus vblank and the fingerprint. Every merge register &mdash;
 <code>0x001C</code>, the <code>0x0717</code> group, <code>0x0058</code> &mdash; is
 <b>identical</b> between them. Same raster, same merge tuple, same bit depth; what
 differs is hmax 445 &rarr; 330, so 98 reads out at normal speed and 117 in the fast
-tier. The merging difference you can see in footage is therefore either a side effect
-of the faster analogue timing, or it is added later in CRCT
-(<code>vbin</code>/<code>hbin</code>/<code>hbin2</code>), which is driven by the PARAM
-profile table and not by these eight tables at all. CRCT is the more likely place.</div>
+tier.
+
+<br><br><b>And CRCT is ruled out.</b> All <b>306</b> PARAM profiles carry
+<code>reduction_enums = (0,0)</code> &mdash; CRCT binning is never switched on for any
+of them. The only post-sensor reduction that is actually used is RWZM, and only in 53
+profiles; the other 253 are unity. The Open Gate profile (p43, 3032&times;2012) is one
+of the unity ones, so an Open Gate frame is the sensor output untouched. Whatever
+differs between 98 and 117 on an Open Gate clip therefore comes from the sensor, and
+the only thing that differs there is the readout-speed block.</div>
 <div class="warn zh"><b>這裡要更正這一頁先前寫的東西:98 跟 117 的差別不在合併設定。</b>
 那 78 個不同的暫存器<strong>全部</strong>落在讀出速度相關的群裡 ——
 50 個在高速讀出群、21 個在速度檔位群、5 個在第三個速度群,再加上 vblank 和指紋。
@@ -664,9 +669,32 @@ profile table and not by these eight tables at all. CRCT is the more likely plac
 兩者<b>完全一樣</b>。<br>
 同光柵、同合併倍率、同位深,差的是 hmax 從 445 變成 330 ——
 98 用常速讀出,117 用高速檔。<br>
-所以實拍看到的合併差異,要嘛是高速類比時序的副作用,要嘛根本是後面 CRCT 階段
-(<code>vbin</code>/<code>hbin</code>/<code>hbin2</code>)加上去的 ——
-那是 PARAM profile 表在控制的,跟這八張表無關。<strong>CRCT 的可能性比較大。</strong></div>
+<br><b>而且 CRCT 可以排除了。</b>306 個 PARAM profile <strong>全部</strong>都是
+<code>reduction_enums = (0,0)</code> —— CRCT 的 binning 一個都沒開過。
+後段真正有在用的縮減只有 RWZM,而且只有 53 個 profile 在用,其餘 253 個是 unity。
+Open Gate 用的 p43(3032&times;2012)正是 unity 那一類,所以 <strong>Open Gate 的畫面
+就是感光元件輸出的原樣</strong>。<br>
+因此在 Open Gate 下 98 跟 117 的差異只可能來自感光元件,
+而那裡唯一不同的就是讀出速度那一整塊。</div>
+
+<div class="warn en"><b>This also closes an open question in the pixel-merge
+measurement.</b> Shot noise gave measured merge counts: stock FHD averages 8.53 sensor
+photosites per output pixel, the OG2K build only 4.10. That note could not say at which
+stage the merging happened. It can now: stock FHD is mode 106 (2&times; sensor merge,
+4 photosites) followed by RWZM &divide;1.5625 in p133&ndash;136, which multiplies the
+per-axis count by 1.5625 &rarr; (2 &times; 1.5625)&sup2; = <b>9.77, against 8.53
+measured</b>. OG2K is mode 139 at RWZM unity, so it keeps only what the sensor gives:
+<b>4, against 4.10 measured</b>. The merging is sensor + RWZM, in two stages, with
+CRCT contributing nothing.</div>
+<div class="warn zh"><b>這順便解掉了像素合併量測那份筆記裡的一個未決。</b>
+散粒雜訊量出來的合併數是:原廠 FHD 每個輸出像素平均了 <b>8.53</b> 個感光點,
+OG2K build 只有 <b>4.10</b>。那份筆記當時說不出合併是在哪一級發生的。<br>
+現在可以了:原廠 FHD 是 mode 106(感光元件 2&times; 合併 = 4 個點)之後再走
+p133&ndash;136 的 RWZM &divide;1.5625,每軸再乘 1.5625 ⇒
+(2 &times; 1.5625)&sup2; = <b>9.77,實測 8.53</b>。<br>
+OG2K 是 mode 139 且 RWZM 是 unity,所以感光元件給多少就是多少:
+<b>4,實測 4.10</b>。<br>
+所以合併是<strong>感光元件 + RWZM 兩級</strong>做的,CRCT 完全沒有參與。</div>
 
 <div class="warn en"><b>A guess that was tested and failed.</b> The 9 modes with
 <code>0x0003</code>=1 all run at exact broadcast rates (29.97, 25, 23.98, 119.88, 100,
