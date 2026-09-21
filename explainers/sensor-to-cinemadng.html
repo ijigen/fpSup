@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>From sensor to CinemaDNG &mdash; fpSup</title>
+<meta name="description" content="The whole SIGMA fp recording chain: menu selection, the string-keyed picker, 70 sensor modes, 306 profiles, the CRCT reduction stages, the canvas record and the DNG writer. With what OG3K, OG2K and HSW each change, and what is still dark.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/sensor-to-cinemadng.html">
+<meta property="og:title" content="SIGMA fp: from sensor to CinemaDNG">
+<meta property="og:description" content="Eleven stages from a menu tap to a file on the card, each one opened up — and an honest map of which parts are solved, which are partial, and which are still dark.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:16px 14px 12px}
+figure.dia svg{display:block; width:100%; height:auto}
+figure.dia figcaption{font-size:.84rem; color:var(--dim); margin-top:11px;
+  padding-top:10px; border-top:1px solid var(--line)}
+figure.dia figcaption b{color:var(--ink); font-weight:600}
+.dia text{font-family:var(--mono); fill:var(--ink)}
+.dia .t-dim{fill:var(--dim)}
+.dia .t-sig{fill:var(--sig)}
+.dia .t-warn{fill:var(--warn)}
+.dia .bx{fill:var(--paper); stroke:var(--line); stroke-width:1}
+.dia .ln{stroke:var(--line); stroke-width:1.5; fill:none}
+.dia .ln-on{stroke:var(--sig); stroke-width:2; fill:none}
+.dia .f-ok{fill:var(--sig)}
+.dia .f-part{fill:var(--warn)}
+.dia .f-dark{fill:var(--dim)}
+
+/* ---- status vocabulary -------------------------------------------------- */
+.st{display:inline-block; font-family:var(--mono); font-size:.62rem;
+  letter-spacing:.05em; text-transform:uppercase; border-radius:3px;
+  padding:2px 7px; border:1px solid var(--line); color:var(--dim);
+  white-space:nowrap; vertical-align:middle}
+.st.ok{border-color:var(--sig); color:var(--sig); background:var(--sig-soft)}
+.st.part{border-color:var(--warn); color:var(--warn); background:var(--warn-soft)}
+.st.dark{border-style:dashed}
+
+.legend{display:flex; flex-wrap:wrap; gap:16px; margin:14px 0 0;
+  font-size:.85rem; color:var(--dim)}
+.legend span{display:flex; align-items:center; gap:7px}
+
+/* ---- the expandable stage list ------------------------------------------ */
+.stages{display:grid; gap:1px; background:var(--line); border:1px solid var(--line);
+  border-radius:3px; overflow:hidden; margin:18px 0 0; counter-reset:stg}
+details.stage{background:var(--panel)}
+details.stage > summary{display:grid; grid-template-columns:2rem 1fr auto;
+  gap:12px; align-items:baseline; padding:13px 15px; cursor:pointer;
+  list-style:none; transition:background .12s}
+details.stage > summary::-webkit-details-marker{display:none}
+details.stage > summary:hover{background:var(--sig-soft)}
+details.stage > summary:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+details[open].stage > summary{background:var(--sig-soft)}
+details.stage > summary::before{counter-increment:stg; content:counter(stg);
+  font-family:var(--mono); font-size:.78rem; color:var(--dim);
+  border:1px solid var(--line); border-radius:3px; text-align:center;
+  padding:1px 0; align-self:start}
+details[open].stage > summary::before{border-color:var(--sig); color:var(--sig)}
+.stage .hd{min-width:0}
+.stage .hd b{display:block; font-size:1rem; font-weight:600; color:var(--sig)}
+.stage .hd small{display:block; color:var(--dim); font-size:.85rem; margin-top:2px}
+.stage .body{padding:2px 15px 16px; border-top:1px solid var(--line);
+  background:var(--paper)}
+.stage .body > *:first-child{margin-top:14px}
+.stage .body p{font-size:.92rem; margin:10px 0}
+.stage .body pre{font-family:var(--mono); font-size:.75rem; line-height:1.6;
+  overflow-x:auto; background:var(--panel); border:1px solid var(--line);
+  border-radius:3px; padding:11px 13px; margin:11px 0}
+.stage .body pre .t-dim{color:var(--dim)}
+.stage .body pre .t-sig{color:var(--sig); font-weight:600}
+.stage .body pre .t-warn{color:var(--warn); font-weight:600}
+.stage .body h4{margin:16px 0 4px; font-size:.9rem; font-weight:600}
+.stage .body ul{font-size:.9rem; margin:9px 0; padding-left:20px}
+.stage .body li{margin:4px 0}
+.stage .body table{margin-top:10px}
+.stage .open-q{border-left:2px solid var(--warn); background:var(--warn-soft);
+  padding:10px 13px; margin:13px 0; font-size:.88rem; border-radius:0 3px 3px 0}
+.stage .open-q b{color:var(--ink)}
+
+/* ---- project comparison ------------------------------------------------- */
+table.proj td:first-child{white-space:nowrap; font-weight:600}
+table.proj .y{color:var(--sig)}
+table.proj .n{color:var(--dim)}
+</style>
+</head>
+<body>
+
+<a class="back" href="../research.html">&larr; Firmware research</a>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1>From sensor to CinemaDNG</h1>
+    <p class="lede">Eleven stages between tapping a resolution in the menu and a
+    file landing on the card. This is all of them, opened up &mdash; what each one
+    reads, what it decides, where the three open-gate projects cut in, and which
+    parts are still dark.</p>
+    <ul class="chips">
+      <li><b>11</b> stages</li>
+      <li><b>3</b> projects compared</li>
+      <li><b>9</b> open questions</li>
+    </ul>
+  </div>
+</header>
+
+<div class="facts">
+  <dl>
+    <dt>Where this comes from</dt>
+    <dd>Ver.5.02 disassembly plus what OG3K, OG2K and HSW each had to find out to
+    work. Several stages were only understood after a failure, and those are called
+    out where they happened.</dd>
+    <dt>How to read the status</dt>
+    <dd>A stage is <span class="st ok">solved</span> only if something was verified
+    on a camera or read directly out of the firmware.
+    <span class="st part">partial</span> means the shape is known but a load-bearing
+    detail is not. <span class="st dark">dark</span> means it is guesswork.</dd>
+    <dt>What is deliberately not here</dt>
+    <dd>Audio, the gyro sidecar, and the still-photo path. This is the movie raw
+    chain only.</dd>
+  </dl>
+</div>
+
+<h2>The whole chain</h2>
+
+<figure class="dia">
+<svg viewBox="0 0 820 742" role="img" aria-labelledby="chaint">
+  <title id="chaint">The eleven stages from menu selection to a CinemaDNG file</title>
+  <g font-size="10.5">
+    <rect class="bx" x="105" y="8" width="550" height="42" rx="3"/>
+    <text x="380" y="26" text-anchor="middle">menu selection</text>
+    <text x="380" y="40" text-anchor="middle" font-size="9" class="t-dim">resolution &middot; frame rate &middot; bit depth &middot; crop</text>
+    <circle class="f-ok" cx="675" cy="29" r="5"/>
+    <rect class="bx" x="105" y="74" width="550" height="42" rx="3"/>
+    <text x="380" y="92" text-anchor="middle">picker &mdash; string key lookup</text>
+    <text x="380" y="106" text-anchor="middle" font-size="9" class="t-dim">"FHD"+"30"(+"CROP") &rarr; three tables by bit depth</text>
+    <text x="97" y="99" text-anchor="end" font-size="9" class="t-dim">FUN_c043b828</text>
+    <circle class="f-ok" cx="675" cy="95" r="5"/>
+    <rect class="bx" x="105" y="140" width="550" height="42" rx="3"/>
+    <text x="380" y="158" text-anchor="middle">format entry &mdash; 16 bytes</text>
+    <text x="380" y="172" text-anchor="middle" font-size="9" class="t-dim">{5, profile, sensor mode, key ptr}</text>
+    <text x="97" y="165" text-anchor="end" font-size="9" class="t-dim">0xC0BE5B50</text>
+    <circle class="f-ok" cx="675" cy="161" r="5"/>
+    <text x="693" y="157" font-size="9" class="t-sig">all three</text>
+    <text x="693" y="169" font-size="9" class="t-dim">register a format</text>
+    <rect class="bx" x="105" y="208" width="265" height="42" rx="3"/>
+    <text x="238" y="226" text-anchor="middle">sensor mode &mdash; 70</text>
+    <text x="238" y="240" text-anchor="middle" font-size="9" class="t-dim">raster &middot; fps &middot; merge</text>
+    <text x="97" y="233" text-anchor="end" font-size="9" class="t-dim">0xC0B59DC0</text>
+    <circle class="f-ok" cx="384" cy="229" r="5"/>
+    <text x="693" y="225" font-size="9" class="t-sig">OG3K OG2K HSW</text>
+    <text x="693" y="237" font-size="9" class="t-dim">swap the mode</text>
+    <rect class="bx" x="390" y="208" width="265" height="42" rx="3"/>
+    <text x="522" y="226" text-anchor="middle">PARAM profile &mdash; 306</text>
+    <text x="522" y="240" text-anchor="middle" font-size="9" class="t-dim">geometry &middot; RWZM &middot; hbin/vbin</text>
+    <circle class="f-part" cx="675" cy="229" r="5"/>
+    <rect class="bx" x="105" y="274" width="265" height="42" rx="3"/>
+    <text x="238" y="292" text-anchor="middle">sensor timing</text>
+    <text x="238" y="306" text-anchor="middle" font-size="9" class="t-dim">hmax / vmax &rarr; real fps</text>
+    <text x="97" y="299" text-anchor="end" font-size="9" class="t-dim">0xC0B5FDA4</text>
+    <circle class="f-ok" cx="384" cy="295" r="5"/>
+    <rect class="bx" x="105" y="342" width="550" height="42" rx="3"/>
+    <text x="380" y="360" text-anchor="middle">CRCT chain &mdash; Vbin / Hbin / Hbin2</text>
+    <text x="380" y="374" text-anchor="middle" font-size="9" class="t-dim">six-way tap mux into windows a0 / a7</text>
+    <text x="97" y="367" text-anchor="end" font-size="9" class="t-dim">0xC0325228</text>
+    <circle class="f-ok" cx="675" cy="363" r="5"/>
+    <rect class="bx" x="105" y="408" width="550" height="42" rx="3"/>
+    <text x="380" y="426" text-anchor="middle">RWZM resampler</text>
+    <text x="380" y="440" text-anchor="middle" font-size="9" class="t-dim">ratio &divide; 1024, floor at unity</text>
+    <text x="97" y="433" text-anchor="end" font-size="9" class="t-dim">0x300F0900</text>
+    <circle class="f-ok" cx="675" cy="429" r="5"/>
+    <rect class="bx" x="105" y="474" width="550" height="42" rx="3"/>
+    <text x="380" y="492" text-anchor="middle">geometry record &mdash; the canvas</text>
+    <text x="380" y="506" text-anchor="middle" font-size="9" class="t-dim">built here, then derived downstream</text>
+    <text x="97" y="499" text-anchor="end" font-size="9" class="t-dim">FUN_c043a158</text>
+    <circle class="f-part" cx="675" cy="495" r="5"/>
+    <text x="693" y="491" font-size="9" class="t-sig">OG3K</text>
+    <text x="693" y="503" font-size="9" class="t-dim">hook the canvas</text>
+    <rect class="bx" x="105" y="540" width="550" height="42" rx="3"/>
+    <text x="380" y="558" text-anchor="middle">producer &rarr; DRAM strip</text>
+    <text x="380" y="572" text-anchor="middle" font-size="9" class="t-dim">packed 12-bit, one stripe per frame</text>
+    <circle class="f-part" cx="675" cy="561" r="5"/>
+    <rect class="bx" x="105" y="606" width="550" height="42" rx="3"/>
+    <text x="380" y="624" text-anchor="middle">DNG writer</text>
+    <text x="380" y="638" text-anchor="middle" font-size="9" class="t-dim">78,848 B header + strip, Compression = 1</text>
+    <text x="97" y="631" text-anchor="end" font-size="9" class="t-dim">FUN_c069ac88</text>
+    <circle class="f-part" cx="675" cy="627" r="5"/>
+    <rect class="bx" x="105" y="672" width="550" height="42" rx="3"/>
+    <text x="380" y="690" text-anchor="middle">card &mdash; one file per frame</text>
+    <text x="380" y="704" text-anchor="middle" font-size="9" class="t-dim">A001_xxxx.dng</text>
+    <circle class="f-ok" cx="675" cy="693" r="5"/>
+  </g>
+  <g class="ln">
+    <path d="M380 50 v24"/><path d="M380 116 v24"/>
+    <path d="M380 182 v14 M237 196 H522 M237 196 v12 M522 196 v12"/>
+    <path d="M237 250 v24"/>
+    <path d="M237 316 v14 M522 250 v80 M237 330 H522 M380 330 v12"/>
+    <path d="M380 384 v24"/><path d="M380 450 v24"/><path d="M380 516 v24"/>
+    <path d="M380 582 v24"/><path d="M380 648 v24"/>
+  </g>
+</svg>
+<figcaption>Stage 3 splits: the format entry hands a <b>sensor mode</b> to the left
+branch and a <b>profile</b> to the right, and they rejoin at the CRCT chain. Almost
+every open-gate trick is a substitution at stage 4, stage 5 or stage 9.</figcaption>
+</figure>
+
+<div class="legend">
+  <span><span class="st ok">solved</span> verified on a camera or read from firmware</span>
+  <span><span class="st part">partial</span> shape known, a detail is not</span>
+  <span><span class="st dark">dark</span> guesswork</span>
+</div>
+
+<h2>Every stage, opened up</h2>
+
+<div class="stages">
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>Menu selection</b>
+    <small>What the user actually picks, and why bit depth matters more than it looks</small></span>
+    <span class="st ok">solved</span>
+  </summary>
+  <div class="body">
+    <p>Four independent choices feed the next stage: resolution name, frame rate,
+    bit depth, and whether crop mode is on. Only the first two are obvious; the
+    other two silently change which table gets searched.</p>
+    <p>The CINE menu's own resolution list lives at <code>0xC0B51044</code>, 14
+    rows, and it only contains 4096&times;2160, 3840&times;2160 and
+    1920&times;1080. Anything else has to be added there as well as in the picker,
+    which is why adding a resolution is a multi-table job rather than one edit.</p>
+    <div class="open-q"><b>Open:</b> the menu can only display three rows in
+    practice, which is why HSW ships as a separate card rather than alongside OG3K
+    and OG2K. Whether that is a hard layout limit or just the current table has not
+    been settled.</div>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>The picker</b>
+    <small>A string-keyed lookup, not an index &mdash; and its fallback is a trap</small></span>
+    <span class="st ok">solved</span>
+  </summary>
+  <div class="body">
+    <p><code>FUN_c043b828</code> builds a key by concatenating the resolution name,
+    the frame rate name, and <code>"CROP"</code> if the crop flag is set. Then
+    <code>FUN_c043ccf8</code> walks a 26-entry table comparing 15 characters:</p>
+<pre>key = "" ;  append resolution name   ("UHD" / "FHD")
+            append frame rate        ("30" / "25" / "23_98" ...)
+            if crop flag: strcat("CROP")
+
+table = (eRawBitType == 4) ? 0xC0BE5810     <span class="t-dim">// 8-bit</span>
+      : (eRawBitType == 3) ? 0xC0BE59B0     <span class="t-dim">// 10-bit</span>
+      :                      0xC0BE5B50     <span class="t-dim">// 12-bit</span>
+
+entry = lookup(table, key)
+if (!entry) { log_error(); entry = 0xC0BE5B50; }   <span class="t-warn">// table 3, row 0 = UHD30</span></pre>
+    <h4>The fallback caused a real bug</h4>
+    <p>That last line is not harmless. OG3K v0.2.1a registered its format in the
+    12-bit table only. Selecting 8-bit or 10-bit made the lookup miss, and the
+    fallback silently handed back <b>UHD30</b> &mdash; a working recording of
+    entirely the wrong thing. A format has to be registered in all three tables or
+    the other two have to be blocked.</p>
+    <p>The three tables are the same formats at different bit depths, and their
+    profile numbers differ systematically by 20:</p>
+    <div class="scroll"><table>
+      <thead><tr><th>key</th><th>mode</th><th>8-bit</th><th>10-bit</th><th>12-bit</th></tr></thead>
+      <tbody>
+        <tr><td>UHD30</td><td>7</td><td>131</td><td>151</td><td>171</td></tr>
+        <tr><td>FHD30</td><td>106</td><td>135</td><td>155</td><td><b>175</b></td></tr>
+        <tr><td>FHD60</td><td>27</td><td>133</td><td>153</td><td>173</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>The format entry</b>
+    <small>Sixteen bytes that decide everything downstream</small></span>
+    <span class="st ok">solved</span>
+  </summary>
+  <div class="body">
+<pre>+0x00   5             constant tag (5 = movie; the stills tables use 1)
++0x04   profile       index into the 306-row PARAM table
++0x08   sensor mode   index into the 70-entry mode table
++0x0C   key ptr       pointer to the lookup string</pre>
+    <p>Because the name is a <em>pointer</em>, a new resolution name can live
+    anywhere and be any length &mdash; <code>"OG3K"</code> needed no space
+    negotiation. The resolution-name tables are separate, at
+    <code>0xC0BE4508</code> / <code>4548</code> / <code>4588</code> for the three
+    bit depths, four entries each of <code>{6, id, 222, name_ptr}</code>.</p>
+    <p>For 12-bit CinemaDNG the resolution enums are UHD = 71, FHD = 73,
+    UHDCROP = 391, FHDCROP = 393.</p>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>Sensor mode table</b>
+    <small>70 entries &mdash; and the frame rate in it is nominal</small></span>
+    <span class="st ok">solved</span>
+  </summary>
+  <div class="body">
+    <p><code>0xC0B59DC0</code>, 70 records of <code>0x64</code> bytes. This is the
+    table the <a href="lossless-compression.html#sim">compression simulator</a>
+    drives from.</p>
+<pre>+0x00  mode id        +0x04/+0x08  raster        +0x2C/+0x30  output crop
++0x34/+0x38  crop origin              +0x3C  bit-depth flag
++0x40  <span class="t-sig">nominal frame rate</span>       +0x44..+0x50  four merge factors
++0x54  aspect marker  +0x58  full/crop  +0x5C  vblank  +0x60  analogue fingerprint</pre>
+    <p>13 distinct rasters, 17 distinct frame rates. The merge tuple is
+    <code>(1,1,1,1)</code> for a full readout, <code>(2,2,2,2)</code> for half,
+    <code>(3,2,3,3)</code> and <code>(3,3,3,6)</code> for the thirds.</p>
+    <h4>The frame rate field lies, on purpose and by accident</h4>
+    <p><code>+0x40</code> is the frame rate, confirmed against measurements: mode 3
+    says 30 and runs 29.97, mode 98 says 78 and runs 77.27, mode 121 says 25 and
+    runs 24.9997. It is a <em>nominal</em> value.</p>
+    <p>It also becomes an outright lie when a project retimes a donor mode. OG3K
+    drives mode 98 at 29.97 while its metadata still says 78. Anything that reads
+    <code>+0x40</code> to label a clip is reading a stale number.</p>
+    <div class="open-q"><b>Open:</b> <code>+0x44</code> and <code>+0x48</code>.
+    <code>+0x4C</code>/<code>+0x50</code> are confirmed as effective X/Y geometry
+    scale, but that only proves a coordinate ratio &mdash; it does not distinguish
+    charge binning from skipping, and the OG2K plan is careful not to claim
+    otherwise.</div>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>PARAM profile table</b>
+    <small>306 rows, column-major, and the columns are not in field order</small></span>
+    <span class="st part">partial</span>
+  </summary>
+  <div class="body">
+    <p>Each profile is a row; each field is a separate array of 306 words. An
+    element is <code>column_base + row&times;4</code>. The fields that matter for
+    geometry:</p>
+<pre>+0x58  preview hbin   0xC0BD8EBC      +0x5C  record hbin   0xC0BE1E2C
++0xC4  preview vbin   0xC0BD9384      +0xC8  record vbin   0xC0BE22F4
++0x60  preview zoomH  0xC0BD984C      +0x64  record zoomH  0xC0BE149C
++0xD0  preview zoomV  0xC0BD9D14      +0xD4  record zoomV  0xC0BE1964</pre>
+    <div class="open-q"><b>This layout cost a wrong conclusion.</b> The column
+    bases are <em>not</em> ordered by field offset &mdash; the column after
+    <code>+0x60</code> is <code>+0xD0</code>, not <code>+0x64</code>. Reading
+    neighbouring columns as neighbouring fields turns "preview versus record" into
+    "horizontal versus vertical", and produced a confident claim that a third of
+    stock profiles were anamorphic. They are not; all 306 are square.</div>
+    <h4>Profile 43 and 83 are the hidden 3K</h4>
+    <p>The firmware already had a 3032&times;2012 path &mdash; on the stills side.
+    Profiles 43 and 83 are the S-size 12-bit photo profiles, and they carry exactly
+    the geometry OG3K wanted:</p>
+<pre>RAW geometry   3032x2012        crop  3008x2000 @ (12, 6)
+sensor window  3032x2012        sensor mode  98 (p43) / 143 (p83)
++0x1C          2  = 3:2 marker  +0x30 frame rate  -1.0 (stills have none)
+RAW RWZM       0x3FF = unity</pre>
+    <p>That is why swapping to p43 made recording clean immediately: it was not
+    improvised, it was the camera's own full-height 3:2 capture path, previously
+    only used for photographs. The movie side has no 3K anywhere &mdash; not in the
+    picker's 78 entries, not in the playback name tables, not in the CINE menu.</p>
+    <div class="open-q"><b>Open:</b> the 306-row table has around 65 columns and
+    only a dozen are understood. <code>+0x030</code> differs between p43
+    (3212836864) and p175 (1106247680) and nobody knows what it is.</div>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>Sensor timing</b>
+    <small>hmax and vmax set the real frame rate; the metadata does not</small></span>
+    <span class="st ok">solved</span>
+  </summary>
+  <div class="body">
+    <p>The register container at <code>0xC0B5FDA4</code> holds 70 records of
+    <code>0x288</code> bytes. The frame period is
+    <code>hmax &times; (vmax&minus;1) + tail</code> cycles at 72 MHz, and the
+    rolling shutter is <code>hmax &times; height / 72 MHz</code>.</p>
+    <p>Mode 12 is the clean example, because it needs no retiming at all:</p>
+<pre>raster         2016 x 672      hmax/tail  330 / 330     vmax  910
+frame cycles   330 x 909 + 330 = 300,300 @ 72 MHz
+actual rate    239.760240 fps  <span class="t-sig">exactly, 0 ppm</span>
+rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
+    <p>Every other open-gate target has to rewrite a donor mode's timing to get the
+    rate it wants, which is what makes the metadata frame rate go stale. HSW is the
+    only one where the sensor is left completely untouched.</p>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>CRCT chain</b>
+    <small>Where all reduction happens &mdash; and only two of six taps are live</small></span>
+    <span class="st ok">solved</span>
+  </summary>
+  <div class="body">
+    <p>Covered in full in <a href="frame-reduction.html">the reduction path</a>.
+    The short version: an eight-branch selector at <code>0xC0325228</code> decides
+    which window is enabled and which of six chain positions it taps. Only
+    <code>Crmf</code> and <code>Hbin2</code> are ever actually enabled;
+    <code>Gain</code>, <code>Vbin</code> and <code>Spc</code> are never written at
+    all, and <code>Hbin</code> only ever lands on a window that branch leaves
+    switched off.</p>
+    <p>Distribution over all 306 profiles: 172 + 81 take the <code>Crmf</code>
+    branches, 36 take <code>Hbin2</code>, 17 take RWZM, and the two-pipeline branch
+    is never reached by anything.</p>
+    <div class="open-q"><b>Open:</b> what <code>Crmf</code> and <code>Spc</code>
+    actually correct. Also the five-tap horizontal coefficients &mdash; both ROM
+    records only carry three-tap kernels.</div>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>RWZM resampler</b>
+    <small>The last place the frame can change size</small></span>
+    <span class="st ok">solved</span>
+  </summary>
+  <div class="body">
+    <p>A divisor scaled by 1024, clamped so anything at or below 1024 means 1.0&times;.
+    Horizontal and vertical are independent registers with independent clamps, so
+    anamorphic is possible in code &mdash; but no stock profile does it.</p>
+    <p>This is the stage that made open gate work. Profile 122's RWZM was
+    <code>0x640</code> = 1600 = 1.5625&times;, which pinned the producer's active
+    area at 1936 wide. Setting all four fields to unity is what let the frame fill
+    3032&times;2012.</p>
+    <div class="open-q"><b>Trap, learned expensively:</b> the four fields cannot be
+    split. Setting only the RAW pair to unity and leaving the preview pair at 1600
+    produced a corrupted recording followed by a freeze. And eight frame rates use
+    eight different profiles &mdash; an early build patched only the 29.97 one, so
+    the other seven were broken and nobody noticed because every test used
+    29.97.</div>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>The geometry record &mdash; the canvas</b>
+    <small>Six rounds of patching the wrong copy</small></span>
+    <span class="st part">partial</span>
+  </summary>
+  <div class="body">
+    <p>The canvas is assembled in <code>FUN_c043a158</code> and then
+    <em>derived</em> into several downstream copies. The hook that works overwrites
+    the record after it is built and before anything is derived from it, at
+    <code>0xC043A19C</code>.</p>
+<pre>result of the working hook:
+  0xC37CE210   3032 x 2012 x 9,229,824      <span class="t-dim">(six earlier attempts: 1936 1090 3244544)</span>
+  on card      9,229,824 bytes x 81 frames
+  overwrite    hit 491 times</pre>
+    <div class="open-q"><b><code>0xC37CE210</code> is a cache, not the source
+    &mdash; and an earlier note says otherwise.</b> It was originally documented as
+    "this is the recording geometry, not a guess", because its three words match
+    the file size exactly. Later testing showed recording proceeds normally with it
+    holding <code>{0,0,0}</code> and the DNG still comes out 1936&times;1090. It is
+    written <em>from</em> the canvas, not read by the writer. What actually
+    consumes the geometry at write time has not been pinned down.</div>
+    <p>Six rounds of failure came from patching things that were computed
+    downstream of this record. That is the general lesson: in this chain, find
+    where a value is <em>constructed</em>, not where it is visible.</p>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>Producer &rarr; DRAM strip</b>
+    <small>Two size fields with different jobs, and they must agree</small></span>
+    <span class="st part">partial</span>
+  </summary>
+  <div class="body">
+    <p>The producer writes a packed 12-bit CinemaDNG strip, one stripe per frame.
+    Two pairs of fields in the descriptor turned out to mean different things:</p>
+    <div class="scroll"><table>
+      <thead><tr><th>field</th><th>role</th><th>stock</th></tr></thead>
+      <tbody>
+        <tr><td><code>+0x0C/+0x10</code></td><td>what the producer actually emits</td><td>1936&times;1090</td></tr>
+        <tr><td><code>+0xD8/+0xE0</code></td><td>what the consumer reads</td><td>overwritten to 3032&times;2012</td></tr>
+      </tbody>
+    </table></div>
+    <p>Measured from a camera screenshot during recording: the image band occupied
+    0.5630 of the non-HUD area, matching 1090/2012 = 0.5417 and nothing else. The
+    producer was writing 1090 rows while the consumer displayed 2012.</p>
+    <div class="open-q"><b>Trap:</b> zeroing <code>+0xD8/+0xE0</code> makes the
+    producer fall back to reading <code>+0x0C/+0x10</code>. That destroyed dozens of
+    takes before it was understood.</div>
+  </div>
+</details>
+
+<details class="stage">
+  <summary>
+    <span class="hd"><b>DNG writer</b>
+    <small>78,848 bytes of header, and a compression flag nothing sets</small></span>
+    <span class="st part">partial</span>
+  </summary>
+  <div class="body">
+    <p>Each frame is a complete DNG: a fixed 78,848-byte header followed by the
+    strip. At FHD that header is 2.4% of the file; it would be 6.3% if the payload
+    were compressed.</p>
+<pre>ImageWidth      3032      ImageLength      2012
+BitsPerSample   12        Compression      1        <span class="t-dim">// uncompressed, always</span>
+RowsPerStrip    2012      StripOffsets     78848
+StripByteCounts 9,150,584           <span class="t-dim">// 3032x2012x12/8 = 9,150,576, plus 8</span></pre>
+    <p>The main image is in IFD0 with the dimensions inline and no SubIFD, which is
+    why reading a frame's size on-camera only needs the first kilobyte.</p>
+    <div class="open-q"><b>Open:</b> whether the writer tolerates variable frame
+    lengths. The playback side derives a shared capacity from the first frame and
+    asserts if a later frame exceeds it, so compressed video would need a
+    conservative upper bound reserved before recording &mdash; the first frame's
+    size is not a safe bound. This is the blocker in front of in-camera
+    compression.</div>
+  </div>
+</details>
+
+</div>
+
+<h2>What each project changes</h2>
+
+<p>All three are substitutions into the same chain. What separates them is
+<em>how many</em> stages they have to touch.</p>
+
+<div class="scroll">
+<table class="proj">
+  <thead><tr><th></th><th>OG3K</th><th>OG2K</th><th>HSW</th></tr></thead>
+  <tbody>
+    <tr><td>sensor raster</td><td>3032&times;2012 (&divide;2)</td><td>2016&times;1344 (&divide;3)</td><td>2016&times;672 (3&times;6)</td></tr>
+    <tr><td>sensor mode</td><td>98 / 143</td><td>139 / 8</td><td><b>12</b></td></tr>
+    <tr><td>frame rate</td><td>29.97 retimed</td><td>29.97 retimed</td><td><b>239.76 native</b></td></tr>
+    <tr><td>rolling shutter</td><td>12.44 ms</td><td>8.31 ms</td><td>3.08 ms</td></tr>
+    <tr><td>rate at 29.97</td><td>273 MB/s</td><td>122 MB/s</td><td>&mdash;</td></tr>
+    <tr><td>donor profile</td><td>p43 / p83 (stills)</td><td>&mdash;</td><td>&mdash;</td></tr>
+    <tr><td>retimes the sensor</td><td class="y">yes</td><td class="y">yes</td><td class="n">no</td></tr>
+    <tr><td>touches RWZM</td><td class="y">yes &mdash; to unity</td><td class="n">no</td><td class="n">no</td></tr>
+    <tr><td>canvas hook</td><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td></tr>
+    <tr><td>status</td><td>v0.2.3a alpha</td><td>v0.1.0 test</td><td><b>not yet on a camera</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note"><b>HSW is the cheapest of the three and the least proven.</b> Mode 12
+ships from the factory at exactly 239.760240 fps with a full-frame 3:2 raster, and
+no picker table references it &mdash; all 78 CinemaDNG entries were checked. Nothing
+about the sensor needs changing, which also means the metadata frame rate stays
+honest. It has not been run.</p>
+
+<h2>What is still dark</h2>
+
+<p>Collected from the stages above, worst first:</p>
+
+<ol class="steps">
+  <li>
+    <h3>What consumes the geometry at write time</h3>
+    <p><code>0xC37CE210</code> was documented as the recording geometry and is not
+    &mdash; recording works with it zeroed. The canvas hook works empirically, but
+    the path from canvas to the writer's idea of frame size is not traced.</p>
+  </li>
+  <li>
+    <h3>Whether the writer accepts variable frame lengths</h3>
+    <p>Blocks in-camera compression entirely. The playback capacity is derived from
+    the first frame, which is not a worst-case guarantee.</p>
+  </li>
+  <li>
+    <h3>Most of the 306-row profile table</h3>
+    <p>About a dozen of roughly 65 columns are understood. <code>+0x030</code>
+    differs between the stills and movie profiles and is unexplained.</p>
+  </li>
+  <li>
+    <h3>Whether the merge tuple is binning or skipping</h3>
+    <p><code>+0x4C</code>/<code>+0x50</code> are confirmed as geometry scale, which
+    proves a coordinate ratio and nothing about charge. The noise work narrowed it
+    but hit a modelling contradiction it could not resolve.</p>
+  </li>
+  <li>
+    <h3>What Crmf and Spc correct</h3>
+    <p>Two of the six CRCT tap names. <code>Spc</code> is the lowest priority of
+    anything here, since no code path can select it.</p>
+  </li>
+</ol>
+
+<p class="note">Four more, smaller: the five-tap horizontal coefficients are in
+neither ROM record; the flat 2.18 ms per codec call is unlocated; the menu's
+three-row limit may or may not be real; and the second imager object's selector has
+never been traced to a caller.</p>
+
+<h2>Sources</h2>
+
+<p>The picker, format entry and name tables are from the format-registry work; the
+canvas hook and its six failed predecessors from the open-gate notes; sensor timing
+from the frame-rate and HSW investigations; the profile table layout from the
+reduction work and an external handoff's table description. Everything on this page
+that is marked solved was either read out of Ver.5.02 or verified on a camera, and
+the two places where an older note says something this page contradicts are called
+out where they occur.</p>
+
+<footer>
+  <p><a href="../research.html">Firmware research</a> &middot;
+  <a href="../">fpSup</a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://github.com/ijigen/fpSup">Repository</a></p>
+</footer>
+
+</body>
+</html>
