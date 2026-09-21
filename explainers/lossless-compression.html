@@ -312,6 +312,13 @@ plus the other two terms. Always budget with all three.</div>
 
 <h3>Tile geometry is worth up to a quarter of the time</h3>
 
+<p>The simulator searches this rather than looking it up, over the engine's own
+limits &mdash; tile width 32&hellip;512 in steps of 32, tile height even and at most
+512, at most 326 tiles &mdash; plus TIFF's requirement that TileLength be a multiple
+of 16. That last constraint matters: without it the search picks 512&times;364 for
+FHD, which is genuinely faster and not a valid tag. With it, the search reproduces
+all four measured optima below exactly.</p>
+
 <div class="scroll">
 <table>
   <thead><tr><th>format</th><th>best tile</th><th>tiles</th><th>encode</th><th>vs 256&times;256</th></tr></thead>
@@ -451,14 +458,24 @@ not a tuning knob &mdash; and it is what OG3K would need.</figcaption>
 
 <h2 id="sim">Budget simulator</h2>
 
-<p>Everything above, wired together. Change the format, the frame rate, how well the
-picture compresses, and where it is going.</p>
+<p>Everything above, wired together. The mode list is the camera's own &mdash; all
+<b>70 readout modes</b> from the table at <code>0xC0B59DC0</code>, grouped by raster,
+with the frame rate each one carries. Pick a mode, say how much the CRCT chain
+reduces it before the codec sees it, and the tile geometry is searched rather than
+guessed.</p>
+
+<p class="note">Two things about those numbers. The frame rate in the mode table is
+<b>nominal</b> &mdash; mode 3 says 30 and runs at 29.97, mode 98 says 78 and runs at
+77.27 &mdash; so the exact variants are in the list too and you can override it. And
+the reduction is applied as plain arithmetic on the raster; the real path also crops,
+which is why mode 106 at 1.5625&times; lands on 1936&times;1092 here against the
+1936&times;1090 the camera actually writes.</p>
 
 <div class="sim">
   <h4>Frame</h4>
   <div class="ctl">
     <div>
-      <label for="fmt">format</label>
+      <label for="fmt">sensor mode &mdash; all 70</label>
       <select id="fmt"></select>
     </div>
     <div>
@@ -476,9 +493,21 @@ picture compresses, and where it is going.</p>
       </select>
     </div>
     <div>
+      <label for="red">reduction before the codec</label>
+      <select id="red">
+        <option value="1" selected>none &mdash; codec sees the full readout</option>
+        <option value="1.25">RWZM 1280 &mdash; 1.25&times;</option>
+        <option value="1.46484375">RWZM 1500 &mdash; 1.465&times;</option>
+        <option value="1.5">RWZM 1536 &mdash; 1.5&times;</option>
+        <option value="1.5625">RWZM 1600 &mdash; 1.5625&times; (stock UHD/FHD)</option>
+        <option value="2">RWZM 2048 &mdash; 2&times; (FP3K 3K)</option>
+        <option value="3">RWZM 3072 or hbin&divide;3+vbin&divide;3 &mdash; 3&times;</option>
+      </select>
+    </div>
+    <div>
       <label for="tile">tile geometry</label>
       <select id="tile">
-        <option value="best" selected>best for this format</option>
+        <option value="best" selected>search for the fastest</option>
         <option value="256">256 &times; 256 (stock)</option>
         <option value="512">512 &times; 512</option>
       </select>
@@ -675,37 +704,101 @@ repository.</p>
   var HDR = 78848;            // bytes of DNG header per frame
   var CONTENTION = 1.17;
 
-  var FORMATS = [
-    {id:'fhd',  n:'FHD 1936 x 1090',   w:1936, h:1090, tw:512, th:368},
-    {id:'og3k', n:'OG3K 3024 x 2010',  w:3024, h:2010, tw:512, th:512},
-    {id:'uhd',  n:'UHD 3840 x 2160',   w:3840, h:2160, tw:480, th:432},
-    {id:'6k',   n:'6K 6064 x 4042',    w:6064, h:4042, tw:512, th:512}
+  var MODES = [
+    {w:6064, h:4042, ar:"3:2", merge:1, modes:[[97,40], [3,30], [121,25], [0,20], [141,18], [142,18]]},
+    {w:3032, h:2012, ar:"3:2", merge:2, modes:[[11,105], [117,100], [98,78], [143,18]]},
+    {w:4176, h:2174, ar:"1.92:1", merge:1, modes:[[6,30], [102,30], [122,25], [124,25], [100,24], [108,24], [152,24]]},
+    {w:5712, h:3216, ar:"16:9", merge:1, modes:[[95,24]]},
+    {w:6064, h:3412, ar:"16:9", merge:1, modes:[[7,30], [123,25], [101,24], [151,24]]},
+    {w:3032, h:1708, ar:"16:9", merge:2, modes:[[58,120], [89,100], [27,60], [104,60], [115,50], [135,48], [220,48], [106,30], [111,30], [125,25], [127,25], [109,24], [113,24], [218,24]]},
+    {w:2088, h:1174, ar:"16:9", merge:2, modes:[[103,120], [132,120], [118,100], [133,100], [88,60], [105,60], [116,50], [136,48], [221,48], [107,30], [112,30], [126,25], [128,25], [110,24], [114,24], [219,24]]},
+    {w:2016, h:1344, ar:"3:2", merge:3, modes:[[56,120], [147,100], [150,90], [149,80], [148,70], [139,60], [8,60]]},
+    {w:2016, h:672, ar:"3:1", merge:3, modes:[[12,240], [140,60], [9,60]]},
+    {w:3968, h:2640, ar:"3:2", merge:1, modes:[[130,40], [129,20], [144,18], [145,18]]},
+    {w:1984, h:1320, ar:"3:2", merge:2, modes:[[131,78], [146,18]]},
+    {w:2016, h:1136, ar:"16:9", merge:3, modes:[[134,120]]},
+    {w:6064, h:2022, ar:"3:1", merge:1, modes:[[10,60]]},
   ];
-  var RATES = [23.976, 24, 25, 29.97, 30, 50, 59.94, 100, 119.88];
+
+  // every frame rate the mode table carries, plus the exact NTSC variants
+  var RATES = [18, 20, 23.976, 24, 25, 29.97, 30, 40, 48, 50, 59.94, 60, 70, 78,
+               80, 90, 100, 105, 119.88, 120, 240];
 
   var $ = function(id){ return document.getElementById(id); };
   var fmt = $('fmt'), fps = $('fps');
   if(!fmt) return;
 
-  FORMATS.forEach(function(f){
-    var o = document.createElement('option');
-    o.value = f.id; o.textContent = f.n; fmt.appendChild(o);
+  MODES.forEach(function(g, gi){
+    var og = document.createElement('optgroup');
+    og.label = g.w + ' \u00d7 ' + g.h + '  \u00b7  ' + g.ar +
+               (g.merge > 1 ? '  \u00b7  ' + g.merge + '\u00d7 merge' : '  \u00b7  full readout');
+    g.modes.forEach(function(m){
+      var o = document.createElement('option');
+      o.value = gi + ':' + m[0];
+      o.textContent = 'mode ' + m[0] + '  \u2014  ' + m[1] + 'p';
+      og.appendChild(o);
+    });
+    fmt.appendChild(og);
   });
   RATES.forEach(function(r){
     var o = document.createElement('option');
     o.value = r; o.textContent = r.toFixed(3).replace(/\.?0+$/,'') + ' fps';
     fps.appendChild(o);
   });
-  fmt.value = 'fhd';
-  fps.value = '29.97';
+
+  // pick the frame rate closest to the mode's nominal one
+  function syncRate(){
+    var sel = fmt.value.split(':');
+    var g = MODES[+sel[0]];
+    var m = g.modes.filter(function(x){ return x[0] === +sel[1]; })[0];
+    if(!m) return;
+    var want = m[1], best = RATES[0];
+    RATES.forEach(function(r){
+      if(Math.abs(r - want) < Math.abs(best - want)) best = r;
+    });
+    fps.value = best;
+  }
+  fmt.value = '5:106';            // mode 106, 3032x1708 at 30p -- the FHD source
+  syncRate();
+  fmt.addEventListener('change', function(){ syncRate(); render(); });
+
+  // Engine guard: width 8..0x4000 and a multiple of 8, height 2..0x4000 and
+  // even, tileW 0x20..0x200 in steps of 32, tileH 2..0x200 and even. TIFF
+  // additionally wants TileLength a multiple of 16, which is why 512x368 beats
+  // the 512x364 a free search would pick.
+  var tileCache = {};
+  function bestTile(W, H){
+    var key = W + 'x' + H;
+    if(tileCache[key]) return tileCache[key];
+    var b = null;
+    for(var tw = 32; tw <= 512; tw += 32){
+      for(var th = 16; th <= 512; th += 16){
+        var cols = Math.ceil(W / tw), rows = Math.ceil(H / th);
+        var n = cols * rows;
+        if(n > 326) continue;                     // header gap holds 326 tiles
+        var t = CALL_US + US_PER_MPIX * ((cols * tw) * (rows * th) / 1e6) +
+                US_PER_TILE * n;
+        if(b === null || t < b.t) b = {t:t, tw:tw, th:th, n:n};
+      }
+    }
+    if(b === null) b = {t:0, tw:256, th:256, n:Math.ceil(W/256)*Math.ceil(H/256)};
+    tileCache[key] = b;
+    return b;
+  }
 
   function n1(x){ return x.toFixed(1); }
   function n2(x){ return x.toFixed(2); }
 
   function calc(){
-    var f = FORMATS.filter(function(x){ return x.id === fmt.value; })[0];
-    var W = f.w, H = f.h;
+    var sel = fmt.value.split(':');
+    var g = MODES[+sel[0]];
+    var mid = +sel[1];
     var R = parseFloat(fps.value);
+
+    // everything upstream of the codec: the CRCT chain and the resampler
+    var red = parseFloat($('red').value);
+    var W = Math.max(8, Math.floor(g.w / red / 8) * 8);
+    var H = Math.max(2, Math.floor(g.h / red / 2) * 2);
     var bits = parseInt($('bits').value, 10);
     var ratio = parseFloat($('ratio').value);
     var store = parseFloat($('dest').value);
@@ -713,9 +806,10 @@ repository.</p>
     var doSkip = $('skip').checked;
     var partial = $('part').checked;
 
-    var tw = f.tw, th = f.th;
+    var tw, th;
     if($('tile').value === '256'){ tw = 256; th = 256; }
     else if($('tile').value === '512'){ tw = 512; th = 512; }
+    else { var bt = bestTile(W, H); tw = bt.tw; th = bt.th; }
 
     var cols = Math.ceil(W / tw), rows = Math.ceil(H / th);
     var tiles = cols * rows;
@@ -767,6 +861,7 @@ repository.</p>
     var serialMs = encMs + writeMs;
 
     return {W:W,H:H,R:R,bits:bits,ratio:ratio,store:store,tiles:tiles,tw:tw,th:th,
+            mid:mid, srcW:g.w, srcH:g.h, red:red, merge:g.merge, ar:g.ar,
             alignedMpix:alignedMpix, encMs:encMs, budgetMs:budgetMs, duty:duty,
             frac:frac, payC:payC, payU:payU, hdrRate:hdrRate, total:total,
             peak:peak, uncompressedAll:uncompressedAll, engineMBs:engineMBs,
@@ -850,9 +945,13 @@ repository.</p>
 
     // detail line
     var d = [];
-    d.push('<b>' + r.W + '&times;' + r.H + '</b> at ' + r.bits + '-bit, ' +
+    d.push('sensor <b>mode ' + r.mid + '</b> reads ' + r.srcW + '&times;' + r.srcH +
+           ' (' + r.ar + (r.merge > 1 ? ', ' + r.merge + '&times; merge' : '') + ')' +
+           (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : ''));
+    d.push('codec sees <b>' + r.W + '&times;' + r.H + '</b> at ' + r.bits + '-bit, ' +
            r.tw + '&times;' + r.th + ' tiles (' + r.tiles + '), aligned ' +
-           n2(r.alignedMpix) + ' Mpix');
+           n2(r.alignedMpix) + ' Mpix' +
+           ($('tile').value === 'best' ? ' \u2014 tile searched' : ''));
     if(!r.engineOK){
       d.push('<b>8-bit</b> \u2014 the codec\u2019s bitdepth field only encodes ' +
              '10 / 12 / 14 / 16, and anything else is rejected outright. ' +
@@ -878,7 +977,7 @@ repository.</p>
     $('detail').innerHTML = d.join('<br>');
   }
 
-  ['fmt','fps','bits','tile','dest','ratio','cont','skip','part'].forEach(function(id){
+  ['fps','bits','tile','dest','ratio','cont','skip','part','red'].forEach(function(id){
     var el = $(id);
     if(el) el.addEventListener('input', render);
   });
