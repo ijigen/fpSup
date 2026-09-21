@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -21,6 +21,25 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 <style>
+/* ---- language switch: both languages present, one hidden -------------- */
+[data-lang="en"] .zh{display:none !important}
+[data-lang="zh"] .en{display:none !important}
+.topbar{display:flex; align-items:center; justify-content:space-between;
+  gap:16px; margin-bottom:22px}
+.topbar .back{margin-bottom:0}
+.lang{display:inline-flex; border:1px solid var(--line); border-radius:3px;
+  overflow:hidden; flex:none}
+.lang button{font-family:var(--mono); font-size:.72rem; letter-spacing:.04em;
+  padding:5px 11px; border:0; background:var(--panel); color:var(--dim);
+  cursor:pointer; transition:background .12s, color .12s}
+.lang button + button{border-left:1px solid var(--line)}
+.lang button:hover{color:var(--ink)}
+.lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
+  font-weight:600}
+.lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+[data-lang="zh"] body{line-height:1.75}
+[data-lang="zh"] .lede{max-width:40em}
+
 figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
   background:var(--panel); padding:16px 14px 12px}
 figure.dia svg{display:block; width:100%; height:auto}
@@ -83,41 +102,57 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
 </head>
 <body>
 
-<a class="back" href="../research.html">&larr; Firmware research</a>
+<div class="topbar">
+  <a class="back" href="../research.html"><span class="en">&larr; Firmware research</span><span class="zh">&larr; 韌體研究</span></a>
+  <div class="lang" role="group" aria-label="Language / 語言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="zh" aria-pressed="false">中文</button>
+  </div>
+</div>
 
 <header class="hero">
   <div class="hero-text">
-    <h1>The 70 sensor modes</h1>
-    <p class="lede">Every way the fp knows how to read its sensor, as a table in ROM.
+    <h1><span class="en">The 70 sensor modes</span><span class="zh">70 個感光元件模式</span></h1>
+    <p class="lede en">Every way the fp knows how to read its sensor, as a table in ROM.
     This is all 70 of them, every field in the record explained, and a searchable
     comparison &mdash; including the fields nobody has worked out.</p>
+    <p class="lede zh">fp 知道的所有「讀取感光元件的方式」,全部存在 ROM 的一張表裡。這頁是全部 70 種,每個欄位逐一解釋,加上一張可以搜尋排序的對照表 ——
+    包括那些到現在還沒人搞懂的欄位。</p>
     <ul class="chips">
-      <li><b>70</b> modes</li>
-      <li><b>13</b> rasters</li>
-      <li><b>17</b> frame rates</li>
+      <li><b>70</b> <span class="en">modes</span><span class="zh">種模式</span></li>
+      <li><b>13</b> <span class="en">rasters</span><span class="zh">種光柵</span></li>
+      <li><b>17</b> <span class="en">frame rates</span><span class="zh">種格率</span></li>
     </ul>
   </div>
 </header>
 
 <div class="facts">
   <dl>
-    <dt>Where it is</dt>
-    <dd>Three separate tables describe a mode. The one below is the
+    <dt><span class="en">Where it is</span><span class="zh">表在哪</span></dt>
+    <dd class="en">Three separate tables describe a mode. The one below is the
     <b>metadata</b> table at <code>0xC0B59DC0</code>: 70 records of
     <code>0x64</code> bytes, 25 words each. Everything on this page is read
     straight out of it.</dd>
-    <dt>On &ldquo;70 parameters&rdquo;</dt>
-    <dd><b>70 is the number of modes, not of parameters.</b> Each mode's metadata
+    <dd class="zh">一個模式是由<strong>三張分開的表</strong>描述的。下面講的這張是
+    <b>metadata</b> 表,在 <code>0xC0B59DC0</code>:70 筆,每筆 <code>0x64</code> bytes、
+    25 個字。這頁的每個數字都是直接從它讀出來的。</dd>
+    <dt><span class="en">On &ldquo;70 parameters&rdquo;</span><span class="zh">關於「70 個參數」</span></dt>
+    <dd class="en"><b>70 is the number of modes, not of parameters.</b> Each mode's metadata
     record has 25 fields; the separate register record has 162, of which 133 vary
     between modes. The 70 is what gets picked from, not what is in each one.</dd>
-    <dt>What is not solved</dt>
-    <dd>Four of the 25 metadata fields are always zero, two are read from a single
+    <dd class="zh"><b>70 是模式的數量,不是參數的數量。</b>
+    每個模式的 metadata 記錄有 25 個欄位;另一張 register record 有 162 個,
+    其中 133 個會隨模式改變。<strong>70 是「可以挑的東西有幾個」,不是「每個裡面有幾項」。</strong></dd>
+    <dt><span class="en">What is not solved</span><span class="zh">還沒解的</span></dt>
+    <dd class="en">Four of the 25 metadata fields are always zero, two are read from a single
     mode's investigation rather than proven across the table, and the 162-field
     register record is almost entirely unmapped.</dd>
+    <dd class="zh">25 個 metadata 欄位裡有四個永遠是 0;兩個的名字是從單一模式的調查來的,
+    沒有在整張表上驗證過;而 162 個欄位的 register record <strong>幾乎完全沒被解開</strong>。</dd>
   </dl>
 </div>
 
-<h2>Three tables, one mode</h2>
+<h2><span class="en">Three tables, one mode</span><span class="zh">三張表,一個模式</span></h2>
 
 <figure class="dia">
 <svg viewBox="0 0 820 216" role="img" aria-labelledby="t3">
@@ -126,146 +161,190 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
     <rect class="bx-on" x="0" y="16" width="250" height="56" rx="3"/>
     <text x="125" y="38" text-anchor="middle" font-weight="600">metadata</text>
     <text x="125" y="53" text-anchor="middle" font-size="9" class="t-dim">0xC0B59DC0 &middot; 70 &times; 0x64</text>
-    <text x="125" y="66" text-anchor="middle" font-size="9" class="t-sig">25 fields &middot; this page</text>
+    <text x="125" y="66" text-anchor="middle" font-size="9" class="t-sig en">25 fields &middot; this page</text>
+    <text x="125" y="66" text-anchor="middle" font-size="9" class="t-sig zh">25 個欄位 &middot; 這一頁</text>
 
     <rect class="bx" x="285" y="16" width="250" height="56" rx="3"/>
     <text x="410" y="38" text-anchor="middle" font-weight="600">register record</text>
     <text x="410" y="53" text-anchor="middle" font-size="9" class="t-dim">0xC0B5FDAC &middot; 70 &times; 0x288</text>
-    <text x="410" y="66" text-anchor="middle" font-size="9" class="t-dim">162 fields &middot; 133 vary</text>
+    <text x="410" y="66" text-anchor="middle" font-size="9" class="t-dim en">162 fields &middot; 133 vary</text>
+    <text x="410" y="66" text-anchor="middle" font-size="9" class="t-dim zh">162 個欄位 &middot; 133 個會變</text>
 
     <rect class="bx" x="570" y="16" width="250" height="56" rx="3"/>
-    <text x="695" y="38" text-anchor="middle" font-weight="600">timing</text>
-    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim">near 0xC0B59A40</text>
-    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim">hmax / vmax &middot; extent unclear</text>
+    <text x="695" y="38" text-anchor="middle" font-weight="600" class="en">timing</text>
+    <text x="695" y="38" text-anchor="middle" font-weight="600" class="zh">時序</text>
+    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim en">near 0xC0B59A40</text>
+    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim zh">0xC0B59A40 附近</text>
+    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim en">hmax / vmax &middot; extent unclear</text>
+    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim zh">hmax / vmax &middot; 範圍未定</text>
   </g>
   <g class="ln">
     <path d="M125 72 v30"/><path d="M410 72 v30"/><path d="M695 72 v30"/>
     <path d="M125 102 H695"/><path d="M410 102 v22"/>
   </g>
   <rect class="bx" x="285" y="124" width="250" height="40" rx="3"/>
-  <text x="410" y="143" text-anchor="middle" font-size="10.5">one readout mode</text>
-  <text x="410" y="157" text-anchor="middle" font-size="9" class="t-dim">keyed by the mode id in word 0</text>
+  <text x="410" y="143" text-anchor="middle" font-size="10.5" class="en">one readout mode</text>
+    <text x="410" y="143" text-anchor="middle" font-size="10.5" class="zh">一個讀出模式</text>
+  <text x="410" y="157" text-anchor="middle" font-size="9" class="t-dim en">keyed by the mode id in word 0</text>
+    <text x="410" y="157" text-anchor="middle" font-size="9" class="t-dim zh">用第 0 個字的 mode id 當鍵</text>
   <g font-size="9.5" class="t-dim">
-    <text x="0" y="192">metadata says what the mode produces. The register record is what gets written to the</text>
-    <text x="0" y="206">sensor. Timing decides the real frame rate &mdash; and the frame rate in metadata is only nominal.</text>
+    <text x="0" y="192" class="en">metadata says what the mode produces. The register record is what gets written to the</text>
+    <text x="0" y="192" class="zh">metadata 說這個模式會產出什麼。register record 是真正寫進感光元件的東西;</text>
+    <text x="0" y="206" class="en">sensor. Timing decides the real frame rate &mdash; and the frame rate in metadata is only nominal.</text>
+    <text x="0" y="206" class="zh">時序決定真實格率 —— 而 metadata 裡那個格率只是標稱值。</text>
   </g>
 </svg>
-<figcaption>All three are keyed by the mode id in their first word, and the register
+<figcaption class="en">All three are keyed by the mode id in their first word, and the register
 record's ids appear in the same order as metadata's &mdash; which is how the stride
 of <code>0x288</code> was confirmed. <b>The timing table's extent could not be
 pinned down</b>: walking it by a plausible stride runs into the metadata table
 instead of stopping cleanly.</figcaption>
+<figcaption class="zh">三張表都用各自第一個字的 mode id 當鍵,而且 register record 的 id
+順序跟 metadata 完全一樣 —— <code>0x288</code> 這個 stride 就是這樣確認的。
+<b>但時序表的範圍抓不出來</b>:用看起來合理的 stride 往外走,會撞進 metadata 表,
+而不是乾淨地停下來。</figcaption>
 </figure>
 
-<h2>Every field in the metadata record</h2>
+<h2><span class="en">Every field in the metadata record</span><span class="zh">metadata 記錄的每一個欄位</span></h2>
 
-<p>25 words. Confidence is marked per field: <span class="fld"><span class="cf ok">read</span></span>
+<p class="en">25 words. Confidence is marked per field: <span class="fld"><span class="cf ok">read</span></span>
 means the meaning is visible in the data or in code,
 <span class="fld"><span class="cf guess">inferred</span></span> means it comes from
 one mode's investigation and has not been checked across the table, and
 <span class="fld"><span class="cf no">unknown</span></span> is unknown.</p>
+<p class="zh">25 個字。每個欄位都標了信心等級:<span class="fld"><span class="cf ok">read</span></span>
+表示意義在資料或程式碼裡看得見;<span class="fld"><span class="cf guess">inferred</span></span>
+表示來自單一模式的調查、沒在整張表上驗證過;
+<span class="fld"><span class="cf no">unknown</span></span> 就是不知道。</p>
 
 <div class="fields">
 
-<div class="fld"><span class="off">+0x00</span><span class="nm">mode id</span><span class="cf ok">read</span>
-  <span class="dsc">The key every other table uses. Not an index &mdash; ids run 0 to 221 with gaps,
+<div class="fld"><span class="off">+0x00</span><span class="nm"><span class="en">mode id</span><span class="zh">mode id</span></span><span class="cf ok">read</span>
+  <span class="dsc en">The key every other table uses. Not an index &mdash; ids run 0 to 221 with gaps,
   and the table is not sorted by them.</span>
-  <span class="vals">70 distinct &middot; 0 &hellip; 221</span></div>
+  <span class="dsc zh">其他兩張表都用這個當鍵。<strong>它不是索引</strong> —— id 從 0 到 221 中間有缺號,而且這張表也沒有按它排序。</span>
+  <span class="vals en">70 distinct &middot; 0 &hellip; 221</span>
+  <span class="vals zh">70 個相異值 &middot; 0 &hellip; 221</span></div>
 
-<div class="fld"><span class="off">+0x04 / +0x08</span><span class="nm">raster width / height</span><span class="cf ok">read</span>
-  <span class="dsc">What the sensor actually reads out. This is the number that decides bandwidth
+<div class="fld"><span class="off">+0x04 / +0x08</span><span class="nm"><span class="en">raster width / height</span><span class="zh">光柵 寬 / 高</span></span><span class="cf ok">read</span>
+  <span class="dsc en">What the sensor actually reads out. This is the number that decides bandwidth
   and, with the timing table, rolling shutter.</span>
-  <span class="vals">8 widths &middot; 13 distinct rasters &middot; 2016&times;672 &hellip; 6064&times;4042</span></div>
+  <span class="dsc zh">感光元件實際讀出來的尺寸。這個數字決定頻寬,配上時序表就決定捲簾時間。</span>
+  <span class="vals en">8 widths &middot; 13 distinct rasters &middot; 2016&times;672 &hellip; 6064&times;4042</span>
+  <span class="vals zh">8 種寬度 &middot; 13 種光柵 &middot; 2016&times;672 &hellip; 6064&times;4042</span></div>
 
-<div class="fld"><span class="off">+0x0C / +0x10</span><span class="nm">&mdash;</span><span class="cf no">unknown</span>
-  <span class="dsc">Zero in all 70 records. Position suggests an origin for the pair above, but
+<div class="fld"><span class="off">+0x0C / +0x10</span><span class="nm"><span class="en">&mdash;</span><span class="zh">&mdash;</span></span><span class="cf no">unknown</span>
+  <span class="dsc en">Zero in all 70 records. Position suggests an origin for the pair above, but
   nothing ever sets it, so that is a guess from layout alone.</span>
-  <span class="vals">always 0</span></div>
+  <span class="dsc zh">70 筆全部是 0。從位置看像是上面那對的原點,但沒有任何東西設過它,所以那純粹是從排版猜的。</span>
+  <span class="vals en">always 0</span>
+  <span class="vals zh">全部是 0</span></div>
 
-<div class="fld"><span class="off">+0x14 / +0x18</span><span class="nm">second width / height</span><span class="cf ok">read</span>
-  <span class="dsc">Identical to <code>+0x04/+0x08</code> in <b>all 70 records</b>. Why the record
+<div class="fld"><span class="off">+0x14 / +0x18</span><span class="nm"><span class="en">second width / height</span><span class="zh">第二組 寬 / 高</span></span><span class="cf ok">read</span>
+  <span class="dsc en">Identical to <code>+0x04/+0x08</code> in <b>all 70 records</b>. Why the record
   carries the same geometry twice is not known.</span>
-  <span class="vals">identical to +0x04/+0x08, 70/70</span></div>
+  <span class="dsc zh">跟 <code>+0x04/+0x08</code> <b>70 筆全部相同</b>。為什麼同一份幾何要存兩次,不知道。</span>
+  <span class="vals en">identical to +0x04/+0x08, 70/70</span>
+  <span class="vals zh">跟 +0x04/+0x08 完全相同,70/70</span></div>
 
-<div class="fld"><span class="off">+0x1C / +0x20</span><span class="nm">&mdash;</span><span class="cf no">unknown</span>
-  <span class="dsc">Zero in all 70 records, same shape as <code>+0x0C/+0x10</code>.</span>
-  <span class="vals">always 0</span></div>
+<div class="fld"><span class="off">+0x1C / +0x20</span><span class="nm"><span class="en">&mdash;</span><span class="zh">&mdash;</span></span><span class="cf no">unknown</span>
+  <span class="dsc en">Zero in all 70 records, same shape as <code>+0x0C/+0x10</code>.</span>
+  <span class="dsc zh">70 筆全部是 0,形狀跟 <code>+0x0C/+0x10</code> 一樣。</span>
+  <span class="vals en">always 0</span>
+  <span class="vals zh">全部是 0</span></div>
 
-<div class="fld"><span class="off">+0x24 / +0x28</span><span class="nm">third width / height</span><span class="cf ok">read</span>
-  <span class="dsc"><b>Identical to the other two in 69 of 70 records.</b> The exception is
+<div class="fld"><span class="off">+0x24 / +0x28</span><span class="nm"><span class="en">third width / height</span><span class="zh">第三組 寬 / 高</span></span><span class="cf ok">read</span>
+  <span class="dsc en"><b>Identical to the other two in 69 of 70 records.</b> The exception is
   <b>mode 100</b>, where the first two say 4176&times;2174 and this one says
   3032&times;2174 &mdash; same height, different width. Whether that is meaningful or a
   typo in the firmware is not known, and nothing else in the table looks like it.</span>
-  <span class="vals">differs only for mode 100</span></div>
+  <span class="dsc zh"><b>70 筆裡有 69 筆跟前兩組相同。</b>例外是 <b>mode 100</b>:前兩組寫 4176&times;2174,這一組寫 3032&times;2174 —— 高度一樣,寬度不同。是有意義還是韌體的筆誤,不知道,而且表裡沒有第二個長這樣的。</span>
+  <span class="vals en">differs only for mode 100</span>
+  <span class="vals zh">只有 mode 100 不同</span></div>
 
-<div class="fld"><span class="off">+0x2C / +0x30</span><span class="nm">output crop width / height</span><span class="cf ok">read</span>
-  <span class="dsc">The active area inside the raster. Set on only <b>6 of 70 modes</b>; the
+<div class="fld"><span class="off">+0x2C / +0x30</span><span class="nm"><span class="en">output crop width / height</span><span class="zh">輸出裁切 寬 / 高</span></span><span class="cf ok">read</span>
+  <span class="dsc en">The active area inside the raster. Set on only <b>6 of 70 modes</b>; the
   other 64 leave it zero, meaning the whole raster is the output.</span>
+  <span class="dsc zh">光柵內的有效區。<b>70 個模式裡只有 6 個</b>有設;其他 64 個留 0,表示整個光柵就是輸出。</span>
   <span class="vals">0 (&times;64) &middot; 3000&times;2000 (&times;2) &middot; 6000&times;4000 (&times;4)</span></div>
 
-<div class="fld"><span class="off">+0x34 / +0x38</span><span class="nm">crop origin x / y</span><span class="cf ok">read</span>
-  <span class="dsc">Top-left of that crop. Only set on the same modes as the pair above.</span>
+<div class="fld"><span class="off">+0x34 / +0x38</span><span class="nm"><span class="en">crop origin x / y</span><span class="zh">裁切原點 x / y</span></span><span class="cf ok">read</span>
+  <span class="dsc en">Top-left of that crop. Only set on the same modes as the pair above.</span>
+  <span class="dsc zh">那個裁切的左上角。只有上面那 6 個模式會設。</span>
   <span class="vals">0 &middot; (16, 6) &middot; (32, 21)</span></div>
 
-<div class="fld"><span class="off">+0x3C</span><span class="nm">14-bit flag</span><span class="cf ok">read</span>
-  <span class="dsc">1 on exactly 8 modes, 0 on the rest. Those 8 are the stills-class readouts
+<div class="fld"><span class="off">+0x3C</span><span class="nm"><span class="en">14-bit flag</span><span class="zh">14-bit 旗標</span></span><span class="cf ok">read</span>
+  <span class="dsc en">1 on exactly 8 modes, 0 on the rest. Those 8 are the stills-class readouts
   &mdash; mode 0 is independently documented as RAW14, which is what fixes the
   polarity.</span>
-  <span class="vals">1 on modes 0, 6, 95, 100, 122, 129, 141, 144</span></div>
+  <span class="dsc zh">剛好 8 個模式是 1,其餘是 0。那 8 個是拍照等級的讀出 —— mode 0 有獨立文件記載是 RAW14,極性就是這樣定下來的。</span>
+  <span class="vals en">1 on modes 0, 6, 95, 100, 122, 129, 141, 144</span>
+  <span class="vals zh">modes 0, 6, 95, 100, 122, 129, 141, 144 為 1</span></div>
 
-<div class="fld"><span class="off">+0x40</span><span class="nm">nominal frame rate</span><span class="cf ok">read</span>
-  <span class="dsc"><b>Nominal, not exact, and it goes stale.</b> Mode 3 says 30 and runs 29.97;
+<div class="fld"><span class="off">+0x40</span><span class="nm"><span class="en">nominal frame rate</span><span class="zh">標稱格率</span></span><span class="cf ok">read</span>
+  <span class="dsc en"><b>Nominal, not exact, and it goes stale.</b> Mode 3 says 30 and runs 29.97;
   mode 98 says 78 and runs 77.27; mode 121 says 25 and runs 24.9997. It also becomes
   an outright lie when a project retimes a donor mode &mdash; OG3K drives mode 98 at
   29.97 while this field still reads 78.</span>
-  <span class="vals">17 values &middot; 18 &hellip; 240</span></div>
+  <span class="dsc zh"><b>是標稱值、不精確,而且會過期。</b>mode 3 寫 30、實跑 29.97;mode 98 寫 78、實跑 77.27;mode 121 寫 25、實跑 24.9997。專案把借來的模式改時序之後,它會變成<strong>純粹的謊話</strong> —— OG3K 讓 mode 98 跑 29.97,而這個欄位還寫著 78。</span>
+  <span class="vals en">17 values &middot; 18 &hellip; 240</span>
+  <span class="vals zh">17 種值 &middot; 18 &hellip; 240</span></div>
 
-<div class="fld"><span class="off">+0x44 &hellip; +0x50</span><span class="nm">merge tuple (four factors)</span><span class="cf ok">read</span>
-  <span class="dsc">Four reduction factors. Only four combinations occur across the whole table.
+<div class="fld"><span class="off">+0x44 &hellip; +0x50</span><span class="nm"><span class="en">merge tuple (four factors)</span><span class="zh">合併倍率(四個數字)</span></span><span class="cf ok">read</span>
+  <span class="dsc en">Four reduction factors. Only four combinations occur across the whole table.
   <b>The last two are confirmed as effective X/Y geometry scale</b> &mdash; but that
   proves a coordinate ratio and says nothing about whether charge is combined or rows
   are skipped. The first two are not pinned down at all.</span>
+  <span class="dsc zh">四個縮減倍率。整張表只出現四種組合。<b>後兩個已確認是有效的 X/Y 幾何倍率</b> —— 但那只證明座標比例,<strong>完全沒有說電荷是被合併還是整列被跳過</strong>。前兩個則完全沒定。</span>
   <span class="vals">(1,1,1,1) &times;23 &middot; (2,2,2,2) &times;36 &middot; (3,2,3,3) &times;8 &middot; (3,3,3,6) &times;3</span></div>
 
-<div class="fld"><span class="off">+0x54</span><span class="nm">aspect marker</span><span class="cf ok">read</span>
-  <span class="dsc">2 on every 3:2 raster, 1 on every 16:9 one. Checks out against the geometry
+<div class="fld"><span class="off">+0x54</span><span class="nm"><span class="en">aspect marker</span><span class="zh">比例標記</span></span><span class="cf ok">read</span>
+  <span class="dsc en">2 on every 3:2 raster, 1 on every 16:9 one. Checks out against the geometry
   in all 70 records.</span>
-  <span class="vals">1 (&times;43, 16:9) &middot; 2 (&times;27, 3:2)</span></div>
+  <span class="dsc zh">每個 3:2 光柵都是 2,每個 16:9 都是 1。70 筆全部對得上幾何。</span>
+  <span class="vals en">1 (&times;43, 16:9) &middot; 2 (&times;27, 3:2)</span>
+  <span class="vals zh">1(&times;43,16:9)&middot; 2(&times;27,3:2)</span></div>
 
-<div class="fld"><span class="off">+0x58</span><span class="nm">full or cropped readout</span><span class="cf ok">read</span>
-  <span class="dsc">0 for a full-width readout, 1 for a cropped one. Independent of the crop
+<div class="fld"><span class="off">+0x58</span><span class="nm"><span class="en">full or cropped readout</span><span class="zh">全幅讀出 或 裁切讀出</span></span><span class="cf ok">read</span>
+  <span class="dsc en">0 for a full-width readout, 1 for a cropped one. Independent of the crop
   fields above, which describe an output window rather than the readout itself.</span>
+  <span class="dsc zh">0 = 全寬讀出,1 = 裁切讀出。跟上面的裁切欄位<strong>是兩回事</strong> —— 那組描述的是輸出視窗,這個講的是讀出本身。</span>
   <span class="vals">0 (&times;39) &middot; 1 (&times;31)</span></div>
 
-<div class="fld"><span class="off">+0x5C</span><span class="nm">vertical blanking</span><span class="cf guess">inferred</span>
-  <span class="dsc">Named from the HSW investigation of a single mode. The value range is
+<div class="fld"><span class="off">+0x5C</span><span class="nm"><span class="en">vertical blanking</span><span class="zh">垂直消隱</span></span><span class="cf guess">inferred</span>
+  <span class="dsc en">Named from the HSW investigation of a single mode. The value range is
   plausible for vblank lines and it correlates loosely with frame rate, but it has not
   been checked against the timing table across the other 69 modes.</span>
+  <span class="dsc zh">名字來自 HSW 對單一模式的調查。數值範圍當 vblank 行數是合理的,跟格率也有鬆散的相關性,但<strong>沒有拿另外 69 個模式對照時序表驗證過</strong>。</span>
   <span class="vals">14 &middot; 30 &middot; 40 &middot; 50 (&times;11) &middot; 70 (&times;44) &middot; 100 (&times;10)</span></div>
 
-<div class="fld"><span class="off">+0x60</span><span class="nm">analogue fingerprint / readout class</span><span class="cf guess">inferred</span>
-  <span class="dsc">Groups modes that share an analogue signature &mdash; the HSW work reads 23 as
+<div class="fld"><span class="off">+0x60</span><span class="nm"><span class="en">analogue fingerprint / readout class</span><span class="zh">類比指紋 / 讀出類別</span></span><span class="cf guess">inferred</span>
+  <span class="dsc en">Groups modes that share an analogue signature &mdash; the HSW work reads 23 as
   the &ldquo;fast 330&rdquo; MONIT class. Eight values across the table, and modes with
   the same value do tend to share a raster family, which is consistent. Not proven.</span>
-  <span class="vals">16 &hellip; 23, eight groups</span></div>
+  <span class="dsc zh">把共用同一個類比特徵的模式分組 —— HSW 那邊把 23 讀成「快速 330」的 MONIT 類。整張表有八個值,而且同值的模式確實傾向共用同一個光柵家族,這點是一致的。<strong>但沒有被證明。</strong></span>
+  <span class="vals en">16 &hellip; 23, eight groups</span>
+  <span class="vals zh">16 &hellip; 23,八組</span></div>
 
 </div>
 
-<h2>All 70 modes</h2>
+<h2><span class="en">All 70 modes</span><span class="zh">全部 70 個模式</span></h2>
 
-<p>Sort by any column. Search matches the mode id and the raster. &ldquo;Rel.&rdquo;
+<p class="en">Sort by any column. Search matches the mode id and the raster. &ldquo;Rel.&rdquo;
 is the raster width against the full 6064, so &times;2 means half-width readout.</p>
+<p class="zh">點任一欄的標題可以排序。搜尋可以打 mode id 或光柵尺寸。
+「Rel.」是光柵寬度相對於全寬 6064 的倍率,所以 &times;2 就是半寬讀出。</p>
 
 <div class="tblbar">
-  <input type="search" id="q" placeholder="Search mode id or raster&hellip;" autocomplete="off" spellcheck="false" aria-label="Search modes">
+  <input type="search" id="q" placeholder="Search mode id or raster / 搜尋 mode id 或光柵尺寸" autocomplete="off" spellcheck="false" aria-label="Search modes">
   <div class="chipbar" id="chips">
-    <button type="button" data-f="all" aria-pressed="true">all</button>
-    <button type="button" data-f="full" aria-pressed="false">full readout</button>
-    <button type="button" data-f="half" aria-pressed="false">2&times; merge</button>
-    <button type="button" data-f="third" aria-pressed="false">3&times; merge</button>
-    <button type="button" data-f="32" aria-pressed="false">3:2</button>
-    <button type="button" data-f="crop" aria-pressed="false">has crop</button>
-    <button type="button" data-f="b14" aria-pressed="false">14-bit</button>
+    <button type="button" data-f="all" aria-pressed="true"><span class="en">all</span><span class="zh">全部</span></button>
+    <button type="button" data-f="full" aria-pressed="false"><span class="en">full readout</span><span class="zh">全幅讀出</span></button>
+    <button type="button" data-f="half" aria-pressed="false"><span class="en">2&times; merge</span><span class="zh">2&times; 合併</span></button>
+    <button type="button" data-f="third" aria-pressed="false"><span class="en">3&times; merge</span><span class="zh">3&times; 合併</span></button>
+    <button type="button" data-f="32" aria-pressed="false"><span class="en">3:2</span><span class="zh">3:2</span></button>
+    <button type="button" data-f="crop" aria-pressed="false"><span class="en">has crop</span><span class="zh">有裁切</span></button>
+    <button type="button" data-f="b14" aria-pressed="false"><span class="en">14-bit</span><span class="zh">14-bit</span></button>
     <span class="count" id="count">70 of 70</span>
   </div>
 </div>
@@ -273,108 +352,145 @@ is the raster width against the full 6064, so &times;2 means half-width readout.
 <div class="scroll">
 <table id="modetbl">
   <thead><tr>
-    <th data-k="0" data-dir="asc">mode</th>
-    <th data-k="w">raster</th>
-    <th data-k="rel">rel.</th>
-    <th data-k="17">aspect</th>
-    <th data-k="merge">merge</th>
-    <th data-k="11">bits</th>
-    <th data-k="12">fps</th>
-    <th data-k="crop">output crop</th>
-    <th data-k="18">readout</th>
-    <th data-k="19">vblank</th>
-    <th data-k="20">fp</th>
+    <th data-k="0" data-dir="asc"><span class="en">mode</span><span class="zh">mode</span></th>
+    <th data-k="w"><span class="en">raster</span><span class="zh">光柵</span></th>
+    <th data-k="rel"><span class="en">rel.</span><span class="zh">相對</span></th>
+    <th data-k="17"><span class="en">aspect</span><span class="zh">比例</span></th>
+    <th data-k="merge"><span class="en">merge</span><span class="zh">合併</span></th>
+    <th data-k="11"><span class="en">bits</span><span class="zh">位深</span></th>
+    <th data-k="12"><span class="en">fps</span><span class="zh">fps</span></th>
+    <th data-k="crop"><span class="en">output crop</span><span class="zh">輸出裁切</span></th>
+    <th data-k="18"><span class="en">readout</span><span class="zh">讀出</span></th>
+    <th data-k="19"><span class="en">vblank</span><span class="zh">vblank</span></th>
+    <th data-k="20"><span class="en">fp</span><span class="zh">指紋</span></th>
   </tr></thead>
   <tbody id="modebody"></tbody>
 </table>
 </div>
 
-<p class="note" id="empty" style="display:none">Nothing matches that.</p>
+<p class="note" id="empty" style="display:none"><span class="en">Nothing matches that.</span><span class="zh">沒有符合的項目。</span></p>
 
-<h2>The register record &mdash; 162 fields, mostly dark</h2>
+<h2><span class="en">The register record &mdash; 162 fields, mostly dark</span><span class="zh">register record &mdash; 162 個欄位,幾乎全黑</span></h2>
 
-<p>The second table is what actually gets written to the sensor. A header at
+<p class="en">The second table is what actually gets written to the sensor. A header at
 <code>0xC0B5FDA4</code> holds <code>{pointer, 70}</code>, and the records start at
 <code>0xC0B5FDAC</code> with a stride of <code>0x288</code> &mdash; confirmed because
 the first word of each record reproduces the metadata table's mode-id order exactly.</p>
+<p class="zh">第二張表才是<strong>真正寫進感光元件</strong>的東西。<code>0xC0B5FDA4</code>
+是個 <code>{指標, 70}</code> 的標頭,記錄從 <code>0xC0B5FDAC</code> 開始,
+stride 是 <code>0x288</code> —— 這個 stride 能確認,是因為每筆的第一個字
+<strong>完全重現了 metadata 表的 mode id 順序</strong>。</p>
 
 <div class="scroll">
 <table>
-  <thead><tr><th>of 162 fields</th><th>count</th><th>what that means</th></tr></thead>
+  <thead><tr><th><span class="en">of 162 fields</span><span class="zh">162 個欄位中</span></th><th><span class="en">count</span><span class="zh">數量</span></th><th><span class="en">what that means</span><span class="zh">代表什麼</span></th></tr></thead>
   <tbody>
-    <tr><td>always zero</td><td>13</td><td>Reserved, or a feature this sensor does not use.</td></tr>
-    <tr><td>constant across all modes</td><td>16</td><td>Set once for the part, not per mode.</td></tr>
-    <tr><td><b>varying</b></td><td><b>133</b></td><td>The actual per-mode configuration. <b>Almost none of it is identified.</b></td></tr>
+    <tr><td><span class="en">always zero</span><span class="zh">永遠是 0</span></td><td>13</td><td><span class="en">Reserved, or a feature this sensor does not use.</span><span class="zh">保留欄位,或是這顆感光元件沒用到的功能。</span></td></tr>
+    <tr><td><span class="en">constant across all modes</span><span class="zh">所有模式都相同</span></td><td>16</td><td><span class="en">Set once for the part, not per mode.</span><span class="zh">為這顆零件設定一次,不隨模式改變。</span></td></tr>
+    <tr><td><b><span class="en">varying</span><span class="zh">會變動</span></b></td><td><b>133</b></td><td><span class="en">The actual per-mode configuration. <b>Almost none of it is identified.</b></span><span class="zh">真正的逐模式設定。<b>幾乎沒有一個被辨識出來。</b></span></td></tr>
   </tbody>
 </table>
 </div>
 
-<p>Most of the varying fields take only two or three distinct values across all 70
+<p class="en">Most of the varying fields take only two or three distinct values across all 70
 modes, which is the signature of a mode <em>class</em> selector rather than a tuned
 number &mdash; the same value repeats for every mode in a raster family. A handful
 have wider ranges and look more like real timing or gain values.</p>
+<p class="zh">大部分會變的欄位,在 70 個模式裡<strong>只有兩三種值</strong> ——
+那是「模式<em>類別</em>選擇器」的特徵,不是調校過的數值:同一個光柵家族的模式共用同一個值。
+少數幾個值域比較寬,那些看起來才像真的時序或增益。</p>
 
-<div class="warn"><b>This is the largest unexplored thing in the sensor path.</b> 133
+<div class="warn en"><b>This is the largest unexplored thing in the sensor path.</b> 133
 per-mode parameters, and the project has names for none of them. Everything the
 open-gate work does at the sensor level &mdash; retiming a donor mode &mdash; is done
 through the timing values, not through these. What they control is simply not
 known.</div>
+<div class="warn zh"><b>這是感光元件路徑上最大的未探索區。</b>
+133 個逐模式參數,而這個專案<strong>一個名字都給不出來</strong>。
+open gate 在感光元件層做的所有事 —— 改借來的模式的時序 —— 走的是時序那些值,
+不是這些。它們控制什麼,就是不知道。</div>
 
-<h2>Timing &mdash; partially mapped</h2>
+<h2><span class="en">Timing &mdash; partially mapped</span><span class="zh">時序 &mdash; 只解開一部分</span></h2>
 
-<p>Frame rate and rolling shutter come from <code>hmax</code>, <code>vmax</code> and
+<p class="en">Frame rate and rolling shutter come from <code>hmax</code>, <code>vmax</code> and
 a tail value, not from the metadata field. For mode 12 the record near
 <code>0xC0B59A40</code> decodes cleanly:</p>
+<p class="zh">格率和捲簾時間來自 <code>hmax</code>、<code>vmax</code> 跟一個 tail 值,
+<strong>不是來自 metadata 那個欄位</strong>。mode 12 在 <code>0xC0B59A40</code>
+附近那筆解得很乾淨:</p>
 
-<pre style="font-family:var(--mono); font-size:.76rem; line-height:1.6; overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:12px 14px">+0x00   12              mode id
+<pre style="font-family:var(--mono); font-size:.76rem; line-height:1.6; overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:12px 14px"><span class="en">+0x00   12              mode id
 +0x04   330, 330        hmax, tail
 +0x08   910, 6          vmax, ?
 +0x24   911, 911        ?
 
 frame period   330 x 909 + 330 = 300,300 cycles @ 72 MHz
 actual rate    239.760240 fps          exactly, 0 ppm
-rolling        330 x 672 / 72 MHz  =   3.080 ms</pre>
+rolling        330 x 672 / 72 MHz  =   3.080 ms</span><span class="zh">+0x00   12          mode id
++0x04   330, 330    hmax, tail
++0x08   910, 6      vmax, ?
++0x24   911, 911    ?
 
-<div class="warn"><b>The table's extent could not be established.</b> Walking outward
+每幀週期  330 x 909 + 330 = 300,300 個時脈 @ 72 MHz
+實際格率  239.760240 fps      剛好,誤差 0 ppm
+捲簾      330 x 672 / 72 MHz = 3.080 ms</span></pre>
+
+<div class="warn en"><b>The table's extent could not be established.</b> Walking outward
 from the mode-12 record by the stride that makes its first words look like mode ids
 (<code>0x40</code>) runs straight into the metadata table rather than stopping, and
 the ids it produces do not cover all 70 modes. Either the stride is wrong, the table
 is shorter than 70 entries, or it is indexed some other way. <b>Only the mode-12
 record is trustworthy here</b>, and it is trustworthy because the HSW work derived
 239.760240 fps from it independently.</div>
+<div class="warn zh"><b>這張表的範圍我沒能定出來。</b>
+從 mode 12 那筆往外走,用那個「能讓首字看起來像 mode id」的 stride(<code>0x40</code>),
+會<strong>直接撞進 metadata 表</strong>而不是停下來,而且走出來的 id 也涵蓋不了全部 70 個模式。
+可能是 stride 錯了、可能這張表不到 70 筆、也可能它根本用別的方式索引。<br>
+<b>所以這裡只有 mode 12 那一筆可信</b> —— 而它可信,是因為 HSW 那邊
+獨立從它推出了 239.760240 fps。</div>
 
-<h2>What is still open</h2>
+<h2><span class="en">What is still open</span><span class="zh">還沒解的部分</span></h2>
 
 <ul>
-  <li>The 133 varying fields of the register record &mdash; the biggest gap on this
+  <li class="en">The 133 varying fields of the register record &mdash; the biggest gap on this
   page by a wide margin.</li>
-  <li>The timing table's stride, extent and indexing. Without it, rolling shutter and
+  <li class="zh">register record 那 133 個會變的欄位 —— 這頁裡差距最大的一塊空白。</li>
+  <li class="en">The timing table's stride, extent and indexing. Without it, rolling shutter and
   exact frame rate can only be quoted for modes somebody has already investigated.</li>
-  <li>Why the metadata record carries its geometry three times, and why
+  <li class="zh">時序表的 stride、範圍和索引方式。沒有這個,捲簾時間和精確格率就只能引用「已經有人調查過」的那幾個模式。</li>
+  <li class="en">Why the metadata record carries its geometry three times, and why
   <b>mode 100</b> is the one record where the third copy disagrees.</li>
-  <li>What <code>+0x0C/+0x10</code> and <code>+0x1C/+0x20</code> are for. They are
+  <li class="zh">metadata 記錄為什麼要把幾何存三次,以及為什麼 <b>mode 100</b> 是唯一第三份不一致的那一筆。</li>
+  <li class="en">What <code>+0x0C/+0x10</code> and <code>+0x1C/+0x20</code> are for. They are
   zero in every record, so nothing can be inferred from the data alone.</li>
-  <li>Whether the merge tuple means charge binning or row skipping. The last two
+  <li class="zh"><code>+0x0C/+0x10</code> 和 <code>+0x1C/+0x20</code> 是做什麼的。它們在每一筆裡都是 0,所以光看資料推不出任何東西。</li>
+  <li class="en">Whether the merge tuple means charge binning or row skipping. The last two
   factors are confirmed as geometry scale, which does not settle it, and the noise
   analysis that tried to settle it hit a modelling contradiction.</li>
-  <li><code>+0x5C</code> and <code>+0x60</code> are named from one mode's
+  <li class="zh">合併倍率到底是電荷合併還是跳列。後兩個因子確認是幾何倍率,但那不足以定案;想定案的雜訊分析撞到了一個模型上的矛盾。</li>
+  <li class="en"><code>+0x5C</code> and <code>+0x60</code> are named from one mode&#x27;s
   investigation and have not been verified across the table.</li>
+  <li class="zh"><code>+0x5C</code> 跟 <code>+0x60</code> 的名字來自單一模式的調查,沒有在整張表上驗證過。</li>
 </ul>
 
-<h2>Sources</h2>
+<h2><span class="en">Sources</span><span class="zh">出處</span></h2>
 
-<p>Every number on this page is read directly out of the Ver.5.02 image at the
+<p class="en">Every number on this page is read directly out of the Ver.5.02 image at the
 addresses given. The field names for <code>+0x5C</code> and <code>+0x60</code>, and
 the mode-12 timing decode, come from the HSW investigation; the RAW14 identification
 that fixes the polarity of <code>+0x3C</code> comes from the sensor-mode work. Where
 this page says a field is unknown, that is the current state and not a summary of
 someone else's conclusion.</p>
+<p class="zh">這頁的每一個數字,都是在上面給的位址直接從 Ver.5.02 映像讀出來的。
+<code>+0x5C</code> 與 <code>+0x60</code> 的欄位名稱、以及 mode 12 的時序解讀,來自 HSW 的調查;
+把 <code>+0x3C</code> 極性定下來的 RAW14 判定,來自感光元件模式的研究。<br>
+這頁說某個欄位「不知道」的地方,就是<strong>目前真的不知道</strong>,不是在轉述別人的結論。</p>
 
 <footer>
-  <p><a href="../research.html">Firmware research</a> &middot;
-  <a href="sensor-to-cinemadng.html">The recording chain</a> &middot;
+  <p><a href="../research.html"><span class="en">Firmware research</span><span class="zh">韌體研究</span></a> &middot;
+  <a href="sensor-to-cinemadng.html"><span class="en">The recording chain</span><span class="zh">錄影鏈</span></a> &middot;
   <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
-  <a href="https://github.com/ijigen/fpSup">Repository</a></p>
+  <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
 </footer>
 
 <script>
@@ -460,6 +576,7 @@ someone else's conclusion.</p>
       empty = $('empty'), tbl = $('modetbl');
   if(!body) return;
 
+  var T = {full:'full', crop:'crop', of:' of '};
   function merge(m){ return m[13]+','+m[14]+','+m[15]+','+m[16]; }
   function rel(m){ return 6064 / m[1]; }
   function rows(){
@@ -507,11 +624,11 @@ someone else's conclusion.</p>
         + '<td class="g">'+(m[11]===1 ? '14' : '12')+'</td>'
         + '<td>'+m[12]+'</td>'
         + '<td class="g">'+crop+'</td>'
-        + '<td class="g">'+(m[18]===0 ? 'full' : 'crop')+'</td>'
+        + '<td class="g">'+(m[18]===0 ? T.full : T.crop)+'</td>'
         + '<td class="g">'+m[19]+'</td>'
         + '<td class="g">'+m[20]+'</td></tr>';
     }).join('');
-    count.textContent = list.length + ' of ' + MODES.length;
+    count.textContent = list.length + T.of + MODES.length;
     empty.style.display = list.length ? 'none' : 'block';
   }
 
@@ -535,7 +652,29 @@ someone else's conclusion.</p>
     });
     render();
   });
-  render();
+  // language switch -- re-renders the table so its generated cells follow too
+  var KEY = 'fpsup-lang', root = document.documentElement;
+  var lbtn = [].slice.call(document.querySelectorAll('.lang button[data-set]'));
+  function applyLang(lang, remember){
+    root.setAttribute('data-lang', lang);
+    root.setAttribute('lang', lang === 'zh' ? 'zh-Hant' : 'en');
+    lbtn.forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-set') === lang));
+    });
+    T = lang === 'zh' ? {full:'全幅', crop:'裁切', of:' / '}
+                      : {full:'full', crop:'crop', of:' of '};
+    if(remember){ try{ localStorage.setItem(KEY, lang); }catch(e){} }
+    render();
+  }
+  var saved = null;
+  try{ saved = localStorage.getItem(KEY); }catch(e){}
+  if(saved !== 'zh' && saved !== 'en'){
+    saved = /^zh\b/i.test(navigator.language || '') ? 'zh' : 'en';
+  }
+  lbtn.forEach(function(b){
+    b.addEventListener('click', function(){ applyLang(b.getAttribute('data-set'), true); });
+  });
+  applyLang(saved, false);
 })();
 </script>
 
