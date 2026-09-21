@@ -129,20 +129,11 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
 <div class="facts">
   <dl>
     <dt><span class="en">Where it is</span><span class="zh">表在哪</span></dt>
-    <dd class="en">Three separate tables describe a mode. The one below is the
-    <b>metadata</b> table at <code>0xC0B59DC0</code>: 70 records of
-    <code>0x64</code> bytes, 25 words each. Everything on this page is read
-    straight out of it.</dd>
-    <dd class="zh">一個模式是由<strong>三張分開的表</strong>描述的。下面講的這張是
-    <b>metadata</b> 表,在 <code>0xC0B59DC0</code>:70 筆,每筆 <code>0x64</code> bytes、
-    25 個字。這頁的每個數字都是直接從它讀出來的。</dd>
+    <dd class="en"><b>Eight</b> separate tables describe a mode, all 70 entries, all indexed by the same row number. The one this page documents field by field is the <b>metadata</b> table at <code>0xC0B59DC0</code>: 70 records of <code>0x64</code> bytes, 25 words each.</dd>
+    <dd class="zh">一個模式是由<strong>八張</strong>分開的表描述的,每張都是 70 筆、都用同一個列號索引。這頁逐欄解釋的是其中的 <b>metadata</b> 表,在 <code>0xC0B59DC0</code>:70 筆,每筆 <code>0x64</code> bytes、25 個字。</dd>
     <dt><span class="en">On &ldquo;70 parameters&rdquo;</span><span class="zh">關於「70 個參數」</span></dt>
-    <dd class="en"><b>70 is the number of modes, not of parameters.</b> Each mode's metadata
-    record has 25 fields; the separate register record has 162, of which 133 vary
-    between modes. The 70 is what gets picked from, not what is in each one.</dd>
-    <dd class="zh"><b>70 是模式的數量,不是參數的數量。</b>
-    每個模式的 metadata 記錄有 25 個欄位;另一張 register record 有 162 個,
-    其中 133 個會隨模式改變。<strong>70 是「可以挑的東西有幾個」,不是「每個裡面有幾項」。</strong></dd>
+    <dd class="en"><b>70 is the number of modes, not of parameters.</b> A mode is described by <b>252 words</b> across eight tables, of which <b>203 vary</b> between modes. The 70 is what gets picked from, not what is in each one.</dd>
+    <dd class="zh"><b>70 是模式的數量,不是參數的數量。</b>一個模式是由八張表裡的 <b>252 個字</b>描述的,其中 <b>203 個會隨模式改變</b>。<strong>70 是「可以挑的東西有幾個」,不是「每個裡面有幾項」。</strong></dd>
     <dt><span class="en">What is not solved</span><span class="zh">還沒解的</span></dt>
     <dd class="en">Four of the 25 metadata fields are always zero, two are read from a single
     mode's investigation rather than proven across the table, and the 162-field
@@ -151,55 +142,110 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
   </dl>
 </div>
 
-<h2><span class="en">Three tables, one mode</span><span class="zh">三張表,一個模式</span></h2>
+<h2><span class="en">Eight tables, one mode</span><span class="zh">八張表,一個模式</span></h2>
 
 <figure class="dia">
-<svg viewBox="0 0 820 216" role="img" aria-labelledby="t3">
-  <title id="t3">The three tables that together describe one sensor mode</title>
-  <g font-size="10.5">
-    <rect class="bx-on" x="0" y="16" width="250" height="56" rx="3"/>
-    <text x="125" y="38" text-anchor="middle" font-weight="600">metadata</text>
-    <text x="125" y="53" text-anchor="middle" font-size="9" class="t-dim">0xC0B59DC0 &middot; 70 &times; 0x64</text>
-    <text x="125" y="66" text-anchor="middle" font-size="9" class="t-sig en">25 fields &middot; this page</text>
-    <text x="125" y="66" text-anchor="middle" font-size="9" class="t-sig zh">25 個欄位 &middot; 這一頁</text>
-
-    <rect class="bx" x="285" y="16" width="250" height="56" rx="3"/>
-    <text x="410" y="38" text-anchor="middle" font-weight="600">register record</text>
-    <text x="410" y="53" text-anchor="middle" font-size="9" class="t-dim">0xC0B5FDAC &middot; 70 &times; 0x288</text>
-    <text x="410" y="66" text-anchor="middle" font-size="9" class="t-dim en">162 fields &middot; 133 vary</text>
-    <text x="410" y="66" text-anchor="middle" font-size="9" class="t-dim zh">162 個欄位 &middot; 133 個會變</text>
-
-    <rect class="bx" x="570" y="16" width="250" height="56" rx="3"/>
-    <text x="695" y="38" text-anchor="middle" font-weight="600" class="en">timing</text>
-    <text x="695" y="38" text-anchor="middle" font-weight="600" class="zh">時序</text>
-    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim en">0xC0B59500 &middot; 70 &times; 0x20</text>
-    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim zh">0xC0B59500 &middot; 70 &times; 0x20</text>
-    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim en">hmax / vmax &middot; rolling shutter</text>
-    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim zh">hmax / vmax &middot; 捲簾</text>
+<svg viewBox="0 0 820 268" role="img" aria-labelledby="t8">
+  <title id="t8">The eight tables that together describe one sensor mode</title>
+  <g font-size="10">
+    <rect class="bx-on" x="0" y="16" width="190" height="52" rx="3"/>
+    <text x="95" y="35" text-anchor="middle" font-weight="600">timing</text>
+    <text x="95" y="49" text-anchor="middle" font-size="8.5" class="t-dim">0xC0B59500</text>
+    <text x="95" y="61" text-anchor="middle" font-size="8.5" class="t-sig">8 u32</text>
+    <rect class="bx-on" x="205" y="16" width="190" height="52" rx="3"/>
+    <text x="300" y="35" text-anchor="middle" font-weight="600">metadata</text>
+    <text x="300" y="49" text-anchor="middle" font-size="8.5" class="t-dim">0xC0B59DC0</text>
+    <text x="300" y="61" text-anchor="middle" font-size="8.5" class="t-sig">25 u32</text>
+    <rect class="bx" x="410" y="16" width="190" height="52" rx="3"/>
+    <text x="505" y="35" text-anchor="middle" font-weight="600">table C</text>
+    <text x="505" y="49" text-anchor="middle" font-size="8.5" class="t-dim">0xC0B5B918</text>
+    <text x="505" y="61" text-anchor="middle" font-size="8.5" class="t-dim">2 u32</text>
+    <rect class="bx" x="615" y="16" width="190" height="52" rx="3"/>
+    <text x="710" y="35" text-anchor="middle" font-weight="600">table D</text>
+    <text x="710" y="49" text-anchor="middle" font-size="8.5" class="t-dim">0xC0B5BB48</text>
+    <text x="710" y="61" text-anchor="middle" font-size="8.5" class="t-dim">10 u32</text>
+    <rect class="bx" x="0" y="86" width="190" height="52" rx="3"/>
+    <text x="95" y="105" text-anchor="middle" font-weight="600">table E</text>
+    <text x="95" y="119" text-anchor="middle" font-size="8.5" class="t-dim">0xC0B5C638</text>
+    <text x="95" y="131" text-anchor="middle" font-size="8.5" class="t-dim">14 u32</text>
+    <rect class="bx" x="205" y="86" width="190" height="52" rx="3"/>
+    <text x="300" y="105" text-anchor="middle" font-weight="600">table F</text>
+    <text x="300" y="119" text-anchor="middle" font-size="8.5" class="t-dim">0xC0B5D588</text>
+    <text x="300" y="131" text-anchor="middle" font-size="8.5" class="t-dim">5 u32</text>
+    <rect class="bx" x="410" y="86" width="190" height="52" rx="3"/>
+    <text x="505" y="105" text-anchor="middle" font-weight="600">table G</text>
+    <text x="505" y="119" text-anchor="middle" font-size="8.5" class="t-dim">0xC0B5DB00</text>
+    <text x="505" y="131" text-anchor="middle" font-size="8.5" class="t-dim">26 u32</text>
+    <rect class="bx" x="615" y="86" width="190" height="52" rx="3"/>
+    <text x="710" y="105" text-anchor="middle" font-weight="600">register</text>
+    <text x="710" y="119" text-anchor="middle" font-size="8.5" class="t-dim">0xC0B5FDAC</text>
+    <text x="710" y="131" text-anchor="middle" font-size="8.5" class="t-dim">162 u32</text>
   </g>
   <g class="ln">
-    <path d="M125 72 v30"/><path d="M410 72 v30"/><path d="M695 72 v30"/>
-    <path d="M125 102 H695"/><path d="M410 102 v22"/>
+    <path d="M95 68 v96"/>
+    <path d="M300 68 v96"/>
+    <path d="M505 68 v96"/>
+    <path d="M710 68 v96"/>
+    <path d="M95 138 v18"/>
+    <path d="M300 138 v18"/>
+    <path d="M505 138 v18"/>
+    <path d="M710 138 v18"/>
+    <path d="M95 176 H710"/><path d="M410 176 v20"/>
   </g>
-  <rect class="bx" x="285" y="124" width="250" height="40" rx="3"/>
-  <text x="410" y="143" text-anchor="middle" font-size="10.5" class="en">one readout mode</text>
-    <text x="410" y="143" text-anchor="middle" font-size="10.5" class="zh">一個讀出模式</text>
-  <text x="410" y="157" text-anchor="middle" font-size="9" class="t-dim en">keyed by the mode id in word 0</text>
-    <text x="410" y="157" text-anchor="middle" font-size="9" class="t-dim zh">用第 0 個字的 mode id 當鍵</text>
-  <g font-size="9.5" class="t-dim">
-    <text x="0" y="192" class="en">metadata says what the mode produces. The register record is what gets written to the</text>
-    <text x="0" y="192" class="zh">metadata 說這個模式會產出什麼。register record 是真正寫進感光元件的東西;</text>
-    <text x="0" y="206" class="en">sensor. Timing decides the real frame rate &mdash; and the frame rate in metadata is only nominal.</text>
-    <text x="0" y="206" class="zh">時序決定真實格率 —— 而 metadata 裡那個格率只是標稱值。</text>
-  </g>
+  <rect class="bx" x="285" y="196" width="250" height="44" rx="3"/>
+  <text x="410" y="216" text-anchor="middle" font-size="10.5" class="en">one readout mode</text>
+  <text x="410" y="216" text-anchor="middle" font-size="10.5" class="zh">一個讀出模式</text>
+  <text x="410" y="230" text-anchor="middle" font-size="8.5" class="t-dim en">every table carries the mode id</text>
+  <text x="410" y="230" text-anchor="middle" font-size="8.5" class="t-dim zh">每張表都帶著 mode id</text>
+  <text x="0" y="260" font-size="9" class="t-dim en">Highlighted: understood. The other six are read but not explained.</text>
+  <text x="0" y="260" font-size="9" class="t-dim zh">亮起來的兩張是懂的。另外六張讀得出來,但不知道在講什麼。</text>
 </svg>
-<figcaption class="en">All three are keyed by the mode id in their first word, and the register
-record's ids appear in the same order as metadata's &mdash; which is how the stride
-of <code>0x288</code> was confirmed. The timing table is indexed by the <b>same row number</b>, not looked up by mode id.</figcaption>
-<figcaption class="zh">三張表都用各自第一個字的 mode id 當鍵,而且 register record 的 id
-順序跟 metadata 完全一樣 —— <code>0x288</code> 這個 stride 就是這樣確認的。
-時序表則是用<b>同一個列號</b>索引,不是用 mode id 去查。</figcaption>
+<figcaption class="en">All eight are 70 entries, all eight carry the mode id (word 0, except table C where it is word 1), and all eight are indexed by the <b>same row number</b> &mdash; not looked up by id. Each stride falls out of the gap to the next table, which is how the sizes were fixed without guessing.</figcaption>
+<figcaption class="zh">八張都是 70 筆、八張都帶 mode id(在第 0 個字,只有 table C 在第 1 個),而且八張都用<b>同一個列號</b>索引 ——不是拿 id 去查。每張的 stride 都是從「到下一張表的間距」算出來的,所以尺寸不用猜。</figcaption>
 </figure>
+
+<p class="en">How many parameters does a sensor mode have? <b>252 words</b>, of
+which <b>203 actually differ between modes</b>. Two tables are understood and six are
+not:</p>
+<p class="zh">一個感測器模式有多少參數?<b>252 個字</b>,其中
+<b>203 個真的會隨模式改變</b>。八張表裡兩張懂、六張不懂:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr>
+    <th><span class="en">table</span><span class="zh">表</span></th><th><span class="en">address</span><span class="zh">位址</span></th>
+    <th><span class="en">stride</span><span class="zh">stride</span></th><th>u32</th>
+    <th><span class="en">vary</span><span class="zh">會變</span></th><th><span class="en">what it holds</span><span class="zh">裝什麼</span></th>
+  </tr></thead>
+  <tbody>
+    <tr><td><b>timing</b></td><td><code>0xC0B59500</code></td><td>0x20</td><td>8</td><td>5</td>
+        <td><span class="en">hmax, tail, vmax &rarr; frame rate and rolling shutter</span><span class="zh">hmax、tail、vmax &rarr; 格率與捲簾</span></td></tr>
+    <tr><td><b>metadata</b></td><td><code>0xC0B59DC0</code></td><td>0x64</td><td>25</td><td>21</td>
+        <td><span class="en">geometry, nominal fps, merge, crop</span><span class="zh">幾何、標稱格率、合併、裁切</span></td></tr>
+    <tr><td>C</td><td><code>0xC0B5B918</code></td><td>0x08</td><td>2</td><td>2</td>
+        <td class="g"><span class="en">a class number 2&ndash;7, then the mode id</span><span class="zh">一個 2&ndash;7 的類別號,然後 mode id</span></td></tr>
+    <tr><td>D</td><td><code>0xC0B5BB48</code></td><td>0x28</td><td>10</td><td>6</td>
+        <td class="g"><span class="en">four packed u16 pairs and a 20/60/120</span><span class="zh">四組 packed u16,和一個 20/60/120</span></td></tr>
+    <tr><td>E</td><td><code>0xC0B5C638</code></td><td>0x38</td><td>14</td><td>9</td>
+        <td class="g"><span class="en">large packed values, unexplained</span><span class="zh">大的 packed 數值,沒解釋</span></td></tr>
+    <tr><td>F</td><td><code>0xC0B5D588</code></td><td>0x14</td><td>5</td><td>2</td>
+        <td class="g"><span class="en">one 0x1xxxx-shaped flag</span><span class="zh">一個 0x1xxxx 形狀的旗標</span></td></tr>
+    <tr><td>G</td><td><code>0xC0B5DB00</code></td><td>0x68</td><td>26</td><td>25</td>
+        <td class="g"><span class="en">a second mode id, and 6064/4042 on some rows</span><span class="zh">另一個 mode id,某些列有 6064/4042</span></td></tr>
+    <tr><td>register</td><td><code>0xC0B5FDAC</code></td><td>0x288</td><td>162</td><td>133</td>
+        <td class="g"><span class="en">what gets written to the sensor</span><span class="zh">真正寫進感光元件的東西</span></td></tr>
+    <tr><td><b><span class="en">total</span><span class="zh">總計</span></b></td><td></td><td></td><td><b>252</b></td><td><b>203</b></td><td></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note en">Every stride here was derived the same way: the tables sit back to
+back, so the gap to the next one divided by 70 gives the record size. Nothing was
+guessed, and the timing table is the proof &mdash; it was called unsolvable while
+being walked at twice its real stride.</p>
+<p class="note zh">這裡每個 stride 都是同一個方法算出來的:這些表是<strong>背靠背排在一起</strong>的,
+所以「到下一張表的間距 ÷ 70」就是每筆的大小。沒有一個是猜的 ——
+而時序表就是證據:它之前被判定「解不開」,只因為當時用了兩倍的 stride 在走。</p>
 
 <h2><span class="en">Every field in the metadata record</span><span class="zh">metadata 記錄的每一個欄位</span></h2>
 
@@ -368,16 +414,10 @@ is the raster width against the full 6064, so &times;2 means half-width readout.
 
 <p class="note" id="empty" style="display:none"><span class="en">Nothing matches that.</span><span class="zh">沒有符合的項目。</span></p>
 
-<h2><span class="en">The register record &mdash; 162 fields, mostly dark</span><span class="zh">register record &mdash; 162 個欄位,幾乎全黑</span></h2>
+<h2><span class="en">The six tables nobody has explained</span><span class="zh">沒人解釋過的那六張表</span></h2>
 
-<p class="en">The second table is what actually gets written to the sensor. A header at
-<code>0xC0B5FDA4</code> holds <code>{pointer, 70}</code>, and the records start at
-<code>0xC0B5FDAC</code> with a stride of <code>0x288</code> &mdash; confirmed because
-the first word of each record reproduces the metadata table's mode-id order exactly.</p>
-<p class="zh">第二張表才是<strong>真正寫進感光元件</strong>的東西。<code>0xC0B5FDA4</code>
-是個 <code>{指標, 70}</code> 的標頭,記錄從 <code>0xC0B5FDAC</code> 開始,
-stride 是 <code>0x288</code> —— 這個 stride 能確認,是因為每筆的第一個字
-<strong>完全重現了 metadata 表的 mode id 順序</strong>。</p>
+<p class="en">The register record is the biggest of them: a <code>{pointer, 70}</code> header at <code>0xC0B5FDA4</code>, records from <code>0xC0B5FDAC</code> with a stride of <code>0x288</code> &mdash; confirmed because the first word of each record reproduces the metadata mode-id order exactly. It is what actually gets written to the sensor.</p>
+<p class="zh">register record 是六張裡最大的一張:<code>0xC0B5FDA4</code> 是個 <code>{指標, 70}</code> 的標頭,記錄從 <code>0xC0B5FDAC</code> 開始,stride 是 <code>0x288</code> —— 這個 stride 能確認,是因為每筆的第一個字<strong>完全重現了 metadata 表的 mode id 順序</strong>。它就是真正寫進感光元件的東西。</p>
 
 <div class="scroll">
 <table>
@@ -398,15 +438,8 @@ have wider ranges and look more like real timing or gain values.</p>
 那是「模式<em>類別</em>選擇器」的特徵,不是調校過的數值:同一個光柵家族的模式共用同一個值。
 少數幾個值域比較寬,那些看起來才像真的時序或增益。</p>
 
-<div class="warn en"><b>This is the largest unexplored thing in the sensor path.</b> 133
-per-mode parameters, and the project has names for none of them. Everything the
-open-gate work does at the sensor level &mdash; retiming a donor mode &mdash; is done
-through the timing values, not through these. What they control is simply not
-known.</div>
-<div class="warn zh"><b>這是感光元件路徑上最大的未探索區。</b>
-133 個逐模式參數,而這個專案<strong>一個名字都給不出來</strong>。
-open gate 在感光元件層做的所有事 —— 改借來的模式的時序 —— 走的是時序那些值,
-不是這些。它們控制什麼,就是不知道。</div>
+<div class="warn en"><b>Across the six unexplained tables that is 177 varying words per mode</b> &mdash; 133 in the register record and 44 in the other five &mdash; and the project has names for none of them. Everything the open-gate work does at the sensor level goes through the timing table, not through these. What they control is simply not known.</div>
+<div class="warn zh"><b>六張沒解釋的表加起來,每個模式有 177 個會變的字</b> —— register record 佔 133,另外五張佔 44 —— 而這個專案<strong>一個名字都給不出來</strong>。<br>open gate 在感光元件層做的所有事,走的都是時序表,不是這些。它們控制什麼,就是不知道。</div>
 
 <h2><span class="en">Timing &mdash; solved</span><span class="zh">時序 &mdash; 解開了</span></h2>
 
@@ -473,6 +506,8 @@ table. The descriptor settles it without guessing: its first two
 <h2><span class="en">What is still open</span><span class="zh">還沒解的部分</span></h2>
 
 <ul>
+  <li class="en">What tables C through G are for. 57 words per mode, 44 of them varying, and not one is identified &mdash; table G alone has 25 varying words including a second mode id whose purpose is unknown.</li>
+  <li class="zh">table C 到 G 是做什麼的。每個模式 57 個字、其中 44 個會變,<strong>沒有一個被辨識出來</strong> —— 光是 table G 就有 25 個會變的字,裡面還有另一個 mode id,用途不明。</li>
   <li class="en">The 133 varying fields of the register record &mdash; the biggest gap on this
   page by a wide margin.</li>
   <li class="zh">register record 那 133 個會變的欄位 —— 這頁裡差距最大的一塊空白。</li>
