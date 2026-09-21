@@ -15,6 +15,10 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+
+# The edition is a define, not a filename: base and gcsv are one source
+# since 2026-09-20.  A test that names a file cannot tell them apart.
+BASE = ('FPGYRO_EDITION_BASE=1',)
 sys.path.insert(0, str(HERE.parent / 'fp_usb_shell'))
 
 import imu_stream as S                                         # noqa: E402
@@ -182,7 +186,7 @@ class Header(unittest.TestCase):
         self.inc = (HERE / 'ring_task.inc.S').read_text()
         # The writer is an edition file plus the core both editions share, so
         # a test that reads only one of them is reading half a writer.
-        self.task = ((HERE / 'ring_task.S').read_text() + '\n'
+        self.task = ((HERE / 'gcsv_task.S').read_text() + '\n'
                      + (HERE / 'writer_core.inc.S').read_text())
 
     @staticmethod
@@ -193,10 +197,14 @@ class Header(unittest.TestCase):
         return re.sub(r'@.*', '', text)
 
     def equ(self, name):
-        m = re.search(rf'^\.equ {name},\s*(\S+?)\s*(?:/\*|$)',
-                      self.inc, re.M)
-        self.assertIsNotNone(m, f'{name} is not defined')
-        return int(m.group(1), 0)
+        # The shared header first, then the edition source: GYR_* belong to the
+        # writer that emits them, not to the constants both editions include.
+        for where in (self.inc, self.task):
+            m = re.search(rf'^\.equ {name},\s*(\S+?)\s*(?:/\*|@|$)',
+                          where, re.M)
+            if m:
+                return int(m.group(1), 0)
+        self.fail(f'{name} is not defined')
 
     def test_the_two_sides_lay_the_header_out_the_same(self):
         import gyr7
@@ -216,38 +224,30 @@ class Header(unittest.TestCase):
         independent rulers agreed on is 400.0854 us."""
         self.assertEqual(self.equ('GYR_PERIOD_PS'), 400085400)
 
-    def test_whoever_opens_the_file_owns_where_it_is(self):
-        """B_OFF must be set by take_header, not by take_open.  --dropfile
-        after a freeze opens nothing and closes what is already there; with the
-        record hook owning B_OFF that path stamped the PREVIOUS take's payload
-        length into the new header, which is exactly the case the tool exists
-        for."""
-        header = self.code(self.task[self.task.index('\ntake_header:'):
-                                     self.task.index('\nput_header:')])
-        self.assertIn('B_OFF', header)
-        self.assertIn('HDR_BYTES', header)
-        take_open = self.code(self.task[self.task.index('\ntake_open:'):
-                                        self.task.index('\ntake_close:')])
-        self.assertNotIn('B_OFF', take_open, 'one owner, and it is the open')
-
-    def test_the_geometry_comes_from_the_settings(self):
-        """0xC37CE210 looks like the source and is a trap: {1936,1090,...} at
-        1080p, zero at UHD, and zero right through a 35 s take here.
-        CameraMgrSetting has it while the camera is idle, so there is nothing
-        to race -- and profilegen.S has been reading it that way all along."""
-        header = self.code(self.task[self.task.index('\ntake_header:'):
-                                     self.task.index('\nput_header:')])
-        self.assertIn('F_CAMSETTING', header)
-        self.assertIn('SETTING_DIMS', header)
-        self.assertIn('DNG_PAD_W', header)
-        self.assertIn('DNG_PAD_H', header)
+    def test_base_seeks_to_where_the_job_belongs(self):
+        """Appending was tried here on 2026-09-20 and is wrong.  A job that
+        never gets a descriptor vanishes, and appending moves every record
+        after it earlier in the file by the length of the hole -- in a format
+        whose claim is that position IS time, that silently rewrites the
+        timeline.  Comparing the job's offset against the file position catches
+        it; T_SEEKS counts how often it happened."""
+        put = self.task[self.task.index('\nwriter_put:'):]
+        put = self.code(put[:put.index('\n#else')])
+        self.assertIn('J_OFF', put)
+        self.assertIn('F_SEEK', put)
+        self.assertIn('T_SEEKS', put)
+        self.assertIn('T_POS', put)
+        # and the first block goes after the header, set by whoever opened it
+        head = self.task[self.task.index('\ngyr_header:'):]
+        self.assertIn('B_OFF', self.code(head[:head.index('/* gcsv_header')]))
+    def test_the_trap_address_stays_out(self):
+        """0xC37CE210 looks like the recording geometry and is a trap: it holds
+        {1936,1090,...} at 1080p, zero at UHD, and read zero right through a
+        35 s take.  The header stopped carrying geometry when the editions
+        became one source -- frame size is in the .json now -- so what is left
+        to guard is that the trap does not come back."""
         self.assertNotIn('0xC37CE210', self.code(self.task))
         self.assertNotIn('0xC37CE210', self.code(self.inc))
-        self.assertEqual(self.equ('F_CAMSETTING'), 0xC0206E98)
-        self.assertEqual(self.equ('SETTING_DIMS'), 0x40)
-        # A CinemaDNG frame is sixteen wider and ten taller than the menu says.
-        self.assertEqual(self.equ('DNG_PAD_W'), 16)
-        self.assertEqual(self.equ('DNG_PAD_H'), 10)
 
     def test_the_named_code_addresses_really_name_that_code(self):
         """ACCEL_AT/START_AT/STOP_AT are exempted from the words-on-code check
@@ -331,16 +331,6 @@ class Header(unittest.TestCase):
         place = src[src.index('def place_code'):src.index('def _require_room')]
         self.assertIn('T_FINGER', place, 'placing must write it')
 
-    def test_an_argument_is_saved_before_the_first_call(self):
-        """blob_at returns in r0, so it destroys whatever r0 held.  take_header
-        takes the volume in r0 and used to stash it on the line after the one
-        that became `bl blob_at`: the header then carried a pool address where
-        the disk number goes, and the file still opened and still parsed."""
-        body = self.task[self.task.index('\ntake_header:'):]
-        body = body[:body.index('bl      blob_at')]
-        self.assertIn('mov     r5, r0', body,
-                      'the volume must be saved before anything returns in r0')
-
     def test_nothing_reaches_a_buffer_with_adr(self):
         """`adr` reaches only as far as an eight-bit rotated immediate allows,
         so how far apart two things landed decided whether the file assembled.
@@ -357,11 +347,20 @@ class Header(unittest.TestCase):
             self.assertIn(name, R.GSUP_ROUTINES,
                           f'{name} is reached through the table, so it must be in it')
 
-    def test_the_header_is_written_twice(self):
-        """Once at open so the file always has a magic, once at close for the
-        counts that only exist then."""
-        self.assertIn('bl      take_header', self.task)
-        self.assertEqual(self.task.count('bl      put_header'), 2)
+    def test_the_header_is_written_once_and_carries_only_what_reads_it(self):
+        """Twenty bytes: a magic, the sample period, the two scales and the
+        axis order.  Written once, at open, because nothing in it is a count
+        that only exists at close, and anything descriptive is in the .json.
+        The magic is the sha256 of the format's own spec, so a recalibration
+        changes VALUES and no reader has to be taught anything."""
+        head = self.task[self.task.index('\ngyr_header:'):]
+        head = head[:head.index('/* gcsv_header')]
+        for name in ('GYR_MAGIC', 'GYR_PERIOD_PS', 'GYR_GSCALE',
+                     'GYR_ASCALE', 'GYR_ORIENT'):
+            self.assertIn(name, head, f'the header must carry {name}')
+        self.assertEqual(self.equ('GYR_HDR_BYTES'), 20)
+        self.assertEqual(self.equ('GYR_MAGIC'), 0x9F5BEB0D)
+        self.assertEqual(self.task.count('bl      gyr_header'), 1)
 
     def test_the_reader_rejects_the_old_container(self):
         import gyr7
@@ -379,7 +378,7 @@ class Editions(unittest.TestCase):
     def setUp(self):
         import ring_task_deploy as R
         self.R = R
-        self.base = R.symbols(HERE / 'ring_task.S', ())
+        self.base = R.symbols(HERE / 'gcsv_task.S', BASE)
         self.gcsv = R.symbols(HERE / 'gcsv_task.S', ())
 
     def test_both_define_the_three(self):
@@ -400,13 +399,19 @@ class Editions(unittest.TestCase):
         gcsv header and the gcsv edition has no binary one; the missing entry
         must be zero, which blob_at reads as "not here", not a KeyError at
         build time or a wild pointer at run time."""
-        for src, absent in (('ring_task.S', 'gcsv_head1'),
-                            ('gcsv_task.S', 'writer_header')):
-            syms = self.R.symbols(HERE / src, ())
-            self.assertNotIn(absent, syms)
-            code = self.R.patch_offsets(assemble(HERE / src, ()), syms)
-            i = self.R.GSUP_ROUTINES.index(absent)
-            self.assertEqual(struct.unpack_from('<I', code, i * 4)[0], 0)
+        for defines in (BASE, ()):
+            syms = self.R.symbols(HERE / 'gcsv_task.S', defines)
+            code = self.R.patch_offsets(assemble(HERE / 'gcsv_task.S', defines), syms)
+            missing = [n for n in self.R.GSUP_ROUTINES if n not in syms]
+            self.assertTrue(missing, 'the table is meant to outlive what fills it')
+            for n in missing:
+                i = self.R.GSUP_ROUTINES.index(n)
+                self.assertEqual(struct.unpack_from('<I', code, i * 4)[0], 0,
+                                 f'{n} is absent but its slot is not zero')
+            # base has no gcsv header; writer_header belonged to the base that
+            # was its own file and neither edition defines it now.
+            if defines == BASE:
+                self.assertIn('gcsv_head1', missing)
 
     def test_the_sidecars_go_where_the_take_does(self):
         """A CinemaDNG take is a folder of frames and the sidecars belong in it;
@@ -501,7 +506,7 @@ class Editions(unittest.TestCase):
         self.assertIn('F_DTOR', tri, 'try_open leaves the object built on failure')
         # and nothing makes a directory: doing that at record start froze the
         # camera on every SSD take, which is why the fallback is a root.
-        for f in ('gcsv_task.S', 'ring_task.S', 'writer_core.inc.S'):
+        for f in ('gcsv_task.S', 'writer_core.inc.S'):
             src = re.sub(r'/\*.*?\*/', '', (HERE / f).read_text(), flags=re.S)
             src = re.sub(r'@.*', '', src)
             self.assertNotIn('MKDIR', src, f'{f} makes a directory')
@@ -621,7 +626,7 @@ class AudioShape(unittest.TestCase):
     def setUp(self):
         # The writer is an edition file plus the core both editions share, so
         # a test that reads only one of them is reading half a writer.
-        self.task = ((HERE / 'ring_task.S').read_text() + '\n'
+        self.task = ((HERE / 'gcsv_task.S').read_text() + '\n'
                      + (HERE / 'writer_core.inc.S').read_text())
         self.inc = (HERE / 'ring_task.inc.S').read_text()
 
@@ -697,10 +702,15 @@ class AudioShape(unittest.TestCase):
         self.assertNotIn("mov     r0, #'G'", c, 'the name is not a path')
         openfile = self.whole('writer_openfile')
         self.assertIn('bl      take_path', openfile)
-        self.assertIn('bl      base_path', openfile)
-        base = self.whole('base_path')
-        for ch in ("'G'", "'Y'", "'R'"):
-            self.assertIn(f'mov     r0, #{ch}', base)
+        # base_path was base's own; one source, one path builder, and the
+        # edition only chooses which rung it starts on and what to call the file
+        self.assertIn('bl      clip_path', openfile)
+        # The extension is the edition's, and clip_path spells it: base asks
+        # for LOG_EXT = 'G' and the routine finishes ".GYR".
+        path = self.whole('clip_path')
+        for ch in ("'Y'", "'R'"):
+            self.assertIn(f"mov     r0, #{ch}", path)
+        self.assertIn("LOG_EXT,     'G'", self.task)
 
     def test_no_fixed_path_is_left_in_the_blob(self):
         """The deployer used to patch a name into the blob.  If a literal comes
@@ -1064,14 +1074,32 @@ class ModeHook(unittest.TestCase):
         core = (HERE / 'writer_core.inc.S').read_text()
         self.assertIn('#ifdef WANT_MODE_HOOK', core)
         self.assertIn('ARM_MODE', core)
-        self.assertNotIn('WANT_MODE_HOOK', (HERE / 'ring_task.S').read_text())
-        self.assertIn('#define WANT_MODE_HOOK', (HERE / 'gcsv_task.S').read_text())
+        # Base must not ARM it: build_base_card leaves the mode section out of
+        # a base card, so arming MODE_SITE would branch into cave bytes nobody
+        # wrote.  That happened on 2026-09-20, when the two editions became one
+        # source and the define came along for the ride, so this asks the
+        # assembled bytes rather than the text.
+        import re as _re
+        site = int(_re.search(r'^\.equ MODE_SITE,\s*(0x[0-9A-Fa-f]+)',
+                              (HERE / 'ring_task.inc.S').read_text(), _re.M).group(1), 0)
+        import struct as _struct
+        def arms(defines):
+            code = assemble(HERE / 'gcsv_task.S', defines)
+            lo = site & 0xFFFF
+            for i in range(0, len(code) - 4, 4):
+                w = _struct.unpack_from('<I', code, i)[0]
+                if (w & 0x0FF00000) == 0x03000000 and \
+                   (((w >> 4) & 0xF000) | (w & 0xFFF)) == lo:
+                    return True
+            return False
+        self.assertFalse(arms(BASE), 'base arms the mode hook it does not carry')
+        self.assertTrue(arms(()), 'gcsv does not arm the mode hook')
 
     def test_the_take_does_not_touch_the_attitude_gate(self):
         """It was tried there and the first frame of a portrait take still read
         Orientation 8.  Leaving the record path able to write that byte is what
         made a take stop by itself at twenty seconds."""
-        for f in ('gcsv_task.S', 'ring_task.S'):
+        for f in ('gcsv_task.S',):
             code = re.sub(r'/\*.*?\*/', '', (HERE / f).read_text(), flags=re.S)
             code = re.sub(r'@.*', '', code)
             self.assertNotIn('LEVEL_GATE', code, f)

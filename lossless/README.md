@@ -7,9 +7,10 @@ Requested UI: **SHOOT page 2 (CINE)**, alongside DC crop, recording settings
 and audio recording, with a dedicated **Lossless RAW / 無損壓縮: OFF / ON**
 row. Existing entries retain their original meanings. The private binding name
 is `MV_fpLossless`. An offline fourth-row resource builder now exists in
-`menu/`; `native/` now contains executable ARM variable-call wrappers.
-Native installation, callback-to-policy wiring and rendered-view publication
-remain pending.
+`menu/`; `native/` contains executable ARM variable-call wrappers and, in
+`native_port.c`, the `fpl_binding_ops` adapter that routes a native variable
+event into policy. Native row installation, rendered-view publication, choice
+permissions and the exclusion/quiescence providers remain pending.
 
 This is an independent product. It does not select a sensor mode, alter crop,
 exposure or bit depth, or include OpenGate patches. Future OG2K/OG3K combinations
@@ -97,6 +98,13 @@ Rendering, navigation, native port functions, loader ownership and actual
 allocation remain unverified. An offline
 structural pass must not enable ON or bypass any codec/writer/playback gate.
 The native call layer passes 23 compiled-ARM-to-original-instruction tests.
+`native/native_port.c` implements the port contract over it: 22 scenarios run
+twice each (host -O2 and an ASan/UBSan executable) against the real
+coordinator, UI policy and control sources, plus an ARMv7 Thumb soft-float
+compile with no libc, FP or compiler-runtime dependency. This port can never
+claim `FPL_READY_UI`, so ON stays unselectable; without caller-supplied
+exclusion and quiescence providers it reports FPL_BUSY and refuses to retire a
+live subscription. Four injected defects each fail the suite.
 Further shared probes cover lazy page selection (16 cases) and input/property
 boundaries (14 cases). These expose two integration hazards: parser nonzero
 returns can publish an incomplete root, and disabling a key does not cancel an

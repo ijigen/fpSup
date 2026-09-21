@@ -31,10 +31,49 @@
 
 /* Base is the stream and nothing else, so the mode hook -- and with it the
  * orientation of what gets recorded -- belongs to this edition only.  The
- * core arms it if this is defined and does not know what it is for. */
+ * core arms it if this is defined and does not know what it is for.
+ *
+ * The guard is not decoration.  build_base_card.sections() leaves the mode
+ * section out of a base card, so defining this for both editions would arm
+ * 0xC0058310 to branch at MODE_AT -- into cave bytes nobody wrote.  That is
+ * the shape of the four-byte patch that once branched into the middle of the
+ * logger.  It happened here on 2026-09-20, when base and gcsv became one
+ * source and this define came along for the ride. */
+#ifndef FPGYRO_EDITION_BASE
 #define WANT_MODE_HOOK 1
+#endif
 
 #include "writer_core.inc.S"
+
+/* ---- what the edition changes ------------------------------------------- *
+ *
+ * One source, two products.  Base was a separate file (`ring_task.S`) and that
+ * is precisely why it went stale: the profile size fix of 2026-09-19 landed in
+ * gcsv and base kept writing the menu's size for another day.  A flag cannot
+ * be forgotten the way a second file can.
+ *
+ * The three axes, and nothing else differs:
+ *
+ *   where    base writes to the volume's ROOT.  Not a folder -- people forget
+ *            to make it and report the log missing, and making one at record
+ *            start is what froze the camera on every SSD take (see clip_path).
+ *            The ladder already had this: rung 1 is the root, so base simply
+ *            starts one rung down.
+ *   what     base writes the records exactly as the producers left them.  No
+ *            text, no re-ordering: the tag in each record already says whether
+ *            it is gyro or accelerometer, so nothing has to be separated out.
+ *   header   20 bytes, holding only what a reader cannot work out for itself.
+ *            Everything descriptive -- mode, size, lens -- is in the .json,
+ *            which is the same file, in the same format, in both editions.
+ */
+#ifdef FPGYRO_EDITION_BASE
+.equ LOG_EXT,     'G'       /* .GYR */
+.equ RUNG_FIRST,  1         /* the root; rung 0 is the clip folder */
+.equ GYR_HDR_BYTES, 20
+#else
+.equ LOG_EXT,     'g'       /* .gcsv */
+.equ RUNG_FIRST,  0
+#endif
 
 /* --------------------------------------------------------------- the file */
 
@@ -63,10 +102,14 @@ writer_openfile:
     /* Start at the top of the ladder, and record what happens on each rung:
      * an SSD take cannot be watched from the host, because the camera has one
      * USB socket and the SSD is in it. */
-    mov     r0, #0
+    mov     r0, #RUNG_FIRST
     movw    ip, #:lower16:G_FALLBACK
     movt    ip, #:upper16:G_FALLBACK
     str     r0, [ip]
+#ifdef FPGYRO_EDITION_BASE
+    mov     r0, #0                      @ gcsv's first rung IS zero, so only
+                                        @ base has to put it back
+#endif
     movw    ip, #:lower16:D_OPEN1
     movt    ip, #:upper16:D_OPEN1
     str     r0, [ip]
@@ -86,8 +129,10 @@ writer_openfile:
     str     r0, [ip]
     bl      take_path
 
-    /* Rung 0: beside the clip, on the volume being recorded to. */
-    mov     r0, #'g'
+#ifndef FPGYRO_EDITION_BASE
+    /* Rung 0: beside the clip, on the volume being recorded to.  Base skips it:
+     * its log goes to the root, so there is nothing to try first. */
+    mov     r0, #LOG_EXT
     bl      clip_path
     mov     r6, r0
     bl      dbg_path                    @ keep it; the next attempt overwrites
@@ -98,6 +143,7 @@ writer_openfile:
     str     r0, [ip]
     cmp     r0, #0
     bne     7f
+#endif
 
     /* Rung 1: \fpSupGYRO on the same volume -- an SSD take's log belongs with
      * the SSD's footage, not on whatever card happens to be in the slot. */
@@ -105,7 +151,7 @@ writer_openfile:
     movw    ip, #:lower16:G_FALLBACK
     movt    ip, #:upper16:G_FALLBACK
     str     r0, [ip]
-    mov     r0, #'g'
+    mov     r0, #LOG_EXT
     bl      clip_path
     mov     r6, r0
     mov     r1, r5
@@ -124,7 +170,7 @@ writer_openfile:
     movt    ip, #:upper16:G_FALLBACK
     str     r0, [ip]
     mov     r5, #VOL_SD
-    mov     r0, #'g'
+    mov     r0, #LOG_EXT
     bl      clip_path
     mov     r6, r0
     mov     r1, r5
@@ -159,7 +205,11 @@ writer_openfile:
      * has consumed it by now.  mode_hook.S does it at the STILL/CINE switch
      * instead, which is minutes earlier. */
 
+#ifdef FPGYRO_EDITION_BASE
+    bl      gyr_header
+#else
     bl      gcsv_header
+#endif
     bl      gcsv_json_write
     b       9f
 
@@ -285,15 +335,22 @@ clip_path:
 2:  mov     r0, #'.'
     strb    r0, [r6], #1
     mov     r0, r7
-    strb    r0, [r6], #1                @ 'g' or 'j'
-    cmp     r7, #'g'
+    strb    r0, [r6], #1                @ LOG_EXT or 'j'
+    cmp     r7, #LOG_EXT
     bne     4f
-    mov     r0, #'c'
+#ifdef FPGYRO_EDITION_BASE
+    mov     r0, #'Y'                    @ .GYR
+    strb    r0, [r6], #1
+    mov     r0, #'R'
+    strb    r0, [r6], #1
+#else
+    mov     r0, #'c'                    @ .gcsv
     strb    r0, [r6], #1
     mov     r0, #'s'
     strb    r0, [r6], #1
     mov     r0, #'v'
     strb    r0, [r6], #1
+#endif
     b       3f
 4:  mov     r0, #'s'
     strb    r0, [r6], #1
@@ -320,6 +377,92 @@ copy_clip:
     b       1b
 2:  pop     {r0, r1, r2, lr}
     bx      lr
+
+#ifdef FPGYRO_EDITION_BASE
+/* gyr_header -- twenty bytes, and only what a reader cannot work out itself.
+ *
+ *   0x00  magic       0x9F5BEB0D
+ *   0x04  period_ps   400085400
+ *   0x08  gscale      0.000137923f
+ *   0x0C  ascale      0.0009765625f
+ *   0x10  orient      0x007A7978   "xyz", all three axes negated
+ *                     then 8-byte records to the end of the file
+ *
+ * The magic is the first four bytes of the SHA-256 of the format's own spec,
+ * little-endian:
+ *
+ *   fpSup gyro stream: le; hdr magic,period_ps,gscale,ascale,orient; rec i16 x,y,tag,z
+ *
+ * A hash rather than a version number that counts up, because a counter has to
+ * be taught to every reader every time it moves.  These four fields make the
+ * file describe itself, so a recalibration changes the VALUES and the magic
+ * stays put -- nothing downstream needs touching.  Only the LAYOUT changing
+ * earns a new magic, and then the spec line above is what is re-hashed.
+ *
+ * Why these five and nothing else: each one is needed to READ the records.
+ * period_ps because position is the only clock -- a record's place in the
+ * stream is its time, and the old header's integer 400 us was fast by 0.085 us
+ * on every sample, 3.4 ms of drift across forty seconds.  orient because the
+ * axes are remapped and negated, and a reader that assumed otherwise would be
+ * wrong in a way no check would catch.  Everything descriptive -- mode, frame
+ * size, lens, exposure -- is in the .json, which is the same file in the same
+ * format in both editions.
+ *
+ * Dropped from the sixty-four byte v7 header: clip id (it is the filename),
+ * volume and payload (the file's own size is the payload), the drop count
+ * (integrity tracking belongs to hdmi-raw), mode and width and height (the
+ * .json), exposure_us (nothing computed with it -- two viewers printed it as
+ * "1/50", and the DNG's EXIF has it per frame, which is better).
+ */
+.equ GYR_MAGIC,   0x9F5BEB0D
+.equ GYR_ASCALE,  0x3A800000    /* 0.0009765625 = 2^-10, the accelerometer LSB */
+
+gyr_header:
+    push    {r4, r5, r6, lr}            @ r6 is unused: the frame has to stay
+                                        @ 8-aligned across the F_WRITE below
+    movw    r4, #:lower16:G_TEXT
+    movt    r4, #:upper16:G_TEXT
+    ldr     r4, [r4]
+    cmp     r4, #0
+    beq     9f
+
+    movw    r5, #:lower16:GYR_MAGIC
+    movt    r5, #:upper16:GYR_MAGIC
+    str     r5, [r4]
+    movw    r5, #:lower16:GYR_PERIOD_PS
+    movt    r5, #:upper16:GYR_PERIOD_PS
+    str     r5, [r4, #4]
+    movw    r5, #:lower16:GYR_GSCALE
+    movt    r5, #:upper16:GYR_GSCALE
+    str     r5, [r4, #8]
+    movw    r5, #:lower16:GYR_ASCALE
+    movt    r5, #:upper16:GYR_ASCALE
+    str     r5, [r4, #12]
+    movw    r5, #:lower16:GYR_ORIENT
+    movt    r5, #:upper16:GYR_ORIENT
+    str     r5, [r4, #16]
+
+    mov     r2, #GYR_HDR_BYTES
+    movw    ip, #:lower16:T_POS
+    movt    ip, #:upper16:T_POS
+    str     r2, [ip]                    @ the file is at the end of the header
+    movw    ip, #:lower16:B_OFF
+    movt    ip, #:upper16:B_OFF
+    str     r2, [ip]                    @ and so is the first block.  Here, not
+                                        @ in take_open: --dropfile after a
+                                        @ freeze opens nothing and closes what
+                                        @ is there, and an owner further out
+                                        @ stamped the PREVIOUS take's length.
+    movw    r0, #:lower16:T_FOBJ
+    movt    r0, #:upper16:T_FOBJ
+    ldr     r0, [r0]
+    mov     r1, r4
+    movw    ip, #:lower16:F_WRITE
+    movt    ip, #:upper16:F_WRITE
+    blx     ip
+9:  pop     {r4, r5, r6, lr}
+    bx      lr
+#endif
 
 /* gcsv_header -- build the header in the text buffer and write it.
  *
@@ -412,6 +555,81 @@ put_str:
  */
     .global writer_put
 writer_put:
+#ifdef FPGYRO_EDITION_BASE
+    /* Zero copy.  The records go to the card as the producers wrote them --
+     * nothing formatted, nothing re-ordered, nothing separated out, because
+     * the tag inside each record already says which sensor it came from.
+     * That is the whole of what this edition does differently with a block.
+     *
+     * It seeks rather than appends, and the seek is the point: a job that
+     * never gets a descriptor vanishes, and appending would move every record
+     * after it earlier in the file by the length of the hole.  In a format
+     * whose whole claim is that position IS time, that rewrites the timeline
+     * and nothing in the file shows it.  Comparing J_OFF against T_POS catches
+     * it, and T_SEEKS counts how often. */
+    push    {r4, r5, r6, lr}
+    movw    r5, #:lower16:T_POS
+    movt    r5, #:upper16:T_POS
+    ldr     r6, [r5]
+    ldr     r0, [r4, #J_OFF]
+    cmp     r6, r0
+    beq     2f
+#ifndef DRY_RUN
+    movw    r1, #:lower16:T_FOBJ
+    movt    r1, #:upper16:T_FOBJ
+    ldr     r1, [r1]
+    mov     r2, r0
+    mov     r0, r1
+    mov     r1, r2
+    mov     r2, #0                      @ from the start of the file
+    movw    ip, #:lower16:F_SEEK
+    movt    ip, #:upper16:F_SEEK
+    blx     ip
+#endif
+    movw    ip, #:lower16:T_SEEKS
+    movt    ip, #:upper16:T_SEEKS
+    ldr     r0, [ip]
+    add     r0, r0, #1
+    str     r0, [ip]                    @ every one of these is a job that was lost
+    ldr     r0, [r4, #J_OFF]
+
+2:  ldr     r6, [r4, #J_LEN]
+    add     r0, r0, r6
+    str     r0, [r5]                    @ where the file is once this lands
+    cmp     r6, #0
+    beq     8f
+    ldr     r5, [r4, #J_PTR]
+#ifndef DRY_RUN
+    mov     r2, r6
+    mov     r1, r5
+    movw    r0, #:lower16:T_FOBJ
+    movt    r0, #:upper16:T_FOBJ
+    ldr     r0, [r0]
+    movw    ip, #:lower16:F_WRITE
+    movt    ip, #:upper16:F_WRITE
+    blx     ip
+    movw    ip, #:lower16:T_WRC
+    movt    ip, #:upper16:T_WRC
+    str     r0, [ip]
+#else
+    movw    ip, #:lower16:T_WRC
+    movt    ip, #:upper16:T_WRC
+    mov     r0, #1
+    str     r0, [ip]
+#endif
+    movw    ip, #:lower16:T_BYTES
+    movt    ip, #:upper16:T_BYTES
+    ldr     r0, [ip]
+    add     r0, r0, r6
+    str     r0, [ip]
+    movw    ip, #:lower16:T_WRITES
+    movt    ip, #:upper16:T_WRITES
+    ldr     r0, [ip]
+    add     r0, r0, #1
+    str     r0, [ip]
+8:  pop     {r4, r5, r6, lr}
+    bx      lr
+#else
     push    {r5, r6, r7, r8, r9, lr}
     ldr     r5, [r4, #J_PTR]
     ldr     r6, [r4, #J_LEN]
@@ -481,6 +699,7 @@ writer_put:
 
 9:  pop     {r5, r6, r7, r8, r9, lr}
     bx      lr
+#endif
 
 /* --------------------------------------------------------------- the end */
 
@@ -514,6 +733,11 @@ writer_closefile:
     bx      lr
 #endif
 
+#ifndef FPGYRO_EDITION_BASE
+    /* Neither of these is base's.  It holds no row -- there is no formatting
+     * to hold one back from -- and it has no note to rewrite: the drop count
+     * lived in the gcsv header's text, and base's twenty bytes carry only what
+     * is needed to READ the file.  Integrity tracking is hdmi-raw's. */
     /* Whatever row is still held.  Without this the last sample of every take
      * is the one that never arrives. */
     movw    r5, #:lower16:G_TEXT
@@ -562,6 +786,7 @@ writer_closefile:
     movt    ip, #:upper16:F_WRITE
     blx     ip
 
+#endif
 3:  mov     r0, #0x24
     str     r0, [r6]
     movw    r5, #:lower16:T_FOBJ
@@ -582,6 +807,11 @@ writer_closefile:
 
 /* ------------------------------------------------------------ the header */
 
+#ifndef FPGYRO_EDITION_BASE
+/* Base writes twenty binary bytes, so neither of these strings nor the row
+ * formatter behind them is any use to it -- and a symbol it carries but never
+ * calls is one the routine table would hand out. */
+
 /* Everything before the six digits is a constant, which is what lets the close
  * rewrite them at NOTE_DROPS_AT without moving a byte. */
     .global gcsv_head1
@@ -596,7 +826,13 @@ gcsv_head1:
 gcsv_head2:
     .asciz  "\ntscale,0.0004000854\ngscale,0.000137923\nascale,0.0009765625\nt,gx,gy,gz,ax,ay,az\n"
     .balign 4
+#endif
 
+/* Both editions, even though only gcsv formats rows: gcsv_json.S reaches into
+ * this file for dec_pairs_at and put_u32, and base writes a .json too.  The
+ * formatter itself is dead weight in a base build and the pool has room for
+ * it; splitting two helpers out to save that is a change with more ways to be
+ * wrong than bytes to gain. */
 #include "gcsv_rows.S"
 #include "gcsv_json.S"
 #include "gcsv_dist.S"

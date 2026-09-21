@@ -10,15 +10,20 @@ firmware image.
 | Exact writer arguments | **Passed, 2026-08-31** | The live writer seam and its FHD segment are identified |
 | Power/clock preflight | **Passed, 2026-08-31** | The exact writer task can balance the required domains while the codec is idle |
 | Scratch allocation | **Offline-verified; not yet run on camera** | A guarded, aligned 4 MiB DMA layout can be prepared |
-| Encode and measure | **Design/dry-run only** | Structure and bounds are checked; live execution is deliberately blocked |
+| Encode and measure | **Armable, never yet run on camera** | Consumes and frees the retained scratch; reports elapsed microseconds, per-tile sizes and release state |
 | Exact final flush | **Offline-verified; not yet run on camera** | One-shot read-only capture of the completed writer list and synchronous flush result |
 
-The hardware codec exists and is reachable. The result that still decides UHD
-feasibility is its sustained lossless throughput on real, high-entropy Bayer
-frames. Nothing in this directory claims that number has been measured.
+The hardware codec exists and is reachable, and its stills-path rate is
+measured: 169.7 Mpix/s from one real 24.51 Mpix capture on 2026-08-30 (see
+`research/imaging-hw/notes/HW_LOSSLESS_JPEG_CODEC.md`). That is 3.4x the
+50 Mpix/s FHD 24p needs and short of the 199 Mpix/s UHD 24p needs. One sample,
+one busy scene; the spread is unmeasured. What this directory still has to
+establish is that the same engine can be driven **from inside the movie writer
+context** — never yet done — and sustained there frame after frame.
 
 中文摘要：已實機確認 FHD writer 交接點，以及該 task 能安全開關 codec 所需的
-power/clock；4 MiB scratch 目前只有離線驗證，真正 encode 與吞吐量量測仍未上機。
+power/clock；4 MiB scratch 與單張 encode 都已可上機安裝，但兩者都還沒真正跑過。
+靜態路徑的速度已量到 169.7 Mpix/s（FHD 24p 有 3.4 倍餘裕），錄影路徑則未知。
 這組工具只改 RAM，並不是未簽章 `.bin` 或可刷寫韌體。
 
 ## Contents
@@ -29,7 +34,7 @@ power/clock；4 MiB scratch 目前只有離線驗證，真正 encode 與吞吐�
 | `exact_writer_power_preflight.S` | Balance power and clock from the exact live writer context without calling the codec |
 | `exact_writer_scratch_preflight.S` | Allocate and guard the proposed 4 MiB DMA layout without calling the codec |
 | `single_frame_codec_probe.py` | Enforce the staged preconditions and keep live encode disabled |
-| `single_frame_encode_discard_probe.S` | Offline-only encode design; not safe to arm yet |
+| `single_frame_encode_discard_probe.S` | PHASE=0/1 the reviewed offline design; PHASE=2 the armable consume-and-free encode |
 | `exact_flush_writer_probe.py` / `.S` | Guarded one-shot probe at the final SD flush; observes the exact writer/list shape without modifying it |
 | `test_*.py` | Verify assembly bounds, hook transaction order, proof gates, cleanup policy, and dry-run refusal |
 
@@ -175,13 +180,53 @@ template routine, but the named helpers reuse sub-slots inside it. Do not run
 `putfile`, `getfile`, bulk-loader, dump, or another template helper while either
 probe is loaded or armed.
 
-The `encode` action is deliberately **dry-run only**. It assembles the proposed
-single-frame encode-and-discard image and reports its layout, but refuses before
-opening the camera transport if `--dry-run` is omitted. The current design image
-ends at `0xC072FCF4`; more importantly, it still allocates its own block instead
-of consuming and freeing the retained scratch handle. It must not be made live
-until that lifecycle is implemented and gated on successful exact-writer power
-and scratch preflights.
+The `encode` action remains deliberately **dry-run only**: it is the reviewed
+self-allocating design, kept byte-identical at 1268 bytes ending `0xC072FCF4`
+for comparison, and it refuses before opening the camera transport.
+
+`encode-live` (PHASE=2) is the armable one. It allocates **nothing**: the host
+reads a complete, error-free scratch result and seeds exactly four words — the
+`PPWR` and `ALOC` proofs, the allocator and the retained handle — into a fresh
+state block. The probe re-derives the entire layout from that handle, repeats
+every alias/alignment/range/overlap check, and additionally requires the three
+guard words the scratch phase left behind to still be intact. A trampled guard
+means the block is not what we think it is: it is then neither encoded into nor
+freed. The image is 1420 bytes, ending `0xC072FD8C`, under its `0xC072FE00`
+limit and 512 bytes below the shell's reserved end.
+
+Its release policy is deliberately asymmetric, because the engine is a single
+global with no ownership arbitration and a wrong free is how the still path was
+killed on 2026-08-30:
+
+| Situation | Action |
+|---|---|
+| adopted, encode never entered | free |
+| adopted, encode returned success | free |
+| encode entered and did not succeed | **retain** — the codec may still own the buffer; power-cycle to reclaim |
+
+`S_ENC_STARTED` is written *before* the call, so a hang that never returns is
+still visible in the state block afterwards.
+
+Live sequence, one stage per armed recording, after `fpsh ping` works:
+
+```sh
+./single_frame_codec_probe.py preflight     # PPWR
+# record 1-2 s FHD CinemaDNG, stop
+./single_frame_codec_probe.py status
+./single_frame_codec_probe.py scratch       # ALOC, retained
+# record again, stop
+./single_frame_codec_probe.py status
+./single_frame_codec_probe.py encode-live   # consume + free
+# record again, stop
+./single_frame_codec_probe.py status        # prints the encode report
+```
+
+`status` decodes a finished PHASE=2 result into elapsed microseconds (the tick
+is a free-running 1 MHz counter, so a wrap is a plain 32-bit subtraction),
+Mpix/s against the 41,708 us 24p frame budget, the summed compressed size and
+ratio, the twelve tile sizes, whether the source DNG was left byte-identical,
+and whether the block was released. **One frame is not sustained throughput**,
+and a rate derived from a single tile set is not a worst case.
 
 The reviewed 4 MiB encode layout is:
 

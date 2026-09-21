@@ -72,7 +72,7 @@ only one that does anything for MOV).
 |  | **fpGyroSup** v1.11b | **fpGyroSup Base** v1 |
 |---|---|---|
 | The camera writes | `.gcsv` and `.json`, during the take, inside the clip's folder | `.GYR`, one per take |
-| Converting | nothing to do | [in a browser](https://ijigen.github.io/fpSup/gyro/web/), or `gyro/gyr7.py` |
+| Converting | nothing to do | [in a browser](https://ijigen.github.io/fpSup/gyro/convert/), or `gyro/gyr7.py` |
 | Gyro rate in the log | 2499.466 Hz, every sample | 2499.466 Hz, every sample |
 | Accelerometer | 46 Hz, on the row of the sample it followed | 46 Hz, in the file; your choice in the log |
 | Lens profile | the camera's own distortion data | you name the lens; distortion zero |

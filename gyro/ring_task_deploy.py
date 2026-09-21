@@ -186,7 +186,7 @@ def patch_offsets(code, syms):
 
 def place():
     _check()
-    defines = ('DRY_RUN',) if DRY_RUN else ()
+    defines = EDITION + (('DRY_RUN',) if DRY_RUN else ())
     code = assemble(HERE / SOURCE, defines)
     syms = symbols(HERE / SOURCE, defines)
     code = patch_offsets(code, syms)
@@ -322,7 +322,13 @@ def place_code():
 # Which edition is being placed.  Both include the same core at the same
 # offsets; they differ in the three functions the core calls without looking
 # inside, so nothing else here has to know which one it is holding.
-SOURCE = 'ring_task.S'
+#
+# One file now, and a define picks the product: base was its own source until
+# 2026-09-20 and that is exactly how it went stale -- a fix would land in gcsv
+# and base would keep the old behaviour, because nobody edits a file that is
+# not in front of them.
+SOURCE = 'gcsv_task.S'
+EDITION = ('FPGYRO_EDITION_BASE=1',)
 
 T_FINGER = 0xC072E954
 MEM_CLASS = 0            # USER, the class blocks_open asks
@@ -528,11 +534,11 @@ def main():
     ap.add_argument('--dry-run', action='store_true',
                     help='build the writer with the card calls stubbed out')
     a = ap.parse_args()
-    global DRY_RUN, SOURCE
+    global DRY_RUN, EDITION
     DRY_RUN = a.dry_run
     if a.gcsv:
-        SOURCE = 'gcsv_task.S'
-    print(f'  edition: {SOURCE}')
+        EDITION = ()
+    print(f'  edition: {"gcsv" if a.gcsv else "base"} ({SOURCE})')
     if a.state:
         state()
     elif a.signal:

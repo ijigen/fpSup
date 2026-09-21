@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fpSup 陀螺記錄轉檔</title>
+<style>
+  :root{
+    --bg:#0f1012; --panel:#17191c; --line:#2a2e33; --ink:#e8eaed; --dim:#9aa0a6;
+    --sig:#f0a54a; --sig-soft:#2a2118; --ok:#68c096; --bad:#e2686a;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  :root:not([data-theme="dark"]){
+    @media (prefers-color-scheme: light){
+      --bg:#fbfbfc; --panel:#fff; --line:#e3e5e8; --ink:#1b1d20; --dim:#6b7076;
+      --sig:#b96f12; --sig-soft:#fdf4e7; --ok:#2e7d55; --bad:#b83034;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+  main{max-width:56rem;margin:0 auto;padding:28px 16px 64px}
+  h1{margin:0 0 6px;font-size:1.4rem;font-weight:600;letter-spacing:-.01em}
+  .sub{margin:0 0 22px;color:var(--dim);max-width:54ch}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:4px;
+    padding:16px;margin-bottom:16px}
+  .drop{padding:26px 16px;border:1px dashed var(--line);border-radius:4px;
+    text-align:center;cursor:pointer;transition:border-color .12s,background .12s}
+  .drop:hover,.drop.over{border-color:var(--sig);background:var(--sig-soft)}
+  .drop b{display:block;font-size:.95rem}
+  .drop small{display:block;color:var(--dim);margin-top:5px}
+  .drop u{color:var(--sig)}
+  table{border-collapse:collapse;width:100%;font-size:.88rem;margin-top:4px}
+  th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--dim);padding:0 10px 6px 0;border-bottom:1px solid var(--line);font-weight:600}
+  td{padding:5px 10px 5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  td.k{color:var(--dim);white-space:nowrap}
+  code,.mono{font-family:var(--mono);font-size:.86em}
+  .tag{display:inline-block;font-family:var(--mono);font-size:.72rem;padding:1px 7px;
+    border-radius:3px;background:var(--sig-soft);color:var(--sig);border:1px solid var(--line)}
+  .note{margin:10px 0 0;padding:10px 12px;border-left:2px solid var(--sig);
+    background:var(--sig-soft);font-size:.84rem;color:var(--dim)}
+  .note.bad{border-left-color:var(--bad)}
+  .note b{color:var(--ink)}
+  .btn{appearance:none;font:inherit;font-family:var(--mono);font-size:.86rem;
+    padding:9px 14px;border:1px solid var(--line);border-radius:3px;cursor:pointer;
+    background:var(--panel);color:var(--ink);margin:14px 8px 0 0}
+  .btn.go{background:var(--sig);border-color:var(--sig);color:#1b1206;font-weight:600}
+  .btn[disabled]{opacity:.45;cursor:default}
+  label.ck{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:.88rem}
+  label.ck small{display:block;color:var(--dim)}
+  footer{margin-top:34px;color:var(--dim);font-size:.82rem;max-width:64ch}
+</style>
+</head>
+<body>
+<main>
+  <h1>fpSup 陀螺記錄轉檔</h1>
+  <p class="sub">把相機寫的 <code>.GYR</code> 拖進來，換成 Gyroflow 吃的
+  <code>.gcsv</code>。全部在這一頁裡做完，沒有東西被上傳。</p>
+
+  <div class="panel">
+    <div id="drop" class="drop">
+      <input type="file" id="file" accept=".GYR,.gyr,.BIN,.bin" hidden>
+      <b>把 .GYR 拖進來</b>
+      <small>或 <u>選一個檔案</u>。新舊格式都讀得動，版本自動判斷。</small>
+    </div>
+    <div id="out"></div>
+  </div>
+
+  <footer>
+    鏡頭 profile 不在這裡產。相機錄影時就把 <code>.json</code> 寫在
+    <code>.GYR</code> 旁邊了，裡面有真正的焦距和畸變係數 —— 直接跟影格一起
+    丟進 Gyroflow 就好。
+  </footer>
+</main>
+
+<script>
+/* Two header layouts, one body.
+ *
+ * The records have never differed: eight bytes, x at 0, y at 2, tag at 4, z at
+ * 6, one flat interleaved array, and position is the clock -- a tag 0 advances
+ * one sample period, a tag 1 does not.  What changed is only what sits in
+ * front of them.
+ *
+ * v7 put sixty-four bytes there and most of it described the take: sensor mode,
+ * frame size, exposure, clip id.  The reader needed almost none of it and the
+ * page used the rest to BUILD a lens profile -- badly, because the header
+ * carries no focal length and no distortion, so it asked the user for one and
+ * wrote zeros for the other.
+ *
+ * The camera writes the profile itself now, so the descriptive half had no
+ * reader left and the header is twenty bytes: the four things you cannot read
+ * the records without, and a magic.  Those four are values rather than a
+ * version number on purpose -- recalibrating changes the numbers in the file
+ * and nothing here needs teaching.  A new magic means the LAYOUT moved, which
+ * is the only thing this code would have to be told about.
+ */
+const FMT = {
+  v7: {
+    name: 'GFS7', hdr: 64, label: 'v7 — 64 位元組檔頭',
+    detect: d => d.getUint32(0, true) === 0x37534647,      // "GFS7"
+    read: d => ({
+      periodPs: d.getUint32(8, true),
+      gscale:   d.getFloat32(12, true),
+      ascale:   1 / 1024,           // not in this header; the writer's constant
+      orient:   str(d, 16, 4),
+      clip:     str(d, 20, 8),
+      extra: {
+        '感光元件模式': d.getUint32(40, true) || '—',
+        '畫格尺寸': (d.getUint32(48, true) || '?') + ' × ' + (d.getUint32(52, true) || '?'),
+        '掉落區塊': d.getUint32(36, true),
+      },
+    }),
+  },
+  v8: {
+    name: 'fpSup stream', hdr: 20, label: '新版 — 20 位元組檔頭',
+    detect: d => d.getUint32(0, true) === 0x9F5BEB0D,
+    read: d => ({
+      periodPs: d.getUint32(4, true),
+      gscale:   d.getFloat32(8, true),
+      ascale:   d.getFloat32(12, true),
+      orient:   str(d, 16, 4),
+      clip:     '',                 // the filename is the clip id now
+      extra: {},
+    }),
+  },
+};
+
+const REC = 8, TAG_GYRO = 0, TAG_ACCEL = 1;
+const $ = s => document.querySelector(s);
+const trim = x => String(Number(x.toPrecision(12)));
+
+function str(d, at, n) {
+  let s = '';
+  for (let i = 0; i < n; i++) { const c = d.getUint8(at + i); if (!c) break; s += String.fromCharCode(c); }
+  return s;
+}
+
+function read(buf, filename) {
+  const d = new DataView(buf);
+  if (buf.byteLength < 20) throw new Error('比一個檔頭還短');
+  const key = Object.keys(FMT).find(k => FMT[k].detect(d));
+  if (!key) throw new Error('認不得這個檔案的開頭 —— 它不是 fpSup 的陀螺記錄');
+  const f = FMT[key];
+  const h = f.read(d);
+  if (!h.periodPs) throw new Error('檔頭沒有取樣週期');
+
+  const body = buf.byteLength - f.hdr;
+  const c = {
+    fmt: f, file: filename,
+    clip: h.clip || filename.replace(/\.[^.]*$/, ''),
+    periodS: h.periodPs / 1e12, gscale: h.gscale, ascale: h.ascale,
+    orientation: h.orient, extra: h.extra, warnings: [],
+  };
+  if (body % REC) c.warnings.push({bad: true, text:
+    `本體是 ${body} 位元組，除以 ${REC} 餘 ${body % REC}。檔案在中途被截斷了，` +
+    `而記錄沒有框，所以斷點之後的每一筆都會錯位。`});
+
+  const n = Math.floor(body / REC);
+  const gx = new Int16Array(n), gy = new Int16Array(n), gz = new Int16Array(n);
+  const aAt = [], ax = [], ay = [], az = [];
+  let ng = 0, unknown = 0;
+  for (let i = 0; i < n; i++) {
+    const o = f.hdr + i * REC, tag = d.getInt16(o + 4, true);
+    if (tag === TAG_GYRO) {
+      gx[ng] = d.getInt16(o, true);
+      gy[ng] = d.getInt16(o + 2, true);
+      gz[ng] = d.getInt16(o + 6, true);
+      ng++;
+    } else if (tag === TAG_ACCEL) {
+      // No time of its own: it belongs to the gyro record it landed against.
+      aAt.push(ng);
+      ax.push(d.getInt16(o, true));
+      ay.push(d.getInt16(o + 2, true));
+      az.push(d.getInt16(o + 6, true));
+    } else unknown++;
+  }
+  if (unknown) c.warnings.push({bad: true, text:
+    `${unknown} 筆記錄的 tag 既不是 0 也不是 1。這一欄是錯位唯一看得見的地方，` +
+    `所以這個檔案有一段是壞的。`});
+
+  Object.assign(c, {n: ng, gx, gy, gz, aAt, ax, ay, az});
+  c.durationS = ng * c.periodS;
+  c.accelHz = c.durationS ? aAt.length / c.durationS : 0;
+  return c;
+}
+
+/* The gcsv the camera writes for its other edition, to the byte.  Anything this
+ * page emits has to be interchangeable with that file. */
+function gcsv(c, withAccel) {
+  const out = [
+    'GYROFLOW IMU LOG', 'version,1.3',
+    'id,sigma_fp_v502_internal_icm20321',
+    `orientation,${c.orientation}`,
+    `note,${c.fmt.name} ${c.clip}`,
+    'fwversion,SIGMA fp 5.02',
+    `videofilename,${c.clip}`,
+    `tscale,${trim(c.periodS)}`,      // t counts samples, so this is the clock
+    `gscale,${trim(c.gscale)}`,
+  ];
+  if (withAccel) {
+    out.push(`ascale,${trim(c.ascale)}`, 't,gx,gy,gz,ax,ay,az');
+    // Hold the last reading rather than interpolate, and seed with the first
+    // real one: a row of zero gravity at the head of a file is not a
+    // measurement.  The accelerometer's axes are not the gyro's and gcsv
+    // carries one orientation for both, so a quarter turn goes here.
+    let j = 0, lx = c.ax[0] ?? 0, ly = c.ay[0] ?? 0, lz = c.az[0] ?? 0;
+    for (let i = 0; i < c.n; i++) {
+      while (j < c.aAt.length && c.aAt[j] <= i) { lx = c.ax[j]; ly = c.ay[j]; lz = c.az[j]; j++; }
+      out.push(`${i},${c.gx[i]},${c.gy[i]},${c.gz[i]},${ly},${-lx},${lz}`);
+    }
+  } else {
+    out.push('t,gx,gy,gz');
+    for (let i = 0; i < c.n; i++) out.push(`${i},${c.gx[i]},${c.gy[i]},${c.gz[i]}`);
+  }
+  return out.join('\n') + '\n';
+}
+
+function save(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type: 'text/csv'}));
+  a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+
+let cap = null;
+
+function render(c, err) {
+  const out = $('#out');
+  if (err) {
+    out.innerHTML = `<p class="note bad"><b>${err.name || '讀不了'}</b> ${err.message}</p>`;
+    return;
+  }
+  const rows = [
+    ['格式', `<span class="tag">${c.fmt.label}</span>`],
+    ['片段', `<span class="mono">${c.clip}</span>`],
+    ['陀螺樣本', `<span class="mono">${c.n.toLocaleString()}</span> 筆 ·
+                 ${c.durationS.toFixed(3)} 秒`],
+    ['取樣率', `<span class="mono">${(1 / c.periodS).toFixed(3)}</span> Hz
+                （每筆 ${(c.periodS * 1e6).toFixed(4)} µs）`],
+    ['加速度', c.aAt.length
+        ? `<span class="mono">${c.aAt.length.toLocaleString()}</span> 筆 ·
+           ${c.accelHz.toFixed(1)} Hz`
+        : '—'],
+    ['軸向', `<span class="mono">${c.orientation}</span>`],
+    ...Object.entries(c.extra).map(([k, v]) => [k, `<span class="mono">${v}</span>`]),
+  ];
+  out.innerHTML =
+    '<table><thead><tr><th>項目</th><th>值</th></tr></thead><tbody>' +
+    rows.map(([k, v]) => `<tr><td class="k">${k}</td><td>${v}</td></tr>`).join('') +
+    '</tbody></table>' +
+    c.warnings.map(w => `<p class="note${w.bad ? ' bad' : ''}">${w.text}</p>`).join('') +
+    `<label class="ck"><input type="checkbox" id="acc" ${c.aAt.length ? 'checked' : 'disabled'}>
+      <span>把加速度一起寫進去
+      <small>Gyroflow 用它推重力方向。沒有加速度的記錄就沒有這一欄。</small></span></label>
+     <button class="btn go" id="go">下載 .gcsv</button>`;
+  $('#go').onclick = () => save(c.clip + '.gcsv', gcsv(c, $('#acc').checked && !!c.aAt.length));
+}
+
+function load(f) {
+  const rd = new FileReader();
+  rd.onload = () => {
+    try { cap = read(rd.result, f.name); render(cap); }
+    catch (e) { cap = null; render(null, e); }
+  };
+  rd.readAsArrayBuffer(f);
+}
+
+const drop = $('#drop'), fin = $('#file');
+drop.onclick = () => fin.click();
+fin.onchange = e => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; };
+['dragenter', 'dragover'].forEach(k => drop.addEventListener(k, e => {
+  e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(k => drop.addEventListener(k, e => {
+  e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+</script>
+</body>
+</html>

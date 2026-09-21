@@ -1,4 +1,4 @@
-# fpLossless v5.02 native variable call layer
+# fpLossless v5.02 native variable call layer and binding-ops port
 
 Actual ARM32 C wrappers around the verified native Thumb entrypoints. This is
 **not an installed hook, complete binding port, renderer or recording product**.
@@ -51,6 +51,55 @@ error. A future binding port must explicitly translate these results.
 A failed native mutation may already have published state. Faults are sticky;
 do not clear state to retry. Cleanup does not clear the fault.
 
+## `native_port.c`: the `fpl_binding_ops` adapter
+
+`native_port.c` wires these calls into the coordinator's port contract, so a
+native variable event now reaches `fpl_binding_notify` and policy decides the
+outcome. It is still **not** a row, a renderer, a hook or a recording product.
+
+- `fpl_port_init` takes the app, the retained `MV_fpLossless` storage, an
+  optional producer-facts provider and an optional exclusion/quiescence
+  provider. `fpl_port_bind` attaches the coordinator before the first attach;
+  a port with a live subscription never changes coordinator.
+- `fpl_port_translate` is the explicit FP_NV_* -> FPL_* map. It never returns
+  FPL_OK for a native error and never returns FPL_BUSY, which would invite a
+  retry after a possibly-published partial mutation. Faults are sticky, and
+  only `unsubscribe`/`quiesce` stay reachable while faulted.
+- `context` always strips `FPL_READY_UI`. An integer write plus readback is not
+  a rendered view, so ON stays unselectable through this port no matter what
+  the facts provider claims. RAW recording is unaffected.
+- `publish` applies the canonical value only. Hiding the row and disabling a
+  choice need the page and permission ports, so they are counted in
+  `presentation_unapplied` instead of being treated as displayed.
+- The callback trampoline forwards only events for the claimed descriptor, and
+  forwards the claimed handle rather than an unchecked pointer. Its own write
+  echo is suppressed; a nested notification is refused and faults the port,
+  because serialization is the caller's contract and clearly did not hold.
+- Without providers, `notification_enter` and `quiesce` report FPL_BUSY and
+  acquire nothing, so close/reap fail closed and the ticket, callback code and
+  context stay alive. `fpl_port_release` drops the retained ticket only after
+  quiescence was proven **and** the coordinator finished its own retirement.
+
+Reproduce (no camera, no emulator needed):
+
+```sh
+python3 -B /absolute/path/fpSup/lossless/native/test_native_port.py
+```
+
+22 scenarios run twice each, in-process at -O2 and again as an ASan/UBSan
+executable, plus an ARMv7 Thumb soft-float compile. The real coordinator, UI
+policy and control sources are used; only the ARM32-only `fp_nv_*` layer is
+substituted, keeping its checked semantics. Four injected defects (a kept
+`FPL_READY_UI`, a dropped exclusion requirement, an invented drain proof and an
+admitted nested notification) each fail the suite. Evidence:
+`projects/lossless-sup/build/native-binding-ops-port-20260920.json`.
+
+Unlike `native_variable.c`, this adapter has a function-pointer table and so
+needs relocated read-only data: installing it requires a real link/loader step,
+not a relocation-free text copy. Its only external symbols are the seven
+`fp_nv_*` entries and `fpl_binding_notify`; it pulls in no libc, no floating
+point and no compiler runtime.
+
 ## Mandatory external contracts / remaining work
 
 Every call requires a live initialized v5.02 app, valid separate caller-owned
@@ -64,8 +113,8 @@ not provide that guarantee. Afterward it must drain queued source events and
 callback users before releasing code/context. This module supplies neither
 lock acquisition nor quiescence; its tests use serial emulation only.
 
-The functions are not yet wired into `fpl_binding_ops`. Callback-to-policy glue,
-multi-variable UI permissions, actual rendered view publication and ownership/
-queue integration remain pending. Value readback alone must never set
-`FPL_READY_UI`. The safe recorder entry remains `fpl_binding_begin`, with all
+Callback-to-policy glue now exists in `native_port.c`. Multi-variable UI
+permissions, actual rendered view publication, the exclusion/quiescence
+providers themselves and ownership/queue integration remain pending. Value
+readback alone must never set `FPL_READY_UI`. The safe recorder entry remains `fpl_binding_begin`, with all
 codec/writer/header/playback/storage proofs still required.

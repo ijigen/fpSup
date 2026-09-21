@@ -11,6 +11,33 @@
  * The live installer refuses PHASE=1 until the PHASE=0 context result has been
  * reviewed explicitly.
  *
+ * PHASE=2 is the live encode.  It allocates NOTHING: the host seeds the
+ * allocator, the handle retained by exact_writer_scratch_preflight, and both
+ * proof magics, and this routine re-derives and re-validates the whole layout
+ * from that handle before use.  The three guard words the scratch phase left
+ * behind must still be intact; a trampled guard means the retained block is not
+ * what we think it is, and the block is then never freed or written.
+ *
+ * PHASE=3 is the sustained run: the same consume path, repeated over FRAMES
+ * consecutive writer calls, appending one 16-byte record per frame to a log at
+ * LOG.  It re-arms the hook only at the very end of each frame, so the risky
+ * window is always unhooked exactly as in the one-shot design: a fault costs
+ * that frame's writer call and stops, it never loops.  A re-arm the fetch path
+ * does not see costs a frame, not correctness -- `frames_done` shows it.  No
+ * cache maintenance is called: 0xC000E91C is a set/way D-cache clean and would
+ * perturb the very timing being measured.
+ *
+ * Release policy for PHASE=2 and the final frame of PHASE=3, deliberately
+ * asymmetric:
+ *   - adopted and the encode never started      -> free
+ *   - adopted and the encode returned success   -> free
+ *   - the encode was entered and did not succeed-> RETAIN.  The codec may still
+ *     own the buffer as a DMA target; freeing it under a live engine is worse
+ *     than leaking 4 MiB until a power cycle.
+ * The engine is a single global with no ownership arbitration (see
+ * research/imaging-hw/notes/HW_LOSSLESS_JPEG_CODEC.md); a wrong free here is
+ * how the still path was killed on 2026-08-30.
+ *
  * Neither phase stores through the DNG buffer or the segment pointer.  The
  * original buffer is source-only, seg[1] remains 0x318200, and the real
  * FUN_c069ac88 is tail-called with its original r0-r3/r12/LR.
@@ -30,6 +57,18 @@
 
 #ifndef PHASE
 #define PHASE 0
+#endif
+
+/* PHASE=2 routes the source-integrity exit through its release step; the
+ * reviewed PHASE=0/1 images keep their original control flow and size. */
+#if PHASE >= 2
+#define SOURCE_EXIT after_source
+#else
+#define SOURCE_EXIT complete
+#endif
+
+#ifndef FRAMES
+#define FRAMES 8
 #endif
 
 .equ HOOK_SITE,       0xC0722AFC
@@ -58,7 +97,8 @@
 .equ F_INIT,          0xC05A6890
 .equ F_ENC,           0xC05A6920
 .equ F_SIZE,          0xC05A6990
-.equ F_CLOCK,         0xC002B6E0
+.equ F_CLOCK,         0xC002B6E0       /* free-running 1 MHz microsecond tick */
+.equ F_FREE,          0xC001D2B8
 .equ F_PWR,           0xC0708C61       /* Thumb */
 .equ F_CLK,           0xC07095A9       /* Thumb */
 
@@ -105,6 +145,25 @@
 .equ S_GUARD_TMP,     0x9C
 .equ S_TILE_COUNT,    0xA0
 .equ S_TILE0,         0xA4             /* 12 words, through +0xD0 */
+.equ S_POWER_PROOF,   0xD4             /* "PPWR", seeded by the host */
+.equ S_SCRATCH_PROOF, 0xD8             /* "ALOC", seeded by the host */
+.equ S_FREE_ERROR,    0xEC
+.equ S_FREE_DONE,     0xF0
+.equ S_ENC_STARTED,   0xF4
+.equ S_ADOPTED,       0xF8
+.equ S_FRAMES_DONE,   0xFC
+
+.equ POWER_MAGIC,     0x52575050       /* "PPWR" */
+.equ SCRATCH_MAGIC,   0x434F4C41       /* "ALOC" */
+.equ FREE_MAGIC,      0x45455246       /* "FREE" */
+.equ HOOK_ARMED,      0xEB00333F       /* BL from the site to CODE */
+.equ LOG,             0xC072FF00       /* PHASE=3, 256 bytes total */
+.equ RING_MASK,       7                /* 8 rows x 16 bytes = the last 8 frames */
+.equ AGG_OFF,         0x80             /* worst-case trackers, every frame */
+.equ AGG_MAX_US,      0x00
+.equ AGG_MAX_BYTES,   0x04
+.equ AGG_OVER_BUDGET, 0x08
+.equ BUDGET_US,       41708            /* one 24000/1001 frame */
 
 .equ ERR_KIND,        1
 .equ ERR_SEG_NULL,    2
@@ -128,6 +187,9 @@
 .equ ERR_SIZE_RANGE,  20
 .equ ERR_GUARD,       21
 .equ ERR_SOURCE,      22
+.equ ERR_PROOF,       23
+.equ ERR_STALE_GUARD, 24
+.equ ERR_RETAINED,    25
 
 .macro LDA reg, value
     movw    \reg, #:lower16:\value
@@ -149,8 +211,15 @@ probe_entry:
     ldr     r3, [r4, #S_COUNT]
     add     r3, r3, #1
     str     r3, [r4, #S_COUNT]
+#if PHASE == 3
+    /* The loop counter is frames actually processed, not hook entries. */
+    ldr     r0, [r4, #S_FRAMES_DONE]
+    cmp     r0, #FRAMES
+    bhs     tail_call
+#else
     cmp     r3, #1
     bne     tail_call
+#endif
 
     str     r0, [r4, #S_R0]
     str     r1, [r4, #S_R1]
@@ -203,6 +272,24 @@ probe_entry:
     mov     r0, #3
     str     r0, [r4, #S_STAGE]
 
+#if PHASE >= 2
+    /* Consume the retained block. Nothing is allocated; both proof magics must
+     * be present or the seeded handle is not one we may touch. */
+    ldr     r0, [r4, #S_POWER_PROOF]
+    LDA     r1, POWER_MAGIC
+    cmp     r0, r1
+    bne     bad_proof
+    ldr     r0, [r4, #S_SCRATCH_PROOF]
+    LDA     r1, SCRATCH_MAGIC
+    cmp     r0, r1
+    bne     bad_proof
+    ldr     r0, [r4, #S_ALLOCATOR]
+    cmp     r0, #0
+    beq     bad_allocator
+    ldr     r8, [r4, #S_HANDLE]
+    cmp     r8, #0
+    beq     bad_alloc
+#else
     /* One allocator-owned block, directly aligned by F_GET's third argument. */
     mov     r0, #0
     LDA     r12, F_ALLOC
@@ -225,6 +312,7 @@ probe_entry:
     str     r8, [r4, #S_HANDLE]
     cmp     r8, #0
     beq     bad_alloc
+#endif
     mov     r0, r8, lsr #30
     cmp     r0, #1                     /* require 0x4xxxxxxx..0x7xxxxxxx */
     bne     bad_alias
@@ -266,6 +354,22 @@ probe_entry:
 
 ranges_ok:
     LDA     r12, GUARD_MAGIC
+#if PHASE >= 2
+    /* The scratch phase wrote these. If any is gone, something else has been
+     * in this block: do not encode into it and do not free it. */
+    ldr     r0, [r2]
+    cmp     r0, r12
+    bne     bad_stale_guard
+    ldr     r0, [r3, #0x30]
+    cmp     r0, r12
+    bne     bad_stale_guard
+    ldr     r0, [r4, #S_TABLE_TMP]
+    ldr     r0, [r0, #0x30]
+    cmp     r0, r12
+    bne     bad_stale_guard
+    mov     r0, #1
+    str     r0, [r4, #S_ADOPTED]
+#endif
     str     r12, [r2]
     str     r12, [r3, #0x30]
     ldr     r0, [r4, #S_TABLE_TMP]
@@ -355,6 +459,11 @@ preflight_bad_pwr_off:
     mov     r0, #5
     str     r0, [r4, #S_STAGE]
 
+#if PHASE >= 2
+    mov     r0, #1
+    str     r0, [r4, #S_ENC_STARTED]   /* set BEFORE the call: a hang must show */
+    dmb     sy
+#endif
     LDA     r12, F_CLOCK
     blx     r12
     str     r0, [r4, #S_T0]
@@ -453,12 +562,111 @@ finish_source:
     cmpeq   r2, r12
     LDA     r12, DNG_LEN
     cmpeq   r3, r12
-    beq     complete
+    beq     SOURCE_EXIT
     ldr     r1, [r4, #S_ERROR]
     cmp     r1, #0
     moveq   r1, #ERR_SOURCE
     streq   r1, [r4, #S_ERROR]
+    b       SOURCE_EXIT
+
+#if PHASE >= 2
+after_source:
+#if PHASE == 3
+    /* One 16-byte record per frame. r5/r6/r7 are dead after finish_source. */
+    ldr     r5, [r4, #S_FRAMES_DONE]
+    LDA     r6, LOG
+    /* The rows are a ring over the last 8 frames: a run lasts as long as the
+     * recording and 256 bytes cannot hold a row per frame. The worst-case
+     * trackers below cover every frame, whatever the run length. */
+    and     r7, r5, #RING_MASK
+    add     r6, r6, r7, lsl #4
+    ldr     r0, [r4, #S_T1]
+    ldr     r1, [r4, #S_T0]
+    sub     r0, r0, r1                 /* 1 MHz tick; a wrap subtracts correctly */
+    str     r0, [r6, #0]
+    ldr     r0, [r4, #S_COMP_SIZE]
+    str     r0, [r6, #4]
+    /* The segment buffer and its first pixel word identify WHICH frame this
+     * record describes. Without them, repeated identical sizes cannot be told
+     * apart from re-encoding one frame. The encode return and error code are
+     * already in the state block, and an error ends the loop anyway. */
+    ldr     r0, [r4, #S_BUF]
+    str     r0, [r6, #8]
+    ldr     r0, [r4, #S_PIX0_BEFORE]
+    str     r0, [r6, #12]
+
+    /* Worst case over EVERY frame, not just the rows kept above. This is what
+     * decides feasibility; a mean would hide the frame that misses. */
+    LDA     r6, LOG + AGG_OFF
+    ldr     r2, [r4, #S_T1]
+    ldr     r1, [r4, #S_T0]
+    sub     r2, r2, r1
+    ldr     r0, [r6, #AGG_MAX_US]
+    cmp     r2, r0
+    strhi   r2, [r6, #AGG_MAX_US]
+    ldr     r3, [r4, #S_COMP_SIZE]
+    ldr     r0, [r6, #AGG_MAX_BYTES]
+    cmp     r3, r0
+    strhi   r3, [r6, #AGG_MAX_BYTES]
+    LDA     r0, BUDGET_US
+    cmp     r2, r0
+    ldrhs   r0, [r6, #AGG_OVER_BUDGET]
+    addhs   r0, r0, #1
+    strhs   r0, [r6, #AGG_OVER_BUDGET]
+
+    add     r5, r5, #1
+    str     r5, [r4, #S_FRAMES_DONE]
+    dmb     sy
+
+    /* Two independent ceilings. S_COUNT counts every hook entry, so a scribbled
+     * frames_done cannot on its own keep this going. */
+    ldr     r0, [r4, #S_ERROR]
+    cmp     r0, #0
+    bne     final_frame                /* stop at the first error, never loop */
+    cmp     r5, #FRAMES
+    bhs     final_frame
+    ldr     r0, [r4, #S_COUNT]
+    cmp     r0, #FRAMES * 2
+    bhs     final_frame
+    /* Re-arm last, so every risky instruction above ran with the site
+     * unhooked, exactly as in the one-shot design. */
+    LDA     r0, HOOK_SITE
+    LDA     r1, HOOK_ARMED
+    str     r1, [r0]
+    dsb     sy
+    isb
     b       complete
+
+final_frame:
+#endif
+    /* Only a block we adopted after every range and guard check may be freed,
+     * and only when the codec cannot still be using it. */
+    ldr     r0, [r4, #S_ADOPTED]
+    cmp     r0, #1
+    bne     complete
+    ldr     r0, [r4, #S_ENC_STARTED]
+    cmp     r0, #0
+    beq     release_block
+    ldr     r0, [r4, #S_ENC_RET]
+    cmp     r0, #1
+    beq     release_block
+    mov     r0, #ERR_RETAINED
+    str     r0, [r4, #S_FREE_ERROR]    /* deliberate leak; power-cycle to reclaim */
+    b       complete
+
+release_block:
+    ldr     r0, [r4, #S_ALLOCATOR]
+    ldr     r1, [r4, #S_HANDLE]
+    cmp     r0, #0
+    beq     complete
+    cmp     r1, #0
+    beq     complete
+    LDA     r12, F_FREE
+    blx     r12
+    LDA     r0, FREE_MAGIC
+    str     r0, [r4, #S_FREE_DONE]
+    b       complete
+#endif
 
 bad_kind:       FAIL ERR_KIND, complete
 bad_seg:        FAIL ERR_SEG_NULL, complete
@@ -472,6 +680,10 @@ bad_alias:      FAIL ERR_ALIAS, finish_source
 bad_align:      FAIL ERR_ALIGN, finish_source
 bad_range:      FAIL ERR_RANGE, finish_source
 bad_overlap:    FAIL ERR_OVERLAP, finish_source
+#if PHASE >= 2
+bad_proof:        FAIL ERR_PROOF, complete
+bad_stale_guard:  FAIL ERR_STALE_GUARD, finish_source
+#endif
 
 complete:
     mov     r0, #8

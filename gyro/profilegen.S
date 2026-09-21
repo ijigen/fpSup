@@ -267,7 +267,8 @@ pg_dng_dims:
 
     .global pg_dims_plausible
 pg_dims_plausible:
-    push    {r4, r5, lr}
+    push    {r4, r5, r6, lr}            /* r6 unused: three registers leave the
+                                         * stack at 12 across the F_GEOM call */
     mov     r5, r1                      /* frame width */
     mov     r4, r0                      /* mode */
     ldr_addr r0, MODE_OBJ
@@ -282,9 +283,9 @@ pg_dims_plausible:
     cmp     r5, r1
     movhi   r0, #0
     movls   r0, #1
-    pop     {r4, r5, pc}
+    pop     {r4, r5, r6, pc}
 8:  mov     r0, #1
-    pop     {r4, r5, pc}
+    pop     {r4, r5, r6, pc}
 
     .global pg_focal_milli
 pg_focal_milli:

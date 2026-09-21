@@ -69,12 +69,12 @@ Each page says what has been proven, what is being worked on, and what is open.
 |---|---|---|---|
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — v3.1.0. The channel is built on the camera's own PTP gadget, so recording survives it |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html), and the mode-table ambiguity closed |
-| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — two editions; Base writes a raw `.GYR` instead, converted [in a browser](gyro/web/) |
+| 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — two editions; Base writes a raw `.GYR` instead, converted [in a browser](gyro/convert/) |
 | 4 | [**open gate**](projects/open-gate.md) | Recording the sensor's full 3:2 area | **OG3K v0.2.3a alpha · OG2K v0.1.0test** — 3024×2010 or 2016×1344, same field of view; Super35/crop must remain off |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | Getting the best 6K the link can carry | designed; 8-bit lands within 94–100% of native 6K across every remaining unknown |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
 | 7 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, packaging | researched; the engine's sustained rate is still the one unmeasured number |
-| 8 | [**ui sup**](projects/ui-sup.md) | On-screen display, boot animation | text on screen works; colour encoding unsolved |
+| 8 | [**ui sup**](projects/ui-sup.md) | On-screen display, boot animation | text, colour and a hardware overlay line all work on a camera |
 | 9 | [**power sup**](projects/power-sup.md) | USB-C power delivery and power saving | charging mechanism solved; the rest untouched |
 | — | [**firmware map**](projects/firmware-map.md) | Format, subsystems, task ABI, state sources | ongoing — not a product, the ground the rest stands on |
 
@@ -166,7 +166,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 |---|---|---|---|
 | 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸 | **已釋出** —— v3.1.0。通道建在相機自己的 PTP gadget 上,所以錄影撐得過去 |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、增益、感光元件控制 | **研究完成** —— [互動說明](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html),模式表的歧義也收掉了 |
-| 3 | [**gyro sup**](projects/gyro-sup.md) | 陀螺儀、六軸記錄、Gyroflow 流程 | **已釋出** —— 兩個版本;Base 版寫原始 `.GYR`,[在瀏覽器裡](gyro/web/)轉換 |
+| 3 | [**gyro sup**](projects/gyro-sup.md) | 陀螺儀、六軸記錄、Gyroflow 流程 | **已釋出** —— 兩個版本;Base 版寫原始 `.GYR`,[在瀏覽器裡](gyro/convert/)轉換 |
 | 4 | [**open gate**](projects/open-gate.md) | 錄下感光元件完整的 3:2 面積 | **OG3K v0.2.3a alpha · OG2K v0.1.0test** —— 3024×2010 或 2016×1344,視角相同;Super35/crop 必須關閉 |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | 把鏈路載得動的最好 6K 拿出來 | 設計完成;8bit 在所有剩餘未知數下都落在原生 6K 的 94–100% |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD、對焦模型、鏡頭控制、跟焦 | AF 深度反編譯完成;收集器還沒做 |

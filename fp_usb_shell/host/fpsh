@@ -37,6 +37,18 @@ def main() -> int:
     if r.startswith("OK "):
         print(r[3:].replace("\\n", "\n").replace("\\\\", "\\"))
         return 0
+    if r.startswith("OKX "):
+        # A raw block. The daemon hex-encodes any reply over 128 bytes -- which
+        # includes every multi-word `mem get` -- because a line-based socket
+        # cannot carry arbitrary bytes. Decode it back so callers see one
+        # format. putfile.py has always done this; this client had not.
+        try:
+            payload = bytes.fromhex(r[4:].strip())
+        except ValueError:
+            print(r, file=sys.stderr)
+            return 1
+        sys.stdout.write(payload.decode("latin-1"))
+        return 0
     print(r, file=sys.stderr)
     return 1
 
