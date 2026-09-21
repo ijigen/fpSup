@@ -126,6 +126,35 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
 .regs span[data-k="5"]{border-left-color:#d7607a}
 .regs span[data-k="6"]{border-left-color:var(--dim)}
 .regs span[data-k="7"]{border-left-color:transparent; opacity:.45}
+#regtbl th{cursor:pointer; user-select:none; white-space:nowrap}
+#regtbl th[data-rk]:hover{color:var(--ink)}
+#regtbl th[data-dir]::after{content:" \25B2"; font-size:.7em; color:var(--sig)}
+#regtbl th[data-dir="desc"]::after{content:" \25BC"}
+#regtbl td{white-space:nowrap; vertical-align:middle}
+#regtbl td.x{width:1.6rem; text-align:center; cursor:pointer; color:var(--dim); font-family:var(--mono)}
+#regtbl tr.hd{cursor:pointer}
+#regtbl tr.hd:hover td, #regtbl tr.hd.on td{background:var(--sig-soft)}
+#regtbl td.a{font-family:var(--mono); font-weight:600}
+#regtbl td.fn{font-size:.82rem}
+#regtbl td.fn i{font-style:normal; display:inline-block; width:9px; height:9px;
+  border-radius:2px; margin-right:6px; vertical-align:baseline}
+#regtbl td.dim{color:var(--dim)}
+#regtbl tr.exp > td{padding:0; white-space:normal; background:var(--panel)}
+.dist{display:flex; gap:2px; align-items:stretch; min-width:170px; height:15px}
+.dist b{display:block; font-weight:400; border-radius:1px; background:var(--dim);
+  min-width:2px; opacity:.55}
+.dist b.s{background:var(--sig); opacity:.85}
+.rexp{padding:13px 16px 15px; border-top:1px solid var(--line);
+  position:sticky; left:0; max-width:min(100%, calc(100vw - 2.4rem))}
+.rexp h4{margin:0 0 9px; font-size:.84rem; font-weight:600}
+.rexp .vrow{display:grid; grid-template-columns:5.5rem 3.2rem 1fr; gap:4px 12px;
+  font-size:.74rem; align-items:baseline; padding:3px 0;
+  border-top:1px solid var(--line)}
+.rexp .vrow:first-of-type{border-top:0}
+.rexp .vrow b{font-family:var(--mono); font-weight:600}
+.rexp .vrow em{font-style:normal; color:var(--dim); font-family:var(--mono)}
+.rexp .vrow span{color:var(--dim); font-family:var(--mono); font-size:.7rem;
+  word-break:break-all; line-height:1.55}
 .rkey{display:flex; flex-wrap:wrap; gap:5px 14px; margin:0 0 10px; font-size:.73rem;
   color:var(--dim)}
 .rkey b{font-weight:600; color:var(--ink)}
@@ -188,11 +217,15 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
   <div class="hero-text">
     <h1><span class="en">The 70 sensor modes</span><span class="zh">70 個感光元件模式</span></h1>
     <p class="lede en">Every way the fp knows how to read its sensor, as a table in ROM.
-    This is all 70 of them, every field in the record explained, and a searchable
-    comparison &mdash; including the fields nobody has worked out.</p>
-    <p class="lede zh">fp 知道的所有「讀取感光元件的方式」,全部存在 ROM 的一張表裡。這頁是全部 70 種,每個欄位逐一解釋,加上一張可以搜尋排序的對照表 ——
-    包括那些到現在還沒人搞懂的欄位。</p>
+    The subject of this page is <b>the settings themselves</b>: the 161 values the fp
+    writes to the IMX410, 150 of them now decoded, plus the eight ROM tables those
+    values live in and the 70 modes they combine into.</p>
+    <p class="lede zh">fp 知道的所有「讀取感光元件的方式」,全部存在 ROM 的表裡。<br>
+    這一頁講的是<b>設定值本身</b>:fp 會寫進 IMX410 的那 <b>161 個值</b>(已經解出 150 個)、
+    它們存放的八張 ROM 表,以及它們組合出來的 70 種模式。</p>
     <ul class="chips">
+      <li><b>161</b> <span class="en">sensor settings</span><span class="zh">個感光元件設定</span></li>
+      <li><b>150</b> <span class="en">decoded</span><span class="zh">已解出用途</span></li>
       <li><b>70</b> <span class="en">modes</span><span class="zh">種模式</span></li>
       <li><b>13</b> <span class="en">rasters</span><span class="zh">種光柵</span></li>
       <li><b>17</b> <span class="en">frame rates</span><span class="zh">種格率</span></li>
@@ -212,9 +245,9 @@ are just the mode id repeated once per table, so <b>195 are real settings</b>. T
 而那 203 個裡有 8 個只是八張表各自重複一次的 mode id,所以<b>真正的設定值是 195 個</b>。<strong>70 是「可以挑的東西有幾個」,不是「每個裡面有幾項」。</strong></dd>
     <dt><span class="en">What is not solved</span><span class="zh">還沒解的</span></dt>
     <dd class="en">Four of the 25 metadata fields are always zero, two are read from a single
-    mode's investigation rather than proven across the table, and the 162-field
-    register record is decoded as far as which sensor register each value goes to, but not what those registers do. Timing <em>is</em> solved, so rolling shutter and exact frame rate are computed for all 70.</dd>
-    <dd class="zh">25 個 metadata 欄位裡有四個永遠是 0;兩個的名字是從單一模式的調查來的,沒有在整張表上驗證過;而 register record 已經解到「每個值進哪一個感光元件暫存器」,但那些暫存器做什麼仍然不知道。時序表<em>已經</em>解開了,所以 70 個模式的捲簾和精確格率都算得出來。</dd>
+    mode's investigation rather than proven across the table, and <b>11 of the 161
+    sensor registers</b> have no explanation yet. Timing <em>is</em> solved, so rolling shutter and exact frame rate are computed for all 70.</dd>
+    <dd class="zh">25 個 metadata 欄位裡有四個永遠是 0;兩個的名字是從單一模式的調查來的,沒有在整張表上驗證過;而 <b>161 個感光元件暫存器裡還有 11 個</b>不知道在管什麼。時序表<em>已經</em>解開了,所以 70 個模式的捲簾和精確格率都算得出來。</dd>
   </dl>
 </div>
 
@@ -322,6 +355,46 @@ being walked at twice its real stride.</p>
 <p class="note zh">這裡每個 stride 都是同一個方法算出來的:這些表是<strong>背靠背排在一起</strong>的,
 所以「到下一張表的間距 ÷ 70」就是每筆的大小。沒有一個是猜的 ——
 而時序表就是證據:它之前被判定「解不開」,只因為當時用了兩倍的 stride 在走。</p>
+
+<h2 id="regs"><span class="en">All 161 sensor settings</span><span class="zh">感光元件上的 161 個設定</span></h2>
+
+<p class="en">This is the main table of this page: <b>every value the fp writes to the
+IMX410</b>, one row each. The camera issues these as 161 straight-line I&sup2;C writes
+with no branches, so every mode writes all 161 &mdash; only the values change.
+<b>150 of them are now decoded.</b> Click a row to see what that register holds across
+all 70 modes.</p>
+<p class="zh">這是這一頁的主表:<b>fp 會寫進 IMX410 的每一個值</b>,一個暫存器一列。
+相機是用 161 筆<strong>沒有任何分支的直線 I&sup2;C 寫入</strong>送出去的,所以每個模式都會寫滿這 161 個,
+只有值不一樣。<b>其中 150 個已經解出用途。</b>點任一列可以看這個暫存器在 70 個模式上分別是什麼值。</p>
+
+<div class="tblbar">
+  <input type="search" id="rq" placeholder="Search register address / 搜尋暫存器位址" autocomplete="off" spellcheck="false" aria-label="Search registers">
+  <div class="chipbar" id="rchips">
+    <button type="button" data-r="all" aria-pressed="true"><span class="en">all</span><span class="zh">全部</span></button>
+    <button type="button" data-r="0" aria-pressed="false"><span class="en">merge</span><span class="zh">合併</span></button>
+    <button type="button" data-r="2" aria-pressed="false"><span class="en">readout speed</span><span class="zh">讀出速度</span></button>
+    <button type="button" data-r="1" aria-pressed="false"><span class="en">bit depth</span><span class="zh">位深</span></button>
+    <button type="button" data-r="3" aria-pressed="false"><span class="en">height</span><span class="zh">高度</span></button>
+    <button type="button" data-r="7" aria-pressed="false"><span class="en">constant</span><span class="zh">常數</span></button>
+    <button type="button" data-r="open" aria-pressed="false"><span class="en">still open</span><span class="zh">還沒解</span></button>
+    <span class="count" id="rcount">161</span>
+  </div>
+</div>
+
+<div class="scroll">
+<table id="regtbl">
+  <thead><tr>
+    <th aria-label="expand"></th>
+    <th data-rk="a"><span class="en">register</span><span class="zh">暫存器</span></th>
+    <th data-rk="k"><span class="en">what it controls</span><span class="zh">管什麼</span></th>
+    <th data-rk="n"><span class="en">values</span><span class="zh">幾種值</span></th>
+    <th><span class="en">distribution across the 70 modes</span><span class="zh">在 70 個模式上的分布</span></th>
+    <th data-rk="g"><span class="en">moves with</span><span class="zh">共變</span></th>
+  </tr></thead>
+  <tbody id="regbody"></tbody>
+</table>
+</div>
+<p class="note" id="rempty" style="display:none"><span class="en">Nothing matches that.</span><span class="zh">沒有符合的項目。</span></p>
 
 <h2><span class="en">Every field in the metadata record</span><span class="zh">metadata 記錄的每一個欄位</span></h2>
 
@@ -939,6 +1012,7 @@ someone else's conclusion.</p>
   // the value each sensor register holds in most of the 70 modes, so an
   // expanded mode can show what is unusual about *it* rather than a wall of numbers
   // ---- the expanded row: what this mode actually writes to the sensor ----
+  var RENDER_REGS = null;
   var OPEN = {};
   // what the 161 registers were decoded to; index matches RKIND
   var KIND = [
@@ -1019,6 +1093,138 @@ someone else's conclusion.</p>
       typ[w] = bv;
     }
     return typ;
+  })();
+
+  // ---- register-major view: one row per sensor setting -------------------
+  (function(){
+    var rbody = $('regbody'); if(!rbody) return;
+    var rq = $('rq'), rchips = $('rchips'), rcount = $('rcount'), rempty = $('rempty'),
+        rtbl = $('regtbl');
+    var ROPEN = {}, rfilter = 'all', rsortK = 'a', rsortDir = 'asc';
+
+    // per register: values, counts, and which other registers share its pattern
+    var RINFO = (function(){
+      var pat = {}, info = {};
+      for(var w = 1; w <= 161; w++){
+        var counts = {}, order = [];
+        for(var r = 0; r < 70; r++){
+          var v = RECS[r].register[w];
+          if(counts[v] === undefined){ counts[v] = []; order.push(v); }
+          counts[v].push(MODES[r][0]);
+        }
+        // canonical partition: which modes share a value
+        var seen = {}, sig = [];
+        for(var r2 = 0; r2 < 70; r2++){
+          var v2 = RECS[r2].register[w];
+          if(seen[v2] === undefined) seen[v2] = sig.length ? Math.max.apply(null, sig) + 1 : 0;
+          sig.push(seen[v2]);
+        }
+        var key = sig.join(',');
+        (pat[key] = pat[key] || []).push(REGMAP[w]);
+        info[w] = {addr:REGMAP[w], counts:counts,
+                   vals:order.slice().sort(function(a,b){ return a - b; }), key:key};
+      }
+      for(var w2 = 1; w2 <= 161; w2++) info[w2].group = pat[info[w2].key];
+      return info;
+    })();
+
+    function kindOf(w){ return RKIND[RINFO[w].addr]; }
+    function rpass(w){
+      if(rfilter === 'all') return true;
+      var k = kindOf(w);
+      if(rfilter === 'open') return k === undefined;
+      return String(k) === rfilter;
+    }
+    function rkey(w, k){
+      var i = RINFO[w];
+      if(k === 'a') return i.addr;
+      if(k === 'n') return i.vals.length;
+      if(k === 'g') return i.group.length;
+      var kk = kindOf(w);
+      return kk === undefined ? 99 : kk;
+    }
+    function renderRegs(){
+      var term = rq.value.trim().toLowerCase().replace(/^0x/, '');
+      var list = [];
+      for(var w = 1; w <= 161; w++){
+        if(!rpass(w)) continue;
+        if(term && RINFO[w].addr.toString(16).indexOf(term) === -1) continue;
+        list.push(w);
+      }
+      list.sort(function(a, b){
+        var x = rkey(a, rsortK), y = rkey(b, rsortK);
+        if(x === y) return RINFO[a].addr - RINFO[b].addr;
+        return rsortDir === 'asc' ? x - y : y - x;
+      });
+      rbody.innerHTML = list.map(function(w){
+        var i = RINFO[w], k = kindOf(w), op = ROPEN[w];
+        var fn = k === undefined
+          ? '<span class="en">not yet explained</span><span class="zh">還沒解開</span>'
+          : '<span class="en">' + KIND[k][0] + '</span><span class="zh">' + KIND[k][1] + '</span>';
+        var dot = k === undefined ? 'var(--line)' : KCOL[k];
+        var bars = i.vals.map(function(v){
+          return '<b class="' + (i.counts[v].length > 35 ? '' : 's') + '" style="flex:' +
+                 i.counts[v].length + '" title="' + v + ' × ' + i.counts[v].length + '"></b>';
+        }).join('');
+        return '<tr class="hd' + (op ? ' on' : '') + '" data-w="' + w + '">'
+          + '<td class="x">' + (op ? '&#9662;' : '&#9656;') + '</td>'
+          + '<td class="a">' + hx(i.addr, 4) + '</td>'
+          + '<td class="fn"><i style="background:' + dot + '"></i>' + fn + '</td>'
+          + '<td class="dim">' + (i.vals.length === 1 ? '&mdash;' : i.vals.length) + '</td>'
+          + '<td><div class="dist">' + bars + '</div></td>'
+          + '<td class="dim">' + (i.group.length === 1 ? '&mdash;' : i.group.length) + '</td></tr>'
+          + (op ? '<tr class="exp"><td colspan="6">' + rexpand(w) + '</td></tr>' : '');
+      }).join('');
+      rcount.textContent = list.length + (list.length === 161 ? '' : T.of + '161');
+      rempty.style.display = list.length ? 'none' : 'block';
+    }
+    function rexpand(w){
+      var i = RINFO[w], k = kindOf(w);
+      var rows = i.vals.map(function(v){
+        var ms = i.counts[v];
+        return '<div class="vrow"><b>= ' + v + '</b><em>' + ms.length +
+               '</em><span>' + ms.join(' ') + '</span></div>';
+      }).join('');
+      var peers = i.group.filter(function(a){ return a !== i.addr; });
+      return '<div class="rexp">'
+        + '<h4><span class="en">Register ' + hx(i.addr, 4) + ' across all 70 modes</span>'
+        +     '<span class="zh">暫存器 ' + hx(i.addr, 4) + ' 在 70 個模式上的值</span></h4>'
+        + rows
+        + (peers.length
+            ? '<div class="vrow" style="grid-template-columns:5.5rem 1fr"><b><span class="en">moves with</span><span class="zh">共變</span></b>'
+              + '<span>' + peers.map(function(a){ return hx(a, 4); }).join(' ') + '</span></div>'
+            : '')
+        + (k === undefined ? '' :
+           '<p class="note" style="margin:11px 0 0"><span class="en">' + KIND[k][2] +
+           '</span><span class="zh">' + KIND[k][1] + '</span></p>')
+        + '</div>';
+    }
+    rbody.addEventListener('click', function(e){
+      var tr = e.target.closest('tr.hd'); if(!tr) return;
+      var w = +tr.getAttribute('data-w');
+      if(ROPEN[w]) delete ROPEN[w]; else ROPEN[w] = 1;
+      renderRegs();
+    });
+    rq.addEventListener('input', renderRegs);
+    rchips.addEventListener('click', function(e){
+      var b = e.target.closest('button[data-r]'); if(!b) return;
+      rfilter = b.getAttribute('data-r');
+      [].forEach.call(rchips.querySelectorAll('button[data-r]'), function(x){
+        x.setAttribute('aria-pressed', String(x === b));
+      });
+      renderRegs();
+    });
+    [].forEach.call(rtbl.querySelectorAll('th[data-rk]'), function(th){
+      th.addEventListener('click', function(){
+        var k = th.getAttribute('data-rk');
+        if(k === rsortK){ rsortDir = rsortDir === 'asc' ? 'desc' : 'asc'; }
+        else { rsortK = k; rsortDir = 'asc'; }
+        [].forEach.call(rtbl.querySelectorAll('th[data-rk]'), function(o){ o.removeAttribute('data-dir'); });
+        th.setAttribute('data-dir', rsortDir);
+        renderRegs();
+      });
+    });
+    RENDER_REGS = renderRegs;
   })();
 
   var data = rows(), sortK = '0', sortDir = 'asc', filter = 'all';
@@ -1171,6 +1377,7 @@ someone else's conclusion.</p>
     if(remember){ try{ localStorage.setItem(KEY, lang); }catch(e){} }
     render();
     renderCmp();
+    if(RENDER_REGS) RENDER_REGS();
   }
   var saved = null;
   try{ saved = localStorage.getItem(KEY); }catch(e){}
