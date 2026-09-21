@@ -62,10 +62,14 @@
       it writes to the wrong ones. Check under
       <code>MENU &rarr; SYSTEM &rarr; Information</code>.</dd>
     <dt>Card</dt>
-    <dd><b>A fast card, for open gate and for the gyro.</b> Open gate at 24p needs
-      about 221&nbsp;MB/s; a mid-range UHS-II card we measured does 94. If the card
-      is too slow the camera stops recording, and gyro files go missing. A slow card
-      is the most common problem people have.</dd>
+    <dd><b>Open gate 3K needs an SSD, not a card.</b> It wants about
+      221&nbsp;MB/s at 24p; the UHS-II SD card we measured does 94, and only
+      66 at the 9.2&nbsp;MB one-frame writes CinemaDNG actually makes. That is a
+      <b>3&times;</b> gap, not a few percent &mdash; every open gate 3K clip we
+      recorded to that card stopped at 4.1 seconds or less. An external SSD over
+      USB-C measured 390. <b>OG2K needs only 98&nbsp;MB/s</b>, the same as normal
+      FHD, and is the open gate you can record to a card. A slow card is the most
+      common problem people have.</dd>
     <dt>Risk</dt>
     <dd><b>Nothing is installed on the camera.</b> It only lives in memory while
       the power is on, so there is no firmware to flash back. You remove it by
@@ -129,7 +133,7 @@ selling you anything, start here.</p>
     <tr><td><a href="releases/fpsup-og2k-v0.1.1a/README.txt">fpsup-og2k</a></td><td>v0.1.1a</td>
         <td>The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.</td></tr>
     <tr><td><a href="releases/fpsup-og3k-v0.2.4a/README.txt">fpsup-og3k</a></td><td>v0.2.4a</td>
-        <td>The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 219 MB/s at 24p 12-bit. Alpha.</td></tr>
+        <td>The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha.</td></tr>
     <tr><td><a href="releases/fpsup-usbshell-v3.1.1/README.txt">fpsup-usbshell</a></td><td>v3.1.1</td>
         <td>The shell that answers <code>shl</code> over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints.</td></tr>
 <!-- releases:end -->

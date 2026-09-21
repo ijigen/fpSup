@@ -106,18 +106,41 @@
       <tr><td>Open gate 3K, 24p, 8-bit</td><td>148 MB/s</td></tr>
       <tr><td>Open gate 2K, 24p, 12-bit</td><td>98 MB/s</td></tr>
       <tr><td>Normal FHD, 12-bit</td><td>97 MB/s</td></tr>
-      <tr><td><i>a mid-range UHS-II card we measured</i></td><td><i>94 MB/s</i></td></tr>
+      <tr class="hl"><td><i>the UHS-II SD card we measured</i></td><td><i>94 MB/s</i></td></tr>
+      <tr class="hl"><td><i>an external SSD we measured</i></td><td><i>390 MB/s</i></td></tr>
     </tbody>
   </table>
   </div>
   <p>If the card is too slow, the camera <b>stops recording</b> after a few seconds.
-  This is the card, not a bug. No setting can fix it.</p>
+  This is the card, not a bug. No setting can fix it. We have 31 open gate 3K clips
+  recorded to that 94 MB/s card and <b>every one of them stops at 4.1 seconds or
+  less</b> &mdash; the camera fills its ~600&ndash;750 MB buffer at a 127 MB/s deficit
+  and then has to stop.</p>
+
+  <p class="warn"><b>Open gate 3K is not an SD card away.</b> The gap is not a few
+  percent like FHD &mdash; it is <b>2.4&times;</b>. And it is worse than the table
+  looks: CinemaDNG writes <b>one file per frame</b>, and one open gate 3K frame is
+  9.2 MB. On our card, writes that size run at <b>66 MB/s</b>, not 94 &mdash; 94 is
+  what it manages in 50 MB blocks, which is not how the camera writes. So the real
+  gap is closer to 3&times;.</p>
+
+  <p>We have only measured one SD card, and we never found where its curve flattens,
+  so we cannot tell you that <i>no</i> SD card can do this. What we can tell you is
+  that nothing we have measured in an SD slot is close, and the only storage we have
+  measured that is comfortably fast enough is an <b>external SSD over USB-C</b>.
+  If you want to try a faster card, run the benchmark below first &mdash; the number
+  printed on the card is not the number you get.</p>
   <p><a href="tools/storage-benchmark/README.txt">The storage benchmark</a> measures
   your real speed on the camera. The number printed on the card is often higher than
   the speed you actually get.</p>
-  <p class="note">If your card is around 94 MB/s, you cannot use open gate 3K. You
-  <b>can</b> use <b>OG2K</b>. It shows the same picture and uses a third of the
-  data.</p>
+  <p class="note"><b>If you want to stay on SD, use OG2K.</b> It needs 98 MB/s, which
+  is essentially the camera's own FHD rate (97). So the test is simple: <b>if your card
+  records normal FHD cleanly, it records OG2K.</b> It shows the same full-sensor 3:2
+  picture and uses well under half the data of OG3K.<br><br>
+  Be aware that at that rate a 94 MB/s card is already running flat out &mdash; it
+  works because the camera buffers, but that is exactly why gyro samples get dropped
+  and why writes can stall for a few hundred milliseconds. Faster card, fewer of those
+  problems.</p>
   <div class="warn"><b>The gyro needs a good card too.</b> It writes its files while
   you record, so it shares the card with the video. If the card is struggling, the
   gyro files are the first thing to go missing. You still get the clip, but the

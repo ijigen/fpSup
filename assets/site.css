@@ -107,6 +107,11 @@ tr:last-child td{border-bottom:0}
 td a{text-decoration:none; border-bottom:1px solid transparent}
 td a:hover{border-bottom-color:var(--sig)}
 
+/* A measured-reference row in a requirements table: it is a baseline to compare
+   against, not another thing you could pick. */
+tbody tr.hl td{background:var(--panel); color:var(--dim)}
+tbody tr.hl td:first-child{font-style:normal}
+
 /* ---- notes and warnings ------------------------------------------------- */
 .note{font-size:.9rem; color:var(--dim); border-left:2px solid var(--line);
   padding-left:13px; margin:16px 0}
