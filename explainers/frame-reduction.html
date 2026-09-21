@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hbin, Vbin, Hbin2 and RWZM &mdash; fpSup</title>
+<meta name="description" content="The SIGMA fp has two separate ways to shrink a frame before it reaches the card. What Hbin, Vbin, Hbin2 and RWZM each are, which ones the camera actually uses, and the decision that picks between them — read out of Ver.5.02 and checked against all 306 recording profiles.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/frame-reduction.html">
+<meta property="og:title" content="SIGMA fp: Hbin, Vbin, Hbin2 and RWZM">
+<meta property="og:description" content="Two separate ways to shrink a frame, six names in a debug line, and only two of them ever switched on. The decision tree, recovered from the firmware and checked against 306 profiles.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+/* Figures. Every diagram here is inline SVG using the site's own custom
+   properties, so light and dark come for free and nothing is a raster. */
+figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:16px 14px 12px}
+figure.dia svg{display:block; width:100%; height:auto}
+figure.dia figcaption{font-size:.84rem; color:var(--dim); margin-top:11px;
+  padding-top:10px; border-top:1px solid var(--line)}
+figure.dia figcaption b{color:var(--ink); font-weight:600}
+.dia text{font-family:var(--mono); fill:var(--ink)}
+.dia .t-dim{fill:var(--dim)}
+.dia .t-sig{fill:var(--sig)}
+.dia .bx{fill:var(--paper); stroke:var(--line); stroke-width:1}
+.dia .bx-on{fill:var(--sig-soft); stroke:var(--sig); stroke-width:1.5}
+.dia .bx-off{fill:var(--paper); stroke:var(--line); stroke-width:1;
+  stroke-dasharray:3 3; opacity:.6}
+.dia .ln{stroke:var(--line); stroke-width:1.5; fill:none}
+.dia .ln-on{stroke:var(--sig); stroke-width:2; fill:none}
+.dia .ln-dot{stroke:var(--dim); stroke-width:1; fill:none; stroke-dasharray:2 3}
+
+/* Verdict badges used in tables and in the simulator. */
+.tag{font-family:var(--mono); font-size:.68rem; letter-spacing:.03em;
+  border:1px solid var(--line); border-radius:3px; padding:2px 7px;
+  background:var(--paper); color:var(--dim); white-space:nowrap;
+  display:inline-block}
+.tag.live{border-color:var(--sig); color:var(--sig); background:var(--sig-soft);
+  font-weight:600}
+.tag.dead{opacity:.62; text-decoration:line-through}
+
+/* The branch simulator. */
+.sim{border:1px solid var(--line); border-radius:3px; background:var(--panel);
+  padding:17px 18px; margin:18px 0 0}
+.sim-ctl{display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:13px 18px; margin-bottom:16px}
+.sim-ctl label{display:block; font-family:var(--mono); font-size:.7rem;
+  text-transform:uppercase; letter-spacing:.07em; color:var(--dim); margin-bottom:5px}
+.sim-ctl select{width:100%; font-family:var(--mono); font-size:.85rem;
+  padding:7px 9px; border:1px solid var(--line); border-radius:3px;
+  background:var(--paper); color:var(--ink)}
+.sim-ctl select:focus-visible{outline:2px solid var(--sig); outline-offset:1px}
+.sim-pre{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:15px}
+.sim-pre button{font-family:var(--mono); font-size:.73rem; padding:5px 11px;
+  border:1px solid var(--line); border-radius:3px; background:var(--paper);
+  color:var(--ink); cursor:pointer; transition:border-color .12s, background .12s}
+.sim-pre button:hover{border-color:var(--sig); background:var(--sig-soft)}
+.sim-pre button:focus-visible{outline:2px solid var(--sig); outline-offset:2px}
+.sim-out{border-top:1px solid var(--line); padding-top:14px}
+.sim-head{display:flex; align-items:baseline; gap:11px; flex-wrap:wrap;
+  margin-bottom:11px}
+.sim-head .br{font-family:var(--mono); font-size:1.5rem; font-weight:600;
+  color:var(--sig); line-height:1}
+.sim-head .rt{font-family:var(--mono); font-size:1rem; font-weight:600}
+.sim-head .note-inline{font-size:.84rem; color:var(--dim)}
+.sim-grid{display:grid; grid-template-columns:auto 1fr; gap:0 16px;
+  font-family:var(--mono); font-size:.79rem}
+.sim-grid dt{color:var(--dim); padding:5px 0; white-space:nowrap}
+.sim-grid dd{margin:0; padding:5px 0}
+.sim-grid dd.hl{color:var(--sig); font-weight:600}
+@media(max-width:560px){
+  .sim-ctl{grid-template-columns:1fr}
+  .sim-grid{grid-template-columns:1fr; gap:0}
+  .sim-grid dt{padding:8px 0 0}
+  .sim-grid dd{padding:1px 0 6px}
+}
+
+/* Kernel bar charts. */
+.kern{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0 0}
+@media(max-width:620px){.kern{grid-template-columns:1fr}}
+.kern svg text{font-family:var(--mono); fill:var(--dim)}
+.kern .b-dim{fill:var(--dim)}
+.kern .b-sig{fill:var(--sig)}
+.dia .b-line{fill:var(--line)}
+.kern figure{margin:0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:14px}
+.kern h4{margin:0 0 3px; font-family:var(--mono); font-size:.82rem; font-weight:600}
+.kern p{margin:0 0 11px; font-size:.8rem; color:var(--dim)}
+
+/* Distribution bars for the 306-profile count. */
+.dist{margin:16px 0 0; font-family:var(--mono); font-size:.8rem}
+.dist-row{display:grid; grid-template-columns:2.6rem 1fr 3.4rem; gap:11px;
+  align-items:center; padding:5px 0}
+.dist-bar{height:17px; background:var(--line); border-radius:2px; position:relative}
+.dist-bar span{position:absolute; inset:0 auto 0 0; border-radius:2px;
+  background:var(--dim)}
+.dist-row.live .dist-bar span{background:var(--sig)}
+.dist-row .n{text-align:right; color:var(--dim)}
+.dist-row.live .n{color:var(--sig); font-weight:600}
+.dist-row .b{color:var(--dim)}
+.dist-row.live .b{color:var(--sig); font-weight:600}
+
+/* The claim/verdict list in "what the old notes got wrong". */
+.fixes{list-style:none; padding:0; margin:16px 0 0; display:grid; gap:1px;
+  background:var(--line); border:1px solid var(--line); border-radius:3px;
+  overflow:hidden}
+.fixes li{background:var(--panel); padding:14px 16px}
+.fixes .was{display:block; color:var(--dim); font-size:.88rem}
+.fixes .was::before{content:"was: "; font-family:var(--mono); font-size:.72rem;
+  text-transform:uppercase; letter-spacing:.06em}
+.fixes .now{display:block; margin-top:6px; font-size:.92rem}
+.fixes .now::before{content:"is: "; font-family:var(--mono); font-size:.72rem;
+  text-transform:uppercase; letter-spacing:.06em; color:var(--sig); font-weight:600}
+</style>
+</head>
+<body>
+
+<a class="back" href="../research.html">&larr; Firmware research</a>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1>Hbin, Vbin, Hbin2 and RWZM</h1>
+    <p class="lede">The fp has two unrelated ways to make a frame smaller before it
+    reaches the card, and six names for where to tap the result. Most of those names
+    are never used. This is what each one is, which the camera actually switches on,
+    and the decision that picks between them.</p>
+    <ul class="chips">
+      <li><b>Ver.5.02</b> disassembly</li>
+      <li><b>306</b> profiles checked</li>
+      <li><b>2 of 6</b> taps ever live</li>
+    </ul>
+  </div>
+</header>
+
+<div class="facts">
+  <dl>
+    <dt>Method</dt>
+    <dd>Read out of the firmware image, with the branch that decides everything
+    verified instruction by instruction rather than from a decompiler.</dd>
+    <dt>Checked against</dt>
+    <dd>An independent instruction-level trace of the same firmware run in an
+    emulator (three cases, from the FP3K handoff), and the camera's own table of
+    all 306 recording profiles. Both agree with what is below.</dd>
+    <dt>Not from a camera</dt>
+    <dd>Nothing here was measured on hardware. It is what the firmware
+    <em>would</em> do, which is a weaker claim than what a camera
+    <em>did</em> &mdash; see <a href="#open">what is still open</a>.</dd>
+  </dl>
+</div>
+
+<h2>The short version</h2>
+
+<p>Three things, if you read nothing else:</p>
+
+<ol class="steps">
+  <li>
+    <h3>Two of the six taps are real</h3>
+    <p><code>Crmf</code> and <code>Hbin2</code> are the only ones the firmware ever
+    switches on. <code>Gain</code>, <code>Vbin</code> and <code>Spc</code> are never
+    written at all, and <code>Hbin</code> &mdash; the one everybody assumed was the
+    normal case &mdash; is only ever written to a tap that is left switched off.</p>
+  </li>
+  <li>
+    <h3>Hbin2 is a second stage, not a second algorithm</h3>
+    <p>The hardware has <em>two</em> horizontal shrink stages and only <em>one</em>
+    vertical. That is exactly why the list reads Vbin, Hbin, Hbin2. They are
+    positions on a chain, not different maths.</p>
+  </li>
+  <li>
+    <h3>The two methods are not mutually exclusive</h3>
+    <p>When the resampler is on, the binning is not switched off &mdash; it is
+    <em>moved</em> to the second stage. And in the one case that matters for
+    recording, it is not even moved: both run at once.</p>
+  </li>
+</ol>
+
+<h2>What the chain looks like</h2>
+
+<p>Raw pixels from the sensor do not go straight to a file. They run down a
+correction chain &mdash; gain, defect correction, various raw-domain fixes &mdash;
+and the firmware can pull a copy out of that chain at several points and write it
+to memory. Those pull-out points are called <em>windows</em>, and there are three
+of them.</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 268" role="img" aria-labelledby="d1t">
+  <title id="d1t">The correction chain, its six tap positions, and the three output windows</title>
+  <!-- chain -->
+  <text x="0" y="14" class="t-dim" font-size="11">from the sensor &rarr; correction chain</text>
+  <g font-size="11">
+    <rect class="bx" x="0"   y="24" width="104" height="34" rx="3"/>
+    <text x="52"  y="45" text-anchor="middle">Gain</text>
+    <rect class="bx" x="112" y="24" width="104" height="34" rx="3"/>
+    <text x="164" y="45" text-anchor="middle">Crmf</text>
+    <rect class="bx" x="224" y="24" width="104" height="34" rx="3"/>
+    <text x="276" y="45" text-anchor="middle">Vbin</text>
+    <rect class="bx" x="336" y="24" width="104" height="34" rx="3"/>
+    <text x="388" y="45" text-anchor="middle">Hbin</text>
+    <rect class="bx" x="448" y="24" width="104" height="34" rx="3"/>
+    <text x="500" y="45" text-anchor="middle">Hbin2</text>
+    <rect class="bx" x="560" y="24" width="104" height="34" rx="3"/>
+    <text x="612" y="45" text-anchor="middle">Spc</text>
+  </g>
+  <g font-size="9" class="t-dim">
+    <text x="52"  y="70" text-anchor="middle">0</text>
+    <text x="164" y="70" text-anchor="middle">1</text>
+    <text x="276" y="70" text-anchor="middle">2</text>
+    <text x="388" y="70" text-anchor="middle">3</text>
+    <text x="500" y="70" text-anchor="middle">4</text>
+    <text x="612" y="70" text-anchor="middle">5</text>
+  </g>
+  <!-- flow arrows between chain boxes -->
+  <g class="ln">
+    <path d="M104 41 h8"/><path d="M216 41 h8"/><path d="M328 41 h8"/>
+    <path d="M440 41 h8"/><path d="M552 41 h8"/>
+  </g>
+  <!-- sensor in -->
+  <!-- selector bus down to a0 / a7 -->
+  <g class="ln-dot">
+    <path d="M52 78 v18"/><path d="M164 78 v18"/><path d="M276 78 v18"/>
+    <path d="M388 78 v18"/><path d="M500 78 v18"/><path d="M612 78 v18"/>
+    <path d="M52 96 H612"/>
+  </g>
+  <path class="ln-on" d="M164 96 v22 h-52 v14"/>
+  <path class="ln-on" d="M500 96 v34 h-52 v10"/>
+  <!-- a0 and a7 windows -->
+  <rect class="bx" x="46"  y="132" width="132" height="38" rx="3"/>
+  <text x="112" y="150" text-anchor="middle" font-size="11">window a0</text>
+  <text x="112" y="163" text-anchor="middle" font-size="9" class="t-dim">3-bit selector</text>
+  <rect class="bx" x="382" y="140" width="132" height="38" rx="3"/>
+  <text x="448" y="158" text-anchor="middle" font-size="11">window a7</text>
+  <text x="448" y="171" text-anchor="middle" font-size="9" class="t-dim">3-bit selector</text>
+  <!-- a1 / rwzm branch -->
+  <path class="ln" d="M664 41 h36 v50"/>
+  <rect class="bx" x="646" y="92" width="108" height="34" rx="3"/>
+  <text x="700" y="113" text-anchor="middle" font-size="11">RWZM</text>
+  <path class="ln" d="M700 126 v14"/>
+  <rect class="bx" x="646" y="140" width="108" height="38" rx="3"/>
+  <text x="700" y="158" text-anchor="middle" font-size="11">window a1</text>
+  <text x="700" y="171" text-anchor="middle" font-size="9" class="t-dim">on / off only</text>
+  <!-- to memory -->
+  <g class="ln">
+    <path d="M112 170 v26"/><path d="M448 178 v18"/><path d="M700 178 v18"/>
+    <path d="M112 196 H700"/>
+    <path d="M406 196 v20"/>
+  </g>
+  <rect class="bx" x="316" y="216" width="180" height="34" rx="3"/>
+  <text x="406" y="237" text-anchor="middle" font-size="11">memory buffer</text>
+</svg>
+<figcaption><b>a0</b> and <b>a7</b> each have a three-bit knob choosing which of six
+points on the chain to copy from. <b>a1</b> has no knob: it is hard-wired behind the
+resampler and only has an on/off switch. The red lines show a typical setting, not
+a fixed one.</figcaption>
+</figure>
+
+<p>Why three? Because recording and the live-view screen usually want different
+sizes. One window can feed the file while another feeds the display.</p>
+
+<p class="note">The six names come from a debug line the firmware prints when it
+sets this up (<code>crct1_win_a0 : CrctHbinToBufA</code> and so on). That line is
+where all four names in this page's title come from, and reading it as a list of
+alternatives is what sent the earlier notes wrong &mdash; three of the six are
+positions nothing ever selects.</p>
+
+<h2>Two different ways to shrink</h2>
+
+<p>Binning and resampling are not two settings of one thing. They are separate
+hardware doing separate jobs.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th></th><th>hbin / vbin</th><th>RWZM</th></tr></thead>
+  <tbody>
+    <tr><td>what it does</td>
+        <td>weighted average of 3 or 5 neighbouring same-colour pixels</td>
+        <td>general resampler, any ratio</td></tr>
+    <tr><td>ratios available</td>
+        <td>horizontal &divide;3 or &divide;5, vertical &divide;3 only</td>
+        <td>anything from 1.0&times; up, in 1/1024 steps</td></tr>
+    <tr><td>where</td>
+        <td>a stage <em>on</em> the correction chain</td>
+        <td>a separate path <em>beside</em> the chain</td></tr>
+    <tr><td>how it is set</td>
+        <td>an enum: 0, 1, 2</td>
+        <td>a number: 1024 means 1.0&times;</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The binning enum is tiny and the conversion is worth seeing, because it explains
+a gap people keep tripping over:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>enum</th><th>horizontal taps</th><th>vertical taps</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>1 &mdash; off</td><td>1 &mdash; off</td></tr>
+    <tr><td>1</td><td>3 &mdash; &divide;3</td><td>3 &mdash; &divide;3</td></tr>
+    <tr><td>2</td><td>5 &mdash; &divide;5</td><td><em>illegal</em></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="warn"><b>There is no &divide;2 here, and vertical has no &divide;5.</b>
+Writing an out-of-range value is not a cosmetic bug: the conversion function asserts
+and drops into an infinite loop, which on a camera means it locks up where it
+stands. Since vertical stops at &divide;3, the only binning combination that keeps a
+3:2 frame 3:2 is &divide;3 with &divide;3.</div>
+
+<p>The resampler's number is a divisor scaled by 1024, so it reads directly as a
+shrink factor:</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 132" role="img" aria-labelledby="d2t">
+  <title id="d2t">The RWZM ratio scale, showing the floor at 1024</title>
+  <!-- axis -->
+  <path class="ln" d="M60 74 H790"/>
+  <!-- forbidden zone -->
+  <rect x="0" y="58" width="60" height="32" class="b-line" opacity=".35" rx="2"/>
+  <text x="30" y="70" text-anchor="middle" font-size="9" class="t-dim">&lt;1024</text>
+  <text x="30" y="82" text-anchor="middle" font-size="9" class="t-dim">clamped</text>
+  <!-- ticks -->
+  <g font-size="10">
+    <path class="ln-on" d="M60 62 v24"/>
+    <text x="60" y="48" text-anchor="middle" class="t-sig" font-weight="600">1024</text>
+    <text x="60" y="104" text-anchor="middle" class="t-dim" font-size="9">1.0&times;</text>
+    <path class="ln" d="M225 66 v16"/>
+    <text x="225" y="48" text-anchor="middle">1280</text>
+    <text x="225" y="104" text-anchor="middle" class="t-dim" font-size="9">1.25&times;</text>
+    <path class="ln" d="M345 66 v16"/>
+    <text x="345" y="48" text-anchor="middle">1500</text>
+    <text x="345" y="104" text-anchor="middle" class="t-dim" font-size="9">1.46&times;</text>
+    <path class="ln" d="M400 66 v16"/>
+    <text x="400" y="48" text-anchor="middle">1600</text>
+    <text x="400" y="104" text-anchor="middle" class="t-dim" font-size="9">1.5625&times;</text>
+    <path class="ln" d="M560 66 v16"/>
+    <text x="560" y="48" text-anchor="middle">2048</text>
+    <text x="560" y="104" text-anchor="middle" class="t-dim" font-size="9">2&times;</text>
+    <path class="ln" d="M790 66 v16"/>
+    <text x="790" y="48" text-anchor="middle">3072</text>
+    <text x="790" y="104" text-anchor="middle" class="t-dim" font-size="9">3&times;</text>
+  </g>
+  <text x="60" y="20" font-size="10" class="t-dim">no upper check in the firmware &rarr;</text>
+</svg>
+<figcaption>The value is a divisor &times;1024, so bigger means smaller output. The
+clamp only has a floor: <code>if (1024 &gt;= ratio) ratio = 1024</code>. There is no
+upper check anywhere in the path &mdash; 3072 is simply the largest the stock tables
+use.</figcaption>
+</figure>
+
+<h2>The hardware has two horizontal stages</h2>
+
+<p>Here is the part that answers "what is Hbin2". Laying the registers out by what
+they drive:</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 216" role="img" aria-labelledby="d3t">
+  <title id="d3t">Main pipeline: one vertical binning stage and two horizontal ones</title>
+  <g font-size="11">
+    <!-- vertical -->
+    <rect class="bx" x="0" y="40" width="180" height="60" rx="3"/>
+    <text x="90" y="64" text-anchor="middle" font-weight="600">vertical</text>
+    <text x="90" y="82" text-anchor="middle" font-size="9.5" class="t-dim">0x300F0800</text>
+    <!-- h1 -->
+    <rect class="bx" x="238" y="40" width="180" height="60" rx="3"/>
+    <text x="328" y="64" text-anchor="middle" font-weight="600">horizontal &mdash; stage 1</text>
+    <text x="328" y="82" text-anchor="middle" font-size="9.5" class="t-dim">0x300F0840</text>
+    <!-- h2 -->
+    <rect class="bx" x="476" y="40" width="180" height="60" rx="3"/>
+    <text x="566" y="64" text-anchor="middle" font-weight="600">horizontal &mdash; stage 2</text>
+    <text x="566" y="82" text-anchor="middle" font-size="9.5" class="t-dim">0x300F08C0</text>
+  </g>
+  <g class="ln">
+    <path d="M180 70 h58"/><path d="M418 70 h58"/><path d="M656 70 h40"/>
+  </g>
+  <text x="704" y="74" font-size="10" class="t-dim">out</text>
+  <!-- coefficient callouts -->
+  <g font-size="9" class="t-dim">
+    <text x="90"  y="118" text-anchor="middle">coeffs 0x300F0810&hellip;0820</text>
+    <text x="90"  y="130" text-anchor="middle">9 &times; u16, /4096</text>
+    <text x="328" y="118" text-anchor="middle">coeffs 0x300F0850&hellip;085C</text>
+    <text x="328" y="130" text-anchor="middle">4 &times; 3 &times; u8, /64</text>
+    <text x="566" y="118" text-anchor="middle">coeffs 0x300F08C4</text>
+    <text x="566" y="130" text-anchor="middle">1 &times; 3 &times; u8, /64</text>
+  </g>
+  <!-- tap labels -->
+  <path class="ln-dot" d="M418 100 v46"/>
+  <path class="ln-on"  d="M656 100 v46"/>
+  <text x="418" y="162" text-anchor="middle" font-size="11" class="t-dim">tap &ldquo;Hbin&rdquo;</text>
+  <text x="656" y="162" text-anchor="middle" font-size="11" class="t-sig" font-weight="600">tap &ldquo;Hbin2&rdquo;</text>
+  <text x="418" y="178" text-anchor="middle" font-size="9" class="t-dim">selector = 3</text>
+  <text x="656" y="178" text-anchor="middle" font-size="9" class="t-sig">selector = 4</text>
+  <text x="418" y="196" text-anchor="middle" font-size="9" class="t-dim">never enabled</text>
+  <text x="656" y="196" text-anchor="middle" font-size="9" class="t-sig">36 profiles</text>
+  <!-- vertical tap -->
+  <path class="ln-dot" d="M180 100 v46"/>
+  <text x="180" y="162" text-anchor="middle" font-size="11" class="t-dim">tap &ldquo;Vbin&rdquo;</text>
+  <text x="180" y="178" text-anchor="middle" font-size="9" class="t-dim">selector = 2</text>
+  <text x="180" y="196" text-anchor="middle" font-size="9" class="t-dim">never written</text>
+</svg>
+<figcaption>One vertical stage, two horizontal ones &mdash; which is exactly the
+shape of the name list: one <code>Vbin</code>, two <code>Hbin</code>. They are
+<b>positions on a chain, not different algorithms</b>. The sub-pipeline, used for
+live view, is a cut-down copy with no second horizontal stage at all.</figcaption>
+</figure>
+
+<h3>Why a second stage exists at all</h3>
+
+<p>Because of an arbitration rule. When the resampler is active, the firmware
+sometimes has to take the horizontal binning out of stage 1 &mdash; but it does not
+throw the setting away. Four instructions, and they are worth reading literally:</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 192" role="img" aria-labelledby="d4t">
+  <title id="d4t">The horizontal binning code being moved from stage 1 to stage 2</title>
+  <!-- before -->
+  <text x="0" y="14" font-size="10" class="t-dim">before</text>
+  <rect class="bx-on" x="0" y="26" width="168" height="44" rx="3"/>
+  <text x="84" y="46" text-anchor="middle" font-size="11">stage 1</text>
+  <text x="84" y="61" text-anchor="middle" font-size="12" class="t-sig" font-weight="600">code = 1</text>
+  <rect class="bx-off" x="196" y="26" width="168" height="44" rx="3"/>
+  <text x="280" y="46" text-anchor="middle" font-size="11" class="t-dim">stage 2</text>
+  <text x="280" y="61" text-anchor="middle" font-size="12" class="t-dim">code = 0</text>
+  <!-- after -->
+  <text x="456" y="14" font-size="10" class="t-dim">after</text>
+  <rect class="bx-off" x="456" y="26" width="168" height="44" rx="3"/>
+  <text x="540" y="46" text-anchor="middle" font-size="11" class="t-dim">stage 1</text>
+  <text x="540" y="61" text-anchor="middle" font-size="12" class="t-dim">code = 0</text>
+  <rect class="bx-on" x="652" y="26" width="168" height="44" rx="3"/>
+  <text x="736" y="46" text-anchor="middle" font-size="11">stage 2</text>
+  <text x="736" y="61" text-anchor="middle" font-size="12" class="t-sig" font-weight="600">code = 1</text>
+  <!-- arrow between -->
+  <path class="ln-on" d="M380 48 h60"/>
+  <path class="ln-on" d="M432 42 l8 6 -8 6"/>
+  <!-- code -->
+  <rect class="bx" x="0" y="92" width="820" height="88" rx="3"/>
+  <g font-size="11.5">
+    <text x="16" y="114" class="t-dim">c032dda4</text><text x="110" y="114">ldrb ip, [sp, #0x22]</text><text x="330" y="114" class="t-dim">; read the horizontal code</text>
+    <text x="16" y="132" class="t-dim">c032dda8</text><text x="110" y="132" class="t-sig" font-weight="600">strb ip, [sp, #0x30]</text><text x="330" y="132" class="t-sig">; save it into stage 2's slot</text>
+    <text x="16" y="150" class="t-dim">c032ddac</text><text x="110" y="150">mov  ip, #0</text>
+    <text x="16" y="168" class="t-dim">c032ddb0</text><text x="110" y="168">strb ip, [sp, #0x22]</text><text x="330" y="168" class="t-dim">; clear stage 1</text>
+  </g>
+</svg>
+<figcaption>The setting is <b>copied to stage 2 before stage 1 is cleared</b>. Earlier
+notes in this project read the last two instructions on their own and concluded the
+binning was disabled. It is not &mdash; the work moves, which is what the second
+stage is for.</figcaption>
+</figure>
+
+<h2>The decision</h2>
+
+<p>All of the above is settings. What actually picks them is a single function
+that looks at two things &mdash; <em>how much does recording want to shrink</em> and
+<em>how much does live view want to shrink</em> &mdash; and falls into one of six
+outcomes.</p>
+
+<p class="note">This function was previously believed to be unreachable without a
+camera, on the grounds that the table holding it was built at runtime. It is not:
+the table is a constant in ROM and the decision is eight plain branches.</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 300" role="img" aria-labelledby="d5t">
+  <title id="d5t">The six outcomes of the path selector</title>
+  <g font-size="11">
+    <!-- root -->
+    <rect class="bx" x="0" y="8" width="150" height="34" rx="3"/>
+    <text x="75" y="29" text-anchor="middle">recording?</text>
+    <path class="ln" d="M150 25 h40"/>
+    <text x="168" y="20" font-size="9" class="t-dim">yes</text>
+    <path class="ln" d="M75 42 v226 h56"/>
+    <text x="84" y="60" font-size="9" class="t-dim">no</text>
+    <!-- same zoom? -->
+    <rect class="bx" x="190" y="8" width="176" height="34" rx="3"/>
+    <text x="278" y="29" text-anchor="middle">rec zoom = lv zoom?</text>
+    <path class="ln" d="M366 25 h40"/>
+    <text x="384" y="20" font-size="9" class="t-dim">yes</text>
+    <path class="ln" d="M278 42 v96 h128"/>
+    <text x="288" y="60" font-size="9" class="t-dim">no</text>
+    <!-- yes branch: unity? -->
+    <rect class="bx" x="406" y="8" width="150" height="34" rx="3"/>
+    <text x="481" y="29" text-anchor="middle">both 1.0&times;?</text>
+    <path class="ln" d="M556 25 h44"/>
+    <text x="570" y="20" font-size="9" class="t-dim">yes</text>
+    <path class="ln" d="M481 42 v28 h119"/>
+    <text x="491" y="60" font-size="9" class="t-dim">no</text>
+    <!-- no branch: which is unity -->
+    <rect class="bx" x="406" y="120" width="150" height="34" rx="3"/>
+    <text x="481" y="135" text-anchor="middle" font-size="10">which one is</text>
+    <text x="481" y="148" text-anchor="middle" font-size="10">1.0&times;?</text>
+    <path class="ln" d="M556 137 h44"/>
+    <path class="ln" d="M481 154 v40 h119"/>
+    <path class="ln" d="M481 154 v104 h119"/>
+  </g>
+  <!-- outcomes -->
+  <g font-size="11">
+    <rect class="bx" x="600" y="8" width="220" height="34" rx="3"/>
+    <text x="614" y="29" font-weight="600">B</text>
+    <text x="646" y="29" class="t-dim">Crmf</text>
+    <text x="810" y="29" text-anchor="end" class="t-dim" font-size="10">172 profiles</text>
+
+    <rect class="bx-on" x="600" y="53" width="220" height="34" rx="3"/>
+    <text x="614" y="74" font-weight="600" class="t-sig">C</text>
+    <text x="646" y="74" class="t-sig" font-weight="600">Hbin2</text>
+    <text x="810" y="74" text-anchor="end" class="t-sig" font-size="10">36 profiles</text>
+
+    <rect class="bx" x="600" y="120" width="220" height="34" rx="3"/>
+    <text x="614" y="141" font-weight="600">D</text>
+    <text x="646" y="141" class="t-dim">Crmf</text>
+    <text x="810" y="141" text-anchor="end" class="t-dim" font-size="10">81 profiles</text>
+
+    <rect class="bx-on" x="600" y="177" width="220" height="34" rx="3"/>
+    <text x="614" y="198" font-weight="600" class="t-sig">E</text>
+    <text x="646" y="198" class="t-sig" font-weight="600">RWZM</text>
+    <text x="810" y="198" text-anchor="end" class="t-sig" font-size="10">17 profiles</text>
+
+    <rect class="bx-off" x="600" y="241" width="220" height="34" rx="3"/>
+    <text x="614" y="262" font-weight="600" class="t-dim">F</text>
+    <text x="646" y="262" class="t-dim">Hbin2, both pipelines</text>
+    <text x="810" y="262" text-anchor="end" class="t-dim" font-size="10">0</text>
+
+    <rect class="bx-off" x="131" y="251" width="220" height="34" rx="3"/>
+    <text x="145" y="272" font-weight="600" class="t-dim">A</text>
+    <text x="177" y="272" class="t-dim">nothing enabled</text>
+  </g>
+  <g font-size="9" class="t-dim">
+    <text x="600" y="172" text-anchor="start">lv is 1.0&times; &rarr;</text>
+    <text x="600" y="236" text-anchor="start">neither &rarr;</text>
+    <text x="600" y="115" text-anchor="start">rec is 1.0&times; &rarr;</text>
+  </g>
+</svg>
+<figcaption>Six outcomes, of which <b>branch F is never reached by any stock
+profile</b> &mdash; the code for driving both pipelines at once is present and
+unused. Counts are over all 306 recording profiles in Ver.5.02.</figcaption>
+</figure>
+
+<h3>Try it</h3>
+
+<p>Pick what recording and live view each ask for and see which branch the firmware
+falls into. The three preset buttons are the cases that were independently traced in
+an emulator, and this page agrees with all three.</p>
+
+<div class="sim">
+  <div class="sim-pre">
+    <button type="button" data-rec="1600" data-lv="1023">Stock UHD 24p &middot; profile 429</button>
+    <button type="button" data-rec="2048" data-lv="1023">FP3K 3K 24p</button>
+    <button type="button" data-rec="1023" data-lv="1023">Stock UHD DC Crop &middot; profile 432</button>
+  </div>
+  <div class="sim-ctl">
+    <div>
+      <label for="simRec">recording wants</label>
+      <select id="simRec"></select>
+    </div>
+    <div>
+      <label for="simLv">live view wants</label>
+      <select id="simLv"></select>
+    </div>
+  </div>
+  <div class="sim-out">
+    <div class="sim-head">
+      <span class="br" id="simBranch">E</span>
+      <span class="rt" id="simRoute">CrctRwzmToBufA</span>
+      <span class="note-inline" id="simWhy"></span>
+    </div>
+    <dl class="sim-grid">
+      <dt>windows a0 / a7 / a1</dt><dd id="simWin">0 / 0 / 1</dd>
+      <dt>a0 selector</dt><dd id="simA0">1 &mdash; Crmf</dd>
+      <dt>a7 selector</dt><dd id="simA7">3 &mdash; Hbin</dd>
+      <dt>0x300F0870</dt><dd id="simFlag">1</dd>
+      <dt>main pipeline gets</dt><dd id="simMain">recording's zoom, live view's binning</dd>
+      <dt>coefficient set</dt><dd id="simRec2">record 1 &mdash; [1 14 1] / 16</dd>
+      <dt>binning and zoom on one stage?</dt><dd id="simBoth" class="hl">yes</dd>
+    </dl>
+  </div>
+</div>
+
+<h2>What is actually switched on</h2>
+
+<p>Running the recovered decision over every profile in the firmware gives the whole
+picture at once. This is the answer to "which of the six names matter":</p>
+
+<div class="dist" id="dist">
+  <div class="dist-row"><span class="b">B</span><div class="dist-bar"><span style="width:100%"></span></div><span class="n">172</span></div>
+  <div class="dist-row"><span class="b">D</span><div class="dist-bar"><span style="width:47.1%"></span></div><span class="n">81</span></div>
+  <div class="dist-row live"><span class="b">C</span><div class="dist-bar"><span style="width:20.9%"></span></div><span class="n">36</span></div>
+  <div class="dist-row live"><span class="b">E</span><div class="dist-bar"><span style="width:9.9%"></span></div><span class="n">17</span></div>
+  <div class="dist-row"><span class="b">F</span><div class="dist-bar"><span style="width:0%"></span></div><span class="n">0</span></div>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>selector</th><th>name</th><th>written by the firmware?</th><th>ever on a window that is enabled?</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>CrctGainToBufA</td><td>never</td><td><span class="tag dead">no</span></td></tr>
+    <tr><td>1</td><td>CrctCrmfToBufA</td><td>yes</td><td><span class="tag live">yes &mdash; 253 profiles</span></td></tr>
+    <tr><td>2</td><td>CrctVbinToBufA</td><td>never</td><td><span class="tag dead">no</span></td></tr>
+    <tr><td>3</td><td>CrctHbinToBufA</td><td>yes, in branch E</td><td><span class="tag dead">no &mdash; window is off</span></td></tr>
+    <tr><td>4</td><td>CrctHbin2ToBufA</td><td>yes</td><td><span class="tag live">yes &mdash; 36 profiles</span></td></tr>
+    <tr><td>5</td><td>CrctSpcToBufA</td><td>never</td><td><span class="tag dead">no</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two of six. <code>Hbin</code> is written in exactly one branch, onto a window
+that branch leaves switched off &mdash; so the tap everyone assumed was the normal
+horizontal case is the one that never carries anything.</p>
+
+<p class="note">There is a second, separate copy of this decision belonging to
+another imager object in the firmware. It was checked too, and it is narrower still:
+its selectors are only ever <code>Crmf</code> or <code>Hbin2</code>. What selects
+between the two imagers has not been traced.</p>
+
+<h2>Binning and the resampler run together</h2>
+
+<p>Branch E &mdash; recording wants to shrink, live view does not &mdash; is the one
+that matters for every UHD clip the camera has ever shot. It does something the
+earlier notes said was impossible.</p>
+
+<p>The arbitration from the earlier diagram is guarded by a flag. In branch E the
+firmware sets that flag to <code>1</code>, which makes the arbitration condition
+false, so the move never happens. And the main pipeline is handed <em>recording's
+resampler ratio</em> together with <em>live view's binning taps</em>:</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 158" role="img" aria-labelledby="d6t">
+  <title id="d6t">In branch E the main pipeline runs binning and the resampler at once</title>
+  <g font-size="11">
+    <rect class="bx" x="0" y="20" width="200" height="46" rx="3"/>
+    <text x="100" y="40" text-anchor="middle" class="t-dim" font-size="10">from the recording profile</text>
+    <text x="100" y="56" text-anchor="middle" font-weight="600">RWZM 1600 &mdash; 1.5625&times;</text>
+
+    <rect class="bx" x="0" y="88" width="200" height="46" rx="3"/>
+    <text x="100" y="108" text-anchor="middle" class="t-dim" font-size="10">from the live-view profile</text>
+    <text x="100" y="124" text-anchor="middle" font-weight="600">hbin &divide;3, vbin &divide;3</text>
+
+    <path class="ln-on" d="M200 43 h70 v26 h40"/>
+    <path class="ln-on" d="M200 111 h70 v-26"/>
+
+    <rect class="bx-on" x="310" y="52" width="230" height="46" rx="3"/>
+    <text x="425" y="72" text-anchor="middle" font-weight="600">main pipeline</text>
+    <text x="425" y="88" text-anchor="middle" font-size="10" class="t-sig">both stages active at once</text>
+
+    <path class="ln-on" d="M540 75 h50"/>
+    <rect class="bx" x="590" y="52" width="230" height="46" rx="3"/>
+    <text x="705" y="72" text-anchor="middle" font-weight="600">window a1 &rarr; buffer</text>
+    <text x="705" y="88" text-anchor="middle" font-size="10" class="t-dim">CrctRwzmToBufA</text>
+  </g>
+  <text x="310" y="128" font-size="10" class="t-dim">0x300F0870 = 1 &mdash; the flag that stops the arbitration firing</text>
+</svg>
+<figcaption>The 17 profiles in branch E are exactly the 17 whose live-view binning is
+set to &divide;3 &mdash; the two sets match row for row. All of them are UHD-class
+geometries: 3856&times;2170, 3840&times;2160 and 4096&times;2160.</figcaption>
+</figure>
+
+<h2>The two kernels</h2>
+
+<p>The weights are not hard-wired in silicon; they come from one of two 56-byte
+records in ROM, and branch E picks the second. They are strikingly different:</p>
+
+<div class="kern">
+  <figure>
+    <h4>record 0 &mdash; [1 2 1] / 4</h4>
+    <p>A real average. Used by the DC Crop path.</p>
+    <svg viewBox="0 0 240 104" role="img" aria-label="Weights 25, 50, 25 percent">
+      <g>
+        <rect x="14"  y="58" width="56" height="30" rx="2" class="b-dim"/>
+        <rect x="86"  y="28" width="56" height="60" rx="2" class="b-dim"/>
+        <rect x="158" y="58" width="56" height="30" rx="2" class="b-dim"/>
+        <path class="ln" d="M6 88 H228"/>
+      </g>
+      <g font-size="10" text-anchor="middle" class="k-lab">
+        <text x="42"  y="102">25%</text>
+        <text x="114" y="102">50%</text>
+        <text x="186" y="102">25%</text>
+      </g>
+    </svg>
+  </figure>
+  <figure>
+    <h4>record 1 &mdash; [1 14 1] / 16</h4>
+    <p>Centre carries 87.5%. Close to a straight pass-through.</p>
+    <svg viewBox="0 0 240 104" role="img" aria-label="Weights 6.25, 87.5, 6.25 percent">
+      <g>
+        <rect x="14"  y="83" width="56" height="5"  rx="2" class="b-sig"/>
+        <rect x="86"  y="18" width="56" height="70" rx="2" class="b-sig"/>
+        <rect x="158" y="83" width="56" height="5"  rx="2" class="b-sig"/>
+        <path class="ln" d="M6 88 H228"/>
+      </g>
+      <g font-size="10" text-anchor="middle" class="k-lab">
+        <text x="42"  y="102">6.25%</text>
+        <text x="114" y="102">87.5%</text>
+        <text x="186" y="102">6.25%</text>
+      </g>
+    </svg>
+  </figure>
+</div>
+
+<p>That matters for image quality: the mode that matters most for recording is using
+the kernel that barely averages at all. Independent noise analysis of real clips
+found the same thing from the other direction &mdash; 3K footage shows almost no
+correlation between neighbouring same-colour pixels, where UHD shows clearly more.</p>
+
+<div class="warn"><b>Both records only contain three-tap weights.</b> The &divide;5
+setting needs five, and those numbers are not in either record. Where they come from
+is not known &mdash; possibly fixed in silicon, possibly somewhere not yet
+found.</div>
+
+<h2>Can the resampler stretch, or enlarge?</h2>
+
+<p>Three questions that come up whenever someone wants anamorphic or a different
+aspect ratio out of this hardware.</p>
+
+<h3>Can the two axes differ?</h3>
+
+<p><b>In the code, yes, with no restriction at all.</b> Horizontal and vertical are
+two separate registers, clamped separately by two structurally identical pieces of
+code, and the enable test is an <em>or</em>: the resampler switches on if
+<em>either</em> axis is not 1.0&times;. If the hardware required a square ratio, that
+test would be the place to enforce it, and it does not.</p>
+
+<p><b>But no stock profile does it.</b> Across all 306, the live-view pair and the
+recording pair each have horizontal equal to vertical, row for row. There is no
+factory precedent to copy, and no reference footage to compare against.</p>
+
+<h3>Can it enlarge?</h3>
+
+<p><b>No.</b> The clamp is one-sided. The value is a divisor, so enlargement needs
+something below 1024, and anything at or below 1024 is pulled back to 1024. The only
+way past that is writing the hardware register directly, and whether the silicon
+does anything sensible below 1.0&times; is simply unknown &mdash; there is no
+evidence either way in the code.</p>
+
+<h3>So can the aspect ratio be changed?</h3>
+
+<p>The resampler is the only layer that can, which is worth stating plainly:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>layer</th><th>ratios it can produce</th></tr></thead>
+  <tbody>
+    <tr><td>sensor readout mode</td><td>a fixed menu of geometries</td></tr>
+    <tr><td>hbin / vbin</td><td>&divide;3 or &divide;5 horizontally, &divide;3 vertically</td></tr>
+    <tr><td><b>RWZM</b></td><td><b>anything, and the axes are independent</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Three things have to be handled if anyone tries it. The output-size formula runs
+once per axis, so the size the firmware computes changes with the ratio, and that
+size has to line up with what the producer actually writes, the canvas, and the
+preview descriptor. The four ratio fields cannot be split &mdash; setting only the
+recording pair and leaving the preview pair alone has been tried on a camera and
+produced a corrupted recording followed by a lockup. And there is no factory
+example, so there is nothing to compare a result against.</p>
+
+<p class="note">If someone does try it, branch C is the least entangled starting
+point: one pipeline, one set of numbers. Branch E is the worst, because there the
+binning and the resampler are stacked on the same pipeline and an anamorphic ratio
+would pass through both.</p>
+
+<h2>What the earlier notes got wrong</h2>
+
+<p>This page exists because three load-bearing claims in the project's own research
+notes turned out to be wrong. They are listed here rather than quietly fixed,
+because each one had already shaped work.</p>
+
+<ul class="fixes">
+  <li>
+    <span class="was">The table holding the decision is built at runtime, so the
+    decision cannot be read statically &mdash; it needs a camera.</span>
+    <span class="now">It is a constant in ROM. One line in a constructor points at
+    it. The whole decision is eight plain branches, and a question that had been
+    filed as unanswerable was open the entire time.</span>
+  </li>
+  <li>
+    <span class="was">When the resampler is on, the horizontal binning is cleared.</span>
+    <span class="now">It is copied to the second stage first. The clear is the
+    second half of a move.</span>
+  </li>
+  <li>
+    <span class="was">Every call site passes 0 to the arbitration flag, so binning
+    and the resampler can never both be active.</span>
+    <span class="now">The call site passes whatever the decision produced, and the
+    recording branch produces 1. In the 17 UHD profiles they run together.</span>
+  </li>
+</ul>
+
+<p class="note"><b>A fourth one was mine, during this work.</b> A first pass at the
+profile table concluded that a third of the stock profiles used unequal horizontal
+and vertical ratios. That was wrong: the table's columns are not laid out in the
+order of the structure they describe, and reading neighbouring columns as
+neighbouring fields turned "preview versus recording" into "horizontal versus
+vertical". The correct answer is that <em>no</em> stock profile is anamorphic. The
+error was caught by checking four known addresses against an independent
+description of the table.</p>
+
+<h2 id="open">Still open</h2>
+
+<ul>
+  <li>The five-tap coefficients for the &divide;5 horizontal setting. Neither ROM
+  record contains them.</li>
+  <li>What <code>Crmf</code> and <code>Spc</code> actually correct. <code>Spc</code>
+  is now the lowest priority of the two, since nothing can select it.</li>
+  <li>The <code>kind</code> input, and why one particular value makes the decision
+  use the a7 window instead of a0.</li>
+  <li>What sets the flag that gates the second route into stage 2.</li>
+  <li>When the second imager object is used instead of the first.</li>
+  <li>The resampler's hardware ceiling. The firmware has no upper check; 3072 is
+  just the largest value the stock tables happen to use.</li>
+  <li><b>All of it is static analysis.</b> None of the counts or branch assignments
+  above have been confirmed by instrumenting a running camera, which is the one
+  check that would turn "the firmware would do this" into "the camera does this".</li>
+</ul>
+
+<h2>Sources</h2>
+
+<p>Everything here comes from the Ver.5.02 firmware image. The branch that decides
+the path, the arbitration, the register writers and the enum conversions were each
+read as instructions rather than trusted from a decompiler. Three independent
+confirmations were available and all three agree: an emulator trace of the same
+firmware from the
+FP3K technical handoff covering three
+configurations, that handoff's separate description of the profile table, and the
+noise analysis of real clips which matches the kernel that branch E selects.</p>
+
+<p class="note">The working notes behind this page are in the repository, and
+several are in Traditional Chinese:
+<code>research/imaging-hw/notes/CRCT_PATH_SELECTOR_SOLVED.md</code> is the primary
+one, with <code>CRCT_REDUCTION_PATHS.md</code> and
+<code>REDUCTION_INVENTORY.md</code> as the earlier passes it corrects.</p>
+
+<footer>
+  <p><a href="../research.html">Firmware research</a> &middot;
+  <a href="../">fpSup</a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://github.com/ijigen/fpSup">Repository</a></p>
+</footer>
+
+<script>
+(function(){
+  var VALUES = [1023,1024,1280,1500,1536,1600,2048,3072];
+  var recSel = document.getElementById('simRec');
+  var lvSel  = document.getElementById('simLv');
+  if(!recSel || !lvSel) return;
+
+  VALUES.forEach(function(v){
+    [recSel,lvSel].forEach(function(sel){
+      var o = document.createElement('option');
+      o.value = v;
+      var eff = v <= 1024 ? 1024 : v;
+      o.textContent = v + '  —  ' + (eff/1024).toFixed(4).replace(/0+$/,'').replace(/\.$/,'') + '×'
+                      + (v <= 1024 ? '  (clamped)' : '');
+      sel.appendChild(o);
+    });
+  });
+  recSel.value = '1600';
+  lvSel.value  = '1023';
+
+  var NAMES = ['Gain','Crmf','Vbin','Hbin','Hbin2','Spc'];
+
+  function decide(rec, lv){
+    var r = rec <= 1024 ? 1024 : rec;
+    var l = lv  <= 1024 ? 1024 : lv;
+    var U = 1024;
+    var o = {a0:0,a7:0,a1:0,a0s:1,a7s:1,flag:0,rec:0,main:'',both:false};
+    if(r === l){
+      if(r === U){ o.branch='B'; o.a0=1; o.a0s=1; o.a7s=1;
+        o.main="live view's zoom and binning"; o.why='both want 1.0×, so one window serves both'; }
+      else { o.branch='C'; o.a7=1; o.a0s=1; o.a7s=4;
+        o.main="recording's zoom and binning"; o.why='both want the same shrink, so it is done once and shared'; }
+    } else if(r === U){
+      o.branch='D'; o.a0=1; o.a0s=1; o.a7s=1;
+      o.main="live view's zoom and binning"; o.why='recording wants full size, only the screen shrinks';
+    } else if(l === U){
+      o.branch='E'; o.a1=1; o.a0s=1; o.a7s=3; o.flag=1; o.rec=1;
+      o.main="recording's zoom, live view's binning"; o.both=true;
+      o.why='only recording shrinks — the dedicated resampler path';
+    } else {
+      o.branch='F'; o.a7=1; o.a0s=4; o.a7s=4;
+      o.main="recording on main, live view on the sub pipeline";
+      o.why='both shrink but differently — no stock profile does this';
+    }
+    o.route = o.a1 ? 'CrctRwzmToBufA'
+            : 'Crct' + NAMES[o.a0 ? o.a0s : (o.a7 ? o.a7s : o.a0s)] + 'ToBufA';
+    if(!o.a0 && !o.a7 && !o.a1) o.route = '(nothing enabled)';
+    return o;
+  }
+
+  function txt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
+
+  function render(){
+    var o = decide(parseInt(recSel.value,10), parseInt(lvSel.value,10));
+    txt('simBranch', o.branch);
+    txt('simRoute', o.route);
+    txt('simWhy', o.why);
+    txt('simWin', o.a0 + ' / ' + o.a7 + ' / ' + o.a1);
+    txt('simA0', o.a0s + ' — ' + NAMES[o.a0s] + (o.a0 ? '   (enabled)' : '   (window off)'));
+    txt('simA7', o.a7s + ' — ' + NAMES[o.a7s] + (o.a7 ? '   (enabled)' : '   (window off)'));
+    txt('simFlag', String(o.flag));
+    txt('simMain', o.main);
+    txt('simRec2', o.rec === 1 ? 'record 1 — [1 14 1] / 16' : 'record 0 — [1 2 1] / 4');
+    var b = document.getElementById('simBoth');
+    if(b){
+      b.textContent = o.both ? 'yes — the flag stops the move'
+                             : 'no — binning, if set, moves to stage 2';
+      b.className = o.both ? 'hl' : '';
+    }
+  }
+
+  recSel.addEventListener('change', render);
+  lvSel.addEventListener('change', render);
+
+  Array.prototype.forEach.call(document.querySelectorAll('.sim-pre button'), function(btn){
+    btn.addEventListener('click', function(){
+      recSel.value = btn.getAttribute('data-rec');
+      lvSel.value  = btn.getAttribute('data-lv');
+      render();
+    });
+  });
+
+  render();
+})();
+</script>
+
+</body>
+</html>
