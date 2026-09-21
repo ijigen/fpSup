@@ -1,0 +1,1605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The firmware shell &mdash; fpSup</title>
+<meta name="description" content="The SIGMA fp carries a factory debug shell with 77 commands and no permission gate. All 77 listed with their handler addresses and the firmware's own usage text, asked from a live camera.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/shell-commands.html">
+<meta property="og:title" content="SIGMA fp: the firmware shell">
+<meta property="og:description" content="77 commands, run from a text file on the SD card with no permission gate. The complete list, with the firmware's own usage text.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+/* ---- the primitive table gets a little more room than a plain .scroll ---- */
+table.prim td:first-child{white-space:nowrap}
+table.prim code{color:var(--sig); font-weight:600}
+
+/* ---- search + filter bar ------------------------------------------------ */
+.filter{position:sticky; top:0; z-index:5; background:var(--paper);
+  padding:12px 0 11px; margin:16px 0 0; border-bottom:1px solid var(--line)}
+.filter input[type=search]{width:100%; font-family:var(--mono); font-size:.9rem;
+  padding:9px 12px; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); color:var(--ink); -webkit-appearance:none}
+.filter input[type=search]:focus-visible{outline:2px solid var(--sig); outline-offset:1px}
+.chipbar{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; align-items:center}
+.chipbar button{font-family:var(--mono); font-size:.71rem; letter-spacing:.03em;
+  padding:5px 10px; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); color:var(--dim); cursor:pointer;
+  transition:border-color .12s, color .12s, background .12s}
+.chipbar button:hover{border-color:var(--sig); color:var(--ink)}
+.chipbar button[aria-pressed="true"]{border-color:var(--sig); color:var(--sig);
+  background:var(--sig-soft); font-weight:600}
+.chipbar button:focus-visible{outline:2px solid var(--sig); outline-offset:2px}
+.chipbar .count{margin-left:auto; font-family:var(--mono); font-size:.72rem;
+  color:var(--dim); white-space:nowrap}
+
+/* ---- command cards ------------------------------------------------------ */
+.grp{margin-top:26px}
+.grp h3{display:flex; align-items:baseline; gap:9px; margin:0 0 9px;
+  font-family:var(--mono); font-size:.76rem; font-weight:600;
+  text-transform:uppercase; letter-spacing:.08em; color:var(--dim)}
+.grp h3 .cnt{font-size:.7rem; font-weight:400; opacity:.75}
+.cmds{display:grid; gap:1px; background:var(--line); border:1px solid var(--line);
+  border-radius:3px; overflow:hidden}
+details.cmd{background:var(--panel)}
+details.cmd > summary{display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:11px 14px; cursor:pointer; list-style:none; transition:background .12s}
+details.cmd > summary::-webkit-details-marker{display:none}
+details.cmd > summary:hover{background:var(--sig-soft)}
+details.cmd > summary:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+details.cmd .nm{font-family:var(--mono); font-size:.93rem; font-weight:600;
+  color:var(--sig)}
+details.cmd .hnd{font-family:var(--mono); font-size:.72rem; color:var(--dim)}
+details[open].cmd > summary{background:var(--sig-soft)}
+details.cmd pre{margin:0; padding:13px 15px 15px; overflow-x:auto;
+  font-family:var(--mono); font-size:.76rem; line-height:1.55; color:var(--ink);
+  background:var(--paper); border-top:1px solid var(--line); white-space:pre}
+details.cmd .skip{margin:0; padding:12px 15px 14px; font-size:.86rem;
+  color:var(--dim); background:var(--paper); border-top:1px solid var(--line)}
+details.cmd .skip b{color:var(--ink)}
+.tag{font-family:var(--mono); font-size:.64rem; letter-spacing:.04em;
+  border:1px solid var(--line); border-radius:3px; padding:2px 6px;
+  color:var(--dim); white-space:nowrap}
+.tag.notrun{opacity:.8}
+.tag.writes{border-color:var(--warn); color:var(--warn); background:var(--warn-soft)}
+.tag.reset{border-color:var(--warn); color:var(--warn)}
+.tag.nonvol{border-color:var(--sig); color:var(--sig); background:var(--sig-soft);
+  font-weight:600}
+.empty{display:none; font-size:.9rem; color:var(--dim); padding:24px 2px}
+.empty.on{display:block}
+</style>
+</head>
+<body>
+
+<a class="back" href="../research.html">&larr; Firmware research</a>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1>The firmware shell</h1>
+    <p class="lede">The fp carries a factory debug shell with 77 commands. A text
+    file on the SD card runs them at boot, and nothing asks for a password. This is
+    all 77, with the firmware's own usage text where a camera could safely be asked
+    for it.</p>
+    <ul class="chips">
+      <li><b>77</b> commands</li>
+      <li><b>54</b> asked on a live camera</li>
+      <li><b>no</b> permission gate</li>
+    </ul>
+  </div>
+</header>
+
+<div class="facts">
+  <dl>
+    <dt>Where it is</dt>
+    <dd>A table at <code>0xC0BAC14C</code>: 77 entries of
+    <code>{ char name[0x14]; void *handler; }</code>, stride <code>0x18</code>,
+    NULL-terminated. The dispatcher <code>FUN_c03d9c20</code> splits the line on
+    spaces, matches the first token against that table, and calls the handler.</dd>
+    <dt>Where the text came from</dt>
+    <dd>Every usage block below was <b>printed by the camera itself</b> over the USB
+    shell. It is the firmware's own help, not a reconstruction, which is why the
+    formatting and the typos are uneven.</dd>
+    <dt>What was not run</dt>
+    <dd>21 commands could reboot the camera, write non-volatile storage,
+    drive hardware, change live settings, or drop the USB channel carrying the
+    question. They are listed with what they are and why they were skipped.</dd>
+  </dl>
+</div>
+
+<h2>Three ways in</h2>
+
+<p>The same 77 commands, reached three different ways:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>route</th><th>how</th><th>when</th></tr></thead>
+  <tbody>
+    <tr><td>AutoRun</td>
+        <td><code>_AutoRun.txt</code> on the SD card, one command per line</td>
+        <td>at boot, before most of the camera is up</td></tr>
+    <tr><td>USB shell</td>
+        <td><a href="https://github.com/ijigen/fpSup/tree/main/fp_usb_shell">fp USB Shell</a>
+        forwards a line with <code>shl &lt;cmd&gt;</code></td>
+        <td>any time the camera is on</td></tr>
+    <tr><td>UART</td>
+        <td>the interactive prompt the shell was built for</td>
+        <td>needs the pads inside the body</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">AutoRun is the one that matters, and it is worth being plain about
+why: <b>there is no permission gate</b>. A file on a memory card runs arbitrary
+commands from this list at boot. That is the whole basis of everything else on this
+site &mdash; open gate, the gyro logger, the USB shell all ride on it.</p>
+
+<h2>The write primitives</h2>
+
+<p>Most of the 77 report something. Five of them change something, and those five
+are the reason the rest of this project is possible:</p>
+
+<div class="scroll">
+<table class="prim">
+  <thead><tr><th>command</th><th>what it reaches</th></tr></thead>
+  <tbody>
+    <tr><td><code>mem set [addr] [data]</code></td>
+        <td><b>Any 32-bit write, anywhere.</b> The handler checks 4-byte alignment
+        and nothing else &mdash; no range check. That covers DRAM, SRAM and the
+        SoC's peripheral registers at <code>0x3xxxxxxx</code>.</td></tr>
+    <tr><td><code>i2c w [dev] [reg] [data]</code></td>
+        <td>Writes the I&sup2;C bus: the image sensor, the PMIC, anything on it.
+        <code>i2c list</code> names the devices.</td></tr>
+    <tr><td><code>prom write [id] [src] [size]</code></td>
+        <td><b>Non-volatile.</b> See the warning below.</td></tr>
+    <tr><td><code>port set [name] high|low</code></td>
+        <td>Drives a named GPIO pin.</td></tr>
+    <tr><td><code>menu [Setter] [value]</code></td>
+        <td>Writes a live camera setting directly &mdash; about 65 setters covering
+        ISO, shutter, aperture, drive, AE and AF.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><code>mem set</code> is the one that changes what is possible. An arbitrary poke
+available at boot, with no gate in front of it, is what turns a closed camera into
+one you can modify.</p>
+
+<h2>Safety</h2>
+
+<p>Three tiers, and they are genuinely different:</p>
+
+<ol class="steps">
+  <li>
+    <h3>Reading is safe</h3>
+    <p><code>mem get</code>, <code>mem save</code>, <code>dir</code>,
+    <code>version</code>, the RTOS introspection commands &mdash; none of these
+    change anything. Note that a read of an <em>unmapped</em> address can still
+    hang the camera, so a scan of a guessed range is not a read-only operation in
+    practice.</p>
+  </li>
+  <li>
+    <h3>A RAM or register poke is, at worst, a reboot</h3>
+    <p>Everything <code>mem set</code> and <code>port set</code> touch is volatile.
+    A bad write freezes or resets the camera; pulling the battery gets it back. This
+    is the tier all of this project's products live in.</p>
+  </li>
+  <li>
+    <h3><code>prom write</code> outlives the battery</h3>
+    <p>This is the only tier that can leave the camera permanently worse.</p>
+  </li>
+</ol>
+
+<div class="warn"><b>Two specific reasons to leave <code>prom write</code> alone.</b>
+Its size argument is rounded <em>up</em> to a 128 KB boundary
+(<code>(size + 0x1FFFF) &amp; 0xFFFE0000</code>) &mdash; a NAND erase-block &mdash;
+so writing a handful of bytes rewrites a whole block. And the <code>id</code>
+argument is just an index into a device registry whose mapping to physical parts
+<b>has not been worked out</b>. Together that means writing an unknown amount to an
+unidentified device. Back everything up with <code>prom readfile</code> first, and
+prefer not to go there at all.</div>
+
+<h2>All 77 commands</h2>
+
+<p>Search matches the command name and the usage text. Handler addresses are
+Ver.5.02.</p>
+
+<div class="filter">
+  <input type="search" id="q" placeholder="Search names and usage text&hellip;"
+         autocomplete="off" spellcheck="false" aria-label="Search commands">
+  <div class="chipbar" id="chips">
+    <button type="button" data-f="all" aria-pressed="true">all</button>
+    <button type="button" data-f="memory" aria-pressed="false">memory &amp; RTOS</button>
+    <button type="button" data-f="bus" aria-pressed="false">bus &amp; device</button>
+    <button type="button" data-f="imaging" aria-pressed="false">imaging</button>
+    <button type="button" data-f="exposure" aria-pressed="false">exposure &amp; AF</button>
+    <button type="button" data-f="io" aria-pressed="false">I/O &amp; storage</button>
+    <button type="button" data-f="notrun" aria-pressed="false">not run</button>
+    <span class="count" id="count">77 of 77</span>
+  </div>
+</div>
+
+<section class="grp" data-g="memory">
+<h3>Memory, CPU and RTOS <span class="cnt">23</span></h3>
+<div class="cmds">
+<details class="cmd" data-g="memory" data-n="mem" data-text="mem [usage]
+  memory write                  : mem set [address] [data] 
+  memory read start_address     : mem get [start address,,] 
+  memory read start-end address : mem get [start address,end address,] 
+  memory read start-start+size  : mem get [start address,,size] 
+  memory save start-end address : mem save [path] [start address,end address,] 
+  memory save start-start+size  : mem save [path] [start address,,size]">
+<summary><code class="nm">mem</code><span class="hnd">0xC03FA2A8</span><span class="tag writes">writes</span></summary>
+<pre>[usage]
+  memory write                  : mem set [address] [data] 
+  memory read start_address     : mem get [start address,,] 
+  memory read start-end address : mem get [start address,end address,] 
+  memory read start-start+size  : mem get [start address,,size] 
+  memory save start-end address : mem save [path] [start address,end address,] 
+  memory save start-start+size  : mem save [path] [start address,,size]</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="memmgr" data-text="memmgr err shl">
+<summary><code class="nm">memmgr</code><span class="hnd">0xC03FA878</span></summary>
+<pre>ERR shl</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="ddr" data-text="ddr lw         last write : ddr lw [address] (up to 8 can be set)
+  lr         last read  : ddr lr [address]
+  w          write log  : ddr w [start_address] [end_address]
+  s          stop       : ddr s
+  m          mem deadbeef : ddr m [xc_memtype] 
+[tips]  
+  enter the address in hexadecimal. (0x is not required)
+  xz01 can not log the cpu">
+<summary><code class="nm">ddr</code><span class="hnd">0xC03DFB40</span></summary>
+<pre>lw         last write : ddr lw [address] (Up to 8 can be set)
+  lr         last read  : ddr lr [address]
+  w          write log  : ddr w [start_address] [end_address]
+  s          stop       : ddr s
+  m          mem deadbeef : ddr m [XC_MEMTYPE] 
+[tips]  
+  Enter the address in hexadecimal. (0x is not required)
+  XZ01 can not log the CPU</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="dbg" data-text="dbg disp_mess  toggle display debug message
+  write_out_script writting out some command sequence to test.txt">
+<summary><code class="nm">dbg</code><span class="hnd">0xC03E04D0</span></summary>
+<pre>disp_mess  Toggle Display Debug Message
+  write_out_script Writting out some command sequence to test.txt</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="drcv" data-text="drcv input error">
+<summary><code class="nm">drcv</code><span class="hnd">0xC03DFF50</span></summary>
+<pre>Input error</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="runtime" data-text="runtime bounds     
+  nil1       
+  nil2">
+<summary><code class="nm">runtime</code><span class="hnd">0xC0407DA0</span></summary>
+<pre>bounds     
+  nil1       
+  nil2</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="status" data-text="status get        status get [param name]                        : get specific parameter value
+  get        status get [param name] [index]                : get specific array parameter value
+param list 
+  is_recording
+  app_current
+  app_lv_attribute">
+<summary><code class="nm">status</code><span class="hnd">0xC040FE78</span></summary>
+<pre>get        status get [param name]                        : Get specific parameter value
+  get        status get [param name] [index]                : Get specific array parameter value
+param list 
+  is_recording
+  app_current
+  app_lv_attribute</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="sys" data-text="sys selfrefresh sys selfrefresh [on/off]
+  selfstoptime sys selfstoptime 600 : [unit = sec / 0 = default setting]
+  selfconfig output selfrefresh setting">
+<summary><code class="nm">sys</code><span class="hnd">0xC040FA58</span></summary>
+<pre>selfrefresh sys selfrefresh [on/off]
+  selfStopTime sys selfStopTime 600 : [unit = sec / 0 = default setting]
+  selfConfig output selfRefresh Setting</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="analyzer" data-text="analyzer tskmon_start  start task monitor.
+  tskmon_stop  stop task monitor.
+  tskmon_out  output task monitor.
+  tskmon_top  output current.
+  set_logger on or off
+ex) display results in shell 
+ &gt;analyzer tskmon_start [option]
+ &gt;analyzer tskmon_stop shell
+ex) save result to media 
+ &gt;analyzer tskmon_start [option]
+ &gt;analyzer tskmon_stop \\dbg_task.txt 
+ex) save result to media 
+ &gt;analyzer tskmon_start [option]
+ &gt;analyzer tskmon_stop 
+ &gt;analyzer tskmon_out \\dbg_task.txt 
+ex) how to link analyzer 
+please type &gt;make help
+  start option 
+  arg 0 tskcount
+  arg 1 splitcount
+  arg 2 timeprefix
+  arg 3 linebufsize
+  arg 4 monitor time(ms)
+  arg 5 output file path
+ex) analyzer tskmon_start 100000 1000 1000000 100 2000 \\dbg_task.txt">
+<summary><code class="nm">analyzer</code><span class="hnd">0xC0410DA8</span></summary>
+<pre>tskmon_start  start task monitor.
+  tskmon_stop  stop task monitor.
+  tskmon_out  output task monitor.
+  tskmon_top  output current.
+  set_logger on or off
+ex) Display results in shell 
+ &gt;analyzer tskmon_start [option]
+ &gt;analyzer tskmon_stop shell
+ex) Save result to media 
+ &gt;analyzer tskmon_start [option]
+ &gt;analyzer tskmon_stop \\DBG_TASK.txt 
+ex) Save result to media 
+ &gt;analyzer tskmon_start [option]
+ &gt;analyzer tskmon_stop 
+ &gt;analyzer tskmon_out \\DBG_TASK.txt 
+ex) How to link analyzer 
+please type &gt;make help
+  start option 
+  arg 0 tskCount
+  arg 1 splitCount
+  arg 2 timePreFix
+  arg 3 lineBufSize
+  arg 4 monitor time(ms)
+  arg 5 output file path
+ex) analyzer tskmon_start 100000 1000 1000000 100 2000 \\DBG_TASK.txt</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="ts" data-text="ts ram        (dst) (src) (original size)                                       : ram to ram
+  nand       (part id (str)) (dst) (work) (comp size) (original size) (offset) : nand to ram">
+<summary><code class="nm">ts</code><span class="hnd">0xC0418388</span></summary>
+<pre>ram        (dst) (src) (original size)                                       : RAM to RAM
+  nand       (part id (str)) (dst) (work) (comp size) (original size) (offset) : NAND to RAM</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="tsd" data-text="tsd threshold  set threshold 
+  temp       get the temperature">
+<summary><code class="nm">tsd</code><span class="hnd">0xC0410638</span></summary>
+<pre>threshold  set threshold 
+  temp       Get the temperature</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="tkos" data-text="tkos tsklist    display task list
+  skdump     dump task stack : tkos skdump [tsk_id / tsk_name] [data max:unit=byte, option(default=0x200)]
+  stkchk     check task stack : tkos stkchk
+  mtx        ref mtx : tkos mtx [all]
+  task       control tasks
+  minth      check interrupt handler : tkos minth on/off/print">
+<summary><code class="nm">tkos</code><span class="hnd">0xC0411FB8</span></summary>
+<pre>tsklist    display task list
+  skdump     dump task stack : tkos skdump [tsk_id / tsk_name] [data max:unit=byte, option(default=0x200)]
+  stkchk     check task stack : tkos stkchk
+  mtx        ref mtx : tkos mtx [all]
+  task       control tasks
+  minth      check interrupt handler : tkos minth on/off/print</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="port" data-text="port drives gpio pins" data-notrun="1">
+<summary><code class="nm">port</code><span class="hnd">0xC0405E18</span><span class="tag writes">writes</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> drives GPIO pins &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="memory" data-n="pmctest" data-text="pmctest power-management test" data-notrun="1">
+<summary><code class="nm">pmctest</code><span class="hnd">0xC0405CD8</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> power-management test &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="memory" data-n="ppmgr" data-text="ppmgr sync        
+  list        
+  erase      bulk delete
+  slot       slot chk
+  filter     display filter list">
+<summary><code class="nm">ppmgr</code><span class="hnd">0xC03E7070</span></summary>
+<pre>sync        
+  list        
+  erase      Bulk delete
+  slot       slot chk
+  filter     display filter list</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="reboot" data-text="reboot reboots the camera" data-notrun="1">
+<summary><code class="nm">reboot</code><span class="hnd">0xC0405DD8</span><span class="tag reset">resets</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> reboots the camera &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="memory" data-n="rebootf" data-text="rebootf forced reboot" data-notrun="1">
+<summary><code class="nm">rebootf</code><span class="hnd">0xC0405DF8</span><span class="tag reset">resets</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> forced reboot &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="memory" data-n="poff" data-text="poff powers the camera off" data-notrun="1">
+<summary><code class="nm">poff</code><span class="hnd">0xC0405D60</span><span class="tag reset">resets</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> powers the camera off &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="memory" data-n="pw_save" data-text="pw_save sleep      enter led sleep
+  poff       enter power off
+  eco        enter eco mode">
+<summary><code class="nm">pw_save</code><span class="hnd">0xC0405FD0</span><span class="tag reset">resets</span></summary>
+<pre>sleep      enter led sleep
+  poff       enter power off
+  eco        enter eco mode</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="echo" data-text="echo">
+<summary><code class="nm">echo</code><span class="hnd">0xC03D99A0</span></summary>
+<p class="skip">No usage text: it takes no arguments, or prints nothing.</p>
+</details>
+<details class="cmd" data-g="memory" data-n="#" data-text="#">
+<summary><code class="nm">comment</code><span class="hnd">0xC03D99F0</span></summary>
+<p class="skip">No usage text: it takes no arguments, or prints nothing.</p>
+</details>
+<details class="cmd" data-g="memory" data-n="help" data-text="help shell usage 
+ command   : [command] [param1]  [param2] .... [option] [enter]
+ up / down : history (max = 30 ) 
+command list 
+  adc
+  adj
+  ae
+  af
+  analyzer
+  audio
+  battery
+  cam
+  ctrl
+  dbg
+  ddr
+  detect
+  device
+  dfi
+  dir
+  display
+  drcv
+  echo
+  event
+  evf_bri
+  extstrb
+  fl
+  fwup
+  gps
+  gui
+  help
+  i2c
+  imager
+  imu
+  key
+  led
+  lens
+  levelgauge
+  log
+  mem
+  memmgr
+  menu
+  mkdir
+  model
+  movrec
+  optic
+  pic
+  play
+  pmctest
+  poff
+  port
+  ppmgr
+  ptp
+  prom
+  pw_save
+  qr
+  reboot
+  rebootf
+  recstate
+  rec
+  rectmlg
+  runtime
+  sdcard
+  setconfig
+  setting
+  sg3
+  status
+  strb
+  sys
+  still
+  time
+  touch
+  tkos
+  ts
+  tsd
+  uart
+  ui
+  usb
+  version
+  versioncheck
+  wb
+  #
+option list 
+  loop[integer]  repeat command specified times">
+<summary><code class="nm">help</code><span class="hnd">0xC03E9598</span></summary>
+<pre>shell usage 
+ command   : [command] [param1]  [param2] .... [option] [enter]
+ up / down : history (max = 30 ) 
+command list 
+  adc
+  adj
+  ae
+  af
+  analyzer
+  audio
+  battery
+  cam
+  ctrl
+  dbg
+  ddr
+  detect
+  device
+  dfi
+  dir
+  display
+  drcv
+  echo
+  event
+  evf_bri
+  extstrb
+  fl
+  fwup
+  gps
+  gui
+  help
+  i2c
+  imager
+  imu
+  key
+  led
+  lens
+  levelgauge
+  log
+  mem
+  memmgr
+  menu
+  mkdir
+  model
+  movrec
+  optic
+  pic
+  play
+  pmctest
+  poff
+  port
+  ppmgr
+  ptp
+  prom
+  pw_save
+  qr
+  reboot
+  rebootf
+  recstate
+  rec
+  rectmlg
+  runtime
+  sdcard
+  setconfig
+  setting
+  sg3
+  status
+  strb
+  sys
+  still
+  time
+  touch
+  tkos
+  ts
+  tsd
+  uart
+  ui
+  usb
+  version
+  versioncheck
+  wb
+  #
+option list 
+  loop[integer]  repeat command specified times</pre>
+</details>
+<details class="cmd" data-g="memory" data-n="log" data-text="log usage 
+ log [command] [flag] 
+log command list 
+  act        active log flag
+  inact      inactive log flag
+  expand     expand log size
+  out        output log data
+  mode       change to the mode to output logs in timely
+  modesave   change to the shellmode 
+  level      set log level
+  time       swich time ms or us
+  toggle_print toggle logging with printing realtime or without printing
+  clear      clear log data
+  info       ロガーの設定状況やメモリ確保状況を表示する
+  analyzer   ログ分析を併用する。トグルします。
+log flaglist 
+  init  0 
+  ui  1 
+  recmgr  2 
+  cameramgr  3 
+  datamgr  4 
+  osif  5 
+  imgctl  6 
+  movie  7 
+  lens  8 
+  ae  9 
+  media  10 
+  disp  11 
+  filemgr  12 
+  gui  13 
+  battery  14 
+  event  15 
+  sigpro  16 
+  menu  17 
+  rawsim  18 
+  awb  19 
+  usb  20 
+  devope  21 
+  af  22 
+  recmgr2  23 
+  play  24 
+  led  25 
+  pic  26 
+  opt  27 
+  adj  28 
+  burst  29 
+  draw  30 
+  memmgr  31 
+  audio  32 
+  power  33 
+  strb  34 
+  gps  35">
+<summary><code class="nm">log</code><span class="hnd">0xC03F9C38</span></summary>
+<pre>usage 
+ Log [command] [flag] 
+Log Command List 
+  act        Active log flag
+  inact      Inactive log flag
+  expand     Expand log size
+  out        Output log data
+  mode       Change to the mode to output logs in timely
+  modesave   Change to the shellmode 
+  level      Set log level
+  time       swich time ms or us
+  toggle_print Toggle logging with printing realtime or without printing
+  clear      clear log data
+  info       ロガーの設定状況やメモリ確保状況を表示する
+  analyzer   ログ分析を併用する。トグルします。
+Log FlagList 
+  INIT  0 
+  UI  1 
+  RECMGR  2 
+  CAMERAMGR  3 
+  DATAMGR  4 
+  OSIF  5 
+  IMGCTL  6 
+  MOVIE  7 
+  LENS  8 
+  AE  9 
+  MEDIA  10 
+  DISP  11 
+  FILEMGR  12 
+  GUI  13 
+  BATTERY  14 
+  EVENT  15 
+  SIGPRO  16 
+  MENU  17 
+  RAWSIM  18 
+  AWB  19 
+  USB  20 
+  DEVOPE  21 
+  AF  22 
+  RECMGR2  23 
+  PLAY  24 
+  LED  25 
+  PIC  26 
+  OPT  27 
+  ADJ  28 
+  BURST  29 
+  DRAW  30 
+  MEMMGR  31 
+  AUDIO  32 
+  POWER  33 
+  STRB  34 
+  GPS  35</pre>
+</details>
+</div>
+</section>
+<section class="grp" data-g="bus">
+<h3>Bus, device and firmware <span class="cnt">14</span></h3>
+<div class="cmds">
+<details class="cmd" data-g="bus" data-n="i2c" data-text="i2c writes the i2c bus (sensor, pmic)" data-notrun="1">
+<summary><code class="nm">i2c</code><span class="hnd">0xC03E9628</span><span class="tag writes">writes</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> writes the I2C bus (sensor, PMIC) &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="bus" data-n="prom" data-text="prom eeprom" data-notrun="1">
+<summary><code class="nm">prom</code><span class="hnd">0xC0406690</span><span class="tag nonvol">non-volatile</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> EEPROM &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="bus" data-n="device" data-text="device rc         rc &lt;on/off/s1/s2/push/press/up&gt;: rc status
+  mic        mic &lt;on/off&gt;: mic status
+  evf        evf &lt;on/off/a_in/a_out/d_e/d_l&gt;: evf status
+  strb       strb &lt;on/off&gt;: strb status">
+<summary><code class="nm">device</code><span class="hnd">0xC03E2070</span></summary>
+<pre>rc         rc &lt;on/off/s1/s2/push/press/up&gt;: rc status
+  mic        mic &lt;on/off&gt;: mic status
+  evf        evf &lt;on/off/a_in/a_out/d_e/d_l&gt;: evf status
+  strb       strb &lt;on/off&gt;: strb status</pre>
+</details>
+<details class="cmd" data-g="bus" data-n="dfi" data-text="dfi invalid sub command
+  analyze    (partition id)
+  load       (partition id)">
+<summary><code class="nm">dfi</code><span class="hnd">0xC03E24E8</span></summary>
+<pre>invalid sub command
+  analyze    (partition ID)
+  load       (partition ID)</pre>
+</details>
+<details class="cmd" data-g="bus" data-n="detect" data-text="detect detection engine control" data-notrun="1">
+<summary><code class="nm">detect</code><span class="hnd">0xC03E13E8</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> detection engine control &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="bus" data-n="model" data-text="model err shl">
+<summary><code class="nm">model</code><span class="hnd">0xC03DF298</span></summary>
+<pre>ERR shl</pre>
+</details>
+<details class="cmd" data-g="bus" data-n="version" data-text="version model       = w71c1 
+xc version  = v91 
+rel version = 5.02.0.v91  
+git hash    = 13aa621060efff11aaba9b21ad925005302605cf">
+<summary><code class="nm">version</code><span class="hnd">0xC03DF218</span></summary>
+<pre>model       = w71c1 
+xc version  = V91 
+rel version = 5.02.0.V91  
+git hash    = 13aa621060efff11aaba9b21ad925005302605cf</pre>
+</details>
+<details class="cmd" data-g="bus" data-n="versioncheck" data-text="versioncheck version enforcement" data-notrun="1">
+<summary><code class="nm">versioncheck</code><span class="hnd">0xC041FCF8</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> version enforcement &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="bus" data-n="setconfig" data-text="setconfig writes configuration" data-notrun="1">
+<summary><code class="nm">setconfig</code><span class="hnd">0xC03DF2D0</span><span class="tag writes">writes</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> writes configuration &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="bus" data-n="setting" data-text="setting read       setting read          : read all parameter value
+  get        setting get [param name]                        : get specific parameter value
+  get        setting get [param name] [index]                : get specific array parameter value
+  set        setting set [param name] [param value]          : set specific parameter value
+  set        setting set [param name] [index] [param value]  : set specific array parameter value
+  write      setting write        : write all parameter value
+  load       setting load          : load all parameter from flashvalue
+  save       setting save          : save all parameter from flashvalue
+  readcom    setting readcom       : read xc_commonsavedata and print it
+  readcam    camerasetting read    : read all parameter value
+  writecam   camerasetting write  : write all parameter value
+param list 
+  cam_still_imagesize.h
+  cam_still_imagesize.v
+  cam_movie_imagesize.h
+  cam_movie_imagesize.v
+  cam_frame_rate
+  cam_aspect
+  exp_mode
+  iso
+  iso_high
+  iso_low">
+<summary><code class="nm">setting</code><span class="hnd">0xC041E330</span><span class="tag writes">writes</span></summary>
+<pre>read       setting read          : Read all parameter value
+  get        setting get [param name]                        : Get specific parameter value
+  get        setting get [param name] [index]                : Get specific array parameter value
+  set        setting set [param name] [param value]          : Set specific parameter value
+  set        setting set [param name] [index] [param value]  : Set specific array parameter value
+  write      setting write        : Write all parameter value
+  load       setting load          : load all parameter from FlashValue
+  save       setting save          : save all parameter from FlashValue
+  readcom    setting readcom       : Read XC_CommonSaveData and print it
+  readcam    CameraSetting read    : Read all parameter value
+  writecam   CameraSetting write  : Write all parameter value
+param list 
+  cam_still_imagesize.h
+  cam_still_imagesize.v
+  cam_movie_imagesize.h
+  cam_movie_imagesize.v
+  cam_frame_rate
+  cam_aspect
+  exp_mode
+  iso
+  iso_high
+  iso_low</pre>
+</details>
+<details class="cmd" data-g="bus" data-n="fwup" data-text="fwup firmware update path" data-notrun="1">
+<summary><code class="nm">fwup</code><span class="hnd">0xC03E73B0</span><span class="tag nonvol">non-volatile</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> firmware update path &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="bus" data-n="cam" data-text="cam start      camera scheduler each stop integer(1st digit)
+  stop       camera scheduler each stop integer(1st digit)
+  ls         camera scheduler start log
+  le         camera scheduler end log">
+<summary><code class="nm">cam</code><span class="hnd">0xC03DB748</span></summary>
+<pre>start      camera scheduler each stop integer(1st digit)
+  stop       camera scheduler each stop integer(1st digit)
+  ls         camera scheduler start log
+  le         camera scheduler end log</pre>
+</details>
+<details class="cmd" data-g="bus" data-n="adc" data-text="adc [usage]
+  device command : show support device list 
+    input: adc list 
+  device command : read from i2c with device name 
+    input: adc &lt;device name&gt; 
+    input: adc &lt;device name&gt; &lt;interval:dec&gt; &lt;count:dec&gt;
+  ex1:once) &gt;adc temp_battery 
+  ex2:10 times at 10 ms interval) &gt;adc temp_battery 10 10 
+  &lt;interval&gt; = 5-100 ms, &lt;count&gt; = max 20 times">
+<summary><code class="nm">adc</code><span class="hnd">0xC03DBA40</span></summary>
+<pre>[usage]
+  device command : show support device list 
+    input: adc list 
+  device command : read from i2c with device name 
+    input: adc &lt;device name&gt; 
+    input: adc &lt;device name&gt; &lt;interval:dec&gt; &lt;count:dec&gt;
+  ex1:once) &gt;adc temp_battery 
+  ex2:10 times at 10 ms interval) &gt;adc temp_battery 10 10 
+  &lt;interval&gt; = 5-100 ms, &lt;count&gt; = max 20 times</pre>
+</details>
+<details class="cmd" data-g="bus" data-n="battery" data-text="battery         500 &lt; [interval] &lt; 10000 ms 
+exit : press camera key or dial">
+<summary><code class="nm">battery</code><span class="hnd">0xC03DEAD8</span></summary>
+<pre>        500 &lt; [interval] &lt; 10000 ms 
+exit : PRESS CAMERA KEY or DIAL</pre>
+</details>
+</div>
+</section>
+<section class="grp" data-g="imaging">
+<h3>Imaging, ISP and recording <span class="cnt">12</span></h3>
+<div class="cmds">
+<details class="cmd" data-g="imaging" data-n="imager" data-text="imager sensor readout and gain state" data-notrun="1">
+<summary><code class="nm">imager</code><span class="hnd">0xC03F54E8</span><span class="tag writes">writes</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> sensor readout and gain state &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="imaging" data-n="adj" data-text="adj adjustment and calibration data" data-notrun="1">
+<summary><code class="nm">adj</code><span class="hnd">0xC03DC1A0</span><span class="tag writes">writes</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> adjustment and calibration data &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="imaging" data-n="optic" data-text="optic set        次に続くオプションに値をセット
+  get        次に続くオプションの値を得る">
+<summary><code class="nm">optic</code><span class="hnd">0xC04037D8</span></summary>
+<pre>set        次に続くオプションに値をセット
+  get        次に続くオプションの値を得る</pre>
+</details>
+<details class="cmd" data-g="imaging" data-n="pic" data-text="pic set        (pattern) (0:off, 1:only tag 2(default):reset
+  inputparam (pattern) (0(default):auto, 1:fix
+  tbsd       (pattern) (0:off, 1:adjust(default), 2:test, 3:auto, 4:user adjust, 5:get_status
+  distortion (pattern) (0(default):auto, 1:force_off, 2:test_mode
+  aberration (pattern) (0(default):auto, 1:force_off, 2:test_mode
+  shading    (pattern) (0(default):auto, 1:force_off, 2:test_mode
+  3ddnr      (pattern) (0(default):auto, 1:force_off, 2:debug_mode, 3:input_mode
+  monofilter (pattern) (param)(0:off(default), 1:off_debug_mode, 2:grayscale, 3:binalization (0&lt;param&lt;15), 4:dither_dot
+  sig_dsccal dumping out some data in signal process
+  print_cp   printing cdng playing info
+  print_tag  printing pic_data when writing tags.">
+<summary><code class="nm">pic</code><span class="hnd">0xC0404E98</span></summary>
+<pre>set        (pattern) (0:off, 1:only tag 2(default):reset
+  inputparam (pattern) (0(default):auto, 1:fix
+  tbsd       (pattern) (0:off, 1:adjust(default), 2:test, 3:auto, 4:user adjust, 5:get_status
+  distortion (pattern) (0(default):auto, 1:force_off, 2:test_mode
+  aberration (pattern) (0(default):auto, 1:force_off, 2:test_mode
+  shading    (pattern) (0(default):auto, 1:force_off, 2:test_mode
+  3ddnr      (pattern) (0(default):auto, 1:force_off, 2:debug_mode, 3:input_mode
+  monofilter (pattern) (param)(0:off(default), 1:off_debug_mode, 2:grayscale, 3:binalization (0&lt;param&lt;15), 4:dither_dot
+  sig_dsccal Dumping out some data in signal process
+  print_cp   Printing cDNG playing info
+  print_tag  Printing pic_data When writing tags.</pre>
+</details>
+<details class="cmd" data-g="imaging" data-n="wb" data-text="wb fp         set fullpower(center 1/4) mode
+  cl         clear all debug mode
+  dbg        wb dbg integer(1st digit) integer(2nd digit)
+  rec_arg    change arguments from recmgr to specified value
+  get_kelvin get kelvin and tint (works on only w71c1)">
+<summary><code class="nm">wb</code><span class="hnd">0xC0420218</span></summary>
+<pre>fp         set fullpower(center 1/4) mode
+  cl         clear all debug mode
+  dbg        wb dbg integer(1st digit) integer(2nd digit)
+  rec_arg    change arguments from recmgr to specified value
+  get_kelvin get kelvin and tint (works on only w71c1)</pre>
+</details>
+<details class="cmd" data-g="imaging" data-n="still" data-text="still still capture" data-notrun="1">
+<summary><code class="nm">still</code><span class="hnd">0xC040F130</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> still capture &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="imaging" data-n="movrec" data-text="movrec movie recording control" data-notrun="1">
+<summary><code class="nm">movrec</code><span class="hnd">0xC0403558</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> movie recording control &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="imaging" data-n="rec" data-text="rec starts and stops recording" data-notrun="1">
+<summary><code class="nm">rec</code><span class="hnd">0xC04074E8</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> starts and stops recording &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="imaging" data-n="recstate" data-text="recstate ena        enable recstate
+  disa       disable recstate
+  init       set initial value
+  movrecstwai waiting for movie rec start
+  movsavewai waiting for movie storage
+  stillsavewai waiting for still storage
+  savewai    waiting for still/movie storage">
+<summary><code class="nm">recstate</code><span class="hnd">0xC0407BA8</span></summary>
+<pre>ena        Enable RecState
+  disa       Disable RecState
+  init       Set Initial Value
+  movrecstwai Waiting for Movie Rec Start
+  movsavewai Waiting for Movie storage
+  stillsavewai Waiting for Still storage
+  savewai    Waiting for Still/Movie storage</pre>
+</details>
+<details class="cmd" data-g="imaging" data-n="rectmlg" data-text="rectmlg addtimeset  logfile infomation get
+  setfilename logfile set name">
+<summary><code class="nm">rectmlg</code><span class="hnd">0xC04077A0</span></summary>
+<pre>addtimeset  LogFile Infomation Get
+  setfilename LogFile Set Name</pre>
+</details>
+<details class="cmd" data-g="imaging" data-n="play" data-text="play playback control" data-notrun="1">
+<summary><code class="nm">play</code><span class="hnd">0xC04057C8</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> playback control &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="imaging" data-n="qr" data-text="qr test       qrcode library test
+  decode_log qrcode decode log
+  dump_yuv   dump yuv when qrcode decode
+  dump_y8    dump y8 when qrcode decode
+  play_make  qr make [write data] : make qr code and display
+  play_read  qr play_read         : read qr code from play image
+  lv_read    qr lv_read           : read qr code from lv">
+<summary><code class="nm">qr</code><span class="hnd">0xC0407298</span></summary>
+<pre>test       qrcode library test
+  decode_log qrcode decode log
+  dump_yuv   dump yuv when qrcode decode
+  dump_y8    dump y8 when qrcode decode
+  play_make  qr make [write data] : make qr code and display
+  play_read  qr play_read         : read qr code from play image
+  lv_read    qr lv_read           : read qr code from lv</pre>
+</details>
+</div>
+</section>
+<section class="grp" data-g="exposure">
+<h3>Exposure, AF and lens <span class="cnt">6</span></h3>
+<div class="cmds">
+<details class="cmd" data-g="exposure" data-n="menu" data-text="menu writes live camera settings" data-notrun="1">
+<summary><code class="nm">menu</code><span class="hnd">0xC0402F98</span><span class="tag writes">writes</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> writes live camera settings &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="exposure" data-n="ae" data-text="ae flck       flicker test
+  pline      disp pline. arg[0] = 0:acq, 1:monit, arg[1] = 0:apex, 1:not apex
+  exp        disp exposure. 0:acq, 1:monit
+  fix        fix exposure settings.
+  ylevel     disp current ylevel.">
+<summary><code class="nm">ae</code><span class="hnd">0xC03DC8E8</span></summary>
+<pre>flck       flicker test
+  pline      disp pline. arg[0] = 0:ACQ, 1:MONIT, arg[1] = 0:Apex, 1:Not Apex
+  exp        disp exposure. 0:ACQ, 1:MONIT
+  fix        fix exposure settings.
+  ylevel     disp current ylevel.</pre>
+</details>
+<details class="cmd" data-g="exposure" data-n="af" data-text="af print      toggle show the log or not
+  dbg        af dbg integer(1st digit) integer(2nd digit)
+  msr        measure
+  get        af information acquisition.">
+<summary><code class="nm">af</code><span class="hnd">0xC03DD020</span></summary>
+<pre>print      toggle show the log or not
+  dbg        af dbg integer(1st digit) integer(2nd digit)
+  msr        Measure
+  get        af information acquisition.</pre>
+</details>
+<details class="cmd" data-g="exposure" data-n="lens" data-text="lens sh         (pattern) (0(default):single, 1:burst
+  init       
+  down       
+  getfedge   0(default):inf, 1:near
+  cnvfpos    (dist=1000)
+  cnvfdist   (pos=1000)
+  setfpos    (pos=1000)
+  getfpos    get focus position
+  setfinf    set focus position to infinity
+  fc         (pattern) (0(default):scan, 1:scan
+  ir         (pattern) (0(default):test
+  cnvav      conver to valid aperture value
+  setav      (av=4096(avx1024)) [spd(avx1024/frame)]
+  getav      get aperture value
+  fwup       (filename=lensfirm.bin) [-f:force]
+  clrc       clear cache
+  print      toggle show the log or not
+  mc         attach sigmamountconverter?
+  isabs      is abs positioning?
+  ver        get current system version
+  dof        get dof pls
+  getdata    get lens data
+  emulate    set emulate
+  read       cmd read (ex:lens read 0x151e00 30)
+  tr         (on/off) no1 no2 ... no10">
+<summary><code class="nm">lens</code><span class="hnd">0xC03F8CC0</span></summary>
+<pre>sh         (pattern) (0(default):single, 1:burst
+  init       
+  down       
+  getfedge   0(default):inf, 1:near
+  cnvfpos    (dist=1000)
+  cnvfdist   (pos=1000)
+  setfpos    (pos=1000)
+  getfpos    Get focus position
+  setfinf    Set focus position to infinity
+  fc         (pattern) (0(default):scan, 1:scan
+  ir         (pattern) (0(default):test
+  cnvav      Conver to valid aperture value
+  setav      (av=4096(AVx1024)) [spd(AVx1024/frame)]
+  getav      Get aperture value
+  fwup       (filename=lensfirm.bin) [-f:force]
+  clrc       clear cache
+  print      toggle show the log or not
+  mc         Attach SigmaMountConverter?
+  isabs      is Abs Positioning?
+  ver        Get current system version
+  dof        Get dof pls
+  getdata    Get Lens data
+  emulate    Set Emulate
+  read       cmd read (ex:lens read 0x151e00 30)
+  tr         (on/off) no1 no2 ... no10</pre>
+</details>
+<details class="cmd" data-g="exposure" data-n="levelgauge" data-text="levelgauge level gauge command
+  check:   check level gauge params (ori, yaw, pitch, roll)">
+<summary><code class="nm">levelgauge</code><span class="hnd">0xC03F8E98</span></summary>
+<pre>level gauge command
+  check:   check level gauge params (ori, yaw, pitch, roll)</pre>
+</details>
+<details class="cmd" data-g="exposure" data-n="imu" data-text="imu cmd : 0 gyro adjustment
+cmd : 1 gyro output
+     cpu : 0 use mainarm
+           1 use subarm
+           2 use subarm ring buf
+     device_id : sampling device id(=0,1,2,...)
+     interval : sampling interval[msec]
+     count : sampling count
+cmd : 2 get gyro offset">
+<summary><code class="nm">imu</code><span class="hnd">0xC03EA2F8</span></summary>
+<pre>cmd : 0 gyro adjustment
+cmd : 1 gyro output
+     cpu : 0 use mainarm
+           1 use subarm
+           2 use subarm ring buf
+     device_id : sampling device id(=0,1,2,...)
+     interval : sampling interval[msec]
+     count : sampling count
+cmd : 2 get gyro offset</pre>
+</details>
+</div>
+</section>
+<section class="grp" data-g="io">
+<h3>I/O, UI and storage <span class="cnt">22</span></h3>
+<div class="cmds">
+<details class="cmd" data-g="io" data-n="strb" data-text="strb dump       eval dump
+  wait">
+<summary><code class="nm">strb</code><span class="hnd">0xC040F7F0</span></summary>
+<pre>dump       eval dump
+  wait</pre>
+</details>
+<details class="cmd" data-g="io" data-n="extstrb" data-text="extstrb test       basic test
+  print      toggle show the log or not
+  print_with_eve toggle show the log or not
+  print_state print ext strb state
+  start      task start
+  stop       task stop
+  flash      flash when task runnning
+  toggle     toggle some setting,
+  manual_flash test emmiting manual flash
+  param      set get params">
+<summary><code class="nm">extstrb</code><span class="hnd">0xC03E66E0</span></summary>
+<pre>test       basic test
+  print      toggle show the log or not
+  print_with_eve toggle show the log or not
+  print_state print ext strb state
+  start      task start
+  stop       task stop
+  flash      flash when task runnning
+  toggle     Toggle some setting,
+  manual_flash test emmiting manual flash
+  param      set get params</pre>
+</details>
+<details class="cmd" data-g="io" data-n="fl" data-text="fl rename     rename [src] [dest]
+  del        delete file(currently not working)
+  deldir     delete directory(currently not working)
+  createdmy  file create :cinemadng
+  deloneimg  delete file topframe
+  delcinemadng delete file cinemadng
+  delall     delete all file">
+<summary><code class="nm">fl</code><span class="hnd">0xC03E6BB8</span></summary>
+<pre>rename     rename [src] [dest]
+  del        delete file(currently not working)
+  delDir     delete Directory(currently not working)
+  createdmy  file create :cinemaDNG
+  deloneimg  delete file topFrame
+  delCinemaDng delete file CinemaDNG
+  delall     delete All file</pre>
+</details>
+<details class="cmd" data-g="io" data-n="led" data-text="led     normal
+    charging
+    firmup
+    movrec
+    format
+    medinit
+    stillwr
+    movwrite
+    still2
+    playlock
+    playmark
+    playrot
+    playdel
+    chargerr
+    feeding
+    output led mode list 
+    &lt;no&gt; = 0...n, &lt;level&gt; = 0:low, n:high 
+    ex) &gt;led 0 1 
+         led no 0 is on">
+<summary><code class="nm">led</code><span class="hnd">0xC03F60C8</span></summary>
+<pre>    normal
+    charging
+    firmup
+    movrec
+    format
+    medinit
+    stillwr
+    movwrite
+    still2
+    playlock
+    playmark
+    playrot
+    playdel
+    chargerr
+    feeding
+    output led mode list 
+    &lt;no&gt; = 0...n, &lt;level&gt; = 0:low, n:high 
+    ex) &gt;led 0 1 
+         LED no 0 is on</pre>
+</details>
+<details class="cmd" data-g="io" data-n="usb" data-text="usb switches usb mode — would drop this very channel" data-notrun="1">
+<summary><code class="nm">usb</code><span class="hnd">0xC0419028</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> switches USB mode — would drop this very channel &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="io" data-n="uart" data-text="uart uart &lt;baudrate&gt;       : set baudrate (example: uart 115200)
+uart def              : set default baudrate
+uart force &lt;baudrate&gt; : set baudrate (no check)
+uart info             : print current baudrate">
+<summary><code class="nm">uart</code><span class="hnd">0xC0419548</span></summary>
+<pre>uart &lt;baudrate&gt;       : set baudrate (example: uart 115200)
+uart def              : set default baudrate
+uart force &lt;baudrate&gt; : set baudrate (no check)
+uart info             : print current baudrate</pre>
+</details>
+<details class="cmd" data-g="io" data-n="gps" data-text="gps set        set: re-set gps info(get and set)
+  get_ifd    get: get gps ifd info
+  get_pos    get: get gps position/orientation
+  clr        clr: clear gps info
+  has        has: check if gps has valid info">
+<summary><code class="nm">gps</code><span class="hnd">0xC03E7BD8</span></summary>
+<pre>set        set: re-set gps info(get and set)
+  get_ifd    get: get gps ifd info
+  get_pos    get: get gps position/orientation
+  clr        clr: clear gps info
+  has        has: check if gps has valid info</pre>
+</details>
+<details class="cmd" data-g="io" data-n="audio" data-text="audio usage 
+   audio mic [int or ext]      : change to [internal or external] mic 
+   audio mic chk               : output mic type 
+   audio rec start &lt;file path&gt; : start recording (linear pcm format) ex: audio rec start \\test.wav
+   audio rec stop              : stop recording 
+   audio play media &lt;file path&gt; (sp_vol) : start playing (linear pcm format) ex: audio play \\test.wav 0x38
+   audio play beep &lt;id&gt; (vol_level) : start playing beep with/without volume(0xab to 0x00) ex: audio play beep focus 0x00
+   audio param filter           : set filter params
+   audio param alc             : set alc params 
+   audio codec vol             : set volume 
+   audio codec pga             : set pga volume 
+   audio codec micb            : set micboost volume 
+   audio dngpb start &lt;file path&gt; : start playing (linear pcm format) ex: audio play start \\test.wav
+   audio dngpb stop              : stop playing">
+<summary><code class="nm">audio</code><span class="hnd">0xC03DE338</span></summary>
+<pre>usage 
+   audio mic [int or ext]      : change to [internal or external] mic 
+   audio mic chk               : output mic type 
+   audio rec start &lt;file path&gt; : start recording (linear PCM format) ex: audio rec start \\test.wav
+   audio rec stop              : stop recording 
+   audio play media &lt;file path&gt; (sp_vol) : start playing (linear PCM format) ex: audio play \\test.wav 0x38
+   audio play beep &lt;id&gt; (vol_level) : start playing beep with/without volume(0xAB to 0x00) ex: audio play beep focus 0x00
+   audio param filter           : Set filter params
+   audio param alc             : Set ALC params 
+   audio codec vol             : Set volume 
+   audio codec pga             : Set PGA volume 
+   audio codec micb            : Set MICboost volume 
+   audio dngpb start &lt;file path&gt; : start playing (linear PCM format) ex: audio play start \\test.wav
+   audio dngpb stop              : stop playing</pre>
+</details>
+<details class="cmd" data-g="io" data-n="key" data-text="key injects key events" data-notrun="1">
+<summary><code class="nm">key</code><span class="hnd">0xC03F5DC0</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> injects key events &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+<details class="cmd" data-g="io" data-n="touch" data-text="touch tap        tap [x] [y]
+  dtap       dtap [x] [y]
+  drag       drag [start x] [start y] [end x] [end y] [point num]
+  th         th [threshold type] [value]">
+<summary><code class="nm">touch</code><span class="hnd">0xC0412958</span></summary>
+<pre>tap        tap [x] [y]
+  dtap       dtap [x] [y]
+  drag       drag [start x] [start y] [end x] [end y] [point num]
+  th         th [threshold type] [value]</pre>
+</details>
+<details class="cmd" data-g="io" data-n="ui" data-text="ui log        log &lt;on/off&gt;
+  detect_log detect ui log &lt;on/off&gt;
+  rload      load &lt;file name&gt; &lt;bank:0-6&gt; &lt;load sys set:0/1&gt;: load setting bin file
+  rsave      save &lt;file name&gt; &lt;title name:16&gt; &lt;icon name:2&gt;: save setting bin file
+  rdump      dump qr preview from current buffer
+  rget       get recommend setting type
+  rlog       rlog &lt;on/off&gt;: recommend load / save log ctrl">
+<summary><code class="nm">ui</code><span class="hnd">0xC0419BC8</span></summary>
+<pre>log        log &lt;on/off&gt;
+  detect_log detect ui log &lt;on/off&gt;
+  rload      load &lt;file name&gt; &lt;bank:0-6&gt; &lt;load sys set:0/1&gt;: load setting bin file
+  rsave      save &lt;file name&gt; &lt;title name:16&gt; &lt;icon name:2&gt;: save setting bin file
+  rdump      dump qr preview from current buffer
+  rget       get recommend setting type
+  rlog       rlog &lt;on/off&gt;: recommend load / save log ctrl</pre>
+</details>
+<details class="cmd" data-g="io" data-n="gui" data-text="gui geti       geti &lt;name&gt;: get variable (int)
+  getf       getf &lt;name&gt;: (float)
+  gets       gets &lt;name&gt;: (string)
+  seti       seti &lt;name&gt;: set variable (int)
+  setf       setf &lt;name&gt;: (float)
+  sets       sets &lt;name&gt;: (string)
+  send       send &lt;appsyncreqname&gt;
+  key        key &lt;exc_guicontroltype&gt; &lt;exc_guikeytype&gt; &lt;on_off&gt;
+  lang       lang &lt;language_id&gt;: change language
+ 0:ja, 1:en, 2:de_de, 3:fr_fr, 4:es_es, 5:it_it, 6:zh_cn, 7:zh_tw, 8:ko, 9:ru 
+ 10:nl_be, 11:pl, 12:pt_pt, 13:da, 14:sv_se, 15:nn_no, 16:fi
+  lang       lang mode &lt;0/1&gt;: change language mode 
+  scr        scr log &lt;0/1&gt;, scr set &lt;screen name&gt;
+  req        req log &lt;0/1&gt;: request log mode
+  time       time log &lt;0/1&gt;: update/render proc time log mode
+  area       area log &lt;0/1&gt;: draw area log mode
+  image      image log &lt;0/1&gt;: load image log mode
+  trace      trace log &lt;0/1&gt;: trace log mode
+  val        val : value function
+  mem        get memory information
+  gc         gc execution
+  ver        get gui version">
+<summary><code class="nm">gui</code><span class="hnd">0xC03E8F98</span></summary>
+<pre>geti       geti &lt;name&gt;: get variable (int)
+  getf       getf &lt;name&gt;: (float)
+  gets       gets &lt;name&gt;: (string)
+  seti       seti &lt;name&gt;: set variable (int)
+  setf       setf &lt;name&gt;: (float)
+  sets       sets &lt;name&gt;: (string)
+  send       send &lt;AppSyncReqName&gt;
+  key        key &lt;eXC_GuiControlType&gt; &lt;eXC_GuiKeyType&gt; &lt;on_off&gt;
+  lang       lang &lt;language_id&gt;: change language
+ 0:ja, 1:en, 2:de_DE, 3:fr_FR, 4:es_ES, 5:it_IT, 6:zh_CN, 7:zh_TW, 8:ko, 9:ru 
+ 10:nl_BE, 11:pl, 12:pt_PT, 13:da, 14:sv_SE, 15:nn_NO, 16:fi
+  lang       lang mode &lt;0/1&gt;: change language mode 
+  scr        scr log &lt;0/1&gt;, scr set &lt;screen name&gt;
+  req        req log &lt;0/1&gt;: request log mode
+  time       time log &lt;0/1&gt;: update/render proc time log mode
+  area       area log &lt;0/1&gt;: draw area log mode
+  image      image log &lt;0/1&gt;: load image log mode
+  trace      trace log &lt;0/1&gt;: trace log mode
+  val        val : value function
+  mem        get memory information
+  gc         gc execution
+  ver        get gui version</pre>
+</details>
+<details class="cmd" data-g="io" data-n="display" data-text="display first of all ,set ctrl target monitor and layer : &gt;&gt;monitor 
+  monitor    (monitornum0-1),(layer0-1)
+  hdmi       (on:1,off:0)
+  lcd        (on:1,off:0)
+  lcdtune    
+  colorbar   (on:1,off:0) (pattern)
+  zoom       (h=640),(v=480),(addr)
+  hdmi_onoff (on:1,off:0)
+  hdmi_mask  (set mask:1-n, all clr mask:0)
+  hdmi_mask_str on/off [option]
+  hdmi_edid  setting debug edid
+  reset      reset shellmode config
+  osd        (on:1,off:0) (color ex::0xffff0000 32bitred) 
+  osdpalette (on:1,off:0) path ex.) \\dump.pal 
+  image      (on:1,off:0) (monitornum0-1)
+  osdfile    path ex.) \\sample\\test.tif (layer0-1) (monitornum0-1) (h) (v) (offset)
+  text       (message)
+  faceframe  on : rect{ 0 1 2 3 } , off : {}
+  focusarea  (on:1,off:0)
+  capture    path ex.) \\sample\\dump.xci ,sel : main(1),sub(2),both(3), compress : none(0),rle(1),lz4(2)
+  palette    sel : main(1),sub(2),both(3) , isrgb : yuv(0),rgb(1) ,path(for dump) 
+  peaking    (on:1,off:0) (thresh 0~) (normal:0,custom:1)
+  address    (count 0~)
+  get_out    displ">
+<summary><code class="nm">display</code><span class="hnd">0xC03E5510</span></summary>
+<pre>first of all ,set ctrl target monitor and layer : &gt;&gt;monitor 
+  monitor    (MonitorNum0-1),(layer0-1)
+  hdmi       (on:1,off:0)
+  lcd        (on:1,off:0)
+  lcdTune    
+  colorbar   (on:1,off:0) (pattern)
+  zoom       (h=640),(v=480),(addr)
+  hdmi_onoff (on:1,off:0)
+  hdmi_mask  (set mask:1-n, all clr mask:0)
+  hdmi_mask_str ON/OFF [option]
+  hdmi_edid  setting debug edid
+  reset      reset shellmode config
+  osd        (on:1,off:0) (color ex::0xffff0000 32bitRed) 
+  osdPalette (on:1,off:0) path ex.) \\dump.pal 
+  image      (on:1,off:0) (MonitorNum0-1)
+  osdfile    path ex.) \\SAMPLE\\TEST.TIF (layer0-1) (MonitorNum0-1) (h) (v) (offset)
+  text       (message)
+  faceframe  ON : rect{ 0 1 2 3 } , OFF : {}
+  focusarea  (on:1,off:0)
+  capture    path ex.) \\SAMPLE\\dump.xci ,sel : main(1),sub(2),both(3), compress : none(0),RLE(1),LZ4(2)
+  palette    sel : main(1),sub(2),both(3) , isRgb : yuv(0),rgb(1) ,path(for Dump) 
+  peaking    (on:1,off:0) (thresh 0~) (normal:0,custom:1)
+  address    (count 0~)
+  get_out    displ</pre>
+</details>
+<details class="cmd" data-g="io" data-n="evf_bri" data-text="evf_bri ok">
+<summary><code class="nm">evf_bri</code><span class="hnd">0xC03E2F58</span></summary>
+<pre>OK</pre>
+</details>
+<details class="cmd" data-g="io" data-n="event" data-text="event send       send [event] [param]
+  getattr    getattr [filter]: output attribute each sub state.">
+<summary><code class="nm">event</code><span class="hnd">0xC03E5A28</span></summary>
+<pre>send       send [event] [param]
+  getattr    getattr [filter]: output attribute each sub state.</pre>
+</details>
+<details class="cmd" data-g="io" data-n="ptp" data-text="ptp log        ptp log
+  sts_chg    send state change command
+  focus_comp send focus driving complete command
+  capt       disp capt status
+  cmd        send command">
+<summary><code class="nm">ptp</code><span class="hnd">0xC0406C30</span></summary>
+<pre>log        ptp log
+  sts_chg    send state change command
+  focus_comp send Focus Driving Complete command
+  capt       disp capt status
+  cmd        send command</pre>
+</details>
+<details class="cmd" data-g="io" data-n="sdcard" data-text="sdcard slot       second argument
+   no input =get now slot
+   sd0      =set sdcard
+   ext      =set external storage
+  test       test [slot]
+  test2      test2 [slot] [bufsize]                  (write,read,diff)*offset
+  test3      test3 [slot] [bufsize] [loop num]       (write,read)*loop
+  test4      test4 [slot] [bufsize]                  (write,read)*offset
+  test5      test5 [slot] [au] [bufsize] [filename]  (write loop, read loop)
+  test6      test6 [slot] [filecount]                (disk full)
+  test_rw    test_rw [slot] [bufsize]                (write,read,seek,discard,delete)test
+  size       size [slot]
+  fnum       fnum [slot]
+  sdmode     
+  format     format [slot]
+  checkinit  checkinit [slot]
+  chkop      
+  readonly   readonly [on|off] [path] : change attributes | readonly time : measure time
+  mnt        mnt [slot]  : mount
+  umnt       umnt [slot] : unmount">
+<summary><code class="nm">sdcard</code><span class="hnd">0xC040B4D0</span></summary>
+<pre>slot       Second Argument
+   no input =Get Now slot
+   sd0      =Set SdCard
+   ext      =Set External storage
+  test       test [slot]
+  test2      test2 [slot] [bufsize]                  (Write,Read,Diff)*offset
+  test3      test3 [slot] [bufsize] [loop num]       (Write,Read)*loop
+  test4      test4 [slot] [bufsize]                  (Write,Read)*offset
+  test5      test5 [slot] [au] [bufsize] [filename]  (Write loop, Read loop)
+  test6      test6 [slot] [filecount]                (Disk full)
+  test_rw    test_rw [slot] [bufsize]                (Write,Read,Seek,Discard,Delete)test
+  size       size [slot]
+  fnum       fnum [slot]
+  sdmode     
+  format     format [slot]
+  checkinit  checkinit [slot]
+  chkop      
+  readOnly   readOnly [on|off] [path] : Change attributes | readOnly time : Measure time
+  mnt        mnt [slot]  : Mount
+  umnt       umnt [slot] : UnMount</pre>
+</details>
+<details class="cmd" data-g="io" data-n="dir" data-text="dir .
+2026/08/25  05:41:28 &lt;dir&gt;                .spotlight-v100
+2026/08/25  08:56:00                14116 autorun.txt
+2026/08/25  23:15:12 &lt;dir&gt;                cinema">
+<summary><code class="nm">dir</code><span class="hnd">0xC03E2980</span></summary>
+<pre>.
+2026/08/25  05:41:28 &lt;DIR&gt;                .Spotlight-V100
+2026/08/25  08:56:00                14116 AutoRun.txt
+2026/08/25  23:15:12 &lt;DIR&gt;                CINEMA</pre>
+</details>
+<details class="cmd" data-g="io" data-n="mkdir" data-text="mkdir usage : mkdir [path]">
+<summary><code class="nm">mkdir</code><span class="hnd">0xC03E2D00</span></summary>
+<pre>usage : mkdir [path]</pre>
+</details>
+<details class="cmd" data-g="io" data-n="time" data-text="time set        &gt;time set yyyy/mm/dd hh:mm:ss
+  get        &gt;time get
+  utc_offset &gt;time utc_offset [+3:00/-5:30...]
+  summer_time &gt;time summer_time [+1:00/+0:00]
+  reset      &gt;time reset
+  tickm      &gt;time get ticktimer ms
+  ticku      &gt;time get ticktimer us
+  tickmstr   &gt;time get ticktimer ms measurement start
+  tickmstp   &gt;time get ticktimer ms measurement stop">
+<summary><code class="nm">time</code><span class="hnd">0xC04112C0</span></summary>
+<pre>set        &gt;time set YYYY/MM/DD hh:mm:ss
+  get        &gt;time get
+  utc_offset &gt;time utc_offset [+3:00/-5:30...]
+  summer_time &gt;time summer_time [+1:00/+0:00]
+  reset      &gt;time reset
+  tickm      &gt;time get ticktimer ms
+  ticku      &gt;time get ticktimer us
+  tickmstr   &gt;time get ticktimer ms Measurement Start
+  tickmstp   &gt;time get ticktimer ms Measurement Stop</pre>
+</details>
+<details class="cmd" data-g="io" data-n="ctrl" data-text="ctrl mediaout   path ex.) \\sample\\test.txt
+  mediaouttest mediaoutのストレステストを行う。mediaoutのエラー切り分け用 
+  mediain    path ex.) \\test.txt
+  bufferin   listname
+  keyin      id(0~3), keyid(exc_eventmessage), iskeyonoff,iskeydisable, cmd...
+  sleep      ms
+  timmem     ex.) timmem [memory no]
+  timclr     ex.) timclr [memory no]
+  timmemwai  ex.) timmemwai [memory no] [wait time(sec)]
+  setmedia   paths ex.) \\test1.txt \\test2.txt
+  getmedia   
+  errstk     dump error stack
+  errlink    print error link addr
+  errlog     print error log
+  save_log   print saved log in nand
+  t_assert   test assert
+  t_abort    test abort
+  t_null     test nullfunc call
+  t_zero     test zero div">
+<summary><code class="nm">ctrl</code><span class="hnd">0xC040D538</span></summary>
+<pre>mediaOut   path ex.) \\SAMPLE\\TEST.TXT
+  mediaOutTest mediaOutのストレステストを行う。mediaOutのエラー切り分け用 
+  mediaIn    path ex.) \\TEST.TXT
+  bufferIn   listname
+  keyIn      id(0~3), keyID(eXC_EventMessage), iskeyOnOff,isKeyDisable, cmd...
+  sleep      ms
+  timmem     ex.) timmem [memory no]
+  timclr     ex.) timclr [memory no]
+  timmemwai  ex.) timmemwai [memory no] [wait time(sec)]
+  setmedia   paths ex.) \\TEST1.TXT \\TEST2.TXT
+  getmedia   
+  errstk     Dump Error Stack
+  errlink    print Error Link Addr
+  errlog     print Error Log
+  save_log   print saved log in nand
+  t_assert   test assert
+  t_abort    test abort
+  t_null     test nullfunc call
+  t_zero     test zero div</pre>
+</details>
+<details class="cmd" data-g="io" data-n="sg3" data-text="sg3 undocumented" data-notrun="1">
+<summary><code class="nm">sg3</code><span class="hnd">0xC040B800</span><span class="tag notrun">not run</span></summary>
+<p class="skip"><b>Not run.</b> undocumented &mdash; the usage text below it would have to be asked on a camera that can afford the consequence.</p>
+</details>
+</div>
+</section>
+
+<p class="empty" id="empty">Nothing matches that.</p>
+
+<h2>What is available at boot</h2>
+
+<p>AutoRun fires early, which cuts both ways:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>state</th><th>commands</th></tr></thead>
+  <tbody>
+    <tr><td>ready immediately</td>
+        <td>anything that is pure CPU and memory: <code>mem</code>,
+        <code>port</code>, <code>ddr</code>, <code>reboot</code>, the RTOS
+        introspection. <b>The most useful one, <code>mem set</code>, is in this
+        group.</b></td></tr>
+    <tr><td>needs its driver up</td>
+        <td><code>i2c</code>, <code>prom</code>, <code>imager</code>,
+        <code>adj</code>, <code>imu</code>, <code>pic</code>, <code>optic</code>,
+        <code>play</code>, <code>qr</code>, <code>rec</code>, <code>movrec</code>,
+        <code>menu</code>. Run too early these no-op, or act on an uninitialised
+        state.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">The exact init order per subsystem versus the moment AutoRun fires
+has not been traced command by command. In practice the products here work around
+it by doing the memory writes at boot and deferring anything driver-shaped until
+the camera has reached a known state.</p>
+
+<h2>Still open</h2>
+
+<ul>
+  <li>The <code>prom</code> device-id to physical-part mapping
+  (<code>FUN_c0041f78</code> holds the registry). Until that is read out,
+  <code>prom write</code> has no safe target.</li>
+  <li>Which <code>i2c list</code> name is the image sensor and which is the PMIC.</li>
+  <li>The per-subsystem init order against AutoRun's exact timing &mdash; whether a
+  given hardware command is safe at the moment it fires.</li>
+  <li><code>sg3</code> is undocumented and was not run; nobody knows what it is.</li>
+  <li>There is no obvious recording time-limit command. <code>rectmlg</code> only
+  stores a tag string, so any limit is probably a <code>menu</code> or
+  <code>setconfig</code> value rather than a command of its own.</li>
+</ul>
+
+<h2>Sources</h2>
+
+<p>The command table, the dispatcher and the handler addresses were read out of the
+Ver.5.02 image. The usage text was asked from a camera over the USB shell, with a
+capture sink pushed onto the shell's own output stack so the firmware's
+<code>printf</code> came back over USB instead of going to the UART pads. The
+working documents are
+<a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_COMMANDS.md">SHELL_COMMANDS</a>
+and
+<a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_CAPABILITIES.md">SHELL_CAPABILITIES</a>,
+and this page is generated from the first of them by
+<a href="https://github.com/ijigen/fpSup/blob/main/tools/gen_shell_page.py">tools/gen_shell_page.py</a>.</p>
+
+<footer>
+  <p><a href="../research.html">Firmware research</a> &middot;
+  <a href="../">fpSup</a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://github.com/ijigen/fpSup">Repository</a></p>
+</footer>
+
+<script>
+(function(){
+  var q = document.getElementById('q');
+  var chips = document.getElementById('chips');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  if(!q || !chips) return;
+  var cards = [].slice.call(document.querySelectorAll('details.cmd'));
+  var groups = [].slice.call(document.querySelectorAll('section.grp'));
+  var filter = 'all';
+
+  function apply(){
+    var term = q.value.trim().toLowerCase();
+    var shown = 0;
+    cards.forEach(function(c){
+      var okG = filter === 'all' ? true
+              : filter === 'notrun' ? c.hasAttribute('data-notrun')
+              : c.getAttribute('data-g') === filter;
+      var okT = !term || c.getAttribute('data-text').indexOf(term) !== -1;
+      var on = okG && okT;
+      c.hidden = !on;
+      if(on) shown++;
+      // a hidden card should not stay expanded behind the filter
+      if(!on) c.open = false;
+    });
+    groups.forEach(function(g){
+      var vis = g.querySelectorAll('details.cmd:not([hidden])').length;
+      g.hidden = vis === 0;
+      var c = g.querySelector('.cnt');
+      if(c) c.textContent = vis;
+    });
+    count.textContent = shown + ' of ' + cards.length;
+    empty.classList.toggle('on', shown === 0);
+  }
+
+  q.addEventListener('input', apply);
+  chips.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-f]');
+    if(!b) return;
+    filter = b.getAttribute('data-f');
+    [].forEach.call(chips.querySelectorAll('button[data-f]'), function(x){
+      x.setAttribute('aria-pressed', String(x === b));
+    });
+    apply();
+  });
+  apply();
+})();
+</script>
+
+</body>
+</html>
