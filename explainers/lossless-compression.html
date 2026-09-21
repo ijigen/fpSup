@@ -42,6 +42,8 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
 .dia .f-sig{fill:var(--sig)}
 .dia .f-line{fill:var(--line)}
 .dia .f-warn{fill:var(--warn)}
+.dia .on-bar{fill:var(--paper)}
+.dia .xmark{stroke:var(--warn)}
 
 /* ---- simulator ---------------------------------------------------------- */
 .sim{border:1px solid var(--line); border-radius:3px; background:var(--panel);
@@ -226,7 +228,7 @@ plan: compression happens <em>last</em>.</p>
     <text x="440" y="168" text-anchor="middle" class="t-dim" font-size="9.5">after this the data is a bit-stream,</text>
     <text x="440" y="181" text-anchor="middle" class="t-dim" font-size="9.5">not pixels</text>
   </g>
-  <g stroke="var(--warn)" stroke-width="2.5" fill="none">
+  <g class="xmark" stroke-width="2.5" fill="none">
     <path d="M432 114 l16 16 M448 114 l-16 16"/>
   </g>
 </svg>
@@ -322,6 +324,66 @@ plus the other two terms. Always budget with all three.</div>
 </table>
 </div>
 
+<h2>Bit depth: 8-bit is a different strategy, not an extra one</h2>
+
+<p>The codec and the raw path do not agree about what a sample is. The engine's
+setup function maps a bitdepth code to a width and refuses anything it does not
+recognise:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>code</th><th>0</th><th>1</th><th>2</th><th>3</th><th>anything else</th></tr></thead>
+  <tbody>
+    <tr><td>engine sample width</td><td>12</td><td>14</td><td>16</td><td>10</td>
+        <td><b>rejected</b> &mdash; the call returns failure</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The <em>raw output</em> path does have 8-bit &mdash; its own depth field carries
+8, 10, 12 and 14, and the debug print has a branch for each. So 8-bit frames are
+something the camera can produce, and something the compressor will not touch.</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 196" role="img" aria-labelledby="p5t">
+  <title id="p5t">Ways to get FHD 29.97 under a card's sustained rate</title>
+  <g font-size="10.5">
+    <text x="0" y="24" class="t-dim">12-bit, uncompressed</text>
+    <text x="0" y="54" class="t-dim">10-bit, uncompressed</text>
+    <text x="0" y="84" class="t-dim">8-bit, uncompressed</text>
+    <text x="0" y="114" class="t-dim">12-bit at 2.0:1</text>
+    <text x="0" y="144" class="t-dim">12-bit at 2.525:1</text>
+  </g>
+  <g>
+    <rect class="f-warn" x="180" y="12" width="640" height="17" rx="2" opacity=".85"/>
+    <rect class="f-dim"  x="180" y="42" width="536" height="17" rx="2" opacity=".7"/>
+    <rect class="f-dim"  x="180" y="72" width="432" height="17" rx="2" opacity=".7"/>
+    <rect class="f-sig"  x="180" y="102" width="328" height="17" rx="2"/>
+    <rect class="f-sig"  x="180" y="132" width="263" height="17" rx="2"/>
+  </g>
+  <g font-size="10">
+    <text x="650" y="24" text-anchor="end" class="on-bar">97.2 MB/s</text>
+    <text x="726" y="54">81.4</text>
+    <text x="622" y="84">65.6</text>
+    <text x="518" y="114">49.8</text>
+    <text x="453" y="144">39.9</text>
+  </g>
+  <!-- card line at 94 MB/s -->
+  <path class="ln-x" d="M799 6 v152"/>
+  <text x="799" y="172" text-anchor="end" font-size="9.5" class="t-warn">SD 94 MB/s</text>
+  <text x="180" y="190" font-size="9.5" class="t-dim">FHD 1936&times;1090 at 29.97, including the 78,848-byte header each frame carries</text>
+</svg>
+<figcaption>Dropping to 8-bit costs a third of the data and <b>no engine time at
+all</b>. Compressing at 2:1 saves more and is lossless, but costs 13.87&nbsp;ms a
+frame and only works at 10, 12, 14 or 16 bits. <b>You cannot have both.</b></figcaption>
+</figure>
+
+<p class="note">That makes 8-bit the cheap answer to a bandwidth problem and
+compression the expensive one. 8-bit is lossy and instant; lossless compression
+keeps every bit and costs a large slice of the frame budget. Picking 8-bit in the
+simulator therefore switches compression off rather than stacking the two &mdash;
+which is what the hardware would do.</p>
+
 <h2>How much it actually compresses</h2>
 
 <p>Read out of the engine's own size table. It moves with the picture, and the
@@ -368,7 +430,7 @@ then takes the next frame:</p>
   <title id="p4t">Serial encode-then-write versus a pipelined arrangement</title>
   <text x="0" y="14" font-size="10" class="t-dim">today &mdash; one worker, serial</text>
   <rect class="f-sig" x="0"   y="24" width="200" height="22" rx="2"/>
-  <text x="100" y="39" text-anchor="middle" font-size="10" fill="var(--paper)">encode 13.9</text>
+  <text x="100" y="39" text-anchor="middle" font-size="10" class="on-bar">encode 13.9</text>
   <rect class="f-dim" x="202" y="24" width="193" height="22" rx="2" opacity=".6"/>
   <text x="298" y="39" text-anchor="middle" font-size="10">write 13.4</text>
   <path class="ln-x" d="M600 18 v34"/>
@@ -377,7 +439,7 @@ then takes the next frame:</p>
 
   <text x="0" y="94" font-size="10" class="t-dim">OG3K at the same scale</text>
   <rect class="f-sig" x="0"   y="104" width="494" height="22" rx="2"/>
-  <text x="247" y="119" text-anchor="middle" font-size="10" fill="var(--paper)">encode 34.3</text>
+  <text x="247" y="119" text-anchor="middle" font-size="10" class="on-bar">encode 34.3</text>
   <rect class="f-dim" x="496" y="104" width="514" height="22" rx="2" opacity=".6"/>
   <path class="ln-x" d="M600 98 v34"/>
   <text x="0" y="146" font-size="9.5" class="t-warn">service time 70.0 ms &mdash; over budget before the write even finishes</text>
@@ -406,6 +468,7 @@ picture compresses, and where it is going.</p>
     <div>
       <label for="bits">bit depth</label>
       <select id="bits">
+        <option value="8">8-bit &mdash; no compression</option>
         <option value="10">10-bit</option>
         <option value="12" selected>12-bit</option>
         <option value="14">14-bit</option>
@@ -606,6 +669,9 @@ repository.</p>
 (function(){
   // Measured cost model: t(us) = 2179 + 4954.40*alignedMpix + 40.926*tiles
   var CALL_US = 2179, US_PER_MPIX = 4954.40, US_PER_TILE = 40.926;
+  // FUN_c062fff8 maps bitdepth code 0/1/2/3 to 12/14/16/10 and returns 1
+  // (failure) for anything else. 8-bit exists in the raw path, not here.
+  var ENGINE_BITS = [10, 12, 14, 16];
   var HDR = 78848;            // bytes of DNG header per frame
   var CONTENTION = 1.17;
 
@@ -655,17 +721,24 @@ repository.</p>
     var tiles = cols * rows;
     var alignedMpix = (cols * tw) * (rows * th) / 1e6;
 
+    var engineOK = ENGINE_BITS.indexOf(bits) !== -1;
+
     var encUs = CALL_US + US_PER_MPIX * alignedMpix + US_PER_TILE * tiles;
     if(contention) encUs *= CONTENTION;
-    var encMs = encUs / 1000;
+    var encMs = engineOK ? encUs / 1000 : 0;
 
     var budgetMs = 1000 / R;
-    var duty = encMs / budgetMs;
+    var duty = engineOK ? encMs / budgetMs : 0;
 
     // fraction of the pixel stream the engine can actually get through
-    var capacity = budgetMs / encMs;               // frames it can do per frame slot
-    var frac = Math.min(1, capacity);
-    if(!doSkip) frac = duty <= 1 ? 1 : 0;          // all-or-nothing without skip
+    var frac;
+    if(!engineOK){
+      frac = 0;                                    // engine rejects this depth
+    } else {
+      var capacity = budgetMs / encMs;             // frames it can do per frame slot
+      frac = Math.min(1, capacity);
+      if(!doSkip) frac = duty <= 1 ? 1 : 0;        // all-or-nothing without skip
+    }
 
     var rawBytes = W * H * bits / 8;
     var uncFrame = rawBytes + HDR;
@@ -688,7 +761,7 @@ repository.</p>
     var uncompressedAll = uncFrame * R / 1e6;
 
     // what the engine can chew through, expressed as input MB/s
-    var engineMBs = (rawBytes / (encMs / 1000)) / 1e6;
+    var engineMBs = engineOK ? (rawBytes / (encMs / 1000)) / 1e6 : 0;
 
     var writeMs = store > 0 ? (total / R) / store * 1000 : 0;
     var serialMs = encMs + writeMs;
@@ -698,7 +771,7 @@ repository.</p>
             frac:frac, payC:payC, payU:payU, hdrRate:hdrRate, total:total,
             peak:peak, uncompressedAll:uncompressedAll, engineMBs:engineMBs,
             writeMs:writeMs, serialMs:serialMs, partial:partial, doSkip:doSkip,
-            contention:contention};
+            contention:contention, engineOK:engineOK};
   }
 
   function render(){
@@ -710,7 +783,9 @@ repository.</p>
       if(wrap) wrap.classList.toggle('on', box.checked);
     });
 
-    $('rEng').innerHTML = n1(r.engineMBs) + '<small>MB/s</small>';
+    $('rEng').innerHTML = r.engineOK
+      ? n1(r.engineMBs) + '<small>MB/s</small>'
+      : '<span style="font-size:.8rem;color:var(--warn)">rejects 8-bit</span>';
     $('rCmp').innerHTML = n1(r.payC) + '<small>MB/s</small>';
     $('rUnc').innerHTML = n1(r.payU) + '<small>MB/s</small>';
     $('rTot').innerHTML = n1(r.total) + '<small>MB/s</small>';
@@ -739,7 +814,7 @@ repository.</p>
     $('tWr').style.width = (r.writeMs / tscale * 100) + '%';
     $('tBud').style.left = (r.budgetMs / tscale * 100) + '%';
     $('tBud').style.width = '0px';
-    $('lEnc').textContent = n2(r.encMs) + ' ms';
+    $('lEnc').textContent = r.engineOK ? n2(r.encMs) + ' ms' : 'not used';
     $('lWr').textContent = r.store > 0 ? n2(r.writeMs) + ' ms' : 'n/a';
     $('lTot').textContent = n2(r.serialMs) + ' ms';
     $('lBud').textContent = n2(r.budgetMs) + ' ms';
@@ -753,7 +828,17 @@ repository.</p>
     if(r.store > 0 && r.serialMs > r.budgetMs) reasons.push('serial encode+write is ' +
         n2(r.serialMs) + ' ms against ' + n2(r.budgetMs));
     v.classList.remove('ok','no');
-    if(reasons.length === 0){
+    var over8 = r.store > 0 && r.total > r.store;
+    if(!r.engineOK){
+      // 8-bit is its own bandwidth strategy, so judge it on storage alone
+      v.classList.add(over8 ? 'no' : 'ok');
+      mk.textContent = over8 ? 'does not fit' : 'fits uncompressed';
+      why.textContent = over8
+        ? 'The engine will not take 8-bit, and ' + n1(r.total) +
+          ' MB/s is over the card by ' + Math.round((r.total / r.store - 1) * 100) + '%.'
+        : 'The engine will not take 8-bit \u2014 but at ' + n1(r.total) +
+          ' MB/s it does not need to. That is what 8-bit is for.';
+    } else if(reasons.length === 0){
       v.classList.add('ok'); mk.textContent = 'fits';
       why.textContent = 'engine at ' + Math.round(r.duty * 100) + '% duty, ' +
         n1(r.total) + ' MB/s to a ' + (r.store > 0 ? r.store + ' MB/s' : 'n/a') +
@@ -768,11 +853,16 @@ repository.</p>
     d.push('<b>' + r.W + '&times;' + r.H + '</b> at ' + r.bits + '-bit, ' +
            r.tw + '&times;' + r.th + ' tiles (' + r.tiles + '), aligned ' +
            n2(r.alignedMpix) + ' Mpix');
-    d.push('encode <b>' + n2(r.encMs) + ' ms</b> = 2.18 call + ' +
+    if(!r.engineOK){
+      d.push('<b>8-bit</b> \u2014 the codec\u2019s bitdepth field only encodes ' +
+             '10 / 12 / 14 / 16, and anything else is rejected outright. ' +
+             'Everything below is the uncompressed rate.');
+    }
+    if(r.engineOK) d.push('encode <b>' + n2(r.encMs) + ' ms</b> = 2.18 call + ' +
            n2(4954.40 * r.alignedMpix / 1000 * (r.contention ? 1.17 : 1)) + ' pixels + ' +
            n2(40.926 * r.tiles / 1000 * (r.contention ? 1.17 : 1)) + ' tiles' +
            (r.contention ? ' (incl. +17% contention)' : ''));
-    d.push('compressed fraction <b>' + Math.round(r.frac * 100) + '%</b>' +
+    if(r.engineOK) d.push('compressed fraction <b>' + Math.round(r.frac * 100) + '%</b>' +
            (r.partial ? ' of every frame' : ' of the frames') +
            (r.doSkip ? '' : ' — frame-skip off, so it is all or nothing'));
     d.push('uncompressed reference <b>' + n1(r.uncompressedAll) + ' MB/s</b> · ' +
