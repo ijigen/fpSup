@@ -146,9 +146,8 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
     <dt><span class="en">What is not solved</span><span class="zh">還沒解的</span></dt>
     <dd class="en">Four of the 25 metadata fields are always zero, two are read from a single
     mode's investigation rather than proven across the table, and the 162-field
-    register record is almost entirely unmapped.</dd>
-    <dd class="zh">25 個 metadata 欄位裡有四個永遠是 0;兩個的名字是從單一模式的調查來的,
-    沒有在整張表上驗證過;而 162 個欄位的 register record <strong>幾乎完全沒被解開</strong>。</dd>
+    register record is almost entirely unmapped. Timing <em>is</em> solved, so rolling shutter and exact frame rate are computed for all 70.</dd>
+    <dd class="zh">25 個 metadata 欄位裡有四個永遠是 0;兩個的名字是從單一模式的調查來的,沒有在整張表上驗證過;而 162 個欄位的 register record <strong>幾乎完全沒被解開</strong>。時序表<em>已經</em>解開了,所以 70 個模式的捲簾和精確格率都算得出來。</dd>
   </dl>
 </div>
 
@@ -173,10 +172,10 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
     <rect class="bx" x="570" y="16" width="250" height="56" rx="3"/>
     <text x="695" y="38" text-anchor="middle" font-weight="600" class="en">timing</text>
     <text x="695" y="38" text-anchor="middle" font-weight="600" class="zh">時序</text>
-    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim en">near 0xC0B59A40</text>
-    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim zh">0xC0B59A40 附近</text>
-    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim en">hmax / vmax &middot; extent unclear</text>
-    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim zh">hmax / vmax &middot; 範圍未定</text>
+    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim en">0xC0B59500 &middot; 70 &times; 0x20</text>
+    <text x="695" y="53" text-anchor="middle" font-size="9" class="t-dim zh">0xC0B59500 &middot; 70 &times; 0x20</text>
+    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim en">hmax / vmax &middot; rolling shutter</text>
+    <text x="695" y="66" text-anchor="middle" font-size="9" class="t-dim zh">hmax / vmax &middot; 捲簾</text>
   </g>
   <g class="ln">
     <path d="M125 72 v30"/><path d="M410 72 v30"/><path d="M695 72 v30"/>
@@ -196,13 +195,10 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
 </svg>
 <figcaption class="en">All three are keyed by the mode id in their first word, and the register
 record's ids appear in the same order as metadata's &mdash; which is how the stride
-of <code>0x288</code> was confirmed. <b>The timing table's extent could not be
-pinned down</b>: walking it by a plausible stride runs into the metadata table
-instead of stopping cleanly.</figcaption>
+of <code>0x288</code> was confirmed. The timing table is indexed by the <b>same row number</b>, not looked up by mode id.</figcaption>
 <figcaption class="zh">三張表都用各自第一個字的 mode id 當鍵,而且 register record 的 id
 順序跟 metadata 完全一樣 —— <code>0x288</code> 這個 stride 就是這樣確認的。
-<b>但時序表的範圍抓不出來</b>:用看起來合理的 stride 往外走,會撞進 metadata 表,
-而不是乾淨地停下來。</figcaption>
+時序表則是用<b>同一個列號</b>索引,不是用 mode id 去查。</figcaption>
 </figure>
 
 <h2><span class="en">Every field in the metadata record</span><span class="zh">metadata 記錄的每一個欄位</span></h2>
@@ -331,9 +327,9 @@ one mode's investigation and has not been checked across the table, and
 <h2><span class="en">All 70 modes</span><span class="zh">全部 70 個模式</span></h2>
 
 <p class="en">Sort by any column. Search matches the mode id and the raster. &ldquo;Rel.&rdquo;
-is the raster width against the full 6064, so &times;2 means half-width readout.</p>
+is the raster width against the full 6064, so &times;2 means half-width readout. <b>fps</b> and <b>roll ms</b> are computed from the timing table; <b>nom</b> is the metadata field that lies, kept alongside for comparison.</p>
 <p class="zh">點任一欄的標題可以排序。搜尋可以打 mode id 或光柵尺寸。
-「Rel.」是光柵寬度相對於全寬 6064 的倍率,所以 &times;2 就是半寬讀出。</p>
+「Rel.」是光柵寬度相對於全寬 6064 的倍率,所以 &times;2 就是半寬讀出。<br><b>格率</b>和<b>捲簾</b>是從時序表算出來的真實值;<b>標稱</b>是 metadata 裡那個會騙人的欄位,擺旁邊對照。</p>
 
 <div class="tblbar">
   <input type="search" id="q" placeholder="Search mode id or raster / 搜尋 mode id 或光柵尺寸" autocomplete="off" spellcheck="false" aria-label="Search modes">
@@ -358,7 +354,9 @@ is the raster width against the full 6064, so &times;2 means half-width readout.
     <th data-k="17"><span class="en">aspect</span><span class="zh">比例</span></th>
     <th data-k="merge"><span class="en">merge</span><span class="zh">合併</span></th>
     <th data-k="11"><span class="en">bits</span><span class="zh">位深</span></th>
-    <th data-k="12"><span class="en">fps</span><span class="zh">fps</span></th>
+    <th data-k="rfps"><span class="en">fps</span><span class="zh">格率</span></th>
+    <th data-k="roll"><span class="en">roll ms</span><span class="zh">捲簾 ms</span></th>
+    <th data-k="12"><span class="en">nom</span><span class="zh">標稱</span></th>
     <th data-k="crop"><span class="en">output crop</span><span class="zh">輸出裁切</span></th>
     <th data-k="18"><span class="en">readout</span><span class="zh">讀出</span></th>
     <th data-k="19"><span class="en">vblank</span><span class="zh">vblank</span></th>
@@ -410,44 +408,67 @@ known.</div>
 open gate 在感光元件層做的所有事 —— 改借來的模式的時序 —— 走的是時序那些值,
 不是這些。它們控制什麼,就是不知道。</div>
 
-<h2><span class="en">Timing &mdash; partially mapped</span><span class="zh">時序 &mdash; 只解開一部分</span></h2>
+<h2><span class="en">Timing &mdash; solved</span><span class="zh">時序 &mdash; 解開了</span></h2>
 
-<p class="en">Frame rate and rolling shutter come from <code>hmax</code>, <code>vmax</code> and
-a tail value, not from the metadata field. For mode 12 the record near
-<code>0xC0B59A40</code> decodes cleanly:</p>
+<p class="en">Frame rate and rolling shutter come from <code>hmax</code>,
+<code>vmax</code> and a tail value, not from the metadata field. The timing table is
+the descriptor's <em>first</em> pointer: <code>0xC0B59500</code>, 70 records of
+<code>0x20</code> bytes, <b>indexed by the same row number as metadata</b> &mdash;
+all 70 rows carry a matching mode id.</p>
 <p class="zh">格率和捲簾時間來自 <code>hmax</code>、<code>vmax</code> 跟一個 tail 值,
-<strong>不是來自 metadata 那個欄位</strong>。mode 12 在 <code>0xC0B59A40</code>
-附近那筆解得很乾淨:</p>
+<strong>不是來自 metadata 那個欄位</strong>。時序表是描述子的<em>第一個</em>指標:
+<code>0xC0B59500</code>,70 筆,每筆 <code>0x20</code> bytes,
+<b>用跟 metadata 相同的列號索引</b> —— 70 筆的 mode id 全部對得上。</p>
 
-<pre style="font-family:var(--mono); font-size:.76rem; line-height:1.6; overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:12px 14px"><span class="en">+0x00   12              mode id
-+0x04   330, 330        hmax, tail
-+0x08   910, 6          vmax, ?
-+0x24   911, 911        ?
+<pre style="font-family:var(--mono); font-size:.76rem; line-height:1.6; overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:12px 14px"><span class="en">+0x00   mode id
++0x04   hmax, tail          two u16
++0x08   vmax, ?             two u16
 
-frame period   330 x 909 + 330 = 300,300 cycles @ 72 MHz
-actual rate    239.760240 fps          exactly, 0 ppm
-rolling        330 x 672 / 72 MHz  =   3.080 ms</span><span class="zh">+0x00   12          mode id
-+0x04   330, 330    hmax, tail
-+0x08   910, 6      vmax, ?
-+0x24   911, 911    ?
+frame period   hmax x (vmax-1) + tail   cycles @ 72 MHz
+rolling        hmax x height / 72 MHz</span><span class="zh">+0x00   mode id
++0x04   hmax, tail          兩個 u16
++0x08   vmax, ?             兩個 u16
 
-每幀週期  330 x 909 + 330 = 300,300 個時脈 @ 72 MHz
-實際格率  239.760240 fps      剛好,誤差 0 ppm
-捲簾      330 x 672 / 72 MHz = 3.080 ms</span></pre>
+每幀週期  hmax x (vmax-1) + tail   個時脈 @ 72 MHz
+捲簾      hmax x 高度 / 72 MHz</span></pre>
 
-<div class="warn en"><b>The table's extent could not be established.</b> Walking outward
-from the mode-12 record by the stride that makes its first words look like mode ids
-(<code>0x40</code>) runs straight into the metadata table rather than stopping, and
-the ids it produces do not cover all 70 modes. Either the stride is wrong, the table
-is shorter than 70 entries, or it is indexed some other way. <b>Only the mode-12
-record is trustworthy here</b>, and it is trustworthy because the HSW work derived
-239.760240 fps from it independently.</div>
-<div class="warn zh"><b>這張表的範圍我沒能定出來。</b>
-從 mode 12 那筆往外走,用那個「能讓首字看起來像 mode id」的 stride(<code>0x40</code>),
-會<strong>直接撞進 metadata 表</strong>而不是停下來,而且走出來的 id 也涵蓋不了全部 70 個模式。
-可能是 stride 錯了、可能這張表不到 70 筆、也可能它根本用別的方式索引。<br>
-<b>所以這裡只有 mode 12 那一筆可信</b> —— 而它可信,是因為 HSW 那邊
-獨立從它推出了 239.760240 fps。</div>
+<p class="en">Checked against every rolling-shutter and frame-rate figure the project
+had recorded independently &mdash; nine of them, across six modes:</p>
+<p class="zh">拿專案裡所有獨立記錄過的捲簾與格率數字來對 —— 九個,橫跨六個模式:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr>
+    <th>mode</th><th><span class="en">computed here</span><span class="zh">這裡算出來</span></th>
+    <th><span class="en">recorded elsewhere</span><span class="zh">別處記錄的</span></th></tr></thead>
+  <tbody>
+    <tr><td>12</td><td>3.080 ms &middot; 239.7602 fps</td><td>3.08 ms &middot; 239.760240 fps</td></tr>
+    <tr><td>8</td><td>6.160 ms</td><td>6.16 ms</td></tr>
+    <tr><td>139</td><td>8.307 ms</td><td>8.31 ms</td></tr>
+    <tr><td>98</td><td>12.435 ms</td><td>12.44 ms</td></tr>
+    <tr><td>3</td><td>24.982 ms &middot; 29.9736 fps</td><td>24.98 ms &middot; 29.97 fps</td></tr>
+    <tr><td>121</td><td>24.9997 fps</td><td>24.9997 fps</td></tr>
+    <tr><td>97</td><td>39.1572 fps</td><td>39.16 fps</td></tr>
+    <tr><td>0</td><td>19.1273 fps</td><td>19.13 fps</td></tr>
+    <tr><td>106</td><td>10.556 ms</td><td>10.556 ms</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note en"><b>What went wrong the first time.</b> This table was written up
+as unsolvable a day earlier. The stride was taken as <code>0x40</code> &mdash;
+exactly two records &mdash; which made a walk outward skip every other entry, produce
+an id list that covered only half the modes, and run past the end into the metadata
+table. The descriptor settles it without guessing: its first two
+<code>{pointer, count}</code> pairs are <code>{0xC0B59500, 70}</code> and
+<code>{0xC0B59DC0, 70}</code>, and the gap between them is exactly
+70&nbsp;&times;&nbsp;<code>0x20</code>.</div>
+<div class="note zh"><b>前一天為什麼弄錯。</b>這張表在一天前被寫成「解不開」。
+當時把 stride 當成 <code>0x40</code> —— 剛好是<strong>兩筆</strong>的長度 ——
+於是往外走時每次都跳過一筆,湊出來的 id 只涵蓋一半的模式,而且還會走過頭撞進 metadata 表。<br>
+描述子不用猜就能定案:它前兩個 <code>{指標, 筆數}</code> 是
+<code>{0xC0B59500, 70}</code> 和 <code>{0xC0B59DC0, 70}</code>,
+而兩者的間距剛好是 70&nbsp;&times;&nbsp;<code>0x20</code>。</div>
 
 <h2><span class="en">What is still open</span><span class="zh">還沒解的部分</span></h2>
 
@@ -455,9 +476,8 @@ record is trustworthy here</b>, and it is trustworthy because the HSW work deriv
   <li class="en">The 133 varying fields of the register record &mdash; the biggest gap on this
   page by a wide margin.</li>
   <li class="zh">register record 那 133 個會變的欄位 —— 這頁裡差距最大的一塊空白。</li>
-  <li class="en">The timing table's stride, extent and indexing. Without it, rolling shutter and
-  exact frame rate can only be quoted for modes somebody has already investigated.</li>
-  <li class="zh">時序表的 stride、範圍和索引方式。沒有這個,捲簾時間和精確格率就只能引用「已經有人調查過」的那幾個模式。</li>
+  <li class="en">The unnamed half of the timing record's second word, and the five words after it. Frame rate and rolling shutter do not need them, so they were never chased.</li>
+  <li class="zh">時序記錄第二個字裡沒命名的那半邊,以及它後面那五個字。算格率和捲簾用不到它們,所以一直沒去追。</li>
   <li class="en">Why the metadata record carries its geometry three times, and why
   <b>mode 100</b> is the one record where the third copy disagrees.</li>
   <li class="zh">metadata 記錄為什麼要把幾何存三次,以及為什麼 <b>mode 100</b> 是唯一第三份不一致的那一筆。</li>
@@ -494,83 +514,84 @@ someone else's conclusion.</p>
 </footer>
 
 <script>
-  // mode, w,h  w2,h2  w3,h3  cropW,cropH  cropX,cropY  bits, fps, m1,m2,m3,m4, aspect, fullcrop, vblank, fp
+  // metadata fields 0..20, then hmax, tail, vmax from the timing table
   var MODES = [
-    [0,6064,4042,6064,4042,6064,4042,6000,4000,32,21,1,20,1,1,1,1,2,0,30,16],
-    [97,6064,4042,6064,4042,6064,4042,6000,4000,32,21,0,40,1,1,1,1,2,0,30,17],
-    [98,3032,2012,3032,2012,3032,2012,3000,2000,16,6,0,78,2,2,2,2,2,0,40,18],
-    [3,6064,4042,6064,4042,6064,4042,0,0,0,0,0,30,1,1,1,1,2,0,70,17],
-    [121,6064,4042,6064,4042,6064,4042,0,0,0,0,0,25,1,1,1,1,2,0,70,17],
-    [6,4176,2174,4176,2174,4176,2174,0,0,0,0,1,30,1,1,1,1,1,1,50,16],
-    [122,4176,2174,4176,2174,4176,2174,0,0,0,0,1,25,1,1,1,1,1,1,50,16],
-    [95,5712,3216,5712,3216,5712,3216,0,0,0,0,1,24,1,1,1,1,1,1,14,16],
-    [100,4176,2174,4176,2174,3032,2174,0,0,0,0,1,24,1,1,1,1,1,1,50,16],
-    [7,6064,3412,6064,3412,6064,3412,0,0,0,0,0,30,1,1,1,1,1,0,70,17],
-    [123,6064,3412,6064,3412,6064,3412,0,0,0,0,0,25,1,1,1,1,1,0,70,17],
-    [102,4176,2174,4176,2174,4176,2174,0,0,0,0,0,30,1,1,1,1,1,1,70,17],
-    [124,4176,2174,4176,2174,4176,2174,0,0,0,0,0,25,1,1,1,1,1,1,70,17],
-    [101,6064,3412,6064,3412,6064,3412,0,0,0,0,0,24,1,1,1,1,1,0,70,17],
-    [108,4176,2174,4176,2174,4176,2174,0,0,0,0,0,24,1,1,1,1,1,1,70,17],
-    [27,3032,1708,3032,1708,3032,1708,0,0,0,0,0,60,2,2,2,2,1,0,70,18],
-    [115,3032,1708,3032,1708,3032,1708,0,0,0,0,0,50,2,2,2,2,1,0,70,18],
-    [88,2088,1174,2088,1174,2088,1174,0,0,0,0,0,60,2,2,2,2,1,1,70,18],
-    [116,2088,1174,2088,1174,2088,1174,0,0,0,0,0,50,2,2,2,2,1,1,70,18],
-    [106,3032,1708,3032,1708,3032,1708,0,0,0,0,0,30,2,2,2,2,1,0,70,18],
-    [125,3032,1708,3032,1708,3032,1708,0,0,0,0,0,25,2,2,2,2,1,0,70,18],
-    [107,2088,1174,2088,1174,2088,1174,0,0,0,0,0,30,2,2,2,2,1,1,70,18],
-    [126,2088,1174,2088,1174,2088,1174,0,0,0,0,0,25,2,2,2,2,1,1,70,18],
-    [109,3032,1708,3032,1708,3032,1708,0,0,0,0,0,24,2,2,2,2,1,0,70,18],
-    [110,2088,1174,2088,1174,2088,1174,0,0,0,0,0,24,2,2,2,2,1,1,70,18],
-    [58,3032,1708,3032,1708,3032,1708,0,0,0,0,0,120,2,2,2,2,1,0,50,19],
-    [89,3032,1708,3032,1708,3032,1708,0,0,0,0,0,100,2,2,2,2,1,0,50,19],
-    [103,2088,1174,2088,1174,2088,1174,0,0,0,0,0,120,2,2,2,2,1,1,70,19],
-    [118,2088,1174,2088,1174,2088,1174,0,0,0,0,0,100,2,2,2,2,1,1,70,19],
-    [104,3032,1708,3032,1708,3032,1708,0,0,0,0,0,60,2,2,2,2,1,0,70,19],
-    [105,2088,1174,2088,1174,2088,1174,0,0,0,0,0,60,2,2,2,2,1,1,70,19],
-    [111,3032,1708,3032,1708,3032,1708,0,0,0,0,0,30,2,2,2,2,1,0,70,19],
-    [127,3032,1708,3032,1708,3032,1708,0,0,0,0,0,25,2,2,2,2,1,0,70,19],
-    [112,2088,1174,2088,1174,2088,1174,0,0,0,0,0,30,2,2,2,2,1,1,70,19],
-    [128,2088,1174,2088,1174,2088,1174,0,0,0,0,0,25,2,2,2,2,1,1,70,19],
-    [113,3032,1708,3032,1708,3032,1708,0,0,0,0,0,24,2,2,2,2,1,0,70,19],
-    [114,2088,1174,2088,1174,2088,1174,0,0,0,0,0,24,2,2,2,2,1,1,70,19],
-    [139,2016,1344,2016,1344,2016,1344,0,0,0,0,0,60,3,2,3,3,2,0,100,20],
-    [56,2016,1344,2016,1344,2016,1344,0,0,0,0,0,120,3,2,3,3,2,0,100,21],
-    [140,2016,672,2016,672,2016,672,0,0,0,0,0,60,3,3,3,6,2,0,70,22],
-    [11,3032,2012,3032,2012,3032,2012,0,0,0,0,0,105,2,2,2,2,2,0,14,19],
-    [117,3032,2012,3032,2012,3032,2012,0,0,0,0,0,100,2,2,2,2,2,0,70,19],
-    [12,2016,672,2016,672,2016,672,0,0,0,0,0,240,3,3,3,6,2,0,50,23],
-    [129,3968,2640,3968,2640,3968,2640,0,0,0,0,1,20,1,1,1,1,2,1,50,16],
-    [130,3968,2640,3968,2640,3968,2640,0,0,0,0,0,40,1,1,1,1,2,1,50,17],
-    [131,1984,1320,1984,1320,1984,1320,0,0,0,0,0,78,2,2,2,2,2,1,50,18],
-    [132,2088,1174,2088,1174,2088,1174,0,0,0,0,0,120,2,2,2,2,1,1,70,18],
-    [133,2088,1174,2088,1174,2088,1174,0,0,0,0,0,100,2,2,2,2,1,1,70,18],
-    [134,2016,1136,2016,1136,2016,1136,0,0,0,0,0,120,3,2,3,3,1,1,100,20],
-    [10,6064,2022,6064,2022,6064,2022,0,0,32,21,0,60,1,1,1,1,2,0,70,17],
-    [135,3032,1708,3032,1708,3032,1708,0,0,0,0,0,48,2,2,2,2,1,0,70,18],
-    [136,2088,1174,2088,1174,2088,1174,0,0,0,0,0,48,2,2,2,2,1,1,70,18],
-    [8,2016,1344,2016,1344,2016,1344,0,0,0,0,0,60,3,2,3,3,2,0,100,21],
-    [9,2016,672,2016,672,2016,672,0,0,0,0,0,60,3,3,3,6,2,0,100,23],
-    [141,6064,4042,6064,4042,6064,4042,6000,4000,32,21,1,18,1,1,1,1,2,0,50,16],
-    [142,6064,4042,6064,4042,6064,4042,6000,4000,32,21,0,18,1,1,1,1,2,0,70,17],
-    [143,3032,2012,3032,2012,3032,2012,3000,2000,16,6,0,18,2,2,2,2,2,0,100,18],
-    [144,3968,2640,3968,2640,3968,2640,0,0,0,0,1,18,1,1,1,1,2,1,50,16],
-    [145,3968,2640,3968,2640,3968,2640,0,0,0,0,0,18,1,1,1,1,2,1,70,17],
-    [146,1984,1320,1984,1320,1984,1320,0,0,0,0,0,18,2,2,2,2,2,1,70,18],
-    [147,2016,1344,2016,1344,2016,1344,0,0,0,0,0,100,3,2,3,3,2,0,100,21],
-    [148,2016,1344,2016,1344,2016,1344,0,0,0,0,0,70,3,2,3,3,2,0,100,21],
-    [149,2016,1344,2016,1344,2016,1344,0,0,0,0,0,80,3,2,3,3,2,0,100,21],
-    [150,2016,1344,2016,1344,2016,1344,0,0,0,0,0,90,3,2,3,3,2,0,100,21],
-    [151,6064,3412,6064,3412,6064,3412,0,0,0,0,0,24,1,1,1,1,1,0,70,17],
-    [152,4176,2174,4176,2174,4176,2174,0,0,0,0,0,24,1,1,1,1,1,1,70,17],
-    [218,3032,1708,3032,1708,3032,1708,0,0,0,0,0,24,2,2,2,2,1,0,70,18],
-    [219,2088,1174,2088,1174,2088,1174,0,0,0,0,0,24,2,2,2,2,1,1,70,18],
-    [220,3032,1708,3032,1708,3032,1708,0,0,0,0,0,48,2,2,2,2,1,0,70,18],
-    [221,2088,1174,2088,1174,2088,1174,0,0,0,0,0,48,2,2,2,2,1,1,70,18],
+    [0,6064,4042,6064,4042,6064,4042,6000,4000,32,21,1,20,1,1,1,1,2,0,30,16,911,911,4132],
+    [97,6064,4042,6064,4042,6064,4042,6000,4000,32,21,0,40,1,1,1,1,2,0,30,17,445,445,4132],
+    [98,3032,2012,3032,2012,3032,2012,3000,2000,16,6,0,78,2,2,2,2,2,0,40,18,445,445,2094],
+    [3,6064,4042,6064,4042,6064,4042,0,0,0,0,0,30,1,1,1,1,2,0,70,17,445,445,5398],
+    [121,6064,4042,6064,4042,6064,4042,0,0,0,0,0,25,1,1,1,1,2,0,70,17,445,445,6472],
+    [6,4176,2174,4176,2174,4176,2174,0,0,0,0,1,30,1,1,1,1,1,1,50,16,911,1915,2636],
+    [122,4176,2174,4176,2174,4176,2174,0,0,0,0,1,25,1,1,1,1,1,1,50,16,911,2151,3160],
+    [95,5712,3216,5712,3216,5712,3216,0,0,0,0,1,24,1,1,1,1,1,1,14,16,911,1255,3296],
+    [100,4176,2174,4176,2174,3032,2174,0,0,0,0,1,24,1,1,1,1,1,1,50,16,911,1255,3296],
+    [7,6064,3412,6064,3412,6064,3412,0,0,0,0,0,30,1,1,1,1,1,0,70,17,445,735,5398],
+    [123,6064,3412,6064,3412,6064,3412,0,0,0,0,0,25,1,1,1,1,1,0,70,17,450,450,6400],
+    [102,4176,2174,4176,2174,4176,2174,0,0,0,0,0,30,1,1,1,1,1,1,70,17,445,735,5398],
+    [124,4176,2174,4176,2174,4176,2174,0,0,0,0,0,25,1,1,1,1,1,1,70,17,450,450,6400],
+    [101,6064,3412,6064,3412,6064,3412,0,0,0,0,0,24,1,1,1,1,1,0,70,17,445,585,6748],
+    [108,4176,2174,4176,2174,4176,2174,0,0,0,0,0,24,1,1,1,1,1,1,70,17,445,585,6748],
+    [27,3032,1708,3032,1708,3032,1708,0,0,0,0,0,60,2,2,2,2,1,0,70,18,445,1035,2698],
+    [115,3032,1708,3032,1708,3032,1708,0,0,0,0,0,50,2,2,2,2,1,0,70,18,450,450,3200],
+    [88,2088,1174,2088,1174,2088,1174,0,0,0,0,0,60,2,2,2,2,1,1,70,18,445,1035,2698],
+    [116,2088,1174,2088,1174,2088,1174,0,0,0,0,0,50,2,2,2,2,1,1,70,18,450,450,3200],
+    [106,3032,1708,3032,1708,3032,1708,0,0,0,0,0,30,2,2,2,2,1,0,70,18,445,735,5398],
+    [125,3032,1708,3032,1708,3032,1708,0,0,0,0,0,25,2,2,2,2,1,0,70,18,450,450,6400],
+    [107,2088,1174,2088,1174,2088,1174,0,0,0,0,0,30,2,2,2,2,1,1,70,18,445,735,5398],
+    [126,2088,1174,2088,1174,2088,1174,0,0,0,0,0,25,2,2,2,2,1,1,70,18,450,450,6400],
+    [109,3032,1708,3032,1708,3032,1708,0,0,0,0,0,24,2,2,2,2,1,0,70,18,445,585,6748],
+    [110,2088,1174,2088,1174,2088,1174,0,0,0,0,0,24,2,2,2,2,1,1,70,18,445,585,6748],
+    [58,3032,1708,3032,1708,3032,1708,0,0,0,0,0,120,2,2,2,2,1,0,50,19,330,330,1820],
+    [89,3032,1708,3032,1708,3032,1708,0,0,0,0,0,100,2,2,2,2,1,0,50,19,360,360,2000],
+    [103,2088,1174,2088,1174,2088,1174,0,0,0,0,0,120,2,2,2,2,1,1,70,19,330,330,1820],
+    [118,2088,1174,2088,1174,2088,1174,0,0,0,0,0,100,2,2,2,2,1,1,70,19,360,360,2000],
+    [104,3032,1708,3032,1708,3032,1708,0,0,0,0,0,60,2,2,2,2,1,0,70,19,330,330,3640],
+    [105,2088,1174,2088,1174,2088,1174,0,0,0,0,0,60,2,2,2,2,1,1,70,19,330,330,3640],
+    [111,3032,1708,3032,1708,3032,1708,0,0,0,0,0,30,2,2,2,2,1,0,70,19,330,330,7280],
+    [127,3032,1708,3032,1708,3032,1708,0,0,0,0,0,25,2,2,2,2,1,0,70,19,360,360,8000],
+    [112,2088,1174,2088,1174,2088,1174,0,0,0,0,0,30,2,2,2,2,1,1,70,19,330,330,7280],
+    [128,2088,1174,2088,1174,2088,1174,0,0,0,0,0,25,2,2,2,2,1,1,70,19,360,360,8000],
+    [113,3032,1708,3032,1708,3032,1708,0,0,0,0,0,24,2,2,2,2,1,0,70,19,330,330,9100],
+    [114,2088,1174,2088,1174,2088,1174,0,0,0,0,0,24,2,2,2,2,1,1,70,19,330,330,9100],
+    [139,2016,1344,2016,1344,2016,1344,0,0,0,0,0,60,3,2,3,3,2,0,100,20,445,445,2700],
+    [56,2016,1344,2016,1344,2016,1344,0,0,0,0,0,120,3,2,3,3,2,0,100,21,330,330,1820],
+    [140,2016,672,2016,672,2016,672,0,0,0,0,0,60,3,3,3,6,2,0,70,22,445,445,2700],
+    [11,3032,2012,3032,2012,3032,2012,0,0,0,0,0,105,2,2,2,2,2,0,14,19,330,330,2070],
+    [117,3032,2012,3032,2012,3032,2012,0,0,0,0,0,100,2,2,2,2,2,0,70,19,330,330,2184],
+    [12,2016,672,2016,672,2016,672,0,0,0,0,0,240,3,3,3,6,2,0,50,23,330,330,910],
+    [129,3968,2640,3968,2640,3968,2640,0,0,0,0,1,20,1,1,1,1,2,1,50,16,911,911,4116],
+    [130,3968,2640,3968,2640,3968,2640,0,0,0,0,0,40,1,1,1,1,2,1,50,17,445,445,4116],
+    [131,1984,1320,1984,1320,1984,1320,0,0,0,0,0,78,2,2,2,2,2,1,50,18,445,445,2068],
+    [132,2088,1174,2088,1174,2088,1174,0,0,0,0,0,120,2,2,2,2,1,1,70,18,445,1185,1348],
+    [133,2088,1174,2088,1174,2088,1174,0,0,0,0,0,100,2,2,2,2,1,1,70,18,450,450,1600],
+    [134,2016,1136,2016,1136,2016,1136,0,0,0,0,0,120,3,2,3,3,1,1,100,20,445,1185,1348],
+    [10,6064,2022,6064,2022,6064,2022,0,0,32,21,0,60,1,1,1,1,2,0,70,17,445,445,2700],
+    [135,3032,1708,3032,1708,3032,1708,0,0,0,0,0,48,2,2,2,2,1,0,70,18,445,515,3374],
+    [136,2088,1174,2088,1174,2088,1174,0,0,0,0,0,48,2,2,2,2,1,1,70,18,445,515,3374],
+    [8,2016,1344,2016,1344,2016,1344,0,0,0,0,0,60,3,2,3,3,2,0,100,21,330,330,3640],
+    [9,2016,672,2016,672,2016,672,0,0,0,0,0,60,3,3,3,6,2,0,100,23,330,330,3640],
+    [141,6064,4042,6064,4042,6064,4042,6000,4000,32,21,1,18,1,1,1,1,2,0,50,16,911,911,4390],
+    [142,6064,4042,6064,4042,6064,4042,6000,4000,32,21,0,18,1,1,1,1,2,0,70,17,445,445,8988],
+    [143,3032,2012,3032,2012,3032,2012,3000,2000,16,6,0,18,2,2,2,2,2,0,100,18,445,445,8988],
+    [144,3968,2640,3968,2640,3968,2640,0,0,0,0,1,18,1,1,1,1,2,1,50,16,911,911,4390],
+    [145,3968,2640,3968,2640,3968,2640,0,0,0,0,0,18,1,1,1,1,2,1,70,17,445,445,8988],
+    [146,1984,1320,1984,1320,1984,1320,0,0,0,0,0,18,2,2,2,2,2,1,70,18,445,445,8988],
+    [147,2016,1344,2016,1344,2016,1344,0,0,0,0,0,100,3,2,3,3,2,0,100,21,395,395,1820],
+    [148,2016,1344,2016,1344,2016,1344,0,0,0,0,0,70,3,2,3,3,2,0,100,21,330,330,3118],
+    [149,2016,1344,2016,1344,2016,1344,0,0,0,0,0,80,3,2,3,3,2,0,100,21,330,330,2728],
+    [150,2016,1344,2016,1344,2016,1344,0,0,0,0,0,90,3,2,3,3,2,0,100,21,330,330,2426],
+    [151,6064,3412,6064,3412,6064,3412,0,0,0,0,0,24,1,1,1,1,1,0,70,17,445,1145,6740],
+    [152,4176,2174,4176,2174,4176,2174,0,0,0,0,0,24,1,1,1,1,1,1,70,17,445,1145,6740],
+    [218,3032,1708,3032,1708,3032,1708,0,0,0,0,0,24,2,2,2,2,1,0,70,18,445,1145,6740],
+    [219,2088,1174,2088,1174,2088,1174,0,0,0,0,0,24,2,2,2,2,1,1,70,18,445,1145,6740],
+    [220,3032,1708,3032,1708,3032,1708,0,0,0,0,0,48,2,2,2,2,1,0,70,18,445,795,3370],
+    [221,2088,1174,2088,1174,2088,1174,0,0,0,0,0,48,2,2,2,2,1,1,70,18,445,795,3370],
   ];
 
 (function(){
-  // record layout: [mode, w,h, w2,h2, w3,h3, cropW,cropH, cropX,cropY,
-  //                 bits, fps, m1,m2,m3,m4, aspect, fullcrop, vblank, fp]
+  // record: [mode, w,h, w2,h2, w3,h3, cropW,cropH, cropX,cropY,
+  //           bits, nominal fps, m1..m4, aspect, fullcrop, vblank, fp,
+  //           hmax, tail, vmax]
   var $ = function(id){ return document.getElementById(id); };
   var body = $('modebody'), q = $('q'), chips = $('chips'), count = $('count'),
       empty = $('empty'), tbl = $('modetbl');
@@ -578,18 +599,22 @@ someone else's conclusion.</p>
 
   var T = {full:'full', crop:'crop', of:' of '};
   function merge(m){ return m[13]+','+m[14]+','+m[15]+','+m[16]; }
+  // timing table: hmax=m[21], tail=m[22], vmax=m[23], sensor clock 72 MHz
+  function roll(m){ return m[21] * m[2] / 72e6 * 1000; }
+  function rfps(m){ return 72e6 / (m[21] * (m[23] - 1) + m[22]); }
   function rel(m){ return 6064 / m[1]; }
   function rows(){
     return MODES.map(function(m){
       return {m:m, w:m[1]*10000+m[2], rel:rel(m), merge:m[13]*1000+m[14]*100+m[15]*10+m[16],
-              crop:m[7]*10000+m[8],
+              crop:m[7]*10000+m[8], roll:roll(m), rfps:rfps(m),
               hay:(m[0]+' '+m[1]+'x'+m[2]+' '+m[1]+' '+m[2]).toLowerCase()};
     });
   }
   var data = rows(), sortK = '0', sortDir = 'asc', filter = 'all';
 
   function keyval(r, k){
-    if(k === 'w' || k === 'rel' || k === 'merge' || k === 'crop') return r[k];
+    if(k === 'w' || k === 'rel' || k === 'merge' || k === 'crop' ||
+       k === 'roll' || k === 'rfps') return r[k];
     return r.m[+k];
   }
   function pass(r){
@@ -622,7 +647,9 @@ someone else's conclusion.</p>
         + '<td class="g">'+(m[17]===2 ? '3:2' : '16:9')+'</td>'
         + '<td class="g">'+merge(m)+'</td>'
         + '<td class="g">'+(m[11]===1 ? '14' : '12')+'</td>'
-        + '<td>'+m[12]+'</td>'
+        + '<td>'+rfps(m).toFixed(2)+'</td>'
+        + '<td>'+roll(m).toFixed(2)+'</td>'
+        + '<td class="g">'+m[12]+'</td>'
         + '<td class="g">'+crop+'</td>'
         + '<td class="g">'+(m[18]===0 ? T.full : T.crop)+'</td>'
         + '<td class="g">'+m[19]+'</td>'
