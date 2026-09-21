@@ -451,7 +451,22 @@ function templateName(){
 function composeVshl(recs, entry){
   const blobs = recs.map(r => b64(r.b));
   const bodyLen = blobs.reduce((s,b) => s + b.length + ((-b.length)&3), 0);
-  const out = new Uint8Array(CAT.pad_to), dv = new DataView(out.buffer);
+  /* Two sizes, and the smaller one is the default.
+     The padding is not a limit on what a card may carry -- it is there because
+     `putfile` writes over USB and cannot shorten a file, so a smaller binary
+     would leave the tail of the last one behind.  The limit is the loader's
+     read: MAXLEN out of loader.S, which is CAT.read_cap.
+     A selection that does not fit the usual 32 KiB is therefore padded to the
+     read cap instead of refused -- four products plus an uploaded payload
+     reach 33 KiB, and nothing about that is a problem the camera has.  Every
+     selection that did fit is padded exactly as before, byte for byte.
+     It used to allocate CAT.pad_to unconditionally and a bigger selection
+     wrote off the end of this array and threw -- and a throw in here takes the
+     whole page's render with it, including the check whose job was to say so. */
+  const need = 16 + recs.length*8 + bodyLen;
+  const pad = need <= CAT.pad_to ? CAT.pad_to : CAT.read_cap;
+  const out = new Uint8Array(Math.max(pad, need));
+  const dv = new DataView(out.buffer);
   out.set([0x56,0x42,0x49,0x4E]);
   dv.setUint32(4, recs.length, true);
   dv.setUint32(8, entry >>> 0, true);
@@ -461,7 +476,7 @@ function composeVshl(recs, entry){
     dv.setUint32(t, r.a >>> 0, true); dv.setUint32(t+4, blobs[i].length, true); t += 8;
     out.set(blobs[i], o); o += blobs[i].length + ((-blobs[i].length)&3);
   });
-  return {bytes: out, used: o, payload: blobs.reduce((s,b)=>s+b.length,0)};
+  return {bytes: out, used: o, pad, payload: blobs.reduce((s,b)=>s+b.length,0)};
 }
 function composeAutorun(banner){
   let t = (fastOn ? CAT.fast.templates : CAT.templates)[templateName()]
@@ -510,7 +525,8 @@ function runChecks(recs, vshl, banner, entry, entriesNow){
      two address spaces, and every destination-zero section has offset zero, so
      it flagged all of them: the page told everyone not to use any card. */
   c.push({ok: vshl.used <= CAT.read_cap, t:'The loader can read the whole card',
-          d: vshl.used.toLocaleString()+' of '+CAT.read_cap.toLocaleString()+' B'});
+          d: vshl.used.toLocaleString()+' of '+CAT.read_cap.toLocaleString()+' B'
+             + ', padded to '+vshl.pad.toLocaleString()});
 
   /* The cave is not one flat region and an earlier version of this check
      treated it as one, which failed every card that carries the USB shell:
@@ -632,9 +648,6 @@ function runChecks(recs, vshl, banner, entry, entriesNow){
 
   c.push({ok: sel().length > 0, t:'Something is selected',
           d: sel().length ? sel().length+' card'+(sel().length>1?'s':'') : 'pick at least one'});
-
-  c.push({ok: vshl.used <= CAT.pad_to, t:'fpSup.BIN fits',
-          d: vshl.used.toLocaleString()+' / '+CAT.pad_to.toLocaleString()+' B'});
 
   /* DO NOT RELAX THIS TO ALLOW ACCENTS.  The banner is the only text on the
      page that reaches AutoRun.txt: everything else is one of three templates
@@ -811,7 +824,7 @@ function render(){
 
   document.getElementById('stats').innerHTML = [
     ['Sections', recs.length], ['Payload', vshl.payload.toLocaleString()+' B'],
-    ['payload used', (vshl.used/CAT.pad_to*100).toFixed(1)+'%'],
+    ['payload used', (vshl.used/vshl.pad*100).toFixed(1)+'%'],
     ['AutoRun', cmds+' cmds'], ['Boot', (4.7 + cmds*0.038).toFixed(1)+' s'],
   ].map(([k,v]) => `<div><span>${k}</span><strong>${v}</strong></div>`).join('');
 

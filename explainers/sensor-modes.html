@@ -728,13 +728,22 @@ speed group, plus vblank and the fingerprint. Every merge register &mdash;
 differs is hmax 445 &rarr; 330, so 98 reads out at normal speed and 117 in the fast
 tier.
 
-<br><br><b>And CRCT is ruled out.</b> All <b>306</b> PARAM profiles carry
-<code>reduction_enums = (0,0)</code> &mdash; CRCT binning is never switched on for any
-of them. The only post-sensor reduction that is actually used is RWZM, and only in 53
-profiles; the other 253 are unity. The Open Gate profile (p43, 3032&times;2012) is one
-of the unity ones, so an Open Gate frame is the sensor output untouched. Whatever
-differs between 98 and 117 on an Open Gate clip therefore comes from the sensor, and
-the only thing that differs there is the readout-speed block.</div>
+<br><br><b>And for Open Gate, CRCT is ruled out.</b> CRCT is not one chain &mdash;
+it is a static <b>eight-branch selector</b> (<code>FUN_c0325228</code>), and across the
+306 PARAM profiles only three branches are ever taken:
+
+<ul style="margin:10px 0 0; padding-left:1.3em; line-height:1.75">
+<li><b>253 profiles &rarr; Crmf, no reduction at all.</b> This is where Open Gate (p43)
+and stock FHD (p133&ndash;136) sit.</li>
+<li><b>36 profiles &rarr; <code>CrctHbin2ToBufA</code></b>, the second horizontal binning
+stage.</li>
+<li><b>17 profiles &rarr; RWZM <i>and</i> hbin&divide;3/vbin&divide;3 at the same time</b>
+&mdash; all UHD recording. These are the exception to "the two are separate branches".</li>
+</ul>
+
+<br>So an Open Gate frame really is the sensor output untouched, and whatever differs
+between 98 and 117 on an Open Gate clip comes from the sensor &mdash; but that is a
+statement about p43's branch, not about CRCT as a whole.</div>
 <div class="warn zh"><b>這裡要更正這一頁先前寫的東西:98 跟 117 的差別不在合併設定。</b>
 那 78 個不同的暫存器<strong>全部</strong>落在讀出速度相關的群裡 ——
 50 個在高速讀出群、21 個在速度檔位群、5 個在第三個速度群,再加上 vblank 和指紋。
@@ -742,13 +751,20 @@ the only thing that differs there is the readout-speed block.</div>
 兩者<b>完全一樣</b>。<br>
 同光柵、同合併倍率、同位深,差的是 hmax 從 445 變成 330 ——
 98 用常速讀出,117 用高速檔。<br>
-<br><b>而且 CRCT 可以排除了。</b>306 個 PARAM profile <strong>全部</strong>都是
-<code>reduction_enums = (0,0)</code> —— CRCT 的 binning 一個都沒開過。
-後段真正有在用的縮減只有 RWZM,而且只有 53 個 profile 在用,其餘 253 個是 unity。
-Open Gate 用的 p43(3032&times;2012)正是 unity 那一類,所以 <strong>Open Gate 的畫面
-就是感光元件輸出的原樣</strong>。<br>
-因此在 Open Gate 下 98 跟 117 的差異只可能來自感光元件,
-而那裡唯一不同的就是讀出速度那一整塊。</div>
+<br><b>而且就 Open Gate 而言,CRCT 可以排除。</b>
+CRCT <strong>不是一條鏈</strong>,而是一個靜態的<b>八分支選擇器</b>(<code>FUN_c0325228</code>);
+306 個 PARAM profile 裡只走得到三條:
+
+<ul style="margin:10px 0 0; padding-left:1.3em; line-height:1.85">
+<li><b>253 筆 &rarr; Crmf,完全不縮減。</b>Open Gate(p43)和原廠 FHD(p133&ndash;136)都在這一支。</li>
+<li><b>36 筆 &rarr; <code>CrctHbin2ToBufA</code></b>,也就是第二級水平 binning。</li>
+<li><b>17 筆 &rarr; RWZM <i>與</i> hbin&divide;3/vbin&divide;3 <strong>同時</strong>作用</b> ——
+全部是 UHD 錄影。這是「兩者是分開的分支」的<strong>例外</strong>。</li>
+</ul>
+
+<br>所以 Open Gate 的畫面確實就是感光元件輸出的原樣,
+在 Open Gate 下 98 跟 117 的差異也只可能來自感光元件 ——
+但這句話講的是 <b>p43 走的那一支</b>,不是整個 CRCT。</div>
 
 <div class="warn en"><b>This also closes an open question in the pixel-merge
 measurement.</b> Shot noise gave measured merge counts: stock FHD averages 8.53 sensor

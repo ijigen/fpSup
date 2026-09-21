@@ -216,19 +216,33 @@ table.proj .n{color:var(--dim)}
     <text x="238" y="306" text-anchor="middle" font-size="9" class="t-dim zh">hmax / vmax &rarr; 真實格率</text>
     <text x="97" y="299" text-anchor="end" font-size="9" class="t-dim">0xC0B5FDA4</text>
     <circle class="f-ok" cx="384" cy="295" r="5"/>
-    <rect class="bx" x="105" y="342" width="550" height="42" rx="3"/>
-    <text x="380" y="360" text-anchor="middle">CRCT chain &mdash; Vbin / Hbin / Hbin2</text>
-    <text x="380" y="374" text-anchor="middle" font-size="9" class="t-dim en">six-way tap mux into windows a0 / a7</text>
-    <text x="380" y="374" text-anchor="middle" font-size="9" class="t-dim zh">六選一抽頭,送進 a0 / a7 兩個窗</text>
-    <text x="97" y="367" text-anchor="end" font-size="9" class="t-dim">0xC0325228</text>
-    <circle class="f-ok" cx="675" cy="363" r="5"/>
-    <rect class="bx" x="105" y="408" width="550" height="42" rx="3"/>
-    <text x="380" y="426" text-anchor="middle" class="en">RWZM resampler</text>
-    <text x="380" y="426" text-anchor="middle" class="zh">RWZM 重取樣器</text>
-    <text x="380" y="440" text-anchor="middle" font-size="9" class="t-dim en">ratio &divide; 1024, floor at unity</text>
-    <text x="380" y="440" text-anchor="middle" font-size="9" class="t-dim zh">比率 &divide; 1024,地板夾在 1.0&times;</text>
-    <text x="97" y="433" text-anchor="end" font-size="9" class="t-dim">0x300F0900</text>
-    <circle class="f-ok" cx="675" cy="429" r="5"/>
+    <rect class="bx" x="105" y="342" width="550" height="38" rx="3"/>
+    <text x="380" y="359" text-anchor="middle" class="en">CRCT path selector &mdash; picks ONE branch</text>
+    <text x="380" y="359" text-anchor="middle" class="zh">CRCT 路徑選擇器 &mdash; 只會選中一條</text>
+    <text x="380" y="372" text-anchor="middle" font-size="9" class="t-dim en">eight branches, static in ROM &mdash; not a chain</text>
+    <text x="380" y="372" text-anchor="middle" font-size="9" class="t-dim zh">八個分支,靜態寫在 ROM &mdash; 不是一條鏈</text>
+    <text x="97" y="365" text-anchor="end" font-size="9" class="t-dim">0xC0325228</text>
+    <circle class="f-ok" cx="675" cy="361" r="5"/>
+
+    <rect class="bx" x="105" y="398" width="178" height="48" rx="3"/>
+    <text x="194" y="414" text-anchor="middle" font-size="10" class="en">Crmf &mdash; no reduction</text>
+    <text x="194" y="414" text-anchor="middle" font-size="10" class="zh">Crmf &mdash; 不縮減</text>
+    <text x="194" y="428" text-anchor="middle" font-size="11" class="t-sig">253</text>
+    <text x="194" y="440" text-anchor="middle" font-size="8.5" class="t-dim en">Open Gate, stock FHD</text>
+    <text x="194" y="440" text-anchor="middle" font-size="8.5" class="t-dim zh">Open Gate、原廠 FHD</text>
+
+    <rect class="bx" x="291" y="398" width="178" height="48" rx="3"/>
+    <text x="380" y="414" text-anchor="middle" font-size="10">Hbin2 &divide;N</text>
+    <text x="380" y="428" text-anchor="middle" font-size="11" class="t-sig">36</text>
+    <text x="380" y="440" text-anchor="middle" font-size="8.5" class="t-dim en">2nd horizontal binning</text>
+    <text x="380" y="440" text-anchor="middle" font-size="8.5" class="t-dim zh">第二級水平 binning</text>
+
+    <rect class="bx" x="477" y="398" width="178" height="48" rx="3"/>
+    <text x="566" y="414" text-anchor="middle" font-size="10">RWZM + hbin&divide;3</text>
+    <text x="566" y="428" text-anchor="middle" font-size="11" class="t-sig">17</text>
+    <text x="566" y="440" text-anchor="middle" font-size="8.5" class="t-dim en">UHD only &mdash; both at once</text>
+    <text x="566" y="440" text-anchor="middle" font-size="8.5" class="t-dim zh">只有 UHD &mdash; 兩者同時</text>
+    <text x="672" y="403" font-size="8.5" class="t-dim">0x300F0900</text>
     <rect class="bx" x="105" y="474" width="550" height="42" rx="3"/>
     <text x="380" y="492" text-anchor="middle" class="en">geometry record &mdash; the canvas</text>
     <text x="380" y="492" text-anchor="middle" class="zh">幾何記錄 &mdash; 畫布</text>
@@ -263,16 +277,29 @@ table.proj .n{color:var(--dim)}
     <path d="M380 182 v14 M237 196 H522 M237 196 v12 M522 196 v12"/>
     <path d="M237 250 v24"/>
     <path d="M237 316 v14 M522 250 v80 M237 330 H522 M380 330 v12"/>
-    <path d="M380 384 v24"/><path d="M380 450 v24"/><path d="M380 516 v24"/>
+    <path d="M380 380 v8 M194 388 H566 M194 388 v10 M380 388 v10 M566 388 v10"/>
+    <path d="M194 446 v10 M380 446 v10 M566 446 v10 M194 456 H566 M380 456 v18"/>
+    <path d="M380 516 v24"/>
     <path d="M380 582 v24"/><path d="M380 648 v24"/>
   </g>
 </svg>
 <figcaption class="en">Stage 3 splits: the format entry hands a <b>sensor mode</b> to the left
-branch and a <b>profile</b> to the right, and they rejoin at the CRCT chain. Almost
-every open-gate trick is a substitution at stage 4, stage 5 or stage 9.</figcaption>
+branch and a <b>profile</b> to the right, and they rejoin at the selector. Almost
+every open-gate trick is a substitution at stage 4, stage 5 or stage 9.
+<br><br><b>Read the CRCT row as a fork, not as a sequence.</b> Hbin/Vbin and RWZM are
+<b>not two stages of one chain</b> &mdash; they are alternative branches of the same
+static selector, and a profile takes exactly one of them. Only the 17 UHD profiles take
+RWZM and hbin together, and that is the firmware doing it, not a hack. Open Gate and
+stock FHD both sit in the 253 that reduce nothing here.</figcaption>
 <figcaption class="zh">第 3 關會分岔:格式條目把<b>感光元件模式</b>交給左邊那條、
-把 <b>profile</b> 交給右邊那條,兩條在 CRCT 那關會合。open gate 的招數幾乎全部
-都是在第 4、第 5 或第 9 關做「換掉」這件事。</figcaption>
+把 <b>profile</b> 交給右邊那條,兩條在選擇器那關會合。open gate 的招數幾乎全部
+都是在第 4、第 5 或第 9 關做「換掉」這件事。
+<br><br><b>CRCT 那一排要讀成「岔路」,不是「順序」。</b>
+Hbin/Vbin 跟 RWZM <b>不是同一條鏈上的前後兩關</b> ——
+它們是同一個靜態選擇器底下<strong>互斥的分支</strong>,一個 profile 只會走中其中一條。<br>
+只有那 <b>17 個 UHD profile</b> 會同時吃到 RWZM 與 hbin,
+而且那是<strong>原廠韌體自己這樣做的</strong>,不是 hack 串出來的。
+Open Gate 和原廠 FHD 都落在「這一關完全不縮減」的那 253 筆裡。</figcaption>
 </figure>
 
 <div class="legend">
@@ -495,8 +522,8 @@ rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
 <details class="stage">
   <summary>
     <span class="hd"><b><span class="en">CRCT chain</span><span class="zh">CRCT 校正鏈</span></b>
-    <small class="en">Where all reduction happens &mdash; and only two of six taps are live</small>
-    <small class="zh">所有縮減都在這裡 &mdash; 而六個抽頭只有兩個真的活著</small></span>
+    <small class="en">A fork, not a sequence &mdash; and only two of six taps are live</small>
+    <small class="zh">是岔路不是順序 &mdash; 六個抽頭只有兩個真的活著</small></span>
     <span class="st ok">solved</span>
   </summary>
   <div class="body">
@@ -512,6 +539,24 @@ rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
     branches, 36 take <code>Hbin2</code>, 17 take RWZM, and the two-pipeline branch
     is never reached by anything.</p>
     <p class="zh">306 個 profile 的分布:172 + 81 走 <code>Crmf</code>、36 走 <code>Hbin2</code>、17 走 RWZM,雙管線那條<strong>一筆都沒有</strong>。</p>
+
+    <p class="en"><b>The part that is easy to misread.</b> The <b>recording</b> hbin/vbin
+    fields (<code>+0x5C</code>/<code>+0xC8</code>) are <b>zero in all 306 profiles</b>,
+    which is where "CinemaDNG never uses hbin" comes from &mdash; and taken on its own it
+    is true. But branch E's main pipeline does not read those fields: it reads the
+    recording <b>RWZM</b> ratio together with the <b>preview</b> hbin/vbin tap counts
+    (<code>+0x58</code>/<code>+0xC4</code>), and those are set to 1 on exactly the 17 UHD
+    profiles. So on those 17, hbin&divide;3 and RWZM&divide;1.5625 really do run together
+    on the recording path, using a field that otherwise serves the LCD. Everywhere else
+    the two are mutually exclusive branches.</p>
+    <p class="zh"><b>最容易讀錯的地方。</b><b>錄影</b>那組 hbin/vbin 欄位
+    (<code>+0x5C</code>/<code>+0xC8</code>)在 <b>306 筆裡全部是 0</b> ——
+    「CinemaDNG 不用 hbin」這個說法就是從這裡來的,單看這組欄位它是對的。<br>
+    但是<strong>分支 E 的主管線根本不讀那組欄位</strong>:它讀的是錄影的 <b>RWZM</b> 比率,
+    搭配<b>預覽</b>那組 hbin/vbin 抽頭數(<code>+0x58</code>/<code>+0xC4</code>)——
+    而那一組正好在那 17 個 UHD profile 上被設成 1。<br>
+    所以那 17 筆,錄影路徑上 hbin&divide;3 跟 RWZM&divide;1.5625 <strong>真的是疊在一起跑的</strong>,
+    用的還是一個平常服務 LCD 的欄位。除此之外,兩者確實是互斥的分支。</p>
     <div class="open-q en"><b>Open:</b> what <code>Crmf</code> and <code>Spc</code>
     actually correct. Also the five-tap horizontal coefficients &mdash; both ROM
     records only carry three-tap kernels.</div>
