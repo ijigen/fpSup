@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>In-camera lossless compression &mdash; fpSup</title>
+<meta name="description" content="The SIGMA fp has a hardware lossless JPEG engine the video path never uses. Its measured cost model, where it sits in the pipeline, and an interactive budget simulator for frame rate, dynamic frame-skip and compression variance.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/lossless-compression.html">
+<meta property="og:title" content="SIGMA fp: in-camera lossless compression">
+<meta property="og:description" content="The engine is there, the format is there, the ratio is enough. What is tight is milliseconds per frame — with a simulator for working out which formats fit.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+/* ---- diagrams ----------------------------------------------------------- */
+figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:16px 14px 12px}
+figure.dia svg{display:block; width:100%; height:auto}
+figure.dia figcaption{font-size:.84rem; color:var(--dim); margin-top:11px;
+  padding-top:10px; border-top:1px solid var(--line)}
+figure.dia figcaption b{color:var(--ink); font-weight:600}
+.dia text{font-family:var(--mono); fill:var(--ink)}
+.dia .t-dim{fill:var(--dim)}
+.dia .t-sig{fill:var(--sig)}
+.dia .t-warn{fill:var(--warn)}
+.dia .bx{fill:var(--paper); stroke:var(--line); stroke-width:1}
+.dia .bx-on{fill:var(--sig-soft); stroke:var(--sig); stroke-width:1.5}
+.dia .bx-warn{fill:var(--warn-soft); stroke:var(--warn); stroke-width:1.5}
+.dia .ln{stroke:var(--line); stroke-width:1.5; fill:none}
+.dia .ln-on{stroke:var(--sig); stroke-width:2; fill:none}
+.dia .ln-x{stroke:var(--warn); stroke-width:2; fill:none; stroke-dasharray:4 3}
+.dia .f-dim{fill:var(--dim)}
+.dia .f-sig{fill:var(--sig)}
+.dia .f-line{fill:var(--line)}
+.dia .f-warn{fill:var(--warn)}
+
+/* ---- simulator ---------------------------------------------------------- */
+.sim{border:1px solid var(--line); border-radius:3px; background:var(--panel);
+  padding:18px; margin:18px 0 0}
+.sim h4{margin:0 0 11px; font-family:var(--mono); font-size:.7rem; font-weight:600;
+  text-transform:uppercase; letter-spacing:.08em; color:var(--dim)}
+.sim h4:not(:first-child){margin-top:20px; padding-top:16px;
+  border-top:1px solid var(--line)}
+.ctl{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 16px}
+@media(max-width:700px){.ctl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:460px){.ctl{grid-template-columns:1fr}}
+.ctl label{display:block; font-family:var(--mono); font-size:.68rem;
+  text-transform:uppercase; letter-spacing:.07em; color:var(--dim); margin-bottom:5px}
+.ctl select, .ctl input[type=number]{width:100%; font-family:var(--mono);
+  font-size:.83rem; padding:7px 9px; border:1px solid var(--line); border-radius:3px;
+  background:var(--paper); color:var(--ink)}
+.ctl select:focus-visible, .ctl input:focus-visible{outline:2px solid var(--sig);
+  outline-offset:1px}
+.rng{grid-column:1/-1}
+.rng .rowlab{display:flex; justify-content:space-between; align-items:baseline}
+.rng output{font-family:var(--mono); font-size:.82rem; color:var(--sig);
+  font-weight:600}
+.rng input[type=range]{width:100%; margin:4px 0 0; accent-color:var(--sig)}
+.toggles{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px}
+.tg{display:inline-flex; align-items:center; gap:7px; font-size:.82rem;
+  padding:7px 12px; border:1px solid var(--line); border-radius:3px;
+  background:var(--paper); cursor:pointer; user-select:none}
+.tg:hover{border-color:var(--sig)}
+.tg input{margin:0; accent-color:var(--sig)}
+.tg.on{border-color:var(--sig); background:var(--sig-soft); color:var(--sig);
+  font-weight:600}
+
+/* results */
+.verdict{display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:13px 15px; border-radius:3px; margin-bottom:14px;
+  border:1px solid var(--line); background:var(--paper)}
+.verdict.ok{border-color:var(--sig); background:var(--sig-soft)}
+.verdict.no{border-color:var(--warn); background:var(--warn-soft)}
+.verdict .mk{font-family:var(--mono); font-size:1.1rem; font-weight:600}
+.verdict.ok .mk{color:var(--sig)}
+.verdict.no .mk{color:var(--warn)}
+.verdict .why{font-size:.87rem; color:var(--dim)}
+.verdict.ok .why, .verdict.no .why{color:var(--ink)}
+
+.rates{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px;
+  background:var(--line); border:1px solid var(--line); border-radius:3px;
+  overflow:hidden; margin-bottom:14px}
+@media(max-width:620px){.rates{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rates div{background:var(--paper); padding:12px 13px}
+.rates dt{font-family:var(--mono); font-size:.63rem; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--dim); margin-bottom:5px; line-height:1.35}
+.rates dd{margin:0; font-family:var(--mono); font-size:1.18rem; font-weight:600;
+  font-variant-numeric:tabular-nums}
+.rates dd small{font-size:.62rem; font-weight:400; color:var(--dim);
+  margin-left:3px}
+.rates .hero-n dd{color:var(--sig)}
+
+/* stacked bar of the rate split */
+.stack{margin-bottom:14px}
+.stack .bar{display:flex; height:26px; border-radius:3px; overflow:hidden;
+  border:1px solid var(--line); background:var(--paper)}
+.stack .bar i{display:block; height:100%}
+.stack .bar .c{background:var(--sig)}
+.stack .bar .u{background:var(--warn)}
+.stack .bar .h{background:var(--dim); opacity:.55}
+.stack .key{display:flex; flex-wrap:wrap; gap:14px; margin-top:7px;
+  font-family:var(--mono); font-size:.7rem; color:var(--dim)}
+.stack .key b{display:inline-block; width:9px; height:9px; border-radius:2px;
+  margin-right:5px; vertical-align:baseline}
+.stack .key .c b{background:var(--sig)}
+.stack .key .u b{background:var(--warn)}
+.stack .key .h b{background:var(--dim); opacity:.55}
+.stack .lim{position:relative; height:30px; margin-top:5px;
+  font-family:var(--mono); font-size:.66rem; color:var(--dim)}
+.stack .lim span{position:absolute; top:0; transform:translateX(-50%); white-space:nowrap}
+.stack .lim span.r2{top:14px}
+.stack .lim span::before{content:""; position:absolute; left:50%; top:-6px;
+  width:1px; height:5px; background:var(--dim)}
+
+/* the timing bar: encode + write vs budget */
+.timing{margin-bottom:2px}
+.timing .track{position:relative; height:30px; border:1px solid var(--line);
+  border-radius:3px; background:var(--paper); overflow:hidden}
+.timing .track i{position:absolute; top:0; bottom:0; display:block}
+.timing .track .enc{left:0; background:var(--sig); opacity:.85}
+.timing .track .wr{background:var(--dim); opacity:.6}
+.timing .track .bud{border-left:2px dashed var(--warn)}
+.timing .lab{display:flex; flex-wrap:wrap; gap:14px; margin-top:7px;
+  font-family:var(--mono); font-size:.7rem; color:var(--dim)}
+.timing .lab b{font-weight:600; color:var(--ink)}
+
+.detail{font-family:var(--mono); font-size:.75rem; color:var(--dim);
+  border-top:1px solid var(--line); margin-top:14px; padding-top:12px;
+  line-height:1.75}
+.detail b{color:var(--ink); font-weight:600}
+
+table.verd td.y{color:var(--sig); font-weight:600}
+table.verd td.n{color:var(--warn); font-weight:600}
+</style>
+</head>
+<body>
+
+<a class="back" href="../research.html">&larr; Firmware research</a>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1>In-camera lossless compression</h1>
+    <p class="lede">The fp has a hardware lossless-JPEG engine. It compresses every
+    still you take and it has never once touched a video frame. The engine works,
+    the format is legal, the ratio is enough &mdash; what is tight is milliseconds
+    per frame, and that number has now been measured.</p>
+    <ul class="chips">
+      <li><b>201.8</b> Mpix/s measured</li>
+      <li><b>2.0:1</b> design ratio</li>
+      <li><b>FHD</b> fits, UHD does not</li>
+    </ul>
+  </div>
+</header>
+
+<div class="facts">
+  <dl>
+    <dt>What is measured</dt>
+    <dd>The engine's full cost function, taken on the camera by wrapping the stills
+    path's own encode call. Three terms, fitted to four points, residual within
+    &plusmn;2&nbsp;&micro;s. Compression ratios come from the engine's own size
+    table, not from file sizes.</dd>
+    <dt>What is not</dt>
+    <dd>Nothing end-to-end. No compressed video frame has been written to a card by
+    the camera. The numbers below are a budget, not a recording.</dd>
+    <dt>The blocking question</dt>
+    <dd>Whether the camera can <em>play back</em> what it would write. The movie
+    parser does not read the tile tags, so a compressed clip may be export-only
+    &mdash; see <a href="#skip">dynamic frame-skip</a>.</dd>
+  </dl>
+</div>
+
+<h2>Where compression sits</h2>
+
+<p>Before any of the arithmetic, the one thing that decides what you are allowed to
+plan: compression happens <em>last</em>.</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 250" role="img" aria-labelledby="p1t">
+  <title id="p1t">The pipeline, with compression after all geometry is fixed</title>
+  <g font-size="11">
+    <rect class="bx" x="0" y="16" width="150" height="38" rx="3"/>
+    <text x="75" y="40" text-anchor="middle">sensor readout</text>
+
+    <rect class="bx" x="186" y="16" width="200" height="38" rx="3"/>
+    <text x="286" y="34" text-anchor="middle">CRCT chain</text>
+    <text x="286" y="48" text-anchor="middle" font-size="9.5" class="t-dim">Vbin &middot; Hbin &middot; Hbin2</text>
+
+    <rect class="bx" x="422" y="16" width="150" height="38" rx="3"/>
+    <text x="497" y="34" text-anchor="middle">RWZM</text>
+    <text x="497" y="48" text-anchor="middle" font-size="9.5" class="t-dim">resampler</text>
+
+    <rect class="bx" x="608" y="16" width="212" height="38" rx="3"/>
+    <text x="714" y="34" text-anchor="middle">DRAM strip</text>
+    <text x="714" y="48" text-anchor="middle" font-size="9.5" class="t-dim">packed 12-bit CinemaDNG</text>
+  </g>
+  <g class="ln">
+    <path d="M150 35 h36"/><path d="M386 35 h36"/><path d="M572 35 h36"/>
+  </g>
+  <!-- geometry bracket -->
+  <path class="ln" d="M186 62 v10 H572 v-10"/>
+  <text x="379" y="88" text-anchor="middle" font-size="10" class="t-dim">every reduction happens here &mdash; geometry is final at the strip</text>
+
+  <!-- down to engine -->
+  <path class="ln-on" d="M714 54 v46"/>
+  <rect class="bx-on" x="578" y="100" width="242" height="44" rx="3"/>
+  <text x="699" y="120" text-anchor="middle" font-size="11" font-weight="600">0x300D lossless JPEG</text>
+  <text x="699" y="135" text-anchor="middle" font-size="9.5" class="t-sig">compression happens here</text>
+
+  <path class="ln-on" d="M699 144 v32"/>
+  <rect class="bx" x="608" y="176" width="212" height="38" rx="3"/>
+  <text x="714" y="200" text-anchor="middle" font-size="11">SD / SSD</text>
+
+  <!-- the forbidden return path -->
+  <path class="ln-x" d="M578 122 H300 v-40"/>
+  <g font-size="10.5">
+    <text x="440" y="152" text-anchor="middle" class="t-warn" font-weight="600">no way back</text>
+    <text x="440" y="168" text-anchor="middle" class="t-dim" font-size="9.5">after this the data is a bit-stream,</text>
+    <text x="440" y="181" text-anchor="middle" class="t-dim" font-size="9.5">not pixels</text>
+  </g>
+  <g stroke="var(--warn)" stroke-width="2.5" fill="none">
+    <path d="M432 114 l16 16 M448 114 l-16 16"/>
+  </g>
+</svg>
+<figcaption>The engine reads the finished CinemaDNG strip &mdash; the same buffer
+the writer is about to put on the card. <b>Once a frame is compressed you cannot
+hbin, vbin or RWZM it.</b></figcaption>
+</figure>
+
+<div class="warn"><b>Decide geometry first, then talk about compression.</b> Three
+reasons, any one of which is enough. <b>Hardware order:</b> the binning stages and
+the resampler are stages of the CRCT pipeline, physically before the write to DRAM;
+the engine is after it. <b>Data type:</b> the engine's output is a Huffman
+bit-stream, not pixels &mdash; any reduction would need a full decode first, and the
+camera's video path has no such decode. <b>Sizing:</b> compression changes bytes,
+never geometry. Work out the frame size in
+<a href="frame-reduction.html">the reduction path</a> first; a ratio computed on a
+frame size you have not settled is a ratio for a frame that does not exist.</div>
+
+<h2>What the engine costs</h2>
+
+<p>Measured on the camera, by wrapping the stills path's own encode call rather than
+cold-calling the engine. Three terms, and they genuinely separate:</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 172" role="img" aria-labelledby="p2t">
+  <title id="p2t">The three-term cost model and how it splits for each format</title>
+  <text x="0" y="16" font-size="12.5">t(&micro;s) = 2,179 + 4,954.40 &times; alignedMpix + 40.926 &times; tiles</text>
+  <g font-size="9" class="t-dim">
+    <text x="60"  y="32">per call</text>
+    <text x="196" y="32">201.8 Mpix/s</text>
+    <text x="416" y="32">per tile</text>
+  </g>
+  <g class="ln"><path d="M74 20 v7"/><path d="M232 20 v7"/><path d="M434 20 v7"/></g>
+
+  <!-- split bars -->
+  <g font-size="10">
+    <text x="0" y="66" class="t-dim">FHD</text>
+    <text x="0" y="96" class="t-dim">OG3K</text>
+    <text x="0" y="126" class="t-dim">UHD</text>
+    <text x="0" y="156" class="t-dim">6K</text>
+  </g>
+  <!-- widths are proportional to 13.87 / 34.33 / 44.91 / 130.8 ms, scaled to 640px max -->
+  <g>
+    <!-- FHD 13.87ms: call 2.179, pix 11.20, tile 0.49 -->
+    <rect class="f-line" x="58" y="54" width="10.7" height="16" rx="2"/>
+    <rect class="f-sig"  x="68.7" y="54" width="54.8" height="16" rx="2"/>
+    <rect class="f-dim"  x="123.5" y="54" width="2.4" height="16" rx="2"/>
+    <text x="136" y="66" font-size="10" class="t-dim">13.87 ms</text>
+    <!-- OG3K 34.33: call 2.179, pix 31.17, tile 0.98 -->
+    <rect class="f-line" x="58" y="84" width="10.7" height="16" rx="2"/>
+    <rect class="f-sig"  x="68.7" y="84" width="152.5" height="16" rx="2"/>
+    <rect class="f-dim"  x="221.2" y="84" width="4.8" height="16" rx="2"/>
+    <text x="236" y="96" font-size="10" class="t-dim">34.33 ms</text>
+    <!-- UHD 44.91: call 2.179, pix 41.09, tile 1.64 -->
+    <rect class="f-line" x="58" y="114" width="10.7" height="16" rx="2"/>
+    <rect class="f-sig"  x="68.7" y="114" width="201.0" height="16" rx="2"/>
+    <rect class="f-dim"  x="269.7" y="114" width="8.0" height="16" rx="2"/>
+    <text x="288" y="126" font-size="10" class="t-dim">44.91 ms</text>
+    <!-- 6K 130.8: call 2.179, pix 124.7, tile 3.93 -->
+    <rect class="f-line" x="58" y="144" width="10.7" height="16" rx="2"/>
+    <rect class="f-sig"  x="68.7" y="144" width="610.0" height="16" rx="2"/>
+    <rect class="f-dim"  x="678.7" y="144" width="19.2" height="16" rx="2"/>
+    <text x="708" y="156" font-size="10" class="t-dim">130.8 ms</text>
+  </g>
+  <g font-size="9" class="t-dim">
+    <rect class="f-line" x="470" y="24" width="9" height="9" rx="2"/><text x="484" y="32">call</text>
+    <rect class="f-sig"  x="520" y="24" width="9" height="9" rx="2"/><text x="534" y="32">pixels</text>
+    <rect class="f-dim"  x="580" y="24" width="9" height="9" rx="2"/><text x="594" y="32">tiles</text>
+  </g>
+</svg>
+<figcaption>The per-call term is a flat 2.18&nbsp;ms whatever you encode, so it hurts
+small frames most &mdash; it is 16% of an FHD frame and 1.7% of a 6K one. The
+per-tile term is why <b>fewer, larger tiles beat less padding</b>.</figcaption>
+</figure>
+
+<div class="note"><b>Two older numbers you will find in the notes are wrong or
+misleading.</b> 32&nbsp;Mpix/s was a watchdog timeout, never a throughput.
+169.7&nbsp;Mpix/s is not wrong but is an <em>effective</em> rate at 256&times;256
+that swallows the per-tile term &mdash; splitting it out gives 201.8&nbsp;Mpix/s
+plus the other two terms. Always budget with all three.</div>
+
+<h3>Tile geometry is worth up to a quarter of the time</h3>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>format</th><th>best tile</th><th>tiles</th><th>encode</th><th>vs 256&times;256</th></tr></thead>
+  <tbody>
+    <tr><td>FHD 1936&times;1090</td><td><b>512&times;368</b></td><td>12</td><td>13.87 ms</td><td>&minus;17.4%</td></tr>
+    <tr><td>OG3K 3024&times;2010</td><td><b>512&times;512</b></td><td>24</td><td>34.33 ms</td><td>&minus;7.9%</td></tr>
+    <tr><td>UHD 3840&times;2160</td><td>480&times;432</td><td>40</td><td>44.91 ms</td><td>&minus;12.9%</td></tr>
+    <tr><td>6K 6064&times;4042</td><td>512&times;512</td><td>96</td><td>130.8 ms</td><td>&minus;8.3%</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>How much it actually compresses</h2>
+
+<p>Read out of the engine's own size table. It moves with the picture, and the
+spread is wide enough that it changes conclusions:</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 104" role="img" aria-labelledby="p3t">
+  <title id="p3t">Compression ratio range</title>
+  <rect class="f-line" x="0" y="34" width="820" height="18" rx="3" opacity=".45"/>
+  <rect class="f-sig"  x="123" y="34" width="492" height="18" rx="3" opacity=".3"/>
+  <g font-size="10">
+    <path class="ln" d="M0 30 v-8"/>   <text x="0"   y="18">1.5</text>
+    <path class="ln-on" d="M123 30 v-10"/><text x="123" y="16" class="t-sig" font-weight="600">1.65</text>
+    <path class="ln-on" d="M369 30 v-10"/><text x="369" y="16" class="t-sig" font-weight="600">2.0</text>
+    <path class="ln-on" d="M615 30 v-10"/><text x="615" y="16" class="t-sig" font-weight="600">2.6</text>
+    <path class="ln" d="M820 30 v-8"/> <text x="820" y="18" text-anchor="end">2.8</text>
+  </g>
+  <g font-size="9.5" class="t-dim" text-anchor="middle">
+    <text x="123" y="68">stress floor</text>
+    <text x="369" y="68">12-bit design value</text>
+    <text x="615" y="68">dark-scene measured</text>
+  </g>
+  <text x="0" y="94" font-size="9.5" class="t-dim">14-bit stills, effective samples: 1.67&ndash;2.08 &middot; 12-bit video frames measured so far: 2.51&ndash;2.74 (all one dark scene)</text>
+</svg>
+<figcaption>Plan against <b>1.65:1</b>, design against <b>2.0:1</b>, and treat 2.6:1
+as what a friendly scene gives you. The high-ISO-at-correct-exposure curve has still
+not been measured, because shutter and aperture cannot be written from the
+host.</figcaption>
+</figure>
+
+<div class="warn"><b>Do not derive a ratio from DNG file sizes.</b> A full still is
+mostly not raw tiles &mdash; one 36.33&nbsp;MB file holds 25.68&nbsp;MB of tiles and
+about 10.65&nbsp;MB of other IFDs and previews. Ratios here come from summing
+<code>TileByteCounts</code>, which is the engine's own accounting.</div>
+
+<h2>The architecture is serial &mdash; encode and write add up</h2>
+
+<p>This is the constraint that decides more than the engine speed does. In the
+current hook, one worker blocks on the encode, then blocks on the SD flush, and only
+then takes the next frame:</p>
+
+<figure class="dia">
+<svg viewBox="0 0 820 156" role="img" aria-labelledby="p4t">
+  <title id="p4t">Serial encode-then-write versus a pipelined arrangement</title>
+  <text x="0" y="14" font-size="10" class="t-dim">today &mdash; one worker, serial</text>
+  <rect class="f-sig" x="0"   y="24" width="200" height="22" rx="2"/>
+  <text x="100" y="39" text-anchor="middle" font-size="10" fill="var(--paper)">encode 13.9</text>
+  <rect class="f-dim" x="202" y="24" width="193" height="22" rx="2" opacity=".6"/>
+  <text x="298" y="39" text-anchor="middle" font-size="10">write 13.4</text>
+  <path class="ln-x" d="M600 18 v34"/>
+  <text x="606" y="39" font-size="10" class="t-warn">frame budget 33.4 ms @30p</text>
+  <text x="0" y="62" font-size="9.5" class="t-dim">service time 27.3 ms &mdash; fits, but both terms count</text>
+
+  <text x="0" y="94" font-size="10" class="t-dim">OG3K at the same scale</text>
+  <rect class="f-sig" x="0"   y="104" width="494" height="22" rx="2"/>
+  <text x="247" y="119" text-anchor="middle" font-size="10" fill="var(--paper)">encode 34.3</text>
+  <rect class="f-dim" x="496" y="104" width="514" height="22" rx="2" opacity=".6"/>
+  <path class="ln-x" d="M600 98 v34"/>
+  <text x="0" y="146" font-size="9.5" class="t-warn">service time 70.0 ms &mdash; over budget before the write even finishes</text>
+</svg>
+<figcaption>Engine duty and card speed are <b>not two resources that overlap</b> in
+the current design. Separating them into two workers with a queue is a real project,
+not a tuning knob &mdash; and it is what OG3K would need.</figcaption>
+</figure>
+
+<h2 id="sim">Budget simulator</h2>
+
+<p>Everything above, wired together. Change the format, the frame rate, how well the
+picture compresses, and where it is going.</p>
+
+<div class="sim">
+  <h4>Frame</h4>
+  <div class="ctl">
+    <div>
+      <label for="fmt">format</label>
+      <select id="fmt"></select>
+    </div>
+    <div>
+      <label for="fps">frame rate</label>
+      <select id="fps"></select>
+    </div>
+    <div>
+      <label for="bits">bit depth</label>
+      <select id="bits">
+        <option value="10">10-bit</option>
+        <option value="12" selected>12-bit</option>
+        <option value="14">14-bit</option>
+        <option value="16">16-bit</option>
+      </select>
+    </div>
+    <div>
+      <label for="tile">tile geometry</label>
+      <select id="tile">
+        <option value="best" selected>best for this format</option>
+        <option value="256">256 &times; 256 (stock)</option>
+        <option value="512">512 &times; 512</option>
+      </select>
+    </div>
+    <div>
+      <label for="dest">destination</label>
+      <select id="dest">
+        <option value="94" selected>SD &mdash; 94 MB/s measured</option>
+        <option value="66">SD &mdash; 66 MB/s pessimistic</option>
+        <option value="390">USB SSD &mdash; 390 MB/s</option>
+        <option value="0">ignore storage</option>
+      </select>
+    </div>
+  </div>
+
+  <h4>Compression</h4>
+  <div class="ctl">
+    <div class="rng">
+      <div class="rowlab">
+        <label for="ratio" style="margin:0">compression ratio</label>
+        <output id="ratioOut">2.00 : 1</output>
+      </div>
+      <input type="range" id="ratio" min="1.5" max="2.8" step="0.05" value="2.0">
+    </div>
+    <div class="rng">
+      <div class="toggles">
+        <label class="tg" id="tgCont"><input type="checkbox" id="cont"> contention +17%</label>
+        <label class="tg on" id="tgSkip"><input type="checkbox" id="skip" checked> dynamic frame-skip</label>
+        <label class="tg" id="tgPart"><input type="checkbox" id="part"> partial-frame mode</label>
+      </div>
+    </div>
+  </div>
+
+  <h4>Result</h4>
+  <div class="verdict" id="verdict">
+    <span class="mk" id="vmk">&mdash;</span>
+    <span class="why" id="vwhy"></span>
+  </div>
+
+  <dl class="rates">
+    <div><dt>engine can process</dt><dd id="rEng">&mdash;<small>MB/s</small></dd></div>
+    <div><dt>from compressed frames</dt><dd id="rCmp">&mdash;<small>MB/s</small></dd></div>
+    <div><dt>from uncompressed frames</dt><dd id="rUnc">&mdash;<small>MB/s</small></dd></div>
+    <div class="hero-n"><dt>total to card</dt><dd id="rTot">&mdash;<small>MB/s</small></dd></div>
+  </dl>
+
+  <div class="stack">
+    <div class="bar" id="bar">
+      <i class="c" id="bc"></i><i class="u" id="bu"></i><i class="h" id="bh"></i>
+    </div>
+    <div class="lim" id="lim"></div>
+    <div class="key">
+      <span class="c"><b></b>compressed payload</span>
+      <span class="u"><b></b>uncompressed payload</span>
+      <span class="h"><b></b>headers, 78,848 B/frame</span>
+    </div>
+  </div>
+
+  <div class="timing">
+    <div class="track" id="track">
+      <i class="enc" id="tEnc"></i><i class="wr" id="tWr"></i><i class="bud" id="tBud"></i>
+    </div>
+    <div class="lab">
+      <span>encode <b id="lEnc">&mdash;</b></span>
+      <span>write <b id="lWr">&mdash;</b></span>
+      <span>serial total <b id="lTot">&mdash;</b></span>
+      <span>budget <b id="lBud">&mdash;</b></span>
+    </div>
+  </div>
+
+  <div class="detail" id="detail"></div>
+</div>
+
+<h2 id="skip">Dynamic frame-skip: legal, but not free</h2>
+
+<p>Compress the frames the engine can keep up with, write the rest uncompressed.
+The format allows it outright &mdash; CinemaDNG is one file per frame and
+<code>Compression</code> is a per-IFD tag, so a clip with a mix of both is valid and
+no frame is dropped. Three things it does not solve:</p>
+
+<ol class="steps">
+  <li>
+    <h3>It lowers the average, not the peak</h3>
+    <p>The uncompressed frames still arrive at full rate. A card fails on sustained
+    throughput, so &ldquo;25% less on average&rdquo; is not the same as &ldquo;the
+    clip that used to drop frames now does not.&rdquo; Turn on partial-frame mode in
+    the simulator to see the peak move instead.</p>
+  </li>
+  <li>
+    <h3>The camera probably cannot play it back</h3>
+    <p>The movie parser reads <code>StripOffsets</code> and never looks at
+    <code>TileOffsets</code>, <code>TileWidth</code> or <code>Compression</code>. The
+    stills path has a hardware LJPEG branch; the video path does not go through it.
+    A compressed clip may be export-only.</p>
+  </li>
+  <li>
+    <h3>The timeline breaks in three different ways</h3>
+    <p>Number the files consecutively and the skipped time vanishes &mdash; motion
+    speeds up. Keep the original numbers and you have gaps, and nobody has checked
+    what the player does with those. Repeat the previous frame and you keep the
+    timing but lose the I/O saving that was the point. Real variable-rate needs
+    per-frame timestamps or a sidecar, and something that understands them.</p>
+  </li>
+</ol>
+
+<p class="note"><b>So frame-skip cannot be hidden as an implementation detail.</b>
+The three safe product shapes are: drop the whole clip one frame-rate step, mark
+compressed clips export-only and ship a sidecar timeline, or build a playback layer
+that understands variable rate. Until one of those exists this stays a research
+probe.</p>
+
+<h2>Partial-frame mode</h2>
+
+<p>The simulator's third toggle compresses a <em>fraction of each frame</em> instead
+of a fraction of the frames. Arithmetically it turns the compressed fraction from a
+whole-frame ratchet into a continuous dial, and the useful consequence is that
+<b>every frame ends up the same size</b> &mdash; so the peak drops with the average
+instead of staying pinned at the uncompressed rate.</p>
+
+<div class="warn"><b>It is not a legal DNG.</b> An IFD is either tiled
+<code>Compression=7</code> or an uncompressed strip; there is no half-and-half
+encoding. Doing it for real means a custom container or a sidecar, which lands you
+right back in the playback problem above. The toggle is there to make the
+average-versus-peak difference visible, not because it can be shipped.</div>
+
+<h2>Verdict as it stands</h2>
+
+<div class="scroll">
+<table class="verd">
+  <thead><tr><th>target</th><th></th><th>why</th></tr></thead>
+  <tbody>
+    <tr><td>FHD 23.976 &rarr; SD</td><td class="y">yes</td>
+        <td>27.3 ms serial against a 41.7 ms budget. The first thing to try.</td></tr>
+    <tr><td>FHD 29.97 &rarr; SD</td><td class="y">likely</td>
+        <td>Same 27.3 ms against 33.4 ms. Fine on a 94 MB/s card, marginal at 66.</td></tr>
+    <tr><td>OG3K 30p &rarr; SD</td><td class="n">no</td>
+        <td>Engine 3% over (20% with contention), card 18% over. Both need solving and
+        the engine has no clock knob.</td></tr>
+    <tr><td>OG3K 30p &rarr; SSD</td><td>not needed</td>
+        <td>Uncompressed 275.6 MB/s already fits in 390. Compression buys recording
+        time, not feasibility.</td></tr>
+    <tr><td>OG3K 18/24 &rarr; SD</td><td class="n">no</td>
+        <td>70&ndash;85 ms per frame serial. Needs a real pipeline, not a tile
+        change.</td></tr>
+    <tr><td>UHD, any rate</td><td class="n">no</td>
+        <td>Engine-bound at 44.91 ms. Nothing to do with the ratio.</td></tr>
+    <tr><td>6K</td><td class="n">no</td>
+        <td>314% duty at 24p.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Still open</h2>
+
+<ul>
+  <li><b>Whether the camera can play back <code>Compression=7</code> video.</b> This
+  is P0 &mdash; everything else is a probe until it is answered.</li>
+  <li>Where the flat 2.18 ms per call goes. The bring-up path shows register writes
+  and no explicit sleep, so it is a hardware transition or an IRQ-to-task wake.</li>
+  <li>The compression ratio at high ISO with correct exposure.</li>
+  <li>Whether the DNG writer tolerates variable frame lengths. The player derives a
+  shared capacity from the first frame, so later frames must be smaller &mdash; which
+  is not a safe worst-case guarantee.</li>
+  <li>Mutual exclusion against the stills path. One engine, no mutex; colliding with
+  a photo wedges IRQ 0x29 and needs a reboot.</li>
+  <li>The extrapolated tile geometries (512&times;368 and friends). Only
+  256&sup2; and 512&sup2; have a same-raster control pair behind them.</li>
+</ul>
+
+<h2>Sources</h2>
+
+<p>The cost model, tile study and ratio measurements are from the in-camera lossless
+work of 2026-09-15/16; the hardware inventory, engine ABI and cold-call analysis are
+from the raw-compression research of 2026-08-20; the pipeline position comes from
+<a href="frame-reduction.html">the reduction-path work</a>. A summary of all of it,
+with the numbers this page uses, is in
+<code>research/imaging-hw/notes/LOSSLESS_DEVELOPMENT_SUMMARY.md</code> in the
+repository.</p>
+
+<footer>
+  <p><a href="../research.html">Firmware research</a> &middot;
+  <a href="../">fpSup</a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://github.com/ijigen/fpSup">Repository</a></p>
+</footer>
+
+<script>
+(function(){
+  // Measured cost model: t(us) = 2179 + 4954.40*alignedMpix + 40.926*tiles
+  var CALL_US = 2179, US_PER_MPIX = 4954.40, US_PER_TILE = 40.926;
+  var HDR = 78848;            // bytes of DNG header per frame
+  var CONTENTION = 1.17;
+
+  var FORMATS = [
+    {id:'fhd',  n:'FHD 1936 x 1090',   w:1936, h:1090, tw:512, th:368},
+    {id:'og3k', n:'OG3K 3024 x 2010',  w:3024, h:2010, tw:512, th:512},
+    {id:'uhd',  n:'UHD 3840 x 2160',   w:3840, h:2160, tw:480, th:432},
+    {id:'6k',   n:'6K 6064 x 4042',    w:6064, h:4042, tw:512, th:512}
+  ];
+  var RATES = [23.976, 24, 25, 29.97, 30, 50, 59.94, 100, 119.88];
+
+  var $ = function(id){ return document.getElementById(id); };
+  var fmt = $('fmt'), fps = $('fps');
+  if(!fmt) return;
+
+  FORMATS.forEach(function(f){
+    var o = document.createElement('option');
+    o.value = f.id; o.textContent = f.n; fmt.appendChild(o);
+  });
+  RATES.forEach(function(r){
+    var o = document.createElement('option');
+    o.value = r; o.textContent = r.toFixed(3).replace(/\.?0+$/,'') + ' fps';
+    fps.appendChild(o);
+  });
+  fmt.value = 'fhd';
+  fps.value = '29.97';
+
+  function n1(x){ return x.toFixed(1); }
+  function n2(x){ return x.toFixed(2); }
+
+  function calc(){
+    var f = FORMATS.filter(function(x){ return x.id === fmt.value; })[0];
+    var W = f.w, H = f.h;
+    var R = parseFloat(fps.value);
+    var bits = parseInt($('bits').value, 10);
+    var ratio = parseFloat($('ratio').value);
+    var store = parseFloat($('dest').value);
+    var contention = $('cont').checked;
+    var doSkip = $('skip').checked;
+    var partial = $('part').checked;
+
+    var tw = f.tw, th = f.th;
+    if($('tile').value === '256'){ tw = 256; th = 256; }
+    else if($('tile').value === '512'){ tw = 512; th = 512; }
+
+    var cols = Math.ceil(W / tw), rows = Math.ceil(H / th);
+    var tiles = cols * rows;
+    var alignedMpix = (cols * tw) * (rows * th) / 1e6;
+
+    var encUs = CALL_US + US_PER_MPIX * alignedMpix + US_PER_TILE * tiles;
+    if(contention) encUs *= CONTENTION;
+    var encMs = encUs / 1000;
+
+    var budgetMs = 1000 / R;
+    var duty = encMs / budgetMs;
+
+    // fraction of the pixel stream the engine can actually get through
+    var capacity = budgetMs / encMs;               // frames it can do per frame slot
+    var frac = Math.min(1, capacity);
+    if(!doSkip) frac = duty <= 1 ? 1 : 0;          // all-or-nothing without skip
+
+    var rawBytes = W * H * bits / 8;
+    var uncFrame = rawBytes + HDR;
+    var cmpFrame = rawBytes / ratio + HDR;
+
+    var payC, payU, hdrRate, peak;
+    if(partial){
+      // every frame carries the same mix -> one frame size, peak equals average
+      payC = rawBytes * frac / ratio * R / 1e6;
+      payU = rawBytes * (1 - frac) * R / 1e6;
+      peak = (rawBytes * (frac / ratio + (1 - frac)) + HDR) * R / 1e6;
+    } else {
+      // whole frames only: frac of them compressed, the rest full size
+      payC = rawBytes / ratio * (frac * R) / 1e6;
+      payU = rawBytes * ((1 - frac) * R) / 1e6;
+      peak = (frac >= 1 ? cmpFrame : uncFrame) * R / 1e6;
+    }
+    hdrRate = HDR * R / 1e6;
+    var total = payC + payU + hdrRate;
+    var uncompressedAll = uncFrame * R / 1e6;
+
+    // what the engine can chew through, expressed as input MB/s
+    var engineMBs = (rawBytes / (encMs / 1000)) / 1e6;
+
+    var writeMs = store > 0 ? (total / R) / store * 1000 : 0;
+    var serialMs = encMs + writeMs;
+
+    return {W:W,H:H,R:R,bits:bits,ratio:ratio,store:store,tiles:tiles,tw:tw,th:th,
+            alignedMpix:alignedMpix, encMs:encMs, budgetMs:budgetMs, duty:duty,
+            frac:frac, payC:payC, payU:payU, hdrRate:hdrRate, total:total,
+            peak:peak, uncompressedAll:uncompressedAll, engineMBs:engineMBs,
+            writeMs:writeMs, serialMs:serialMs, partial:partial, doSkip:doSkip,
+            contention:contention};
+  }
+
+  function render(){
+    var r = calc();
+
+    $('ratioOut').textContent = n2(r.ratio) + ' : 1';
+    ['cont','skip','part'].forEach(function(id){
+      var box = $(id), wrap = $('tg' + id.charAt(0).toUpperCase() + id.slice(1));
+      if(wrap) wrap.classList.toggle('on', box.checked);
+    });
+
+    $('rEng').innerHTML = n1(r.engineMBs) + '<small>MB/s</small>';
+    $('rCmp').innerHTML = n1(r.payC) + '<small>MB/s</small>';
+    $('rUnc').innerHTML = n1(r.payU) + '<small>MB/s</small>';
+    $('rTot').innerHTML = n1(r.total) + '<small>MB/s</small>';
+
+    // stacked bar, scaled against the uncompressed rate or the card, whichever is bigger
+    var scale = Math.max(r.uncompressedAll, r.store || 0, r.total) * 1.02;
+    $('bc').style.width = (r.payC / scale * 100) + '%';
+    $('bu').style.width = (r.payU / scale * 100) + '%';
+    $('bh').style.width = (r.hdrRate / scale * 100) + '%';
+    var lim = $('lim'); lim.innerHTML = '';
+    function mark(v, label, row){
+      if(v <= 0 || v > scale) return;
+      var s = document.createElement('span');
+      s.style.left = (v / scale * 100) + '%';
+      s.textContent = label;
+      if(row) s.className = 'r2';
+      lim.appendChild(s);
+    }
+    if(r.store > 0) mark(r.store, 'card ' + r.store, 0);
+    mark(r.uncompressedAll, 'uncompressed ' + n1(r.uncompressedAll), 1);
+
+    // timing track
+    var tscale = Math.max(r.serialMs, r.budgetMs) * 1.05;
+    $('tEnc').style.width = (r.encMs / tscale * 100) + '%';
+    $('tWr').style.left = (r.encMs / tscale * 100) + '%';
+    $('tWr').style.width = (r.writeMs / tscale * 100) + '%';
+    $('tBud').style.left = (r.budgetMs / tscale * 100) + '%';
+    $('tBud').style.width = '0px';
+    $('lEnc').textContent = n2(r.encMs) + ' ms';
+    $('lWr').textContent = r.store > 0 ? n2(r.writeMs) + ' ms' : 'n/a';
+    $('lTot').textContent = n2(r.serialMs) + ' ms';
+    $('lBud').textContent = n2(r.budgetMs) + ' ms';
+
+    // verdict
+    var v = $('verdict'), mk = $('vmk'), why = $('vwhy');
+    var reasons = [];
+    if(r.duty > 1) reasons.push('engine needs ' + Math.round(r.duty * 100) + '% of the frame');
+    if(r.store > 0 && r.total > r.store) reasons.push('card is over by ' +
+        Math.round((r.total / r.store - 1) * 100) + '%');
+    if(r.store > 0 && r.serialMs > r.budgetMs) reasons.push('serial encode+write is ' +
+        n2(r.serialMs) + ' ms against ' + n2(r.budgetMs));
+    v.classList.remove('ok','no');
+    if(reasons.length === 0){
+      v.classList.add('ok'); mk.textContent = 'fits';
+      why.textContent = 'engine at ' + Math.round(r.duty * 100) + '% duty, ' +
+        n1(r.total) + ' MB/s to a ' + (r.store > 0 ? r.store + ' MB/s' : 'n/a') +
+        ' destination.';
+    } else {
+      v.classList.add('no'); mk.textContent = 'does not fit';
+      why.textContent = reasons.join(' · ');
+    }
+
+    // detail line
+    var d = [];
+    d.push('<b>' + r.W + '&times;' + r.H + '</b> at ' + r.bits + '-bit, ' +
+           r.tw + '&times;' + r.th + ' tiles (' + r.tiles + '), aligned ' +
+           n2(r.alignedMpix) + ' Mpix');
+    d.push('encode <b>' + n2(r.encMs) + ' ms</b> = 2.18 call + ' +
+           n2(4954.40 * r.alignedMpix / 1000 * (r.contention ? 1.17 : 1)) + ' pixels + ' +
+           n2(40.926 * r.tiles / 1000 * (r.contention ? 1.17 : 1)) + ' tiles' +
+           (r.contention ? ' (incl. +17% contention)' : ''));
+    d.push('compressed fraction <b>' + Math.round(r.frac * 100) + '%</b>' +
+           (r.partial ? ' of every frame' : ' of the frames') +
+           (r.doSkip ? '' : ' — frame-skip off, so it is all or nothing'));
+    d.push('uncompressed reference <b>' + n1(r.uncompressedAll) + ' MB/s</b> · ' +
+           'peak <b>' + n1(r.peak) + ' MB/s</b>' +
+           (!r.partial && r.frac < 1 && r.frac > 0
+             ? ' — unchanged, because the skipped frames still arrive full size'
+             : ''));
+    if(r.store > 0){
+      var mins = function(gb){ return (gb * 1024 * 0.93) / r.total / 60; };
+      d.push('recording time <b>' + n1(mins(128)) + ' min</b> per 128 GB · ' +
+             n1(mins(512)) + ' min per 512 GB');
+    }
+    $('detail').innerHTML = d.join('<br>');
+  }
+
+  ['fmt','fps','bits','tile','dest','ratio','cont','skip','part'].forEach(function(id){
+    var el = $(id);
+    if(el) el.addEventListener('input', render);
+  });
+  render();
+})();
+</script>
+
+</body>
+</html>
