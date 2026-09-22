@@ -948,7 +948,8 @@ repository.</p>
     // With frame-skip on, the engine running past one frame slot is exactly what
     // skip absorbs -- it is already priced into frac, and into the rate below.
     // Judging it again here made skip look useless whenever it was doing its job.
-    if(r.duty > 1 && !r.doSkip) reasons.push('engine needs ' + Math.round(r.duty * 100) + '% of the frame');
+    if(r.duty > 1 && !r.doSkip) reasons.push('engine tops out at ' + n2(1000 / r.encMs) +
+        ' fps at this size \u2014 needs ' + Math.round(r.duty * 100) + '% of the frame');
     if(r.store > 0 && r.total > r.store) reasons.push('card is over by ' +
         Math.round((r.total / r.store - 1) * 100) + '%');
     if(r.store > 0 && r.serialMs > r.budgetMs && !r.doSkip)
@@ -1010,6 +1011,15 @@ repository.</p>
            n2(4954.40 * r.alignedMpix / 1000 * (r.contention ? 1.17 : 1)) + ' pixels + ' +
            n2(40.926 * r.tiles / 1000 * (r.contention ? 1.17 : 1)) + ' tiles' +
            (r.contention ? ' (incl. +17% contention)' : ''));
+    // The single most useful number when nothing compresses: where the ceiling is.
+    if(r.compress && r.engineOK && r.duty > 1)
+      d.push('<b>the engine cannot keep up at ' + n2(r.R) + ' fps</b> \u2014 at ' +
+             r.W + '&times;' + r.H + ' it tops out at <b>' + n2(1000 / r.encMs) +
+             ' fps</b>. ' + (r.doSkip
+               ? 'Frame-skip is absorbing that, so ' + Math.round(r.frac * 100) +
+                 '% of frames get compressed.'
+               : 'With frame-skip off it is all or nothing, so nothing is compressed. ' +
+                 'Turn frame-skip on, or drop below that rate.'));
     if(r.compress && r.engineOK) d.push('compressed fraction <b>' + Math.round(r.frac * 100) + '%</b>' +
            (r.partial ? ' of every frame' : ' of the frames') +
            (r.doSkip ? '' : ' — frame-skip off, so it is all or nothing'));
