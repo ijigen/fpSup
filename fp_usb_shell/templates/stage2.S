@@ -53,6 +53,27 @@
 stage2:
     push    {r4, r5, r6, r7, r8, lr}   @ an even count: the firmware LDRDs need 8-byte alignment
     mov     r6, r0
+
+    /* Hand the cave's allocator a fresh start, before anybody can ask.
+     *
+     * One word holds the next free cave address and a payload takes what it
+     * needs by adding to it -- no free list, because nothing gives cave space
+     * back within a boot, and no lock, because entries are called one after
+     * another from here.  What it buys is that a card nobody selected costs no
+     * addresses at all, instead of holding a reserved range for a feature the
+     * user may not want.
+     *
+     * RESET EVERY BOOT, and that is the part that bites.  The cave outlives a
+     * soft power cycle, so a pointer left from the last boot would climb a
+     * little further each time until it walked off the end -- the same shape as
+     * the stale B_PTR that had the logger writing into buffers the recorder had
+     * been given.  Here is the only honest moment: after the file is in memory
+     * and before any entry has run. */
+    movw    r0, #:lower16:CAVE_ARENA
+    movt    r0, #:upper16:CAVE_ARENA
+    movw    r1, #:lower16:CAVE_BUMP
+    movt    r1, #:upper16:CAVE_BUMP
+    str     r0, [r1]
     mov     r8, #1                      @ pass 1: firmware destinations
     bl      s2_pass
     bl      s2_publish                  @ before anything placed is allowed to run

@@ -176,6 +176,19 @@ STORE_BOOT_AT = 0xC072F700   # cave scratch: above the payload and above
                              # bootstrap copies the loader there and would
                              # overwrite itself.
 LOADER_END = CAVE_LOW + 0x200   # loader.S sits at the bottom; payloads go above
+CAVE_BUMP  = 0xC072E060   # the cave's next free address, and the ONLY cave word a
+                          # build still names.  It is the last word of the loader's
+                          # own 0x200 block rather than a claim of its own: the
+                          # loader is the one thing that cannot ask for space --
+                          # it is what goes and asks -- so its block is where the
+                          # asking starts.  stage2 initialises it every boot.
+CAVE_ARENA_END = 0xC072EFB4   # the park stub.  An allocation that would cross it
+                              # is refused, and the payload stands down the same
+                              # way it does when the pool allocator says no.
+CAVE_ARENA = 0xC072EC60   # where handing out begins.  Above the gyro state words
+                          # for now, which are still build-time addresses; when
+                          # they move this drops to LOADER_END and the arena
+                          # becomes the whole payload window.
 
 # Where the worker's code goes on the FALLBACK card, the one that spells the
 # whole thing out with `mem set` and hooks `bootstrap`.  It used to go at
@@ -808,7 +821,8 @@ if args.loader:
     # it needs to know where both live and what the loader's bytes hash to.
     _sd = [f'ABORT_AT=0x{ABORT_AT:08X}', f'ECHO_SLOT=0x{ECHO_SLOT:08X}',
            f'STORE=0x{STORE:08X}', f'LOADER_BASE=0x{CAVE_LOW:08X}',
-           f'LOAD_DONE_US=0x{LOAD_DONE_US:08X}']
+           f'LOAD_DONE_US=0x{LOAD_DONE_US:08X}',
+           f'CAVE_BUMP=0x{CAVE_BUMP:08X}', f'CAVE_ARENA=0x{CAVE_ARENA:08X}']
     if args.store_boot:
         _sd += ['STORE_PROVISION=1', f'STORE_MAGIC=0x{smagic:08X}',
                 f'STORE_LEN=0x{slen:X}']

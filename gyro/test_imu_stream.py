@@ -253,36 +253,59 @@ class Header(unittest.TestCase):
         self.assertNotIn('0xC37CE210', self.code(self.task))
         self.assertNotIn('0xC37CE210', self.code(self.inc))
 
-    def test_the_named_code_addresses_really_name_that_code(self):
-        """ACCEL_AT/START_AT/STOP_AT are exempted from the words-on-code check
-        because they ARE the code's addresses -- gsup_boot builds the three
-        branch encodings from them.  An exemption that stops being true is a
-        branch into the middle of a hook, so check it."""
-        import imu_stream_deploy as D
-        inc = (HERE / 'ring_task.inc.S').read_text()
-        for equ, producer in (('ACCEL_AT', 'accel'), ('START_AT', 'start'),
-                              ('STOP_AT', 'stop')):
-            m = re.search(rf'^\.equ {equ},\s*(0x[0-9A-Fa-f]+)', inc, re.M)
-            self.assertIsNotNone(m, equ)
-            self.assertEqual(int(m.group(1), 0), D.PRODUCERS[producer][0],
-                             f'{equ} is not where {producer} is placed')
+    def test_no_build_names_a_cave_address_for_a_hook(self):
+        """The rule the allocator exists for.
 
-    def test_the_arm_words_match_the_deployer(self):
-        """The card arms the hooks from constants; the USB deploy computes them.
-        If they ever disagree, one of the two branches into nothing."""
-        import imu_stream_deploy as D
+        If one product may write a cave address into its build, so may the next,
+        and the end of that is a set of reserved ranges held for features the
+        user did not ask for.  ACCEL_AT and its three siblings were exactly
+        that, and the branch words computed from them; both are gone, and a
+        hook now gets eight bytes from the bump allocator at boot."""
         inc = (HERE / 'ring_task.inc.S').read_text()
-        for equ, producer in (('ARM_ACCEL', 'accel'), ('ARM_START', 'start'),
-                              ('ARM_STOP', 'stop')):
-            at, _src, _d, site, _orig, thumb = D.PRODUCERS[producer]
-            want = D.branch_word(site, at, thumb)
-            m = re.search(rf'^\.equ {equ},\s*(.+?)\s*$', inc, re.M)
-            self.assertIsNotNone(m, equ)
-            got = eval(m.group(1), {}, {n: int(re.search(
-                rf'^\.equ {n},\s*(0x[0-9A-Fa-f]+)', inc, re.M).group(1), 0)
-                for n in ('ACCEL_SITE', 'ACCEL_AT', 'START_SITE', 'START_AT',
-                          'STOP_SITE', 'STOP_AT')})
-            self.assertEqual(got, want, f'{equ} disagrees with the deployer')
+        for gone in ('ACCEL_AT', 'START_AT', 'STOP_AT', 'MODE_AT',
+                     'ARM_ACCEL', 'ARM_START', 'ARM_STOP', 'ARM_MODE'):
+            self.assertIsNone(re.search(rf'^\.equ {gone},', inc, re.M),
+                              f'{gone} is back: a build is naming cave space again')
+        import imu_stream_deploy as D
+        for name, spec in D.PRODUCERS.items():
+            self.assertNotIsInstance(spec[0], int,
+                                     f'{name} carries a cave address again')
+
+    def test_the_cave_allocator_is_one_word_and_both_sides_agree(self):
+        """It is duplicated -- build_autorun lays the loader's block out, the
+        gyro header has to know where the word is -- and the same constant in
+        two places is this tree's recurring bug."""
+        inc = (HERE / 'ring_task.inc.S').read_text()
+        ba = (HERE.parent / 'fp_usb_shell' / 'build_autorun.py').read_text()
+        for name in ('CAVE_BUMP', 'CAVE_ARENA_END'):
+            asm = int(re.search(rf'^\.equ {name},\s*(0x[0-9A-Fa-f]+)',
+                                inc, re.M).group(1), 0)
+            py = int(re.search(rf'^{name}\s*=\s*(0x[0-9A-Fa-f]+)',
+                               ba, re.M).group(1), 0)
+            self.assertEqual(asm, py, f'{name} disagrees between the two')
+
+    def test_the_branch_word_is_worked_out_the_same_way_on_both_sides(self):
+        """The card computes it in s_hook and the USB deploy computes it in
+        Python.  If the two ever disagree, one of them branches into nothing --
+        which used to be guarded by comparing two constants and now has to be
+        guarded by comparing two pieces of arithmetic."""
+        import imu_stream_deploy as D
+        # the Python side, against the definition
+        for site, dest in ((0xC050D4C8, 0xC072EC60), (0xC03790B8, 0xC072E064),
+                           (0xC0058310, 0xC072EFB0)):
+            want = 0xEB000000 | (((dest - site - 8) >> 2) & 0xFFFFFF)
+            self.assertEqual(D.branch_word(site, dest, 0), want)
+        # the camera side: the five instructions, in order, in s_hook
+        core = (HERE / 'writer_core.inc.S').read_text()
+        hook = core[core.index('\ns_hook:'):]
+        hook = re.sub(r'/\*.*?\*/', '', hook[:hook.index('\n9:')], flags=re.S)
+        seq = ['sub     r1, r0, r5', 'sub     r1, r1, #8', 'asr     r1, r1, #2',
+               'bic     r1, r1, #0xFF000000', 'orr     r1, r1, #0xEB000000']
+        pos = -1
+        for ins in seq:
+            nxt = hook.find(ins)
+            self.assertGreater(nxt, pos, f's_hook is missing or reorders `{ins}`')
+            pos = nxt
 
     def test_the_camera_never_makes_the_log_directory(self):
         """\\GYRO has to already exist on whatever volume is recorded to, and
@@ -524,14 +547,20 @@ class Editions(unittest.TestCase):
         boot = boot[:boot.index('\n9:')]
         code = re.sub(r'/\*.*?\*/', '', boot, flags=re.S)
         code = re.sub(r'@.*', '', code)
-        first_arm = min(code.index(s) for s in
-                        ('ACCEL_SITE', 'START_SITE', 'STOP_SITE'))
-        for at in ('ACCEL_AT', 'START_AT', 'STOP_AT', 'MODE_AT'):
-            self.assertIn(at, code, f'gsup_boot never writes a veneer at {at}')
-            self.assertLess(code.index(at), first_arm,
-                            f'the veneer at {at} is written after a hook is armed')
-        # ...and through the helper, not by hand four times.
-        self.assertEqual(code.count('bl      s_veneer'), 4)
+        # One call per hook, and each one allocates, writes the veneer and arms
+        # the site in that order -- so "before" is now a property of s_hook, not
+        # of where two blocks sit in gsup_boot.
+        self.assertEqual(code.count('bl      s_hook'), 4)
+        core_all = (HERE / 'writer_core.inc.S').read_text()
+        hook = core_all[core_all.index('\ns_hook:'):]
+        hook = hook[:hook.index('\n9:')]
+        hook = re.sub(r'@.*', '', hook)
+        self.assertLess(hook.index('CAVE_BUMP'), hook.index('VENEER_LDR'),
+                        'the veneer is written before the cave says where')
+        self.assertLess(hook.index('VENEER_LDR'), hook.index('0xEB000000'),
+                        'the site is armed before the veneer exists')
+        self.assertIn('bhi     9f', hook,
+                      's_hook does not refuse when the cave is full')
 
     def test_the_call_throughs_are_written_before_any_hook_is_armed(self):
         """The ordering that makes the move safe.
@@ -1096,7 +1125,7 @@ class Reader(unittest.TestCase):
         import imu_stream_deploy as D
         entries = {0xC0315C10, 0xC01FB640, 0xC01FB918, 0xC050D250, 0xC01FD380,
                    0xC0125478}
-        for name, (_at, _src, _d, site, _orig, _t) in D.PRODUCERS.items():
+        for name, (_src, _d, site, _orig, _t) in D.PRODUCERS.items():
             self.assertNotIn(site, entries, f'{name} is on a function entry')
 
     def test_every_hook_declares_the_site_it_is_deployed_to(self):
@@ -1106,8 +1135,8 @@ class Reader(unittest.TestCase):
     def test_the_two_triggers_share_one_source(self):
         """Start and stop differ by four lines; two files would drift."""
         import imu_stream_deploy as D
-        self.assertEqual(D.PRODUCERS['start'][1], D.PRODUCERS['stop'][1])
-        self.assertEqual(D.PRODUCERS['stop'][2], ('REC_STOP',))
+        self.assertEqual(D.PRODUCERS['start'][0], D.PRODUCERS['stop'][0])
+        self.assertEqual(D.PRODUCERS['stop'][1], ('REC_STOP',))
 
     def test_a_short_buffer_is_refused(self):
         with self.assertRaises(ValueError):
@@ -1134,7 +1163,7 @@ class ModeHook(unittest.TestCase):
 
     def setUp(self):
         import imu_stream_deploy as D
-        self.at, self.src, self.defines, self.site, self.orig, _ = D.PRODUCERS['mode']
+        self.src, self.defines, self.site, self.orig, _ = D.PRODUCERS['mode']
 
     def test_the_site_still_holds_the_instruction_we_displace(self):
         """The stub ends by running `mov r4, r0` itself.  If the firmware word
@@ -1178,7 +1207,7 @@ class ModeHook(unittest.TestCase):
         self.assertIn('mode_hook', gcsv, 'the gcsv edition lost the mode hook')
         core = (HERE / 'writer_core.inc.S').read_text()
         self.assertIn('#ifdef WANT_MODE_HOOK', core)
-        self.assertIn('ARM_MODE', core)
+        self.assertIn('MODE_SITE', core)
         # Base must not ARM it: build_base_card leaves the mode section out of
         # a base card, so arming MODE_SITE would branch into cave bytes nobody
         # wrote.  That happened on 2026-09-20, when the two editions became one
@@ -1252,16 +1281,21 @@ class ModeHook(unittest.TestCase):
         self.assertRegex(self.SRC, r'str\s+r3, \[r2, #4\]')
         self.assertIn('G_MODE_N', (HERE / 'writer_core.inc.S').read_text())
 
-    def test_the_branch_reaches_the_stub(self):
-        """ARM_MODE and MODE_AT come from the same two constants, so they
-        cannot disagree -- but the displacement still has to fit."""
+    def test_the_branch_reaches_anywhere_the_allocator_can_hand_out(self):
+        """The veneer's address is not known until boot, so what has to fit is
+        not one displacement but every displacement the arena can produce."""
         inc = (HERE / 'ring_task.inc.S').read_text()
-        site = int(equ('MODE_SITE', inc), 0)
-        at = int(equ('MODE_AT', inc), 0)
-        self.assertEqual(site, self.site)
-        self.assertEqual(at, self.at)
-        disp = (at - site - 8) >> 2
-        self.assertEqual(disp, ((disp << 8) >> 8), 'the bl does not reach')
+        ba = (HERE.parent / 'fp_usb_shell' / 'build_autorun.py').read_text()
+        lo = int(re.search(r'^CAVE_ARENA\s*=\s*(0x[0-9A-Fa-f]+)', ba, re.M).group(1), 0)
+        hi = int(equ('CAVE_ARENA_END', inc), 0)
+        self.assertEqual(int(equ('MODE_SITE', inc), 0), self.site)
+        import imu_stream_deploy as D
+        for _name, spec in D.PRODUCERS.items():
+            site = spec[2]
+            for dest in (lo, hi - 8):
+                disp = (dest - site - 8) >> 2
+                self.assertEqual(disp, ((disp << 8) >> 8),
+                                 f'a bl from 0x{site:08X} cannot reach 0x{dest:08X}')
 
 
 if __name__ == '__main__':

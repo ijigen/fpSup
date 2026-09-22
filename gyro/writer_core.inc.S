@@ -1190,64 +1190,31 @@ gsup_boot:
     cmp     r0, #0
     beq     9f                          @ refused: arm nothing
 
-    /* The veneers, before the branches that will run them.
+    /* Each hook: eight bytes from the cave's allocator, the veneer written
+     * into them, and the site armed to branch there -- in that order, per
+     * hook, so a site is never armed over a landing point that does not exist.
      *
-     * The firmware reaches a hook with `bl`, which carries 32 MB of range, and
-     * the blob is two gigabytes away in the pool -- so what sits at ACCEL_AT
-     * and friends is `ldr pc,[pc,#-4]` and the body's address, eight bytes,
-     * and the body itself is in here.  The cave keeps the landing point
-     * because the landing point is the part that has to be reachable.
-     *
-     * Written after blocks_open said yes and before anything is armed: a
-     * veneer nobody branches to is inert, and a branch to a veneer nobody
-     * wrote is not.  The F_CACHE below publishes these as well as the arming
-     * words -- they are instructions the firmware is about to fetch.
-     *
-     * An edition without a hook has a zero in its slot and s_veneer leaves the
-     * cave alone, the same way a missing buffer entry is read as "not here". */
+     * The F_CACHE below publishes all of it: the veneers are instructions the
+     * firmware is about to fetch, and so are the branch words. */
     ldr     r0, [r5, #64]               @ accel_hook
-    movw    r1, #:lower16:ACCEL_AT
-    movt    r1, #:upper16:ACCEL_AT
-    bl      s_veneer
+    movw    r1, #:lower16:ACCEL_SITE
+    movt    r1, #:upper16:ACCEL_SITE
+    bl      s_hook
     ldr     r0, [r5, #68]               @ rec_start
-    movw    r1, #:lower16:START_AT
-    movt    r1, #:upper16:START_AT
-    bl      s_veneer
+    movw    r1, #:lower16:START_SITE
+    movt    r1, #:upper16:START_SITE
+    bl      s_hook
     ldr     r0, [r5, #72]               @ rec_stop
-    movw    r1, #:lower16:STOP_AT
-    movt    r1, #:upper16:STOP_AT
-    bl      s_veneer
+    movw    r1, #:lower16:STOP_SITE
+    movt    r1, #:upper16:STOP_SITE
+    bl      s_hook
 #ifdef WANT_MODE_HOOK
     ldr     r0, [r5, #76]               @ mode_hook
-    movw    r1, #:lower16:MODE_AT
-    movt    r1, #:upper16:MODE_AT
-    bl      s_veneer
+    movw    r1, #:lower16:MODE_SITE
+    movt    r1, #:upper16:MODE_SITE
+    bl      s_hook
 #endif
 
-    /* Only now.  The arming words, then the cache, so the firmware fetches
-     * the branches and not what was there before them. */
-    movw    r0, #:lower16:ACCEL_SITE
-    movt    r0, #:upper16:ACCEL_SITE
-    movw    r1, #:lower16:ARM_ACCEL
-    movt    r1, #:upper16:ARM_ACCEL
-    str     r1, [r0]
-    movw    r0, #:lower16:START_SITE
-    movt    r0, #:upper16:START_SITE
-    movw    r1, #:lower16:ARM_START
-    movt    r1, #:upper16:ARM_START
-    str     r1, [r0]
-    movw    r0, #:lower16:STOP_SITE
-    movt    r0, #:upper16:STOP_SITE
-    movw    r1, #:lower16:ARM_STOP
-    movt    r1, #:upper16:ARM_STOP
-    str     r1, [r0]
-#ifdef WANT_MODE_HOOK
-    movw    r0, #:lower16:MODE_SITE
-    movt    r0, #:upper16:MODE_SITE
-    movw    r1, #:lower16:ARM_MODE
-    movt    r1, #:upper16:ARM_MODE
-    str     r1, [r0]
-#endif
     movw    ip, #:lower16:F_CACHE
     movt    ip, #:upper16:F_CACHE
     blx     ip
@@ -1300,29 +1267,61 @@ gsup_boot:
 9:  pop     {r4, r5, r6, r7, r8, lr}
     bx      lr
 
-/* s_veneer -- write one eight-byte hop into the cave.
+/* s_hook -- give one hook its veneer and arm its site.
  *
  *   r0 = the body's offset in this blob, or zero if this edition has none
- *   r1 = the cave address the firmware's `bl` lands on
+ *   r1 = the firmware site the `bl` is written over
  *   r6 = the blob's base, as everywhere else in gsup_boot
  *
- * `ldr pc,[pc,#-4]` and the word after it.  pc reads as the instruction plus
- * eight, so [pc,#-4] is exactly the next word -- the classic absolute jump, and
- * the only one that costs nothing: it touches no register and it does not touch
- * lr, so the body still returns straight to the firmware with `bx lr` and the
- * caller cannot tell there was a hop at all.  `ldr ip, =addr; bx ip` would
- * clobber ip, and the displaced firmware instruction may be using it. */
-.equ VENEER_LDR, 0xE51FF004
-
-s_veneer:
+ * THE CAVE ADDRESS IS NOT A BUILD CONSTANT ANY MORE.  It is eight bytes taken
+ * from the cave's bump allocator at boot, which is the whole point: a card that
+ * is not on the SD card asks for nothing and holds no addresses, instead of a
+ * range reserved for a feature the user may not have wanted.  The branch word
+ * has to be computed here for the same reason -- until the allocator answers,
+ * nobody knows what the firmware should branch to.
+ *
+ * Refused, or no body: the site is left exactly as the firmware wrote it.  A
+ * hook that cannot be given a landing point must not be armed.
+ *
+ *     ldr pc, [pc, #-4]        the veneer, eight bytes
+ *     .word <body>             filled in below
+ *
+ * pc reads as the instruction plus eight, so [pc,#-4] is the word straight
+ * after.  It touches no register and not lr, so the body returns to the
+ * firmware with `bx lr` and the caller cannot tell there was a hop. */
+s_hook:
     cmp     r0, #0
     bxeq    lr
-    add     r0, r0, r6
+    push    {r4, r5, r7, lr}            @ four: the stack stays 8-aligned
+    add     r4, r0, r6                  @ the body
+    mov     r5, r1                      @ the site
+
+    movw    r7, #:lower16:CAVE_BUMP
+    movt    r7, #:upper16:CAVE_BUMP
+    ldr     r0, [r7]
+    adds    r1, r0, #8
+    movw    r2, #:lower16:CAVE_ARENA_END
+    movt    r2, #:upper16:CAVE_ARENA_END
+    cmp     r1, r2
+    bhi     9f                          @ the cave is full: arm nothing
+    str     r1, [r7]
+
     movw    r2, #:lower16:VENEER_LDR
     movt    r2, #:upper16:VENEER_LDR
-    str     r2, [r1]
-    str     r0, [r1, #4]
-    bx      lr
+    str     r2, [r0]
+    str     r4, [r0, #4]
+
+    /* bl <veneer>, written over the site.  (dest - site - 8) >> 2, twenty-four
+     * bits, and the top byte is the opcode.  asr, not lsr: the veneer can be
+     * below the site and the offset is signed. */
+    sub     r1, r0, r5
+    sub     r1, r1, #8
+    asr     r1, r1, #2
+    bic     r1, r1, #0xFF000000
+    orr     r1, r1, #0xEB000000
+    str     r1, [r5]
+
+9:  pop     {r4, r5, r7, pc}
 
 #include "mpool.S"
 

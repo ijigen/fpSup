@@ -43,13 +43,17 @@ import imu_stream as S                                         # noqa: E402
 # The injection cave, from notes/: loader.S below, park stub above.
 CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
 
-# name -> (code address, source, defines, hook site, firmware's word, thumb?)
+# name -> (source, defines, hook site, firmware's word, thumb?)
+#
+# No cave address any more.  The hook bodies are sections of the writer's blob
+# and the eight-byte veneer the firmware lands on comes from the cave allocator
+# at boot, so where a hook lives is not a build-time fact about it.
 PRODUCERS = {
     # The accelerometer driver publishing a sample is the only real hardware
     # event this data has, so it is the only hook left that produces anything:
     # it drains the coprocessor's ring and then appends its own record, which is
     # what puts that record in the right place.
-    'accel': (0xC072E200, 'accel_hook.S',       (),            0xC050D4C8, 0xE3A02000, 0),
+    'accel': ('accel_hook.S',  (),            0xC050D4C8, 0xE3A02000, 0),
     # gyro_drain.S and stream_space.S used to be here, at 0xC072E300 and
     # 0xC072EC60 -- 1,108 bytes of the 3,920-byte payload window, for code
     # NOTHING BRANCHES TO.  The firmware reaches every hook below by a branch
@@ -61,16 +65,38 @@ PRODUCERS = {
     # words are filled in from the blob's routine table -- by gsup_boot on a
     # card, by place_code() over USB.  Same two files, same symbols, one
     # layout; what changed is where they land.  (2026-09-22)
-    'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC03790B8, 0xE5DB25CE, 0),
-    'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC038C484, 0xE3500000, 0),
+    'start': ('rec_trigger.S', (),            0xC03790B8, 0xE5DB25CE, 0),
+    'stop':  ('rec_trigger.S', ('REC_STOP',), 0xC038C484, 0xE3500000, 0),
     # The STILL/CINE mode being set.  Not part of the stream at all: it decides
     # which way up a take's frames say they are, which has to happen long
     # before the take.  Base does not arm it -- see mode_hook.S.
-    'mode':  (0xC072E6A0, 'mode_hook.S',         (),            0xC0058310, 0xE1A05001, 0),
+    'mode':  ('mode_hook.S',   (),            0xC0058310, 0xE1A05001, 0),
 }
 
 
 VENEER_LDR = 0xE51FF004      # ldr pc, [pc, #-4] -- the word after it is the target
+
+
+CAVE_BUMP, CAVE_ARENA_END = 0xC072E060, 0xC072EFB4
+VEN = {}                     # name -> where this deploy's veneer landed
+
+
+def cave_alloc(n, what):
+    """Take n bytes from the cave's bump allocator, the way a payload does.
+
+    The same word stage2 initialises and gsup_boot adds to.  Re-deploying over
+    USB takes a fresh eight bytes each time rather than reusing the ones the
+    card's own boot handed out -- a few bytes leak per deploy and are back at
+    the next reboot, which is cheaper than guessing where the last ones went.
+    """
+    base = (P.mem_get(CAVE_BUMP) or [0])[0]
+    if not base or not 0xC072D000 <= base < CAVE_ARENA_END:
+        raise SystemExit(f'the cave bump reads 0x{base or 0:08X} -- stage2 did '
+                         f'not initialise it, so this card predates the allocator')
+    if base + n > CAVE_ARENA_END:
+        raise SystemExit(f'{what}: the cave is full at 0x{base:08X}')
+    _setw(CAVE_BUMP, base + n, 'the cave bump')
+    return base
 
 
 def veneer(target):
@@ -176,7 +202,7 @@ def _check_header():
     # Each hook must carry the site it is deployed to, and end by performing the
     # instruction it displaced.  A site that drifts between the two is how a
     # branch lands inside something that is running.
-    for name, (_at, source, defines, site, orig, _t) in PRODUCERS.items():
+    for name, (source, defines, site, orig, _t) in PRODUCERS.items():
         if site is None:
             continue                    # not a hook: placed code the hooks call
         text = (HERE / source).read_text()
@@ -193,20 +219,26 @@ def _check_header():
 
 
 def _place(measure_accel=False):
-    """Assemble everything and check nothing lands on anything else."""
-    global PRODUCERS
-    if measure_accel:
-        a = PRODUCERS['accel']
-        PRODUCERS = dict(PRODUCERS, accel=(ACC_CODE_AT,) + a[1:])
+    """Check nothing lands on anything else.
 
-    # Eight bytes each, not the stub: the bodies are sections of the writer's
-    # blob and live in the pool.  arm() fills the target in once the pool is
-    # known; here they are placeholders, which is enough for the span checks
-    # and is what gets printed.
-    code = {n: veneer(0) for n in PRODUCERS}
-    spans = [(n, PRODUCERS[n][0], len(c)) for n, c in code.items()]
-    code_spans = list(spans)      # words may sit in data, never in code
-    spans += [('state words', STATE_AT, STATE_WORDS * 4),
+    ACC_MEASURE cannot be reached from here any more: the accelerometer hook is
+    a section of the writer's blob, so the define belongs to whoever assembles
+    that blob, not to this deployer.  Rather than accept the flag and quietly
+    place the ordinary build, say so.  The question it was asked to answer --
+    could the drain live in this hook -- was answered yes, and the drain lives
+    there; if it is ever needed again it is a define on the blob build.
+
+    The producers are not in this map any more.  Their bodies are sections of
+    the writer's blob and the eight-byte veneer the firmware lands on comes from
+    the cave allocator at boot, so there is no build-time span to overlap with
+    -- which also means the words below can no longer sit on a hook's code,
+    because no hook has code here.
+    """
+    if measure_accel:
+        raise SystemExit('--measure-accel needs the blob built with ACC_MEASURE; '
+                         'the hook bodies are not placed from here any more')
+    code_spans = []               # words may sit in data, never in code
+    spans = [('state words', STATE_AT, STATE_WORDS * 4),
               ('accel state', ACC_STATE, ACC_WORDS * 4),
               # ring_task_deploy owns these, but only this script knows
               # where the hooks land -- so the overlap check lives here.
@@ -245,7 +277,7 @@ def _place(measure_accel=False):
     # time rather than by a spelling rule, because a rule would quietly exempt
     # the next word that really does sit on code, which is the freeze this
     # check exists to catch.
-    names_code = {'ACCEL_AT', 'START_AT', 'STOP_AT', 'MODE_AT'}
+    names_code = set()          # none left: no cave equate names code any more
     hit = []
     for wname, wa in sorted(caves.items(), key=lambda kv: kv[1]):
         if wname in names_code:
@@ -260,7 +292,6 @@ def _place(measure_accel=False):
 
     for name, at, n in sorted(spans, key=lambda s: s[1]):
         print(f'  {name:14s} 0x{at:08X}..0x{at+n:08X}  {n} bytes')
-    return code
 
 
 def _setw(addr, value, what):
@@ -312,9 +343,9 @@ def arm(only=None, measure_accel=False):
     INSIDE the firmware's audio teardown and rebuild, so being able to leave
     them out is how one tells whether they are what broke the audio."""
     _check_header()
-    code = _place(measure_accel)
+    _place(measure_accel)
 
-    for name, (_at, _src, _d, site, orig, _t) in PRODUCERS.items():
+    for name, (_src, _d, site, orig, _t) in PRODUCERS.items():
         if site is None:
             continue
         got = P.mem_get(site)[0]
@@ -331,7 +362,7 @@ def arm(only=None, measure_accel=False):
     _code, at = R.place()               # assembles and resolves; writes nothing
     BODY = {'accel': 'accel_hook', 'start': 'rec_start',
             'stop': 'rec_stop', 'mode': 'mode_hook'}
-    for name in code:
+    for name in PRODUCERS:
         if only and name not in only:
             continue
         sym = BODY[name]
@@ -339,7 +370,9 @@ def arm(only=None, measure_accel=False):
             raise SystemExit(f'the blob has no {sym}: the pool build and this '
                              f'deployer disagree about which hooks moved out '
                              f'of the cave')
-        P.put_slow(PRODUCERS[name][0], veneer(at[sym]), f'{name} veneer')
+        where = cave_alloc(8, f'{name} veneer')
+        P.put_slow(where, veneer(at[sym]), f'{name} veneer')
+        VEN[name] = where
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
     if measure_accel:
         P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
@@ -371,13 +404,13 @@ def arm(only=None, measure_accel=False):
                              f'deployer disagree about what moved out of the cave')
         _setw(word, at[name], name)
 
-    for name, (at, _src, _d, site, _orig, thumb) in PRODUCERS.items():
+    for name, (_src, _d, site, _orig, thumb) in PRODUCERS.items():
         if site is None:
             continue                    # nothing to arm: it is called, not hooked
         if only and name not in only:
             print(f'skipping {name}')
             continue
-        word = branch_word(site, at, thumb)
+        word = branch_word(site, VEN[name], thumb)
         kind = 'blx' if thumb else 'bl '
         print(f'arming {name:6s} 0x{site:08X} -> {kind} 0x{at:08X}  (0x{word:08X})')
         for _ in range(8):
@@ -390,7 +423,7 @@ def arm(only=None, measure_accel=False):
 
 
 def restore():
-    for name, (_at, _src, _d, site, orig, _t) in PRODUCERS.items():
+    for name, (_src, _d, site, orig, _t) in PRODUCERS.items():
         if site is None:
             continue
         for _ in range(8):
@@ -478,7 +511,7 @@ def stage(n):
     # cave is empty, and a stage on its own then looks exactly like a working
     # deploy right up until the take produces nothing -- which has now cost two
     # takes.  Say so here rather than let the counters say it afterwards.
-    unarmed = [n for n, (_a, _s, _d, site, orig, _t) in PRODUCERS.items()
+    unarmed = [n for n, (_s, _d, site, orig, _t) in PRODUCERS.items()
                if site is not None and P.mem_get(site)[0] == orig]
     if unarmed:
         raise SystemExit(

@@ -291,22 +291,29 @@
  * carried as data: the sites and the cave addresses are both build-time
  * constants, so the branch and the code it reaches cannot disagree -- which is
  * exactly how the orientation stub once branched into the middle of the logger. */
+/* The cave's allocator.  Duplicated from build_autorun.py, which is where the
+ * loader's own block is laid out -- test_imu_stream checks the two agree, the
+ * way every other constant that lives in both places is checked.  A payload
+ * takes cave space by adding to this word; a card that is not on the SD card
+ * never calls it and costs no addresses at all. */
+.equ CAVE_BUMP,      0xC072E060
+.equ CAVE_ARENA_END, 0xC072EFB4
+.equ VENEER_LDR,     0xE51FF004      /* ldr pc, [pc, #-4] */
+
+/* Only the sites.  There used to be an ACCEL_AT next to each of these and an
+ * ARM_ACCEL computed from the pair -- the cave address the firmware branches to
+ * and the `bl` that gets written over the site, both decided at build time.
+ * Both are gone: gsup_boot takes eight bytes from the cave allocator and works
+ * the branch word out from what it got, so no build names a cave address for a
+ * hook and a card nobody selected reserves nothing. */
 .equ ACCEL_SITE,     0xC050D4C8
-.equ ACCEL_AT,       0xC072E200
 .equ START_SITE,     0xC03790B8
-.equ START_AT,       0xC072E4E0
 .equ STOP_SITE,      0xC038C484
-.equ STOP_AT,        0xC072E620
 /* The fourth site is the mode being set, and only the gcsv edition arms it:
  * base is the stream and nothing else.  FUN_c0058308's `mov r5, r1`
  * (0xE1A05001), after a prologue that has already pushed lr.  0xC072E6A0 is in
  * the 576 bytes between the stop hook's end and the counters at 0xC072E8E0. */
 .equ MODE_SITE,      0xC0058310
-.equ MODE_AT,        0xC072E6A0
-.equ ARM_ACCEL, 0xEB000000 | (((ACCEL_AT - ACCEL_SITE - 8) >> 2) & 0xFFFFFF)
-.equ ARM_START, 0xEB000000 | (((START_AT - START_SITE - 8) >> 2) & 0xFFFFFF)
-.equ ARM_STOP,  0xEB000000 | (((STOP_AT  - STOP_SITE  - 8) >> 2) & 0xFFFFFF)
-.equ ARM_MODE,  0xEB000000 | (((MODE_AT  - MODE_SITE  - 8) >> 2) & 0xFFFFFF)
 
 .equ W_VT_BODY,      W_VT + W_VT_SLOT   /* the slot the pool worker calls */
 /* The gcsv writer's state, in the gap the space provider left when it moved
