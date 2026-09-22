@@ -101,6 +101,15 @@ ap.add_argument('--bin-name', default='fpSup.BIN',
                      '2026-09-19 carry VSHL.BIN and stay readable.')
 ap.add_argument('--loader', action='store_true',
                 help='put the code in fpSup.BIN and have the AutoRun read it')
+ap.add_argument('--profile', action='store_true',
+                help='stamp the camera\'s own microsecond clock when the loader '
+                     'is entered, as well as when the load finishes, so the two '
+                     'words say how much of the boot is the AutoRun and how much '
+                     'is everything before it.  Six words in the loader -- free on '
+                     'a card whose loader comes out of the settings block, six '
+                     '`mem set` on one that spells it out, which is why it is a '
+                     'flag and not the default.  Read both with '
+                     '`mem get 0xC072F6F4,,8`')
 args = ap.parse_args()
 # The loader's path string, as the C preprocessor wants it: one backslash in
 # the file means two here.  Assembled into the loader rather than written in
@@ -136,6 +145,12 @@ WCODE_PTR     = 0xC072F058   # its code's own allocation, separate from the
                              # convention, and conventions are what this tree's
                              # address collisions have all been made of
 
+# The loader's defines, in one place.  They were spelled out twice -- once to
+# measure the loader for the store's magic, once to emit it -- and the two lists
+# had to agree or the magic would be a hash of code the card does not carry.
+LOADER_DEFINES = None       # filled in below, once POOL_DESC exists
+
+
 def _equ(path, name):
     """An .equ from a source file.  `.equ` constants are not in the symbol
     table, so the only way to check that this file and worker.S agree about
@@ -146,6 +161,9 @@ def _equ(path, name):
     import re
     m = re.search(rf'^\.equ\s+{name},\s*(0x[0-9A-Fa-f]+)', path.read_text(), re.M)
     return int(m.group(1), 16) if m else None
+LOAD_START_US = 0xC072F6F4   # --profile: when the loader was entered.  Next
+                             # to the word below on purpose -- `mem get
+                             # 0xC072F6F4,,8` reads the whole profile.
 LOAD_DONE_US  = 0xC072F6F8   # when the load finished, in the camera's own
                              # microseconds (TICK_US).  Was STORE_FROM, the
                              # store_boot -> loader handshake, which the magic
@@ -175,6 +193,10 @@ ECHO_SLOT = 0xC0BAC2F8  # command table entry 17, echo's handler pointer
 ECHO_ORIG = 0xC03D99A0
 HOOK   = 0xC00D0794   # gyro callback, borrowed once to create the task
 
+LOADER_DEFINES = [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}',
+                  BIN_PATH_DEF] + (
+                      [f'LOAD_START_US=0x{LOAD_START_US:08X}'] if args.profile else [])
+
 from patches import IFACE, PUSH, RETAIN, SCREEN, BAR_WIDTH
 
 # The on-screen readout.  `display text` draws into the OSD surface and
@@ -185,6 +207,53 @@ from patches import IFACE, PUSH, RETAIN, SCREEN, BAR_WIDTH
 
 def word_at(seq, i):
     return seq[i]
+
+
+def verify_loader_saves_lr_first(code):
+    """No call in the loader before lr is on the stack.
+
+    `bl` writes lr, and until the push at the top of `load` has run, lr still
+    holds the echo handler's return address -- the one the loader leaves through
+    at the end.  A call above that push destroys it and the loader returns into
+    whatever is left: measured 2026-09-22, the camera froze on every boot and the
+    card had to come out of the slot, because a frozen loader means no shell to
+    replace it with.
+
+    Decoded from the emitted words rather than read from the source, so a
+    comment or a renamed macro cannot make a build look safe.
+    """
+    insns = to_words(code)
+    push = next((i for i, w in enumerate(insns)
+                 if w & 0xFFFF0000 == 0xE92D0000 and w & (1 << 14)), None)
+    if push is None:
+        sys.exit('loader: no push that saves lr')
+    for i, w in enumerate(insns[:push]):
+        if w & 0x0F000000 == 0x0B000000:                      # bl
+            sys.exit(f'loader: a bl at word {i} runs before lr is saved at word '
+                     f'{push}; move it below the push')
+        if w & 0x0FFFFFF0 == 0x012FFF30:                      # blx <reg>
+            sys.exit(f'loader: a blx at word {i} runs before lr is saved')
+
+    # And nothing may carry sp across a call in a register the callee is allowed
+    # to destroy.  `mov rN, sp` ... `bl` ... `mov sp, rN` with rN in r0-r3 or ip
+    # restores garbage: r0-r3 and ip are caller-saved.  Measured 2026-09-22 --
+    # r1 was used instead of r5 and the camera froze on every boot.
+    for i, w in enumerate(insns):
+        if w & 0x0FFF0FFF != 0x01A0000D:                      # mov rN, sp
+            continue
+        saved = (w >> 12) & 0xF
+        if saved > 3 and saved != 12:
+            continue
+        for j in range(i + 1, min(i + 12, len(insns))):
+            back = insns[j]
+            if back & 0x0FFF0FFF == 0x01A0D000 | (saved << 0):  # mov sp, rN
+                pass
+            if back == 0xE1A0D000 | saved:                     # mov sp, rN
+                sys.exit(f'loader: word {i} keeps sp in r{saved} and word {j} '
+                         f'restores from it, but r0-r3 and ip are caller-saved '
+                         f'-- use a register from the push (r4-r10)')
+            if back & 0x0F000000 == 0x0B000000:                # a call between
+                continue
 
 
 def verify_stage2_cache_publish(code):
@@ -447,9 +516,7 @@ if args.store_boot:
     # has to be bumped by hand, and in one night the loader changed four times
     # while the string sat still.  Any of those builds would have found a store
     # whose magic matched and branched into the wrong bytes.
-    sbytes = assemble(HERE / 'templates' / 'loader.S',
-                      [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}',
-                       BIN_PATH_DEF])
+    sbytes = assemble(HERE / 'templates' / 'loader.S', LOADER_DEFINES)
     slen = len(sbytes)
     smagic = int(hashlib.sha256(sbytes).hexdigest()[:8], 16)
     if slen > STORE_MAX:
@@ -558,8 +625,7 @@ if args.loader:
     # because the assembler lays it out at zero.
     # One loader, whatever the card carries: see the note at `boot:` in
     # loader.S for the task that turned out to be unnecessary.
-    ldef = [f'LOADER_BASE={CAVE_LOW}', f'POOL_DESC=0x{POOL_DESC:08X}',
-            BIN_PATH_DEF]
+    ldef = LOADER_DEFINES
     if args.store_boot:
         # The stored copy is the one that aborts the script: reaching it means
         # the settings block was good, and everything after that point in the
@@ -571,6 +637,7 @@ if args.loader:
         # is assembled.  Both constants are movw/movt pairs, so their VALUE
         # cannot change the size: assemble once to measure, then again for real.
         n = len(assemble(HERE / 'templates' / 'loader.S', ldef))
+        verify_loader_saves_lr_first(assemble(HERE / 'templates' / 'loader.S', ldef))
         # The store's body is the loader itself, so its ceiling is the space
         # measured safe in XC_CommonSaveData: +0x024..+0x200 of the block, less
         # the one-word header.  Checked here rather than assumed, because a

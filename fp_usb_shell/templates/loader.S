@@ -69,6 +69,7 @@
 .equ F_CLOSE,     0xC0366020
 .equ F_DTOR,      0xC0365ED0
 .equ F_CACHE,     0xC000E91C
+.equ F_TICK_US,   0xC002B6E0    /* () -> microseconds since power-on      */
 
 .equ VOL_SD,      1             /* FUN_c0444698: 1 = the card, 5 = an SSD */
 
@@ -146,6 +147,48 @@ load:
      * down there would take.  The loader is 468 bytes and the store holds 468,
      * so a spare word is not a nicety here. */
     push    {r4, r5, r6, r7, r8, r9, r10, lr}
+
+#ifdef LOAD_START_US
+    /* --profile: the camera's own microseconds, the moment the loader gets
+     * control.  Together with the word stage2 writes at the end, the two say
+     * how the boot divides:
+     *
+     *     LOAD_START_US          camera boot + the AutoRun up to `echo`
+     *     LOAD_DONE_US - START   read the file, place the sections, run the entry
+     *
+     * The host cannot see either boundary: it can only poll for the worker to
+     * answer, which carries USB enumeration and the polling interval with it
+     * (measured 580 ms of it).
+     *
+     * Six words.  On a card whose loader comes out of the settings block they
+     * cost nothing -- the store is read, not spelled out -- and on one that
+     * spells the loader out they are six more `mem set`, about 430 ms.  That is
+     * why it is a flag rather than the default.
+     *
+     * AFTER the push, and that is not a style choice: `bl` writes lr, and
+     * before the push lr still holds the echo handler's return address.  The
+     * first version of this sat above the push, destroyed it, and the loader
+     * returned into garbage -- the camera froze on every boot and the card had
+     * to come out of the slot to be replaced.  Anything here that calls has to
+     * come after lr is saved.
+     *
+     * r0-r3 and ip are free: nothing has been set up yet.  SP is aligned the
+     * same way recprobe.S does it, because a leaf that is wrong about this is
+     * the freeze our notes warn of.
+     *
+     * r10, not r1, carries sp across the call.  r0-r3 and ip are
+     * caller-saved: the callee may destroy them, so restoring sp from r1 after
+     * the call restores garbage -- measured 2026-09-22, the camera froze on
+     * every boot and the card came out of the slot for the second time that
+     * afternoon.  recprobe.S uses r5 for the same reason.  r10 is in the push
+     * above and dead until the file is open. */
+    mov     r10, sp
+    bic     sp, sp, #7
+    CALL    F_TICK_US
+    mov     sp, r10
+    LDA     r1, LOAD_START_US
+    str     r0, [r1]
+#endif
 
 
     /* Ask for the staging buffer here instead of having the AutoRun ask.
