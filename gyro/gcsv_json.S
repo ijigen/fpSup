@@ -521,8 +521,7 @@ j_dims:
 gcsv_json_write:
     push    {r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}
 
-    movw    r4, #:lower16:G_TEXT
-    movt    r4, #:upper16:G_TEXT
+    SHAREDAT    r4, O_G_TEXT
     ldr     r4, [r4]
     cmp     r4, #0
     beq     90f
@@ -712,8 +711,7 @@ j_open:
      * folder; getting the volume from F_VOL again would send the json to the
      * SSD while the gcsv sat on the SD, and a log without its profile is half
      * a take. */
-    movw    ip, #:lower16:G_FALLBACK
-    movt    ip, #:upper16:G_FALLBACK
+    SHAREDAT    ip, O_G_FALLBACK
     ldr     ip, [ip]
     cmp     ip, #2
     moveq   r1, #VOL_SD

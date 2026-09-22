@@ -214,8 +214,7 @@ gcsv_emit:
     mov     r7, r1
     mov     r5, r2
 
-    movw    r6, #:lower16:G_ROW
-    movt    r6, #:upper16:G_ROW
+    SHAREDAT    r6, O_G_ROW
     ldr     r0, [r6]
     add     ip, r0, #1
     str     ip, [r6]
@@ -298,8 +297,7 @@ gcsv_format:
     mov     r6, r2
     mov     r7, r3
     sub     r7, r7, #ROW_MAX            @ the last place a row may start
-    movw    r8, #:lower16:G_HELD
-    movt    r8, #:upper16:G_HELD
+    SHAREDAT    r8, O_G_HELD
 
 1:  cmp     r5, #0
     beq     9f
@@ -367,8 +365,7 @@ gcsv_format:
 gcsv_last:
     push    {r4, r5, r6, lr}
     mov     r6, r0
-    movw    r5, #:lower16:G_HELD
-    movt    r5, #:upper16:G_HELD
+    SHAREDAT    r5, O_G_HELD
     ldr     r0, [r5, #8]
     cmp     r0, #0
     beq     9f

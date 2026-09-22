@@ -103,15 +103,13 @@ writer_openfile:
      * an SSD take cannot be watched from the host, because the camera has one
      * USB socket and the SSD is in it. */
     mov     r0, #RUNG_FIRST
-    movw    ip, #:lower16:G_FALLBACK
-    movt    ip, #:upper16:G_FALLBACK
+    SHAREDAT    ip, O_G_FALLBACK
     str     r0, [ip]
 #ifdef FPGYRO_EDITION_BASE
     mov     r0, #0                      @ gcsv's first rung IS zero, so only
                                         @ base has to put it back
 #endif
-    movw    ip, #:lower16:D_OPEN1
-    movt    ip, #:upper16:D_OPEN1
+    SHAREDAT    ip, O_D_OPEN1
     str     r0, [ip]
     str     r0, [ip, #4]                @ D_OPEN2
     str     r0, [ip, #8]                @ D_OPEN3
@@ -124,8 +122,7 @@ writer_openfile:
     movt    ip, #:upper16:F_VOL
     blx     ip
     mov     r5, r0                      @ the volume: the ctor's, and the name's
-    movw    ip, #:lower16:D_VOL
-    movt    ip, #:upper16:D_VOL
+    SHAREDAT    ip, O_D_VOL
     str     r0, [ip]
     bl      take_path
 
@@ -138,8 +135,7 @@ writer_openfile:
     bl      dbg_path                    @ keep it; the next attempt overwrites
     mov     r1, r5
     bl      try_open
-    movw    ip, #:lower16:D_OPEN1
-    movt    ip, #:upper16:D_OPEN1
+    SHAREDAT    ip, O_D_OPEN1
     str     r0, [ip]
     cmp     r0, #0
     bne     7f
@@ -148,16 +144,14 @@ writer_openfile:
     /* Rung 1: \fpSupGYRO on the same volume -- an SSD take's log belongs with
      * the SSD's footage, not on whatever card happens to be in the slot. */
     mov     r0, #1
-    movw    ip, #:lower16:G_FALLBACK
-    movt    ip, #:upper16:G_FALLBACK
+    SHAREDAT    ip, O_G_FALLBACK
     str     r0, [ip]
     mov     r0, #LOG_EXT
     bl      clip_path
     mov     r6, r0
     mov     r1, r5
     bl      try_open
-    movw    ip, #:lower16:D_OPEN2
-    movt    ip, #:upper16:D_OPEN2
+    SHAREDAT    ip, O_D_OPEN2
     str     r0, [ip]
     cmp     r0, #0
     bne     7f
@@ -166,8 +160,7 @@ writer_openfile:
      * camera volume when an HDMI recorder has it, and this is the rung that
      * still gives the log somewhere to go. */
     mov     r0, #2
-    movw    ip, #:lower16:G_FALLBACK
-    movt    ip, #:upper16:G_FALLBACK
+    SHAREDAT    ip, O_G_FALLBACK
     str     r0, [ip]
     mov     r5, #VOL_SD
     mov     r0, #LOG_EXT
@@ -175,8 +168,7 @@ writer_openfile:
     mov     r6, r0
     mov     r1, r5
     bl      try_open
-    movw    ip, #:lower16:D_OPEN3
-    movt    ip, #:upper16:D_OPEN3
+    SHAREDAT    ip, O_D_OPEN3
     str     r0, [ip]
 
 7:  movw    ip, #:lower16:T_FOPEN
@@ -192,11 +184,9 @@ writer_openfile:
 
     /* t starts at zero and nothing is held over from the last take. */
     mov     r0, #0
-    movw    ip, #:lower16:G_ROW
-    movt    ip, #:upper16:G_ROW
+    SHAREDAT    ip, O_G_ROW
     str     r0, [ip]
-    movw    ip, #:lower16:G_HELD_OK
-    movt    ip, #:upper16:G_HELD_OK
+    SHAREDAT    ip, O_G_HELD_OK
     str     r0, [ip]
 
     /* Orientation is not decided here.  Clearing the attitude gate at record
@@ -253,8 +243,7 @@ try_open:
  * the buffer and an SSD take cannot be watched while it happens. */
 dbg_path:
     push    {r0, lr}
-    movw    r1, #:lower16:D_PATH
-    movt    r1, #:upper16:D_PATH
+    SHAREDAT    r1, O_D_PATH
     mov     r2, r6
     mov     r3, #48
 1:  ldrb    r0, [r2], #1
@@ -294,8 +283,7 @@ clip_path:
     /* The fallback is the root of the volume: one character, no folder to
      * make, and no second copy of the name.  Making a directory at record
      * start is what froze the camera on every SSD take. */
-    movw    r8, #:lower16:G_FALLBACK
-    movt    r8, #:upper16:G_FALLBACK
+    SHAREDAT    r8, O_G_FALLBACK
     ldr     r8, [r8]
     cmp     r8, #0
     beq     0f
@@ -420,8 +408,7 @@ copy_clip:
 gyr_header:
     push    {r4, r5, r6, lr}            @ r6 is unused: the frame has to stay
                                         @ 8-aligned across the F_WRITE below
-    movw    r4, #:lower16:G_TEXT
-    movt    r4, #:upper16:G_TEXT
+    SHAREDAT    r4, O_G_TEXT
     ldr     r4, [r4]
     cmp     r4, #0
     beq     9f
@@ -472,8 +459,7 @@ gyr_header:
  */
 gcsv_header:
     push    {r4, r5, r6, lr}
-    movw    r4, #:lower16:G_TEXT
-    movt    r4, #:upper16:G_TEXT
+    SHAREDAT    r4, O_G_TEXT
     ldr     r4, [r4]
     cmp     r4, #0
     beq     9f
@@ -630,8 +616,7 @@ writer_put:
     lsr     r6, r6, #3                  @ records
     cmp     r6, #0
     beq     9f
-    movw    r7, #:lower16:G_TEXT
-    movt    r7, #:upper16:G_TEXT
+    SHAREDAT    r7, O_G_TEXT
     ldr     r7, [r7]
     cmp     r7, #0
     beq     9f
@@ -727,8 +712,7 @@ writer_closefile:
      * is needed to READ the file.  Integrity tracking is hdmi-raw's. */
     /* Whatever row is still held.  Without this the last sample of every take
      * is the one that never arrives. */
-    movw    r5, #:lower16:G_TEXT
-    movt    r5, #:upper16:G_TEXT
+    SHAREDAT    r5, O_G_TEXT
     ldr     r5, [r5]
     cmp     r5, #0
     beq     2f
@@ -746,8 +730,7 @@ writer_closefile:
 
 2:  /* The note's drop count, in place.  Six digits wide whatever it says, so
      * nothing after it moves. */
-    movw    r5, #:lower16:G_TEXT
-    movt    r5, #:upper16:G_TEXT
+    SHAREDAT    r5, O_G_TEXT
     ldr     r5, [r5]
     cmp     r5, #0
     beq     3f

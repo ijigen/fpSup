@@ -728,5 +728,117 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertLessEqual(size, 0x10000)
 
 
+class SharedBlockTests(unittest.TestCase):
+    """A displacement off a shared word has to land where the source says.
+
+    The shared block used to be a list of `.equ`s at cave addresses, and the
+    addresses carried the sizes: G_HELD was 0xC072E944 and the flag after it
+    0xC072E94C, so `[G_HELD, #8]` reached the flag because G_HELD was eight
+    bytes wide.  Re-declaring the block as words lost that -- G_HELD became one
+    word, `str r1, [r8, #4]` wrote the second half of the sample over the flag
+    and `str r0, [r8, #8]` wrote 1 over the text buffer POINTER.  The build was
+    clean, the boot was clean, and the camera froze the moment it recorded.
+
+    So: every displacement off a SHAREDAT register must land exactly on a
+    declared field, and where the line names the field in its comment, it must
+    be that one.  A field that grows or shrinks now breaks the build.
+    """
+
+    def block(self):
+        """The shared block's fields, as {name: (offset, size)}."""
+        text = (HERE / "writer_core.inc.S").read_text()
+        body = text.split("\ng_shared:", 1)[1].split("\n.equ ", 1)[0]
+        fields, off = {}, 0
+        for line in body.split("\n"):
+            m = re.match(r"\s*g_([a-z_0-9]+):\s*\.(word|space)\s+([0-9, ]+)", line)
+            if not m:
+                continue
+            if m.group(2) == "space":
+                size = int(m.group(3).split(",")[0])
+            else:
+                size = 4 * len(m.group(3).replace(" ", "").rstrip(",").split(","))
+            fields[m.group(1).upper()] = (off, size)
+            off += size
+        self.assertIn("G_HELD", fields)
+        return fields
+
+    def test_every_displacement_off_a_shared_word_lands_on_a_field(self):
+        fields = self.block()
+        starts = {off: name for name, (off, _) in fields.items()}
+        checked = 0
+        for src in sorted(HERE.glob("*.S")):
+            held = {}                       # register -> field name
+            for n, line in enumerate(src.read_text().split("\n"), 1):
+                code = line.split("@")[0]
+                m = re.match(r"\s*SHAREDAT\s+(\w+),\s*O_(\w+)", code)
+                if m:
+                    held[m.group(1)] = m.group(2)
+                    continue
+                for reg, disp in re.findall(r"\[(\w+),\s*#(\d+)\]", code):
+                    if reg not in held:
+                        continue
+                    start, size = fields[held[reg]]
+                    base = start + int(disp)
+                    where = f"{src.name}:{n}"
+                    if base < start + size:
+                        continue            # inside the base field itself
+                    self.assertIn(
+                        base, starts,
+                        f"{where}: [{reg}, #{disp}] off {held[reg]} lands at "
+                        f"+{base} in the shared block, which is inside a field, "
+                        f"not at the start of one")
+                    named = re.search(r"@\s*([A-Z][A-Z_0-9]+)", line)
+                    if named and named.group(1) in fields:
+                        self.assertEqual(
+                            starts[base], named.group(1),
+                            f"{where}: the comment says {named.group(1)} but "
+                            f"the displacement reaches {starts[base]}")
+                    checked += 1
+                # A plain write through the register does not disturb it, but
+                # anything that assigns it does.
+                m = re.match(r"\s*(?:ldr|mov|add|sub|bl|blx)\b[^,]*?(\w+)\s*,",
+                             code)
+                if m and m.group(1) in held and not code.strip().startswith("str"):
+                    held.pop(m.group(1), None)
+        self.assertGreater(checked, 3, "the scan found nothing to check")
+
+    def test_a_shared_word_written_with_writeback_is_a_buffer(self):
+        """D_PATH was `48 bytes` in a comment on its .equ and one word in the
+        block that replaced it.  dbg_path copies a path into it with
+        `strb r0, [r1], #1`, so the take's first open wrote forty-four bytes of
+        the blob's own code and the camera froze the moment it recorded -- the
+        same failure as the 2026-09-07 accel-hook overlap, arrived at from the
+        other direction.
+
+        A register that walks forward cannot be bounded from here, but a
+        one-word field is never a thing you walk forward through, so a
+        SHAREDAT register used with writeback must name a field wider than a
+        word.  That is enough to make the next dropped size stop the build.
+        """
+        fields = self.block()
+        found = 0
+        for src in sorted(HERE.glob("*.S")):
+            held = {}
+            for n, line in enumerate(src.read_text().split("\n"), 1):
+                code = line.split("@")[0]
+                m = re.match(r"\s*SHAREDAT\s+(\w+),\s*O_(\w+)", code)
+                if m:
+                    held[m.group(1)] = m.group(2)
+                    continue
+                m = re.match(r"\s*(?:str|ldr)[bh]?\s+\w+,\s*\[(\w+)\]\s*,",
+                             code)                 # post-indexed writeback
+                if not m:
+                    m = re.match(r"\s*(?:str|ldr)[bh]?\s+\w+,\s*\[(\w+),[^]]*\]!",
+                                 code)             # pre-indexed writeback
+                if m and m.group(1) in held:
+                    name = held[m.group(1)]
+                    self.assertGreater(
+                        fields[name][1], 4,
+                        f"{src.name}:{n}: {m.group(1)} walks forward through "
+                        f"{name}, which is one word wide -- it is a buffer, and "
+                        f"the block has to give it its bytes")
+                    found += 1
+        self.assertGreater(found, 0, "the scan found no writeback to check")
+
 if __name__ == "__main__":
     unittest.main()

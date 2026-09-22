@@ -98,6 +98,25 @@ g_t_wrc:    .word   0       /* what the last write returned                   */
 g_t_lost:   .word   0       /* records dropped                                */
 g_t_wraps:  .word   0       /* ring wraps                                     */
 g_t_stage:  .word   0       /* how far the close got                          */
+g_g_row: .word   0       /* the row being built                           */
+g_g_held:   .word   0, 0    /* the sample held for a reading -- EIGHT bytes.
+                             * The flag below is read as [G_HELD, #8]; it was
+                             * two words in the cave too, and re-declaring it
+                             * as one froze the camera at record start.     */
+g_g_held_ok: .word   0       /* whether one is held                           */
+g_g_text: .word   0       /* the text buffer                               */
+g_t_finger: .word   0       /* the blob fingerprint                          */
+g_g_level: .word   0       /* the level gauge                               */
+g_g_mode: .word   0       /* STILL or CINE                                 */
+g_g_mode_n: .word   0       /* times the mode hook fired                     */
+g_g_fallback: .word   0       /* the name fell back                            */
+g_d_vol: .word   0       /* which volume                                  */
+g_d_open1: .word   0       /* open, first rung                              */
+g_d_open2: .word   0       /* second                                        */
+g_d_open3: .word   0       /* third                                         */
+g_d_path:   .space  48      /* the path it tried -- FORTY-EIGHT bytes.  dbg_path
+                             * copies into it with strb writeback, so a single
+                             * word here writes 44 bytes of code.           */
 
 .equ O_T_BYTES,  g_t_bytes  - gsup_offsets
 .equ O_T_WRITES, g_t_writes - gsup_offsets
@@ -105,11 +124,34 @@ g_t_stage:  .word   0       /* how far the close got                          */
 .equ O_T_LOST,   g_t_lost   - gsup_offsets
 .equ O_T_WRAPS,  g_t_wraps  - gsup_offsets
 .equ O_T_STAGE,  g_t_stage  - gsup_offsets
+.equ O_G_ROW, g_g_row - gsup_offsets
+.equ O_G_HELD, g_g_held - gsup_offsets
+.equ O_G_HELD_OK, g_g_held_ok - gsup_offsets
+.equ O_G_TEXT, g_g_text - gsup_offsets
+.equ O_T_FINGER, g_t_finger - gsup_offsets
+.equ O_G_LEVEL, g_g_level - gsup_offsets
+.equ O_G_MODE, g_g_mode - gsup_offsets
+.equ O_G_MODE_N, g_g_mode_n - gsup_offsets
+.equ O_G_FALLBACK, g_g_fallback - gsup_offsets
+.equ O_D_VOL, g_d_vol - gsup_offsets
+.equ O_D_OPEN1, g_d_open1 - gsup_offsets
+.equ O_D_OPEN2, g_d_open2 - gsup_offsets
+.equ O_D_OPEN3, g_d_open3 - gsup_offsets
+.equ O_D_PATH, g_d_path - gsup_offsets
 
 /* The job pool is not a word either: it is a fixed offset from the same pool
  * the blob sits in, so it can be worked out instead of stored -- which leaves
  * nothing to initialise and nothing to go stale.  JPOOL_POOL_OFF is one page
  * below CODE_POOL_OFF. */
+/* The address of one shared word, for code that then uses [reg] as it always
+ * did.  Five instructions instead of two, but every use site below it is
+ * unchanged -- which is what makes moving twenty-eight of them a substitution
+ * rather than twenty-eight judgements about register liveness. */
+.macro SHAREDAT reg, off
+    BLOBBASE \reg
+    add     \reg, \reg, #\off
+.endm
+
 .macro JPOOLAT reg
     BLOBBASE \reg
     sub     \reg, \reg, #(CODE_POOL_OFF - JPOOL_POOL_OFF)
@@ -439,8 +481,7 @@ free_blocks:
 
     /* And the text buffer, which is not in the row and would otherwise be the
      * one block a free-and-take cycle leaks every time round. */
-    movw    r4, #:lower16:G_TEXT
-    movt    r4, #:upper16:G_TEXT
+    SHAREDAT    r4, O_G_TEXT
     ldr     r1, [r4]
     cmp     r1, #0
     beq     9f
@@ -528,8 +569,7 @@ blocks_open:
     movt    ip, #:upper16:MEM_GET
     blx     ip
     add     sp, sp, #8
-    movw    ip, #:lower16:G_TEXT
-    movt    ip, #:upper16:G_TEXT
+    SHAREDAT    ip, O_G_TEXT
     str     r0, [ip]
 
     b       3f
@@ -1131,8 +1171,7 @@ gsup_boot:
 7:  str     r0, [r1], #4
     subs    r2, r2, #1
     bne     7b
-    movw    r1, #:lower16:G_TEXT
-    movt    r1, #:upper16:G_TEXT
+    SHAREDAT    r1, O_G_TEXT
     str     r0, [r1]
 
     movw    r1, #:lower16:T_FOPEN
@@ -1161,8 +1200,7 @@ gsup_boot:
 #ifdef WANT_MODE_HOOK
     /* The cave outlives a re-place, so a stale count from the last blob would
      * read as "the hook fired" when it did not.  Zero is never fired. */
-    movw    r1, #:lower16:G_MODE_N
-    movt    r1, #:upper16:G_MODE_N
+    SHAREDAT    r1, O_G_MODE_N
     str     r0, [r1]
 #endif
 
@@ -1253,8 +1291,7 @@ gsup_boot:
     movw    ip, #:lower16:F_MODE_GET
     movt    ip, #:upper16:F_MODE_GET
     blx     ip
-    movw    r1, #:lower16:G_MODE
-    movt    r1, #:upper16:G_MODE
+    SHAREDAT    r1, O_G_MODE
     str     r0, [r1]                    @ readable afterwards, like the hook's
     mov     r2, #1
     str     r2, [r1, #4]

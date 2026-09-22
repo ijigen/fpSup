@@ -225,15 +225,47 @@ def place():
     return code, {n: CODE_AT + o for n, o in syms.items()}
 
 
+# Which edition the camera is holding, once it has been worked out.
+_EDITION_HELD = None
+
+
+def _edition_held():
+    """Which edition's blob the camera has, asked of the camera.
+
+    EDITION is a module global that main() rewrites from a command-line flag,
+    and shared() used to read it.  imu_stream_deploy imports shared and never
+    touches that flag, so `--take` resolved gcsv labels against the base
+    build's symbol table and printed gyro counts in the billions -- numbers
+    that look like state, not like an error.
+
+    T_FINGER cannot answer this: place_code writes it and a card-booted camera
+    has never run place_code, so on a card it is zero.  The routine table can.
+    It is at the top of the blob at a fixed offset in both editions, and the
+    mode hook is the one routine only the gcsv edition has -- EDITION_ROUTINES
+    is where that is decided, and patch_offsets leaves the slot zero for an
+    edition that does not build it.
+    """
+    global _EDITION_HELD
+    if _EDITION_HELD is not None:
+        return _EDITION_HELD
+    slot = GSUP_ROUTINES.index('mode_hook') * 4
+    got = P.mem_get(pool_base() + CODE_POOL_OFF + slot)[0]
+    if got is None:
+        raise SystemExit('the routine table did not read back')
+    _EDITION_HELD = () if got else ('FPGYRO_EDITION_BASE=1',)
+    return _EDITION_HELD
+
+
 def shared(name):
     """Where a word of the blob's shared block is, this boot.
 
     The counters and the close stage are labels in the blob now, not cave
     addresses, so a diagnostic has to ask the same two questions the camera
     does: where is the pool, and where is the symbol inside the blob.  The
-    symbol table is the single source of truth for the second.
+    symbol table is the single source of truth for the second -- and which
+    edition's table is the camera's own answer, not a flag.
     """
-    syms = symbols(HERE / SOURCE, EDITION)
+    syms = symbols(HERE / SOURCE, _edition_held())
     key = 'g_' + name.lower()
     if key not in syms:
         raise SystemExit(f'the blob has no {key}')
@@ -312,7 +344,7 @@ def place_code():
                          + ' '.join('0x%08X' % (x or 0) for x in (got or [])))
     print(f'  blocks: {BUF_N} x {BUF_BYTES // 1024} KiB, '
           f'0x{got[0]:08X}..0x{got[-1] + BUF_BYTES:08X}')
-    _setw(T_FINGER, fingerprint(code), 'the blob fingerprint')
+    _setw(shared('T_FINGER'), fingerprint(code), 'the blob fingerprint')
     pool = pool_base()
     _setw(T_FOBJ, pool + FOBJ_POOL_OFF, 'the file object')
     _setw(STREAM_POSTED, 0, 'the posted mark')
@@ -348,7 +380,6 @@ def place_code():
 SOURCE = 'gcsv_task.S'
 EDITION = ('FPGYRO_EDITION_BASE=1',)
 
-T_FINGER = 0xC072E954
 MEM_CLASS = 0            # USER, the class blocks_open asks
 
 
@@ -415,7 +446,7 @@ def _verify_placed(code, at):
     # The last symbol moves whenever anything before it does, so between the two
     # ends nothing can shift without being seen.
     want = fingerprint(code)
-    got = P.mem_get(T_FINGER)[0]
+    got = P.mem_get(shared('T_FINGER'))[0]
     if got != want:
         raise SystemExit(
             'the pool does not hold this blob -- run --place first.\n'
@@ -480,8 +511,8 @@ def signal(times, at=None):
 def state():
     mbx = P.mem_get(T_MBX)[0]
     drained, maxspan = P.mem_get(T_DRAINED)[0], P.mem_get(T_MAXSPAN)[0]
-    fopen, wr, by = (P.mem_get(T_FOPEN)[0], P.mem_get(T_WRITES)[0],
-                     P.mem_get(T_BYTES)[0])
+    fopen, wr, by = (P.mem_get(T_FOPEN)[0], P.mem_get(shared('T_WRITES'))[0],
+                     P.mem_get(shared('T_BYTES'))[0])
     lost, wraps, wrc = (P.mem_get(shared('T_LOST'))[0],
                         P.mem_get(shared('T_WRAPS'))[0],
                         P.mem_get(shared('T_WRC'))[0])

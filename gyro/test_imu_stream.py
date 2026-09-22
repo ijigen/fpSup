@@ -1164,10 +1164,21 @@ class ModeHook(unittest.TestCase):
                          f'0x{self.site:08X} is 0x{got:08X}, not '
                          f'0x{self.orig:08X}')
 
+    def slice_of(self, name):
+        """mode_hook.S does not assemble on its own any more: it reaches the
+        shared words through SHAREDAT, which writer_core.inc.S defines, so its
+        bytes are its symbol's slice of the blob."""
+        import ring_task_deploy as R
+        code = assemble(HERE / 'gcsv_task.S', ())
+        syms = R.symbols(HERE / 'gcsv_task.S', ())
+        start = syms[name]
+        after = [v for v in syms.values() if v > start]
+        return code[start:min(after) if after else len(code)]
+
     def test_the_stub_puts_the_displaced_instruction_back(self):
         """Assembled, not read: the last two instructions must be `mov r4, r0`
         then `bx lr`.  A comment saying so is not the same thing."""
-        blob = assemble(HERE / 'mode_hook.S', self.defines)
+        blob = self.slice_of('mode_hook')
         tail = struct.unpack_from('<II', blob, len(blob) - 8)
         self.assertEqual(tail, (self.orig, 0xE12FFF1E),
                          'the stub does not end with the displaced '
@@ -1247,7 +1258,7 @@ class ModeHook(unittest.TestCase):
         Once it is not negative the build must actually store the byte -- a
         build that still only watches, believed armed, is a take spent."""
         cine = int(equ('MODE_CINE', (HERE / 'ring_task.inc.S').read_text()), 0)
-        blob = assemble(HERE / 'mode_hook.S', self.defines)
+        blob = self.slice_of('mode_hook')
         words = struct.unpack(f'<{len(blob) // 4}I', blob)
         armed = 0xE5C23000 in words             # strb r3, [r2]
         self.assertEqual(armed, cine >= 0,
@@ -1258,15 +1269,20 @@ class ModeHook(unittest.TestCase):
         """Which of 0 and 1 is CINE is not in the decompilation.  The count is
         the only thing that separates "encoded the other way round" from "never
         fired", and that distinction cost two takes at the record hook."""
-        self.assertIn('G_MODE', self.SRC)
+        self.assertIn('O_G_MODE', self.SRC)   # a shared word in the blob now
         # The count is reached as [r2, #4], so the two equates have to be
         # adjacent -- moving one without the other would have the hook
         # counting into whatever came next.
-        inc = (HERE / 'ring_task.inc.S').read_text()
-        self.assertEqual(int(equ('G_MODE_N', inc), 0),
-                         int(equ('G_MODE', inc), 0) + 4)
+        # They are labels in the blob now, so adjacency is the order of two
+        # .word directives rather than two equates -- but the hook still counts
+        # at [r2, #4], so it still has to hold.
+        core = (HERE / 'writer_core.inc.S').read_text()
+        mode = core.index('g_g_mode:')
+        self.assertLess(mode, core.index('g_g_mode_n:'))
+        between = core[mode:core.index('g_g_mode_n:')]
+        self.assertEqual(between.count('.word'), 1,
+                         'something was inserted between the mode and its count')
         self.assertRegex(self.SRC, r'str\s+r3, \[r2, #4\]')
-        self.assertIn('G_MODE_N', (HERE / 'writer_core.inc.S').read_text())
 
     def test_the_branch_reaches_anywhere_the_allocator_can_hand_out(self):
         """The veneer's address is not known until boot, so what has to fit is

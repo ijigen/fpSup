@@ -50,8 +50,7 @@
  * instruction runs on the way out. */
 mode_hook:
     push    {r0, r1, r2, r3, r12, lr}   @ six registers: the stack stays 8-aligned
-    movw    r2, #:lower16:G_MODE
-    movt    r2, #:upper16:G_MODE
+    SHAREDAT    r2, O_G_MODE
     str     r1, [r2]                    @ the last mode we saw set
     ldr     r3, [r2, #4]
     add     r3, r3, #1

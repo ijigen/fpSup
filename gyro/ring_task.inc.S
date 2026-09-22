@@ -324,10 +324,6 @@
  * G_HELD is one row held back by a record, so a reading can land on the sample
  * it followed; it survives a block boundary because blocks are a card-sized
  * unit and a row is not. */
-.equ G_ROW,          0xC072E940
-.equ G_HELD,         0xC072E944     /* 8 bytes, then the flag at +8            */
-.equ G_HELD_OK,      0xC072E94C
-.equ G_TEXT,         0xC072E950     /* where one block becomes text            */
 
 /* Big enough for a whole block's worth of rows, so a block is one write.
  *
@@ -342,13 +338,9 @@
 .equ TEXT_BYTES,     0x22000
 /* The fingerprint of the blob the camera actually holds.  place_code writes
  * it; every command that calls into the pool checks it.  See _verify_placed. */
-.equ T_FINGER,       0xC072E954
-.equ G_LEVEL,        0xC072E958     /* what the attitude gate was before the take */
 /* What the mode hook saw, and how many times it ran.  The count is the only
  * way to tell "the switch is encoded the other way round" from "the hook never
  * fired", which is the distinction that cost two takes at the record hook. */
-.equ G_MODE,         0xC072E95C
-.equ G_MODE_N,       0xC072E960
 /* How the sidecars were opened.  Both files read it, so they always land
  * together, and where the file ended up says which rung it took.
  *
@@ -363,16 +355,10 @@
  * Rung 1 keeps an SSD take's sidecars on the SSD, which is where they belong.
  * Rung 2 is what makes an HDMI recorder work at all: nothing of the take is
  * written to a camera volume then, but the log still has somewhere to go. */
-.equ G_FALLBACK,     0xC072E964
 .equ VOL_SD,         1              /* FUN_c0444698: 1 = SD, 5 = the SSD */
 
 /* What the open actually did, for a fault that can only be looked at after the
  * fact: the camera has one USB socket and the SSD is in it. */
-.equ D_VOL,          0xC072E968     /* what F_VOL returned                    */
-.equ D_OPEN1,        0xC072E96C     /* beside the clip                        */
-.equ D_OPEN2,        0xC072E970     /* \fpSupGYRO on the recording volume     */
-.equ D_OPEN3,        0xC072E974     /* \fpSupGYRO on the SD                   */
-.equ D_PATH,         0xC072E978     /* the first path we tried, 48 bytes      */
 
 .equ G_WORDS,        9
 

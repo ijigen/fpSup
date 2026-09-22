@@ -39,6 +39,7 @@ import putfile as P                                            # noqa: E402
 from armasm import assemble                                    # noqa: E402
 
 import imu_stream as S                                         # noqa: E402
+from ring_task_deploy import shared                            # noqa: E402
 
 # The injection cave, from notes/: loader.S below, park stub above.
 CAVE_LO, CAVE_HI = 0xC072E064, 0xC072EFA0
@@ -481,12 +482,17 @@ def take():
     measured -- the frame period, the rate, the doubled-interrupt count -- was
     finished work.  What is left is what the take itself says.
     """
-    w = P.mem_get(STATE_AT, STATE_WORDS)
-    if any(x is None for x in w):
+    # The cursors were one block in the cave, read as twenty words at a fixed
+    # address with the interesting ones picked out by index.  They are labels
+    # beside their hooks in the blob now, so each is asked for by name -- and
+    # a rename breaks this loudly instead of silently shifting an index.
+    names = ('r1_gc', 'r1_n', 'r0_head', 'r0_gc', 'r0_n', 'padbad', 'gcount')
+    got = {n: P.mem_get(shared(n))[0] for n in names}
+    if any(v is None for v in got.values()):
         raise SystemExit('the state words did not read back whole')
-    r1_gc, r1_n = w[8], w[9]
-    r0_head, r0_gc, r0_n = w[12], w[14], w[15]
-    padbad, gcount = w[17], w[19]
+    r1_gc, r1_n = got['r1_gc'], got['r1_n']
+    r0_head, r0_gc, r0_n = got['r0_head'], got['r0_gc'], got['r0_n']
+    padbad, gcount = got['padbad'], got['gcount']
     handed, drops = P.mem_get(B_HANDED)[0], P.mem_get(B_DROPS)[0]
     cur, fill, done = (P.mem_get(B_CUR)[0], P.mem_get(B_FILL)[0],
                        P.mem_get(B_DONE)[0])
