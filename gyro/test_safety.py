@@ -533,6 +533,8 @@ class ArenaTests(unittest.TestCase):
     EXEMPT = {
         'cave.py':
             'declares the arena',
+        'cave_audit.py':
+            'declares the arena, to say which side of it a card is writing',
         'imu_stream_deploy.py':
             'CAVE_LO/CAVE_HI are the bounds its placement check uses',
         'build_base_card.py':

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -23,199 +23,220 @@
 </head>
 <body>
 
-<a class="back" href="./">&larr; fpSup</a>
+<div class="topbar">
+  <a class="back" href="./">&larr; fpSup</a>
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
+  </div>
+</div>
 
 <header class="hero">
-  <h1>Firmware research</h1>
-  <p class="lede">The products are the part of this that fits on an SD card. Most of
+  <h1><span class="en">Firmware research</span><span class="zh">韌體研究</span></h1>
+  <p class="lede en">The products are the part of this that fits on an SD card. Most of
   the work is reading disassembly, and every project page keeps three things apart:
   what has been proven on a camera, what is being worked on, and what is still open.</p>
+  <p class="lede zh">做出來的產品,只是這裡面塞得進一張 SD 卡的那一部分。
+  大部分的工作是在讀反組譯,而每一頁專案都把三件事分開講:
+  哪些已經在相機上證實、哪些正在做、哪些還沒解。</p>
 </header>
 
-<h2>Explainers</h2>
+<h2><span class="en">Explainers</span><span class="zh">解說</span></h2>
 <div class="grid">
   <a class="row" href="explainers/imx410-iso-gain.html">
-    <b>IMX410 ISO and gain</b>
-    <small>Where the sensor's gain is actually applied, what that does to dynamic
+    <b><span class="en">IMX410 ISO and gain</span><span class="zh">IMX410 的 ISO 與增益</span></b>
+    <small><span class="en">Where the sensor's gain is actually applied, what that does to dynamic
     range at each ISO, and which parts are confirmed in the firmware versus which
-    OTP values still need measuring. Interactive.</small>
-    <span class="m">read this one first &middot; the most finished piece of research here</span>
+    OTP values still need measuring. Interactive.</span><span class="zh">感光元件的增益實際上是在哪裡施加的、那對每一個 ISO 的動態範圍做了什麼,以及哪些部分已經在韌體裡確認、哪些 OTP 值還要量。可互動。</span></small>
+    <span class="m"><span class="en">read this one first &middot; the most finished piece of research here</span><span class="zh">先讀這一篇 &middot; 這裡最完整的一份研究</span></span>
   </a>
   <a class="row" href="explainers/fpsup-load-chain.html">
-    <b>The fpSup load chain</b>
-    <small>How a card loads, in four layers &mdash; and what the camera's own clock says
+    <b><span class="en">The fpSup load chain</span><span class="zh">fpSup 的載入流程</span></b>
+    <small><span class="en">How a card loads, in four layers &mdash; and what the camera's own clock says
     about them: the whole load takes 3.5&nbsp;ms out of an 11.7&nbsp;second boot, so what
     goes in <code>fpSup.BIN</code> is effectively free and only the AutoRun's length
     costs anything. With the price of every command, whether fast start pays for itself,
-    and two freezes that turned into build errors.</small>
-    <span class="m">measured on the camera &middot; EN / 中文</span>
+    and two freezes that turned into build errors.</span><span class="zh">一張卡是怎麼載入的,分成四層 —— 以及相機自己的時鐘怎麼說:整個載入在 11.7 秒的開機裡只佔 3.5 毫秒,所以放進 <code>fpSup.BIN</code> 的東西等於免費,真正有成本的只有 AutoRun 的長度。附每一個指令的代價、fast start 划不划算,以及兩個後來變成編譯錯誤的當機。</span></small>
+    <span class="m"><span class="en">measured on the camera &middot; EN / 中文</span><span class="zh">在相機上實測 &middot; EN / 中文</span></span>
   </a>
   <a class="row" href="explainers/sensor-to-cinemadng.html">
-    <b>From sensor to CinemaDNG</b>
-    <small>The whole recording chain in eleven stages &mdash; menu, picker, the 70
+    <b><span class="en">From sensor to CinemaDNG</span><span class="zh">從感光元件到 CinemaDNG</span></b>
+    <small><span class="en">The whole recording chain in eleven stages &mdash; menu, picker, the 70
     sensor modes, the 306 profiles, the reduction stages, the canvas and the DNG
     writer &mdash; each one expandable, with what OG3K, OG2K and HSW each change and
-    an honest mark on which parts are solved, partial or still dark.</small>
-    <span class="m">the map &middot; read this before the reduction pages</span>
+    an honest mark on which parts are solved, partial or still dark.</span><span class="zh">整條錄影鏈拆成十一段 —— 選單、挑選器、70 個感光元件模式、306 組設定檔、縮減階段、畫布、DNG 寫入器 —— 每一段都可以展開,附 OG3K、OG2K、HSW 各改了什麼,以及哪些部分已解、哪些只解一半、哪些還是黑的。</span></small>
+    <span class="m"><span class="en">the map &middot; read this before the reduction pages</span><span class="zh">全局圖 &middot; 讀縮減那幾頁之前先看這個</span></span>
   </a>
   <a class="row" href="explainers/sensor-modes.html">
-    <b>Every setting on the sensor</b>
-    <small>The 161 values the fp writes to the IMX410, one row each &mdash; 150 of them
+    <b><span class="en">Every setting on the sensor</span><span class="zh">感光元件上的每一個設定</span></b>
+    <small><span class="en">The 161 values the fp writes to the IMX410, one row each &mdash; 150 of them
     now decoded, without a datasheet, by grouping registers on which modes share a
     value. Merge select, bit depth and the readout-speed block are identified; 11 are
     still open. Plus the eight ROM tables the values live in and all 70 modes they
-    combine into.</small>
-    <span class="m">reference &middot; sortable, filterable, read from Ver.5.02</span>
+    combine into.</span><span class="zh">fp 寫給 IMX410 的 161 個值,一個一列 —— 在沒有 datasheet 的情況下,靠「哪些模式共用同一個值」分組,已經解出 150 個。Merge select、位元深度、讀出速度那一區都認出來了,還有 11 個沒解。另附這些值所在的八張 ROM 表,以及它們組合出來的全部 70 個模式。</span></small>
+    <span class="m"><span class="en">reference &middot; sortable, filterable, read from Ver.5.02</span><span class="zh">參考 &middot; 可排序、可篩選,從 Ver.5.02 讀出</span></span>
   </a>
   <a class="row" href="explainers/imx410-binning.html">
-    <b>What the IMX410&rsquo;s binning actually does</b>
-    <small>The menu calls the two open-gate modes 2&times;2 and 3&times;3. Seven frames
+    <b><span class="en">What the IMX410&rsquo;s binning actually does</span><span class="zh">IMX410 的像素合併到底做了什麼</span></b>
+    <small><span class="en">The menu calls the two open-gate modes 2&times;2 and 3&times;3. Seven frames
     say otherwise: up and down the sensor really does combine rows, left and right it
     combines nothing at all, the &divide;3 mode throws one row in three away, and the
     whole thing averages rather than sums &mdash; so none of it buys you light. Written
-    for someone holding a camera, not a textbook.</small>
-    <span class="m">plain language &middot; M98 and M139 only &middot; EN / 中 / 繁</span>
+    for someone holding a camera, not a textbook.</span><span class="zh">選單把兩個 open gate 模式寫成 2&times;2 和 3&times;3,七張照片說不是:上下方向感光元件確實在合併列,左右方向它根本沒有合併,&divide;3 模式每三列丟掉一列,而且整件事是平均不是相加 —— 所以換不到光。寫給拿著相機的人看,不是寫給教科書。</span></small>
+    <span class="m"><span class="en">plain language &middot; M98 and M139 only &middot; EN / 中 / 繁</span><span class="zh">白話版 &middot; 只談 M98 和 M139 &middot; EN / 中 / 繁</span></span>
   </a>
   <a class="row" href="explainers/rwzm-resampler.html">
-    <b>What the RWZM resizer does</b>
-    <small>The second machine, the one every mode except OG3K and OG2K goes through
+    <b><span class="en">What the RWZM resizer does</span><span class="zh">RWZM 縮圖電路做了什麼</span></b>
+    <small><span class="en">The second machine, the one every mode except OG3K and OG2K goes through
     &mdash; and it matters more than the binning. It shrinks without smoothing first, and
     it rotates through sixteen slightly different recipes, which is where FHD&rsquo;s
     horizontal banding comes from. Every route ranked, the banding graded, and one rule
-    for picking a ratio that will not stripe the picture.</small>
-    <span class="m">plain language &middot; why FHD looks the way it does &middot; EN / 中 / 繁</span>
+    for picking a ratio that will not stripe the picture.</span><span class="zh">第二台機器,除了 OG3K 和 OG2K 以外每個模式都會經過的那一台 ——而它的影響比像素合併還大。它縮圖之前不先平滑,而且輪流使用十六套略有不同的做法,FHD 的橫向條帶就是從那裡來的。附全部路線的排名、橫紋評分,以及一條挑比例不會讓畫面起條紋的規則。</span></small>
+    <span class="m"><span class="en">plain language &middot; why FHD looks the way it does &middot; EN / 中 / 繁</span><span class="zh">白話版 &middot; FHD 為什麼長這樣 &middot; EN / 中 / 繁</span></span>
   </a>
   <a class="row" href="explainers/frame-reduction.html">
-    <b>Hbin, Vbin, Hbin2 and RWZM</b>
-    <small>The same two stages as the pair above, but read out of the firmware instead of
+    <b><span class="en">Hbin, Vbin, Hbin2 and RWZM</span><span class="zh">Hbin、Vbin、Hbin2 與 RWZM</span></b>
+    <small><span class="en">The same two stages as the pair above, but read out of the firmware instead of
     measured from frames: six names for where to tap the result, only two of them ever
     switched on, and the decision that picks between them run over all 306 recording
-    profiles. Interactive.</small>
-    <span class="m">from disassembly &middot; corrects three claims in the older notes</span>
+    profiles. Interactive.</span><span class="zh">和上面兩頁同樣那兩關,但是從韌體讀出來的,不是從畫面量的:六個可以取結果的地方、其中只有兩個真的會開,以及在 306 組錄影設定檔上跑出來的判斷邏輯。可互動。</span></small>
+    <span class="m"><span class="en">from disassembly &middot; corrects three claims in the older notes</span><span class="zh">來自反組譯 &middot; 更正舊筆記裡的三個說法</span></span>
   </a>
   <a class="row" href="explainers/reduction-kernels.html">
-    <b>Reduction kernels &mdash; the full working version</b>
-    <small>The two plain-language pages above, unabridged and unsimplified: every
+    <b><span class="en">Reduction kernels &mdash; the full working version</span><span class="zh">縮減核 —— 完整技術版</span></b>
+    <small><span class="en">The two plain-language pages above, unabridged and unsimplified: every
     per-channel table, the sixteen-phase fit, the merge-tuple cross-check, the
     photon-transfer verification, the two traps, and the corrections in the order they
-    happened. Go here when you want to check the working.</small>
-    <span class="m">reference &middot; long and technical &middot; EN / 中文</span>
+    happened. Go here when you want to check the working.</span><span class="zh">上面兩頁白話版的未刪節版本:每一張逐通道表格、十六相位擬合、merge tuple 對照、光子轉移驗證、兩個坑,以及那些更正發生的先後順序。想核對推導過程的時候看這個。</span></small>
+    <span class="m"><span class="en">reference &middot; long and technical &middot; EN / 中文</span><span class="zh">參考 &middot; 又長又技術 &middot; EN / 中文</span></span>
   </a>
   <a class="row" href="explainers/lossless-compression.html">
-    <b>In-camera lossless compression</b>
-    <small>The fp compresses every still it takes and has never compressed a video
+    <b><span class="en">In-camera lossless compression</span><span class="zh">機內無損壓縮</span></b>
+    <small><span class="en">The fp compresses every still it takes and has never compressed a video
     frame. The engine's measured cost model, where it sits in the pipeline &mdash;
     after every reduction, so you cannot resize afterwards &mdash; and a simulator
     for frame rate, dynamic frame-skip and how much the picture happens to
-    compress.</small>
-    <span class="m">interactive budget &middot; FHD fits, UHD does not</span>
+    compress.</span><span class="zh">fp 會壓縮它拍的每一張照片,而且從來沒有壓縮過任何一格影片。附這個引擎實測出來的成本模型、它在流程裡的位置 —— 在所有縮減之後,所以事後改不了尺寸 ——以及一個可以算格率、動態抽格、和畫面剛好有多好壓的模擬器。</span></small>
+    <span class="m"><span class="en">interactive budget &middot; FHD fits, UHD does not</span><span class="zh">可互動的預算表 &middot; FHD 塞得下,UHD 塞不下</span></span>
   </a>
   <a class="row" href="explainers/shell-commands.html">
-    <b>The firmware shell</b>
-    <small>The fp carries a factory debug shell with 77 commands, and a text file on
+    <b><span class="en">The firmware shell</span><span class="zh">韌體裡的 shell</span></b>
+    <small><span class="en">The fp carries a factory debug shell with 77 commands, and a text file on
     the SD card runs them at boot with no permission gate &mdash; which is what
     everything else here is built on. All 77 with the firmware's own usage text,
-    searchable, and the three tiers of how much damage each one can do.</small>
-    <span class="m">reference &middot; 54 of 77 asked on a live camera</span>
+    searchable, and the three tiers of how much damage each one can do.</span><span class="zh">fp 裡有一個原廠除錯用的 shell,共 77 個指令,而且 SD 卡上一個文字檔就能在開機時執行它們,沒有任何權限關卡 —— 這裡其他所有東西都建立在這件事上。77 個全部列出,附韌體自己的用法說明、可搜尋,以及每一個能造成多大破壞的三個等級。</span></small>
+    <span class="m"><span class="en">reference &middot; 54 of 77 asked on a live camera</span><span class="zh">參考 &middot; 77 個裡有 54 個在真機上問過</span></span>
   </a>
   <a class="row" href="explainers/osd-text-colours.html">
-    <b>On-screen text colours</b>
-    <small>The colour of <code>display text</code> is a palette index, not a colour
+    <b><span class="en">On-screen text colours</span><span class="zh">畫面文字的顏色</span></b>
+    <small><span class="en">The colour of <code>display text</code> is a palette index, not a colour
     value, and the stock pink is an out-of-range one. All 256 indices, with the
-    thirty that come from ROM kept apart from the ones that had to be photographed.</small>
-    <span class="m">reference &middot; 0&ndash;29 exact, 161&ndash;255 measured</span>
+    thirty that come from ROM kept apart from the ones that had to be photographed.</span><span class="zh"><code>display text</code> 的顏色是一個調色盤索引,不是顏色值,而出廠那個粉紅色是超出範圍的一個。全部 256 個索引都在,其中三十個來自 ROM 的和必須靠拍照才問得出來的分開放。</span></small>
+    <span class="m"><span class="en">reference &middot; 0&ndash;29 exact, 161&ndash;255 measured</span><span class="zh">參考 &middot; 0&ndash;29 精確,161&ndash;255 是量的</span></span>
   </a>
 </div>
 
-<h2>Project threads</h2>
+<h2><span class="en">Project threads</span><span class="zh">專案進度</span></h2>
 <div class="scroll">
 <table>
-  <thead><tr><th>project</th><th>what it is</th><th>status</th></tr></thead>
+  <thead><tr><th><span class="en">project</span><span class="zh">專案</span></th><th><span class="en">what it is</span><span class="zh">是什麼</span></th><th><span class="en">status</span><span class="zh">狀態</span></th></tr></thead>
   <tbody>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/usb-shell-sup.md">usb shell sup</a></td>
-        <td>USB firmware research and data transport</td>
-        <td>released — v3.1.0, built on the camera's own PTP gadget so recording survives it</td></tr>
+        <td><span class="en">USB firmware research and data transport</span><span class="zh">USB 韌體研究與資料傳輸</span></td>
+        <td><span class="en">released — v3.1.0, built on the camera's own PTP gadget so recording survives it</span><span class="zh">已釋出 —— v3.1.0,建在相機自己的 PTP gadget 上,所以錄影不會被它打斷</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/sensor-lab-sup.md">sensor lab sup</a></td>
-        <td>IMX410 modes, ISO, gain, sensor control</td>
-        <td>research complete — the mode-table ambiguity is closed</td></tr>
+        <td><span class="en">IMX410 modes, ISO, gain, sensor control</span><span class="zh">IMX410 的模式、ISO、增益、感光元件控制</span></td>
+        <td><span class="en">research complete — the mode-table ambiguity is closed</span><span class="zh">研究完成 —— 模式表的歧義已經解掉</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/gyro-sup.md">gyro sup</a></td>
-        <td>Gyro, six-axis logging, Gyroflow workflow</td>
-        <td>released — two editions</td></tr>
+        <td><span class="en">Gyro, six-axis logging, Gyroflow workflow</span><span class="zh">陀螺儀、六軸記錄、Gyroflow 流程</span></td>
+        <td><span class="en">released — two editions</span><span class="zh">已釋出 —— 兩個版本</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/open-gate.md">open gate</a></td>
-        <td>Recording the sensor's full 3:2 area</td>
-        <td>OG3K v0.2.3a alpha · OG2K v0.1.0test</td></tr>
+        <td><span class="en">Recording the sensor's full 3:2 area</span><span class="zh">錄下感光元件完整的 3:2 範圍</span></td>
+        <td><span class="en">OG3K v0.2.3a alpha · OG2K v0.1.0test</span><span class="zh">OG3K v0.2.3a alpha · OG2K v0.1.0test</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/6k-to-ssd.md">6k to ssd</a></td>
-        <td>Getting the best 6K the link can carry</td>
-        <td>designed — 8-bit lands within 94–100% of native 6K</td></tr>
+        <td><span class="en">Getting the best 6K the link can carry</span><span class="zh">在傳輸能扛的範圍內拿到最好的 6K</span></td>
+        <td><span class="en">designed — 8-bit lands within 94–100% of native 6K</span><span class="zh">設計完成 —— 8-bit 落在原生 6K 的 94–100%</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/focus-sup.md">focus sup</a></td>
-        <td>DFD, focus model, lens control, follow focus</td>
-        <td>AF decompiled in depth; no collector built</td></tr>
+        <td><span class="en">DFD, focus model, lens control, follow focus</span><span class="zh">DFD、對焦模型、鏡頭控制、跟焦</span></td>
+        <td><span class="en">AF decompiled in depth; no collector built</span><span class="zh">AF 已深入反編譯;還沒做出收集工具</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/raw-sup.md">raw sup</a></td>
-        <td>Bayer capture, streaming, compression, packaging</td>
-        <td>researched; the engine's sustained rate is the one unmeasured number</td></tr>
+        <td><span class="en">Bayer capture, streaming, compression, packaging</span><span class="zh">拜耳擷取、串流、壓縮、封裝</span></td>
+        <td><span class="en">researched; the engine's sustained rate is the one unmeasured number</span><span class="zh">研究完成;引擎的持續速率是唯一還沒量到的數字</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/ui-sup.md">ui sup</a></td>
-        <td>On-screen display, boot animation</td>
-        <td>text, colour and a hardware overlay line all work on a camera</td></tr>
+        <td><span class="en">On-screen display, boot animation</span><span class="zh">螢幕顯示、開機動畫</span></td>
+        <td><span class="en">text, colour and a hardware overlay line all work on a camera</span><span class="zh">文字、顏色和一條硬體疊圖線都已經在相機上跑起來</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/power-sup.md">power sup</a></td>
-        <td>USB-C power delivery and power saving</td>
-        <td>charging mechanism solved; the rest untouched</td></tr>
+        <td><span class="en">USB-C power delivery and power saving</span><span class="zh">USB-C 供電與省電</span></td>
+        <td><span class="en">charging mechanism solved; the rest untouched</span><span class="zh">充電機制已解;其餘還沒碰</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/firmware-map.md">firmware map</a></td>
-        <td>Format, subsystems, task ABI, state sources</td>
-        <td>ongoing — not a product, the ground the rest stands on</td></tr>
+        <td><span class="en">Format, subsystems, task ABI, state sources</span><span class="zh">格式、子系統、task ABI、狀態來源</span></td>
+        <td><span class="en">ongoing — not a product, the ground the rest stands on</span><span class="zh">持續進行 —— 不是產品,是其他東西站的地基</span></td></tr>
   </tbody>
 </table>
 </div>
 
-<h2>Reference</h2>
+<h2><span class="en">Reference</span><span class="zh">參考文件</span></h2>
 <div class="scroll">
 <table>
-  <thead><tr><th>document</th><th>what is in it</th></tr></thead>
+  <thead><tr><th><span class="en">document</span><span class="zh">文件</span></th><th><span class="en">what is in it</span><span class="zh">裡面有什麼</span></th></tr></thead>
   <tbody>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_COMMANDS.md">SHELL_COMMANDS</a></td>
-        <td>The firmware shell's 77 commands, with the usage text asked from a live camera</td></tr>
+        <td><span class="en">The firmware shell's 77 commands, with the usage text asked from a live camera</span><span class="zh">韌體 shell 的 77 個指令,附從真機上問出來的用法說明</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_CAPABILITIES.md">SHELL_CAPABILITIES</a></td>
-        <td>What those commands reach — memory and I²C writes, menu setters, sensor readout modes</td></tr>
+        <td><span class="en">What those commands reach — memory and I²C writes, menu setters, sensor readout modes</span><span class="zh">那些指令碰得到什麼 —— 記憶體與 I²C 寫入、選單設定、感光元件讀出模式</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/docs/MENU_MODIFICATION.md">MENU_MODIFICATION</a></td>
-        <td>Every menu item carries its own metadata in ROM, right after its name string</td></tr>
+        <td><span class="en">Every menu item carries its own metadata in ROM, right after its name string</span><span class="zh">每一個選單項目在 ROM 裡都帶著自己的 metadata,就接在名稱字串後面</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/docs/FREEZE_ROOTCAUSE.md">FREEZE_ROOTCAUSE</a></td>
-        <td>Why the first USB shell froze the camera — six symptoms reduced to one mechanism</td></tr>
+        <td><span class="en">Why the first USB shell froze the camera — six symptoms reduced to one mechanism</span><span class="zh">第一版 USB shell 為什麼會讓相機當機 —— 六個症狀收斂成一個機制</span></td></tr>
   </tbody>
 </table>
 </div>
-<p class="note">These are the working documents, not tidied write-ups, and several are
+<p class="note en">These are the working documents, not tidied write-ups, and several are
 in Traditional Chinese. They are on GitHub rather than here because GitHub renders
 Markdown and this site does not.</p>
+<p class="note zh">這些是工作筆記,不是整理過的文章,而且有幾份是繁體中文。
+它們放在 GitHub 而不是這裡,因為 GitHub 會算繪 Markdown,這個站不會。</p>
 
-<h2>Stopped or paused</h2>
-<p class="lede">Kept because what they established still holds.</p>
+<h2><span class="en">Stopped or paused</span><span class="zh">停掉或暫停的</span></h2>
+<p class="lede en">Kept because what they established still holds.</p>
+<p class="lede zh">留著,因為它們確立的東西現在還成立。</p>
 <div class="scroll">
 <table>
   <tbody>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/bridge.md">bridge</a></td>
-        <td>The most complete thing built on the fp's PTP surface. Its measurements — why host-side autofocus is hard, and that UHD 12-bit CinemaDNG cannot come over USB — are load-bearing here</td></tr>
+        <td><span class="en">The most complete thing built on the fp's PTP surface. Its measurements — why host-side autofocus is hard, and that UHD 12-bit CinemaDNG cannot come over USB — are load-bearing here</span><span class="zh">建在 fp 的 PTP 介面上最完整的東西。它量到的兩件事 —— 為什麼主機端自動對焦很難,以及 UHD 12-bit CinemaDNG 沒辦法走 USB —— 在這裡是承重的</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/gimbal.md">gimbal</a></td>
-        <td>SIGMA's <code>0x94xx</code> vendor protocol works during recording, unlike tethered focus. Relative drive only, but absolute position is readable</td></tr>
+        <td><span class="en">SIGMA's <code>0x94xx</code> vendor protocol works during recording, unlike tethered focus. Relative drive only, but absolute position is readable</span><span class="zh">SIGMA 的 <code>0x94xx</code> 廠商協定在錄影中可以用,和連線對焦不一樣。只能相對驅動,但絕對位置讀得到</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/color-sup.md">color sup</a></td>
-        <td>The colour is reproduced; the tool is awkward and nothing is packaged</td></tr>
+        <td><span class="en">The colour is reproduced; the tool is awkward and nothing is packaged</span><span class="zh">顏色已經重現;工具很難用,而且什麼都還沒打包</span></td></tr>
     <tr><td><a href="https://github.com/ijigen/fpSup/blob/main/projects/fp-remote.md">fpRemote</a></td>
-        <td>Not started. Wireless bridge and low-resolution streaming through AutoRun rather than PTP</td></tr>
+        <td><span class="en">Not started. Wireless bridge and low-resolution streaming through AutoRun rather than PTP</span><span class="zh">還沒開始。無線橋接和低解析度串流,走 AutoRun 而不是 PTP</span></td></tr>
   </tbody>
 </table>
 </div>
 
-<h2>Helping</h2>
-<p class="lede">The most useful thing anyone can contribute is a measurement: a card's
+<h2><span class="en">Helping</span><span class="zh">想幫忙的話</span></h2>
+<p class="lede en">The most useful thing anyone can contribute is a measurement: a card's
 sustained write rate, a frame rate nobody has tested, footage from a body other than
 the one everything here was developed on. The
-<a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
-  <a href="https://www.youtube.com/@fp-sup">YouTube</a> is where that gets coordinated,
-and <a href="https://github.com/ijigen/fpSup">the repository</a> has all of it.</p>
+<a href="https://discord.gg/XeFK5zNZpT">Discord</a> is where that gets coordinated,
+<a href="https://github.com/ijigen/fpSup">the repository</a> has all of it, and there is
+a <a href="https://www.youtube.com/@fp-sup">YouTube channel</a>.</p>
+<p class="lede zh">任何人能提供的東西裡,最有用的是一筆量測:一張卡的持續寫入速度、
+一個沒人試過的格率、或是來自另一台機身的素材 —— 這裡的一切都只在同一台機器上開發出來。
+協調這些事的地方在 <a href="https://discord.gg/XeFK5zNZpT">Discord</a>,
+全部的東西都在<a href="https://github.com/ijigen/fpSup">程式庫</a>裡,
+另外還有一個 <a href="https://www.youtube.com/@fp-sup">YouTube 頻道</a>。</p>
 
 <footer>
-  <p><a href="./">fpSup</a> &middot; <a href="guide.html">How to use it</a> &middot;
-  <a href="how-it-works.html">Why this is possible</a> &middot;
+  <p><a href="./">fpSup</a> &middot;
+  <a href="guide.html"><span class="en">How to use it</span><span class="zh">怎麼用</span></a> &middot;
+  <a href="how-it-works.html"><span class="en">Why this is possible</span><span class="zh">為什麼做得到</span></a> &middot;
   <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
 </footer>
+
+<script src="assets/lang.js?v=0183bc5d" defer></script>
 
 </body>
 </html>

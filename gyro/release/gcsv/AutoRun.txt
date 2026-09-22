@@ -18,7 +18,7 @@
 # that has not run yet, so no stale instruction-cache line can shadow them.
 #
 # The screen reads fpSup[........]0 through fpSup[########]100 while this runs
-# and fpSup-Gyro-v1.12.1! when it is done.  A bar that stops means the load stopped there.
+# and fpSup-Gyro-v1.13! when it is done.  A bar that stops means the load stopped there.
 # ============================================================================
 
 # --- screen ------------------------------------------------------------------
@@ -149,11 +149,11 @@ mem set 0xC0BAC2F8 0xC03D99A0
 display osd 1 0x00000000
 display osd 1 0x00000000
 display osd 1 0x00000000
-display text fpSup-Gyro-v1.12.1!
+display text fpSup-Gyro-v1.13!
 display osd 1
-display text fpSup-Gyro-v1.12.1!
+display text fpSup-Gyro-v1.13!
 display osd 1
-display text fpSup-Gyro-v1.12.1!
+display text fpSup-Gyro-v1.13!
 display osd 1
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
@@ -602,4 +602,4 @@ display osd 1
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
 # pad -- see PAD_TO: mode 7 overwrites but does not truncate
-########
+################
