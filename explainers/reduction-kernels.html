@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What the binning actually does &mdash; fpSup</title>
+<meta name="description" content="The SIGMA fp's 2x2 and 3x3 sensor reduction modes, measured from real frames rather than read from firmware. Vertical is genuine row binning; horizontal never is. The 3x mode bins only two rows. With the RWZM resampler kernel solved to 16 phases.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/reduction-kernels.html">
+<meta property="og:title" content="SIGMA fp: what the binning actually does">
+<meta property="og:description" content="Measured from frames, not firmware. Vertical is real binning, horizontal is interpolation, and the 3x mode only bins two rows out of every three.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:16px 14px 12px}
+figure.dia svg{display:block; width:100%; height:auto}
+figure.dia figcaption{font-size:.84rem; color:var(--dim); margin-top:11px;
+  padding-top:10px; border-top:1px solid var(--line)}
+figure.dia figcaption b{color:var(--ink); font-weight:600}
+.dia text{font-family:var(--mono); fill:var(--ink); font-size:12px}
+.dia .t-dim{fill:var(--dim)}
+.dia .t-sig{fill:var(--sig); font-weight:600}
+.dia .t-sm{font-size:10.5px}
+.dia .bx{fill:var(--paper); stroke:var(--line); stroke-width:1}
+.dia .bx-on{fill:var(--sig-soft); stroke:var(--sig); stroke-width:1.5}
+.dia .ln{stroke:var(--line); stroke-width:1.5; fill:none}
+.dia .ln-on{stroke:var(--sig); stroke-width:2; fill:none}
+.dia .ln-dot{stroke:var(--dim); stroke-width:1; fill:none; stroke-dasharray:2 3}
+.dia .ax{stroke:var(--dim); stroke-width:1; fill:none}
+
+/* the kernel plot */
+.dia .plot-fill{fill:var(--sig-soft); stroke:none}
+.dia .plot-meas{stroke:var(--sig); stroke-width:2.2; fill:none;
+  stroke-linejoin:round}
+.dia .plot-ref{stroke:var(--dim); stroke-width:1.3; fill:none;
+  stroke-dasharray:4 3}
+
+/* verdict pills in tables */
+.v{font-family:var(--mono); font-size:.68rem; letter-spacing:.03em;
+  border:1px solid var(--line); border-radius:3px; padding:2px 7px;
+  background:var(--paper); color:var(--dim); white-space:nowrap;
+  display:inline-block}
+.v.yes{border-color:var(--sig); color:var(--sig); background:var(--sig-soft);
+  font-weight:600}
+
+/* numeric tables read better right-aligned and monospaced */
+table td.n, table th.n{text-align:right; font-family:var(--mono);
+  font-variant-numeric:tabular-nums; white-space:nowrap}
+table tr.hl td{background:var(--sig-soft)}
+table tr.hl td:first-child{font-weight:600}
+code.k{font-family:var(--mono); white-space:nowrap}
+</style>
+</head>
+<body>
+
+<a class="back" href="../research.html">&larr; Firmware research</a>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1>What the binning actually does</h1>
+    <p class="lede">Every description of the fp's reduction modes &mdash; ours
+    included &mdash; says &ldquo;sensor 2&times;2&rdquo; and &ldquo;sensor
+    3&times;3&rdquo;. Seven frames of one scene say otherwise. Vertically the sensor
+    really does average rows. Horizontally it never averages anything: it
+    interpolates. And the &divide;3 mode bins only two rows out of every three.</p>
+    <ul class="chips">
+      <li><b>7 frames</b> one scene, one exposure</li>
+      <li><b>3 methods</b> that must agree</li>
+      <li><b>2&times;2 = 3.2</b> photodiodes, not 4</li>
+    </ul>
+  </div>
+</header>
+
+<div class="facts">
+  <dl>
+    <dt>Method</dt>
+    <dd>Least-squares recovery of the reduction kernel from raw frames, checked
+    against two measurements that share none of its assumptions: photon-transfer
+    noise statistics, and the sub-pixel geometry of the two green planes.</dd>
+    <dt>Checked against</dt>
+    <dd>A control pair shot after the camera was taken off the tripod and refocused;
+    synthetic frames built with known kernels and pushed through the same pipeline;
+    and the firmware's own merge-tuple table from
+    <a href="sensor-modes.html">Every setting on the sensor</a>, which agrees
+    row for row.</dd>
+    <dt>Not from the firmware</dt>
+    <dd>Nothing here was read out of a disassembly. It is what one camera
+    <em>did</em>, which is a different kind of claim from what the firmware
+    <em>would</em> do &mdash; and it cannot say <em>which block</em> applied a
+    kernel, only what reached the card. See
+    <a href="#open">what is still open</a>.</dd>
+  </dl>
+</div>
+
+<h2>The short version</h2>
+
+<p>Three things, if you read nothing else:</p>
+
+<ol class="steps">
+  <li>
+    <h3>Vertical is real binning. Horizontal is not.</h3>
+    <p>The vertical kernel is an exact equal-weight average of two same-colour rows,
+    and it leaves a fingerprint no resampler can fake: the output rows come out
+    <em>unevenly spaced</em>. The horizontal kernel has unequal weights that mirror
+    between even and odd output columns &mdash; the signature of resampling onto a
+    uniform grid. Charge combination cannot produce that.</p>
+  </li>
+  <li>
+    <h3>The &divide;3 mode bins two rows, not three</h3>
+    <p>OG2K throws away one same-colour row in every three. That is not an
+    inference from the pixels alone: the firmware's own merge tuple for those
+    eight modes is <code>(3,2,3,3)</code>, and the lone <code>2</code> is the
+    vertical tap count. The pixels and the ROM table say the same thing.</p>
+  </li>
+  <li>
+    <h3>The cheapest large win is not in the sensor</h3>
+    <p>Feeding the &divide;2 sensor mode into the resampler at &times;1.5 beats a
+    textbook true 3&times;3 on aliasing <em>and</em> on noise &mdash; using only
+    blocks that already ship. The FHD mode is that cascade already.</p>
+  </li>
+</ol>
+
+<h2>How it was measured</h2>
+
+<p>One frame per mode of the same scene, same lens, same exposure: ISO&nbsp;400,
+1/25&nbsp;s, f/3.5, 25p, Ver.5.02. A guitar amplifier, because the grille cloth is
+a dense regular weave &mdash; the worst case for any reduction, and therefore the
+one that separates the candidates.</p>
+
+<p>OG3K and OG2K cannot live on the same card, so the session splits in two, with
+the camera remounted and refocused in between. That split turns out to matter:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>set</th><th>frames</th><th>how it aligns to the 6K still</th></tr></thead>
+  <tbody>
+    <tr><td>one</td><td><code>6K</code> <code>OG3K</code> <code>4K</code> <code>FHD</code></td>
+      <td><b>Integer offset, nothing else.</b> 6K&harr;OG3K is (3,4) in colour-plane
+      units &mdash; sensor (6,8) &mdash; at r&sup2;&nbsp;=&nbsp;0.991&ndash;0.993.</td></tr>
+    <tr><td>two</td><td><code>OG2K</code> <code>4K_set2</code> <code>FHD_set2</code></td>
+      <td>Needs an affine. <b>1.2% magnification difference</b> from the refocus
+      (focus breathing), so OG2K's kernel can only be fitted on small central
+      patches and its detail is one confidence level below OG3K's.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Three measurements run on those frames. They share no assumptions, so they are
+allowed to disagree &mdash; and where they agree, the answer is not an artefact of
+any one of them.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>what</th><th>how</th><th>what it is blind to</th></tr></thead>
+  <tbody>
+    <tr><td><b>Kernel</b></td>
+      <td>Least squares for the output pixel as a linear combination of same-colour
+      source pixels, free taps to &plusmn;5.</td>
+      <td>Needs registration. Sub-pixel error smears the answer.</td></tr>
+    <tr><td><b>Noise</b></td>
+      <td>Photon transfer. The slope of variance against signal gives
+      <code class="k">N<sub>eff</sub> = 1/&Sigma;w&sup2;</code>, the effective number
+      of photodiodes behind each output pixel.</td>
+      <td>Registration entirely. Says nothing about <em>where</em> the taps are.</td></tr>
+    <tr><td><b>Geometry</b></td>
+      <td>Sub-pixel phase between the G1 and G2 planes <em>inside one frame</em>.</td>
+      <td>Any external reference. Only sees the sampling grid, not the weights.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">For OG3K the three land on the same answer: the fitted kernel gives
+&Sigma;w&sup2;&nbsp;=&nbsp;0.291, so N<sub>eff</sub>&nbsp;=&nbsp;3.44; the noise
+measurement, which never saw the kernel, gives 3.48. One per cent apart.</p>
+
+<h2>The sampling grid gives it away</h2>
+
+<p>The cleanest evidence needs no reference frame at all. In a Bayer array the two
+green planes sit on a quincunx: G1 at (even row, odd column), G2 at (odd row, even
+column), so G2 is offset from G1 by exactly half a plane step in each axis. Measure
+that offset in each mode and the 6K still is its own control.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>frame</th><th class="n">G1&rarr;G2 vertical</th><th class="n">G1&rarr;G2 horizontal</th><th>reading</th></tr></thead>
+  <tbody>
+    <tr><td><code>6K</code></td><td class="n">&minus;0.500</td><td class="n">+0.469</td><td>textbook &mdash; the control</td></tr>
+    <tr><td><code>4K</code></td><td class="n">&minus;0.498</td><td class="n">+0.442</td><td>resampled, geometry intact</td></tr>
+    <tr><td><code>4K_set2</code></td><td class="n">&minus;0.498</td><td class="n">+0.491</td><td>same</td></tr>
+    <tr class="hl"><td><code>OG3K</code></td><td class="n">&minus;0.248</td><td class="n">+0.480</td><td><b>vertical halved</b>, horizontal normal</td></tr>
+    <tr><td><code>OG2K</code></td><td class="n">&minus;0.503</td><td class="n">+0.388</td><td>both uniform &mdash; see below</td></tr>
+    <tr><td><code>FHD</code></td><td class="n">&minus;0.362</td><td class="n">+0.434</td><td>inherits OG3K's error, diluted</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Nine tiles across the grille give OG3K a vertical phase between
+&minus;0.24 and &minus;0.26 every time. A value of 0.25 instead of 0.5 has exactly
+one cause: the R/G1 output row is centred <em>between</em> two even sensor rows and
+the G2/B output row between two odd ones, which leaves the two Bayer row phases one
+sensor row apart instead of two.</p>
+
+<figure class="dia">
+<svg viewBox="0 0 620 210" role="img" aria-label="Diagram: two-row binning bunches the output rows into pairs spaced 1, 3, 1, 3 sensor rows apart instead of evenly at 2.">
+  <text x="0" y="14" class="t-dim t-sm">sensor rows</text>
+  <!-- sensor row markers 6..13 -->
+  <g>
+    <rect class="bx-on" x="52" y="26" width="16" height="16" rx="2"/>
+    <rect class="bx" x="122" y="26" width="16" height="16" rx="2"/>
+    <rect class="bx-on" x="192" y="26" width="16" height="16" rx="2"/>
+    <rect class="bx" x="262" y="26" width="16" height="16" rx="2"/>
+    <rect class="bx-on" x="332" y="26" width="16" height="16" rx="2"/>
+    <rect class="bx" x="402" y="26" width="16" height="16" rx="2"/>
+    <rect class="bx-on" x="472" y="26" width="16" height="16" rx="2"/>
+    <rect class="bx" x="542" y="26" width="16" height="16" rx="2"/>
+  </g>
+  <g class="t-dim t-sm" text-anchor="middle">
+    <text x="60" y="56">6</text><text x="130" y="56">7</text>
+    <text x="200" y="56">8</text><text x="270" y="56">9</text>
+    <text x="340" y="56">10</text><text x="410" y="56">11</text>
+    <text x="480" y="56">12</text><text x="550" y="56">13</text>
+  </g>
+  <text x="0" y="90" class="t-dim t-sm">averaged</text>
+  <!-- brackets: (6,8) (7,9) (10,12) (11,13) -->
+  <path class="ln-on" d="M60 74 L60 84 L200 84 L200 74"/>
+  <path class="ln" d="M130 92 L130 100 L270 100 L270 92"/>
+  <path class="ln-on" d="M340 74 L340 84 L480 84 L480 74"/>
+  <path class="ln" d="M410 92 L410 100 L550 100 L550 92"/>
+  <!-- drop lines to output centres 7, 8, 11, 12 -->
+  <path class="ln-dot" d="M130 84 L130 146"/>
+  <path class="ln-dot" d="M200 100 L200 146"/>
+  <path class="ln-dot" d="M410 84 L410 146"/>
+  <path class="ln-dot" d="M480 100 L480 146"/>
+  <text x="0" y="150" class="t-dim t-sm">output rows</text>
+  <g>
+    <circle class="bx-on" cx="130" cy="146" r="6"/>
+    <circle class="bx" cx="200" cy="146" r="6"/>
+    <circle class="bx-on" cx="410" cy="146" r="6"/>
+    <circle class="bx" cx="480" cy="146" r="6"/>
+  </g>
+  <!-- spacing annotation -->
+  <path class="ax" d="M130 172 L200 172 M410 172 L480 172"/>
+  <path class="ax" d="M200 172 L410 172"/>
+  <g class="t-sig" text-anchor="middle" font-size="11">
+    <text x="165" y="190">1</text><text x="445" y="190">1</text>
+  </g>
+  <g class="t-dim" text-anchor="middle" font-size="11">
+    <text x="305" y="190">3</text>
+  </g>
+  <text x="505" y="190" class="t-dim t-sm">&hellip;sensor rows apart</text>
+</svg>
+<figcaption><b>OG3K's output rows are not evenly spaced.</b> Each output row is the
+average of two same-colour sensor rows, so the R/G1 row lands on 7 and the G2/B row
+on 8 &mdash; one row apart &mdash; then the next pair starts at 11. The pitch reads
+1,&nbsp;3,&nbsp;1,&nbsp;3 rather than a constant 2. A resampler would have produced
+an even grid; this is what genuine row binning looks like from the outside.</figcaption>
+</figure>
+
+<p>For a <em>&divide;3</em> mode this test goes quiet: with an odd factor a symmetric
+bin centres on a photosite, so binning and resampling both give an even grid.
+OG2K's 0.503 therefore proves nothing either way, and the kernel and the noise have
+to carry that mode on their own.</p>
+
+<h2>OG3K &mdash; the &divide;2 mode</h2>
+
+<h3>Vertical: two rows, equal weights</h3>
+
+<p>Free-tap least squares on the grille, per CFA channel, at
+r&sup2;&nbsp;&asymp;&nbsp;0.993. Side lobes under 0.01 in every channel:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>channel</th><th class="n">&minus;2</th><th class="n">&minus;1</th><th class="n">0</th><th class="n">+1</th><th class="n">+2</th><th class="n">+3</th></tr></thead>
+  <tbody>
+    <tr><td>R</td><td class="n">0.003</td><td class="n">&minus;0.004</td><td class="n">0.498</td><td class="n">0.493</td><td class="n">0.003</td><td class="n">0.007</td></tr>
+    <tr><td>G1</td><td class="n">0.005</td><td class="n">&minus;0.009</td><td class="n">0.501</td><td class="n">0.495</td><td class="n">0.001</td><td class="n">0.007</td></tr>
+    <tr><td>G2</td><td class="n">0.007</td><td class="n">&minus;0.008</td><td class="n">0.499</td><td class="n">0.494</td><td class="n">0.002</td><td class="n">0.007</td></tr>
+    <tr><td>B</td><td class="n">0.006</td><td class="n">&minus;0.001</td><td class="n">0.490</td><td class="n">0.497</td><td class="n">0.004</td><td class="n">0.004</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Horizontal: two taps, and they mirror</h3>
+
+<p>The same fit, read across instead of down:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>channel</th><th>output column</th><th class="n">&minus;2</th><th class="n">&minus;1</th><th class="n">0</th><th class="n">+1</th><th class="n">+2</th><th class="n">+3</th></tr></thead>
+  <tbody>
+    <tr><td>R</td><td>even</td><td class="n">0.018</td><td class="n">&minus;0.014</td><td class="n">0.712</td><td class="n">0.259</td><td class="n">0.005</td><td class="n">0.020</td></tr>
+    <tr><td>G2</td><td>even</td><td class="n">0.015</td><td class="n">&minus;0.017</td><td class="n">0.725</td><td class="n">0.259</td><td class="n">0.000</td><td class="n">0.018</td></tr>
+    <tr><td>G1</td><td>odd</td><td class="n">0.002</td><td class="n">0.009</td><td class="n">0.219</td><td class="n">0.745</td><td class="n">0.020</td><td class="n">0.006</td></tr>
+    <tr><td>B</td><td>odd</td><td class="n">0.010</td><td class="n">0.013</td><td class="n">0.222</td><td class="n">0.715</td><td class="n">0.027</td><td class="n">0.013</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="warn"><b>Even and odd output columns are mirror images.</b> Convert the
+weights to sensor coordinates: R samples at <code class="k">4t&nbsp;+&nbsp;8.53</code>
+and G1 at <code class="k">4t&nbsp;+&nbsp;10.54</code> &mdash; <b>2.01 sensor columns
+apart</b>. A uniform output grid predicts 2. Pair-wise binning predicts 1. A global
+misalignment cannot explain it, because a shift moves both channels equally and
+leaves the difference alone.</div>
+
+<p>So each output pixel is a linear interpolation between the two nearest
+same-colour photosites, positioned on an evenly spaced grid. Charge combination
+cannot produce unequal weights, and certainly not weights that flip with column
+parity.</p>
+
+<h3>Which model fits</h3>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>model</th><th class="n">R</th><th class="n">G1</th><th class="n">G2</th><th class="n">B</th></tr></thead>
+  <tbody>
+    <tr class="hl"><td>V = bin 2 rows &middot; H = 2-tap interpolation</td><td class="n">0.9918</td><td class="n">0.9910</td><td class="n">0.9932</td><td class="n">0.9916</td></tr>
+    <tr><td>V = bin 2 rows &middot; H = bin 2 columns</td><td class="n">0.9769</td><td class="n">0.9713</td><td class="n">0.9797</td><td class="n">0.9728</td></tr>
+    <tr><td>V = bin 2 rows &middot; H = skip</td><td class="n">0.9675</td><td class="n">0.9766</td><td class="n">0.9729</td><td class="n">0.9724</td></tr>
+    <tr><td>V = interpolate &middot; H = interpolate</td><td class="n">0.9293</td><td class="n">0.9310</td><td class="n">0.9370</td><td class="n">0.9351</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">Residual variance under the correct model is a third of what a true
+2&times;2 box leaves behind. The remaining error is mostly the two frames' own
+independent noise.</p>
+
+<h2>OG2K &mdash; the &divide;3 mode</h2>
+
+<p>Second set, affine registration, r&sup2;&nbsp;&asymp;&nbsp;0.93 on a central
+100&times;100 patch. One confidence level below OG3K &mdash; but the pipeline was
+checked by feeding it synthetic frames built with known kernels, where it returns
+r&sup2;&nbsp;=&nbsp;0.9999 and recovers the weights to three decimals. The 0.93 is
+registration error, not model error.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>channel</th><th colspan="5">vertical, at sensor offsets &minus;4 &minus;2 0 +2 +4</th></tr></thead>
+  <tbody>
+    <tr><td>R</td><td class="n">0.101</td><td class="n">0.496</td><td class="n">0.380</td><td class="n">0.020</td><td class="n">0.003</td></tr>
+    <tr><td>G1</td><td class="n">0.030</td><td class="n">0.508</td><td class="n">0.464</td><td class="n">&minus;0.001</td><td class="n">0.000</td></tr>
+    <tr><td>G2</td><td class="n">&minus;0.005</td><td class="n">0.490</td><td class="n">0.494</td><td class="n">0.020</td><td class="n">0.001</td></tr>
+    <tr><td>B</td><td class="n">0.004</td><td class="n">0.487</td><td class="n">0.485</td><td class="n">0.027</td><td class="n">&minus;0.003</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="warn"><b>Two taps, not three.</b> The output row centre sits at about
+<code class="k">3v&nbsp;+&nbsp;28</code> with taps at &minus;2 and 0, so even output
+rows use sensor rows <code class="k">{26,28} {32,34} {38,40}</code> &mdash; rows 30
+and 36 are never read. Of every six sensor rows, two even and two odd are binned and
+one of each is discarded.</div>
+
+<p>Horizontally it is a symmetric three-tap <code class="k">[1&nbsp;2&nbsp;1]&nbsp;/&nbsp;4</code>
+&mdash; the G2 profile reads
+<code class="k">0.06&nbsp;0.21&nbsp;0.44&nbsp;0.24&nbsp;0.05</code>.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>model</th><th class="n">R</th><th class="n">G1</th><th class="n">G2</th><th class="n">B</th></tr></thead>
+  <tbody>
+    <tr class="hl"><td>V = bin 2 rows &middot; H = [1 2 1]/4</td><td class="n">0.9259</td><td class="n">0.9205</td><td class="n">0.9231</td><td class="n">0.9249</td></tr>
+    <tr><td>V = bin 2 rows &middot; H = bin 2 columns</td><td class="n">0.9146</td><td class="n">0.9102</td><td class="n">0.9126</td><td class="n">0.9140</td></tr>
+    <tr><td><b>true 3&times;3 box</b> &mdash; what everyone assumed</td><td class="n">0.8933</td><td class="n">0.8502</td><td class="n">0.8487</td><td class="n">0.8589</td></tr>
+    <tr><td>V = bin 3 rows &middot; H = [1 2 1]/4</td><td class="n">0.8906</td><td class="n">0.8516</td><td class="n">0.8526</td><td class="n">0.8607</td></tr>
+    <tr><td>V = bin 2 rows &middot; H = skip</td><td class="n">0.8554</td><td class="n">0.8668</td><td class="n">0.8731</td><td class="n">0.8651</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>It averages, it does not sum</h2>
+
+<p>Every clip mode sits 1.32&nbsp;EV below the 6K still at identical ISO and
+shutter &mdash; mean ratios 0.399 / 0.392 / 0.406 / 0.410 across RGGB, and the DNGs
+record <code>BaselineExposure</code> 2 against 0.678, a difference of 1.32.</p>
+
+<p>The part that settles it is that <b>OG3K and OG2K sit at the same level</b>
+(127.1 against 124.8). If charge were being summed, &divide;3 would be 2.25&times;
+brighter than &divide;2. It is not, so whatever combines is normalised afterwards.</p>
+
+<h2>What it costs</h2>
+
+<p>Two numbers per mode. <code class="k">N<sub>eff</sub></code> is how many
+photodiodes are effectively behind each output pixel. The alias figure is the mean
+gain the prefilter still has over the fold-back band &mdash; the energy that lands
+on top of real detail and cannot be removed afterwards.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>mode</th><th class="n">N<sub>eff</sub> measured</th><th class="n">nominal</th><th class="n">noise shortfall</th><th class="n">alias, vertical</th><th class="n">alias, horizontal</th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><b>OG3K</b> &divide;2</td><td class="n">3.27 / 3.48 / 3.34 / 3.52</td><td class="n">4</td><td class="n">&minus;0.13 EV</td><td class="n"><b>0.372</b></td><td class="n">0.591</td></tr>
+    <tr class="hl"><td><b>OG2K</b> &divide;3</td><td class="n">5.35 / 5.05 / 4.96 / 5.64</td><td class="n">9</td><td class="n">&minus;0.38 EV</td><td class="n">0.477</td><td class="n"><b>0.293</b></td></tr>
+    <tr><td>ideal box &divide;2</td><td class="n">4</td><td class="n">4</td><td class="n">&mdash;</td><td class="n">0.305</td><td class="n">0.305</td></tr>
+    <tr><td>ideal box &divide;3</td><td class="n">9</td><td class="n">9</td><td class="n">&mdash;</td><td class="n">0.231</td><td class="n">0.231</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two things worth sitting with.</p>
+
+<p><b>The noise shortfall is small.</b> A tenth to a third of a stop. &ldquo;It is
+not really combining four photodiodes&rdquo; sounds alarming and converts to almost
+nothing. The real cost is aliasing.</p>
+
+<p><b>The weak axis is opposite in the two modes.</b> OG3K's two-row average has an
+exact null at the source Nyquist &mdash; vertically it is a textbook &divide;2
+prefilter &mdash; while horizontally the two-tap interpolation still passes about
+half. OG2K is the other way round, and worse: a two-tap average cannot prefilter a
+&divide;3 decimation at all, so the fold at &nu;&nbsp;=&nbsp;&#8531; still carries
+0.5. <b>OG3K moir&eacute;s horizontally, OG2K moir&eacute;s vertically.</b></p>
+
+<p class="note">Horizontal interpolation instead of binning is not pure loss: it
+keeps more horizontal detail than a true 2&times;2 would (0.79 against 0.707 at
+Nyquist). It is sharpness traded for aliasing, not sharpness thrown away.</p>
+
+<h2>The RWZM kernel, solved</h2>
+
+<p><a href="frame-reduction.html">Hbin, Vbin, Hbin2 and RWZM</a> establishes from
+the firmware that FHD is the &divide;2 sensor mode feeding the resampler at
+1600&nbsp;/&nbsp;1024&nbsp;=&nbsp;1.5625&times;. That makes
+<code>OG3K&nbsp;&rarr;&nbsp;FHD</code> a measurement of the resampler with no sensor
+modelling in it at all &mdash; and both frames are in set one, so they align exactly.</p>
+
+<p><b>r&sup2;&nbsp;=&nbsp;0.99923.</b> Sixteen phases solved separately:</p>
+
+<ul>
+  <li>The ratio is exactly 25/16 and the output grid is uniform. Across all sixteen
+  phases the fitted kernel centroid tracks the predicted phase
+  <code class="k">frac(25p/16&nbsp;+&nbsp;C)</code> with a <em>constant</em> residual
+  of &minus;0.41&nbsp;&plusmn;&nbsp;0.02.</li>
+  <li>It is <b>isotropic</b>. The two axes agree to &plusmn;0.01 at every point;
+  &Sigma;w&sup2; is 0.5603 vertical against 0.5532 horizontal.</li>
+  <li>N<sub>eff</sub> is 1.78 and 1.81 per axis, so <b>3.2</b> in two dimensions.</li>
+</ul>
+
+<figure class="dia">
+<svg viewBox="0 0 620 290" role="img" aria-label="Plot of the measured RWZM prototype kernel against a triangle of half-width 1.20. The measured curve tracks the triangle closely near the centre but has a longer tail reaching about plus and minus 1.45 source samples.">
+  <!-- axes -->
+  <path class="ax" d="M40 250 L600 250"/>
+  <path class="ax" d="M40 250 L40 20"/>
+  <g class="t-dim t-sm">
+    <text x="30" y="254" text-anchor="end">0</text>
+    <text x="30" y="118" text-anchor="end">0.5</text>
+    <text x="30" y="51" text-anchor="end">0.75</text>
+  </g>
+  <path class="ln-dot" d="M40 114.7 L600 114.7"/>
+  <g class="t-dim t-sm" text-anchor="middle">
+    <text x="145" y="268">&minus;1</text>
+    <text x="320" y="268">0</text>
+    <text x="495" y="268">+1</text>
+  </g>
+  <text x="320" y="286" class="t-dim t-sm" text-anchor="middle">d &mdash; distance in source samples</text>
+  <path class="ln-dot" d="M320 250 L320 24"/>
+  <!-- triangle reference -->
+  <polyline class="plot-ref" points="110,250 320,24.5 530,250"/>
+  <!-- measured -->
+  <polyline class="plot-meas" points="44.6,252.6 55.5,253.0 66.4,251.8 77.4,251.7 88.3,250.4 99.2,245.8 110.2,239.1 121.1,232.7 132.1,225.5 143.0,218.5 153.9,210.8 164.9,200.9 175.8,187.5 186.7,175.2 197.7,158.8 208.6,142.9 219.6,127.7 230.5,116.4 241.4,101.2 252.4,86.4 263.3,75.2 274.2,64.2 285.2,56.8 296.1,48.6 307.1,45.3 318.0,43.8 328.9,44.2 339.9,46.6 350.8,55.7 361.7,63.0 372.7,74.7 383.6,86.9 394.6,100.1 405.5,111.2 416.4,125.4 427.4,139.1 438.3,152.5 449.2,167.9 460.2,182.7 471.1,195.0 482.1,207.3 493.0,214.7 503.9,222.4 514.9,228.6 525.8,234.5 536.7,239.2 547.7,244.5 558.6,247.0 569.6,248.1 580.5,250.7 591.4,250.8"/>
+  <!-- legend -->
+  <g transform="translate(410,30)">
+    <line class="plot-meas" x1="0" y1="0" x2="24" y2="0"/>
+    <text x="31" y="4" class="t-sig t-sm">measured</text>
+    <line class="plot-ref" x1="0" y1="18" x2="24" y2="18"/>
+    <text x="31" y="22" class="t-dim t-sm">triangle, half-width 1.20</text>
+  </g>
+</svg>
+<figcaption><b>The resampler's prototype kernel, recovered from sixteen phases.</b>
+Every phase samples the same underlying curve at a different offset, and they all
+fall on it. It is close to a triangle of half-width 1.20 through the core, with a
+longer tail that reaches &plusmn;1.45. <b>The width is fixed</b> &mdash; a
+1.5625&times; reduction wants a half-width of 1.5625 to match, and this is 1.20. The
+resampler interpolates well; it does not prefilter enough for its own ratio.</figcaption>
+</figure>
+
+<p>A cross-check that costs nothing: push white noise through the measured kernels
+and read it with the same estimator used on the real files.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>mode</th><th class="n">predicted reading</th><th class="n">measured</th></tr></thead>
+  <tbody>
+    <tr><td><code>4K</code> &mdash; sensor 1:1 + RWZM 25/16</td><td class="n">4.52</td><td class="n">4.69</td></tr>
+    <tr><td><code>FHD</code> &mdash; sensor &divide;2 + RWZM 25/16</td><td class="n">14.9</td><td class="n">16.5 / 20.5</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">FHD inherits OG3K's paired row grid. The resampler assumes its input
+is evenly spaced, and it is not &mdash; FHD measures &minus;0.362 where the ideal is
+&minus;0.5 and OG3K is &minus;0.248. The error is diluted, not removed.</p>
+
+<h2>The merge tuples were right all along</h2>
+
+<p><a href="sensor-modes.html">Every setting on the sensor</a> lists four merge
+tuples across the 70 modes and says of them: <em>&ldquo;The last two are confirmed
+as effective X/Y geometry scale &mdash; but that proves a coordinate ratio and says
+nothing about whether charge is combined or rows are skipped. The first two are not
+pinned down at all.&rdquo;</em></p>
+
+<p><b>The first two are the per-axis tap counts.</b> The pixels say so:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>tuple</th><th class="n">modes</th><th>what the frames show</th><th></th></tr></thead>
+  <tbody>
+    <tr><td><code class="k">(1,1,1,1)</code></td><td class="n">23</td><td>&mdash;</td><td></td></tr>
+    <tr class="hl"><td><code class="k">(2,2,2,2)</code></td><td class="n">36</td><td>OG3K: 2 taps horizontal, 2 rows vertical</td><td><span class="v yes">matches</span></td></tr>
+    <tr class="hl"><td><code class="k">(3,2,3,3)</code></td><td class="n">8</td><td>OG2K: 3 taps <code class="k">[1&nbsp;2&nbsp;1]/4</code> horizontal, <b>2 rows</b> vertical</td><td><span class="v yes">matches</span></td></tr>
+    <tr><td><code class="k">(3,3,3,6)</code></td><td class="n">3</td><td>not measured &mdash; the 3&times;6 mode</td><td><span class="v">open</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The lone <code>2</code> in <code class="k">(3,2,3,3)</code> is the same
+&ldquo;only two rows&rdquo; the kernel fit found. That is not a reading of the
+pixels agreeing with a guess &mdash; it is a ROM table and a photograph, taken
+independently, saying the same number.</p>
+
+<p>The measurement adds what the table cannot: <b>vertical is a real average and
+horizontal is a phase-aware resample.</b> The registers on that page
+(<code>0x001C</code> selecting 1&times;/2&times;/3&times;, the <code>0x0717</code>
+group holding twice the merge factor, <code>0x0058</code> enabling it) only carry a
+<em>factor</em>. None of them carries tap weights, which is what you would expect if
+the horizontal path is a fixed resampler rather than a combining circuit.</p>
+
+<div class="warn"><b>One thing the frames cannot settle.</b> A kernel measured at
+the card says what happened, not which block did it. OG2K's horizontal
+<code class="k">[1&nbsp;2&nbsp;1]/4</code> is <em>exactly</em> the hbin coefficient
+record&nbsp;0 documented in <a href="frame-reduction.html">the frame-reduction
+page</a> &mdash; but hbin has no &divide;2 at all, and OG3K's horizontal is a
+two-tap with phase-dependent weights that no fixed three-tap record can produce. So
+at least OG3K's horizontal is not hbin. Whether OG2K's is the sensor's own merge or
+an hbin&nbsp;&divide;3 wearing the same classic kernel needs the profile table, not
+more photographs.</div>
+
+<h2>Where this leaves 2K</h2>
+
+<p>If the &divide;3 mode is only binning two rows, the obvious question is whether a
+true 3&times;3 can be built. Two answers, and the second is the useful one.</p>
+
+<p><b>Vertically it might be possible.</b> If the first two tuple numbers are tap
+counts, then <code class="k">(3,3,3,6)</code> is a mode that already bins three
+rows, which would mean the hardware can. Horizontally it almost certainly is not,
+and it barely matters.</p>
+
+<p>Here is what each option is worth. Aliasing is the incoherent residual &mdash;
+the part of the error that no sharpening can recover &mdash; against a
+Lanczos-3 &divide;3 of the 6K still, measured on three regions:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>route to 2016&times;1344</th><th class="n">grille</th><th class="n">panel</th><th class="n">wood</th><th class="n">N<sub>eff</sub></th><th class="n">noise vs A</th></tr></thead>
+  <tbody>
+    <tr><td><b>A</b> &mdash; OG2K as it ships</td><td class="n">31.4%</td><td class="n">5.2%</td><td class="n">3.6%</td><td class="n">5.33</td><td class="n">&mdash;</td></tr>
+    <tr><td><b>A2</b> &mdash; only the vertical raised to 3 rows</td><td class="n">13.1%</td><td class="n">2.7%</td><td class="n">1.4%</td><td class="n">8.00</td><td class="n">+0.29 EV</td></tr>
+    <tr><td><b>A3</b> &mdash; textbook true 3&times;3</td><td class="n">12.3%</td><td class="n">2.3%</td><td class="n">1.4%</td><td class="n">9.00</td><td class="n">+0.38 EV</td></tr>
+    <tr><td><b>B</b> &mdash; full read + RWZM &times;3</td><td class="n">40.1%</td><td class="n">7.1%</td><td class="n">3.6%</td><td class="n">2.69</td><td class="n">&minus;0.35 EV</td></tr>
+    <tr class="hl"><td><b>C</b> &mdash; sensor &divide;2 + RWZM &times;1.5</td><td class="n">6.5%</td><td class="n">0.9%</td><td class="n">0.5%</td><td class="n">10.24</td><td class="n">+0.47 EV</td></tr>
+    <tr><td><b>C2</b> &mdash; a true 2&times;2 + RWZM &times;1.5</td><td class="n">5.6%</td><td class="n">0.9%</td><td class="n">0.5%</td><td class="n">12.80</td><td class="n">+0.63 EV</td></tr>
+  </tbody>
+</table>
+</div>
+
+<ol class="steps">
+  <li>
+    <h3>Fixing only the vertical gets nine tenths of it</h3>
+    <p>A&nbsp;&rarr;&nbsp;A2 takes grille aliasing from 31.4% to 13.1%, and a
+    textbook 3&times;3 only reaches 12.3%. The remaining 0.8 points is
+    <code class="k">[1&nbsp;2&nbsp;1]/4</code> against a box &mdash; not worth
+    touching the horizontal path for.</p>
+  </li>
+  <li>
+    <h3>Even a true 3&times;3 loses to the cascade</h3>
+    <p>12.3% against 6.5%, and N<sub>eff</sub> 9 against 10.24. Route C needs
+    nothing changed in the sensor: both of its stages already ship, and FHD is that
+    cascade at a different second ratio.</p>
+  </li>
+  <li>
+    <h3>Doing it in one resampler step is the worst option</h3>
+    <p>A fixed 1.20-wide kernel asked to do &divide;3 barely prefilters at all, so
+    <b>full read + RWZM &times;3 is worse than OG2K is today</b> on both counts.</p>
+  </li>
+</ol>
+
+<p>The reason C wins is that the two stages are complementary. The sensor's two-row
+average has its null exactly at the source Nyquist, which makes it a perfect
+&divide;2 prefilter. Then RWZM's fixed 1.20-wide kernel, running on a grid that has
+already been halved, is 2.4 wide referred back to sensor pitch &mdash; about right
+for the remaining &times;1.5. <b>The fixed width that is a defect at &divide;3 is
+the right width for &divide;1.5 after a &divide;2.</b></p>
+
+<p>Output is 3032&times;2021 &divide; 1.5 = 2021&times;1347, cropped to
+2016&times;1344 &mdash; still open gate, full sensor width.</p>
+
+<div class="warn"><b>C's second stage is an extrapolation.</b> The resampler has only
+been measured at 25/16, twice, by two independent paths &mdash; but both at that one
+ratio. &ldquo;The prototype width does not change with the ratio&rdquo; has no
+cross-ratio evidence behind it yet, and the whole table above rests on it.</div>
+
+<h2>For anyone demosaicing these files</h2>
+
+<p>Measured against a Lanczos-3 &divide;2 of the 6K still, scoring false colour
+(chroma RMS as a percentage of mean luma). Luma RMS is useless here &mdash; the
+grille aliases so hard that the blurriest algorithm scores best.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>setting</th><th class="n">grille</th><th class="n">panel</th><th class="n">wall</th></tr></thead>
+  <tbody>
+    <tr><td>DCB &mdash; <b>LibRaw defaults</b></td><td class="n">21.32</td><td class="n">22.80</td><td class="n">3.49</td></tr>
+    <tr><td>DCB, <code>iterations=3 enhance=true</code></td><td class="n">19.20</td><td class="n">20.90</td><td class="n">3.02</td></tr>
+    <tr><td>AAHD</td><td class="n">19.55</td><td class="n">20.84</td><td class="n">3.09</td></tr>
+    <tr><td>AHD</td><td class="n">20.04</td><td class="n">20.83</td><td class="n">3.33</td></tr>
+    <tr><td>VNG</td><td class="n">22.74</td><td class="n">23.54</td><td class="n">3.11</td></tr>
+    <tr><td>bilinear</td><td class="n">29.40</td><td class="n">30.01</td><td class="n">3.70</td></tr>
+    <tr class="hl"><td>AAHD + <code>median_filter_passes=3</code></td><td class="n">17.45</td><td class="n">19.06</td><td class="n">2.71</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two things fall out. LibRaw's DCB defaults
+(<code>dcb_iterations=0, dcb_enhance=false</code>) are the worst of the directional
+algorithms because the colour refinement never runs; switching it on brings DCB
+level with AAHD. But <b>a chroma median pass beats every change of algorithm</b>,
+which is what you would expect when the aliasing is already baked into the file and
+no demosaic can undo it.</p>
+
+<p>And OG3K wants its row grid corrected first, because every demosaic assumes a
+square Bayer lattice and OG3K does not have one. A fractional row shift on the CFA
+before demosaicing &mdash; even rows &minus;0.125, odd rows +0.125 of a plane step
+&mdash; buys 3% for the directional algorithms and 8&ndash;11% for the simple ones.
+<b>OG2K does not need it</b>; its grid is uniform on both axes.</p>
+
+<h2>Two traps</h2>
+
+<ol class="steps">
+  <li>
+    <h3>Do not solve RWZM against the 6K still</h3>
+    <p>Fitting <code>4K</code> against <code>6K</code> produces a convincing
+    horizontal sharpening that is not there &mdash; &Sigma;w&sup2; scattering from
+    0.61 to 0.96 with negative wings at both ends of the tap window. Those two
+    frames differ by more than a resampler. <code>OG3K&nbsp;&rarr;&nbsp;FHD</code>
+    is the clean path, and it gives two axes that agree to &plusmn;0.01.</p>
+  </li>
+  <li>
+    <h3>The noise estimator over-reads when taps overlap</h3>
+    <p>A diagonal high-pass tile estimator assumes white noise. A resampler with
+    overlapping support correlates it, and the estimator then over-reads
+    N<sub>eff</sub> by 1.4&ndash;1.6&times;. OG3K and OG2K have non-overlapping
+    taps so they are unaffected &mdash; which is exactly why their kernel and noise
+    numbers agree &mdash; but every RWZM path needs the correction. This is the same
+    effect seen from the other side in
+    <a href="frame-reduction.html">the frame-reduction page</a>, where 3K footage
+    shows almost no correlation between neighbouring same-colour pixels and UHD
+    shows clearly more.</p>
+  </li>
+</ol>
+
+<h2 id="open">Still open</h2>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>question</th><th>the experiment</th></tr></thead>
+  <tbody>
+    <tr><td><b>Does the RWZM prototype width change with the ratio?</b>
+      Everything about route C rests on it not changing.</td>
+      <td>Record a clip through RWZM&nbsp;1536 (1.5&times;) with an OG3K frame from
+      the same position, and run the same sixteen-phase fit. Half-width still 1.20
+      confirms C; 2.4 means the kernel scales and B has to be recomputed.</td></tr>
+    <tr><td><b>Is <code class="k">(3,3,3,6)</code>'s second 3 really three rows?</b>
+      The A2 row above is an analogy from the other two tuples, not a measurement.</td>
+      <td>Shoot the 3&times;6 mode against a 6K from the same position and fit the
+      vertical kernel. Three equal weights proves the hardware can bin three rows;
+      two means the whole idea of a true &divide;3 is dead.</td></tr>
+    <tr><td><b>Which register sets the vertical tap count?</b></td>
+      <td>Diff the 161-register pattern of a <code class="k">(3,2,3,3)</code> mode
+      against a <code class="k">(3,3,3,6)</code> one. They share a horizontal count
+      of 3 and differ only vertically, so the difference should be a handful of
+      registers &mdash; quite possibly among the eleven still undecoded.</td></tr>
+    <tr><td><b>OG2K deserves a better measurement.</b> Its kernel came off the
+      second set at r&sup2;&nbsp;&asymp;&nbsp;0.93.</td>
+      <td>Reshoot OG2K and 6K in one session. Integer registration should take it
+      to 0.99 and raise its detail to OG3K's level.</td></tr>
+    <tr><td><b>One camera, one firmware.</b> Ver.5.02.0.V91 only.</td>
+      <td>Repeat on a second body. The horizontal interpolation weights are the
+      thing most likely to move.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Sources</h2>
+
+<p>The frames are a public test set shot for this purpose: one frame per mode of the
+same scene at ISO&nbsp;400, 1/25&nbsp;s, f/3.5, 25p on Ver.5.02 with fpSup, with the
+camera serial zeroed in place and the image data left byte-identical. Everything
+above is derived from those seven files and nothing else, except where it is
+explicitly checked against
+<a href="sensor-modes.html">Every setting on the sensor</a> and
+<a href="frame-reduction.html">Hbin, Vbin, Hbin2 and RWZM</a>, both of which are
+read from the firmware rather than from frames.</p>
+
+<p class="note">The working note behind this page is
+<code>projects/open-gate/notes/REDUCTION_KERNEL_MEASURED.md</code>, in Traditional
+Chinese, which carries the full per-channel tables and the reproduction recipe.</p>
+
+<footer>
+  <p><a href="../research.html">Firmware research</a> &middot;
+  <a href="../">fpSup</a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://github.com/ijigen/fpSup">Repository</a></p>
+</footer>
+
+</body>
+</html>

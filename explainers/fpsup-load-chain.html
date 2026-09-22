@@ -481,14 +481,19 @@ has it.</p>
 <h2><span class="en">The cave, and what is left to do</span><span class="zh">空洞區,以及還沒做的</span></h2>
 
 <p class="en">Everything above runs in one 12 KB gap in firmware RAM &mdash;
-<code>0xC072D000..0xC0730000</code>, of which 3,640 bytes are the firmware's own. It is
-the scarcest thing on the camera, and the reason is not size but addressing: every cave
-address is a build-time constant, so products must be hand-arranged around each other and
-<em>a card you did not select still holds its addresses</em>.</p>
+<code>0xC072D000..0xC0730000</code>. The firmware's own data ends at
+<code>0xC072DE64</code>; everything above that is zero in the image. The gap was the
+scarcest thing on the camera, and the reason was never size but addressing: a cave address
+written into a build is held whether the card runs or not, so products had to be
+hand-arranged around each other and <em>a card you did not select still held its
+addresses</em>. <b>No product names one any more.</b> The loader keeps the bottom 512
+bytes, and everything above is an arena handed out at boot.</p>
 <p class="zh">上面這一切都跑在韌體 RAM 裡的一段 12 KB 空隙裡 ——
-<code>0xC072D000..0xC0730000</code>,其中 3,640 bytes 是韌體自己的。
-它是這台相機上最稀缺的東西,而原因不是大小是定址:每個空洞區位址都是 build 時的常數,
-所以產品之間要手工錯開,而且<em>沒被選到的卡照樣佔著它的位址</em>。</p>
+<code>0xC072D000..0xC0730000</code>。韌體自己的資料到 <code>0xC072DE64</code> 為止,
+以上在映像檔裡全是零。這段空隙曾經是這台相機上最稀缺的東西,而原因從來不是大小是定址:
+寫進 build 的空洞區位址,不管那張卡跑不跑都佔著,所以產品之間要手工錯開,
+而且<em>沒被選到的卡照樣佔著它的位址</em>。<b>現在沒有任何產品指定位址。</b>
+loader 佔最下面 512 bytes,以上整片是開機時才配發的 arena。</p>
 
 <div class="scroll">
 <table class="num">
@@ -498,21 +503,29 @@ address is a build-time constant, so products must be hand-arranged around each 
   </tr></thead>
   <tbody>
     <tr><td><span class="en">the gap</span><span class="zh">整段空隙</span></td><td>12,288</td></tr>
-    <tr><td><span class="en">the firmware's own</span><span class="zh">韌體本來就佔的</span></td><td>3,640</td></tr>
-    <tr><td><span class="en">addresses claimed by constants</span><span class="zh">被常數宣告的位址</span></td><td>7,712</td></tr>
-    <tr class="best"><td><span class="en">bytes any one card actually writes</span><span class="zh">任何一張卡實際寫入的</span></td><td>708</td></tr>
+    <tr><td><span class="en">the firmware's own, to <code>0xC072DE64</code></span><span class="zh">韌體本來就佔的,到 <code>0xC072DE64</code></span></td><td>3,684</td></tr>
+    <tr><td><span class="en">the loader's own block</span><span class="zh">loader 自己的區塊</span></td><td>512</td></tr>
+    <tr><td><span class="en">the arena, handed out at boot</span><span class="zh">arena,開機時配發</span></td><td>3,920</td></tr>
+    <tr><td><span class="en">above the arena: park stub, shell state, host scratch</span><span class="zh">arena 以上:park stub、shell 狀態、主機暫存</span></td><td>4,172</td></tr>
+    <tr class="best"><td><span class="en">addresses a build still names</span><span class="zh">build 還指定的位址</span></td><td>0</td></tr>
+    <tr class="best"><td><span class="en">bytes the gyro holds at runtime &mdash; four veneers</span><span class="zh">陀螺執行期實際佔用 —— 四個 veneer</span></td><td>32</td></tr>
   </tbody>
 </table>
 </div>
 
-<p class="en"><b>89% of the claimed address space is held by constants, not by bytes.</b>
-Fixing that &mdash; not saving bytes &mdash; is the actual goal.</p>
-<p class="zh"><b>89% 的位址是被常數佔著的,不是被位元組佔著的。</b>
-要解決的是那個,不是省位元組。</p>
+<p class="en"><b>It was never the bytes.</b> 7,712 bytes of address space were held
+by constants against 708 bytes any one card wrote; the fix was to stop naming addresses,
+not to use fewer of them. What is left is 32 bytes of veneer, asked for at boot and given
+back by the next reboot &mdash; and the arena above it is one unbroken run, so the next
+payload does not have to be arranged around anybody.</p>
+<p class="zh"><b>問題從來不在位元組。</b>被常數佔著的位址有 7,712 bytes,
+而任何一張卡實際只寫 708 bytes;解法是不要再指定位址,不是少用幾個。
+現在剩下的是 32 bytes 的 veneer,開機時要、下次重開就還回去 ——
+而且上面那片 arena 是完整一段連續空間,下一個 payload 不必再跟誰錯開。</p>
 
 
 <figure class="dia">
-  <svg viewBox="0 0 760 250" role="img" aria-label="The payload window before and after the gyro drain and space provider moved into the pool: 1,964 bytes used with a largest free run of 684, versus 840 used with a largest free run of 856.">
+  <svg viewBox="0 0 760 250" role="img" aria-label="The payload window before and after the whole move: 1,964 bytes used with a largest free run of 684, versus 32 bytes of veneer at the bottom and a single free run of 3,888.">
     <text x="20" y="18" font-size="10" class="t-dim">0xC072E064</text>
     <text x="740" y="18" font-size="10" text-anchor="end" class="t-dim">0xC072EFB4</text>
     <text x="380" y="18" font-size="10" text-anchor="middle" class="t-dim en">payload window &mdash; 3,920 B</text>
@@ -537,40 +550,38 @@ Fixing that &mdash; not saving bytes &mdash; is the actual goal.</p>
     <text x="172" y="98" font-size="10" text-anchor="middle" class="t-warn">drain 324</text>
     <text x="655" y="98" font-size="10" text-anchor="middle" class="t-warn">space 784</text>
 
-    <text x="20" y="136" font-size="11" class="en">after</text>
-    <text x="20" y="136" font-size="11" class="zh">搬之後</text>
-    <text x="740" y="136" font-size="10" text-anchor="end" class="t-dim">840 B &middot; 856 B</text>
+    <text x="20" y="136" font-size="11" class="en">now</text>
+    <text x="20" y="136" font-size="11" class="zh">現在</text>
+    <text x="740" y="136" font-size="10" text-anchor="end" class="t-dim">32 B &middot; 3,888 B</text>
     <rect class="bx" x="20" y="144" width="720" height="26"/>
-    <rect class="f-cam" x="81.0" y="144" width="14.7" height="26"/>
-    <rect class="f-auto" x="95.7" y="144" width="27.9" height="26"/>
-    <rect class="f-auto" x="230.9" y="144" width="36.0" height="26"/>
-    <rect class="f-auto" x="289.6" y="144" width="22.8" height="26"/>
-    <rect class="f-auto" x="313.2" y="144" width="11.8" height="26"/>
-    <rect class="f-cam" x="413.1" y="144" width="3.7" height="26"/>
-    <rect class="f-cam" x="418.9" y="144" width="3.7" height="26"/>
-    <rect class="f-cam" x="548.2" y="144" width="16.9" height="26"/>
-    <rect class="f-cam" x="565.8" y="144" width="16.9" height="26"/>
-    <line x1="582.8" y1="178" x2="740" y2="178" class="ln-on"/>
-    <text x="661" y="192" font-size="10" text-anchor="middle" class="t-sig en">largest run 856 B</text>
-    <text x="661" y="192" font-size="10" text-anchor="middle" class="t-sig zh">最大連續 856 B</text>
+    <rect class="f-auto" x="20" y="144" width="6" height="26"/>
+    <line x1="26" y1="178" x2="740" y2="178" class="ln-on"/>
+    <text x="383" y="192" font-size="10" text-anchor="middle" class="t-sig en">one free run &mdash; 3,888 B</text>
+    <text x="383" y="192" font-size="10" text-anchor="middle" class="t-sig zh">單一連續空間 —— 3,888 B</text>
+    <text x="40" y="136" font-size="9" class="t-sig en">four veneers, allocated at boot</text>
+    <text x="40" y="136" font-size="9" class="t-sig zh">四個 veneer,開機時配置</text>
 
     <rect class="f-auto" x="20" y="222" width="10" height="10"/>
-    <text x="36" y="231" font-size="10" class="t-dim en">hook stub &mdash; the firmware branches here</text>
-    <text x="36" y="231" font-size="10" class="t-dim zh">hook stub —— 韌體跳進來的落點</text>
-    <rect class="f-load" x="270" y="222" width="10" height="10"/>
-    <text x="286" y="231" font-size="10" class="t-dim en">nothing branches here &mdash; moved out</text>
-    <text x="286" y="231" font-size="10" class="t-dim zh">沒人跳進來 —— 已搬走</text>
-    <rect class="f-cam" x="530" y="222" width="10" height="10"/>
-    <text x="546" y="231" font-size="10" class="t-dim en">state words and pointers</text>
-    <text x="546" y="231" font-size="10" class="t-dim zh">狀態字與指標</text>
+    <text x="36" y="231" font-size="10" class="t-dim en">hook landing point &mdash; the firmware branches here</text>
+    <text x="36" y="231" font-size="10" class="t-dim zh">hook 落點 —— 韌體跳進來的地方</text>
+    <rect class="f-load" x="330" y="222" width="10" height="10"/>
+    <text x="346" y="231" font-size="10" class="t-dim en">code that moved into the pool</text>
+    <text x="346" y="231" font-size="10" class="t-dim zh">已搬進池的程式碼</text>
+    <rect class="f-cam" x="560" y="222" width="10" height="10"/>
+    <text x="576" y="231" font-size="10" class="t-dim en">state words</text>
+    <text x="576" y="231" font-size="10" class="t-dim zh">狀態字</text>
   </svg>
   <figcaption>
-    <span class="en"><b>1,124 bytes came back, and the largest free run moved only from
-    684 to 856.</b> What fragments the window is the scattered state words, not the code
-    that moved. Wanting one big run is a different job from wanting bytes.</span>
-    <span class="zh"><b>拿回 1,124 bytes,但最大連續只從 684 變 856。</b>
-    切碎這個視窗的是散落的狀態字,不是搬走的那兩段程式碼。
-    「要一大塊連續空間」和「要位元組」是兩件不同的工作。</span>
+    <span class="en"><b>1,964 bytes down to 32, and the largest free run from 684 to
+    3,888.</b> Moving the code back only took the window from 684 to 856: what fragmented
+    it was the scattered state words, and they had to go too. They are fields of the
+    writer's own blob in the pool now, reached through the pool pointer, so the window has
+    nothing in it but four eight-byte landing points at the bottom &mdash; and those are
+    asked for at boot, not written into a build.</span>
+    <span class="zh"><b>1,964 bytes 降到 32,最大連續空間從 684 變 3,888。</b>
+    只把程式碼搬走,視窗只從 684 變 856:切碎它的是散落的狀態字,所以那些也得走。
+    它們現在是 writer 自己那塊 blob 在池裡的欄位,透過池指標存取,
+    所以視窗裡只剩最下面四個 8 bytes 的落點 —— 而且那是開機時要的,不是寫進 build 的。</span>
   </figcaption>
 </figure>
 
@@ -640,15 +651,19 @@ Fixing that &mdash; not saving bytes &mdash; is the actual goal.</p>
 <ul class="todo">
   <li><span class="s done">&#10003;</span><div>
     <b><span class="en">The gyro drain and space provider moved into the pool</span><span class="zh">陀螺的 drain 與 space 搬進池</span></b>
-    <small><span class="en">1,736 &rarr; 612 bytes of cave. Nothing branches to them &mdash; the hooks reach them through four words &mdash; so they never needed a fixed address. Verified on the camera; not yet released.</span><span class="zh">cave 從 1,736 降到 612 bytes。沒有任何東西跳進它們(hook 是透過四個字呼叫的),所以它們本來就不需要固定位址。上機驗過,尚未發行。</span></small>
+    <small><span class="en">1,736 &rarr; 612 bytes of cave. Nothing branches to them &mdash; the hooks reach them by an ordinary <code>bl</code> inside the blob now &mdash; so they never needed a fixed address.</span><span class="zh">cave 從 1,736 降到 612 bytes。沒有任何東西跳進它們(現在 hook 在同一塊 blob 裡用普通的 <code>bl</code> 呼叫),所以它們本來就不需要固定位址。</span></small>
   </div></li>
-  <li><span class="s todo-m">&mdash;</span><div>
+  <li><span class="s done">&#10003;</span><div>
     <b><span class="en">Hook stubs become 8-byte veneers</span><span class="zh">hook stub 改成 8 bytes 的跳板</span></b>
     <small><span class="en">A firmware <code>bl</code> reaches &plusmn;32 MB, and the pool is 2 GB away &mdash; so the landing point must stay in the cave, but only the landing point. 536 &rarr; 32 bytes.</span><span class="zh">韌體的 <code>bl</code> 只到 &plusmn;32 MB,而池在 2 GB 外 —— 所以落點非留在 cave 不可,但只有落點。536 → 32 bytes。</span></small>
   </div></li>
-  <li><span class="s todo-m">&mdash;</span><div>
+  <li><span class="s done">&#10003;</span><div>
     <b><span class="en">Allocate cave space at boot instead of naming it in a build</span><span class="zh">空洞區改成開機時配置,不要在 build 裡指定</span></b>
-    <small><span class="en">The one that matters. A card that is not selected then costs nothing. Needs a fixed directory word, because host tools find things by absolute address.</span><span class="zh">真正重要的那一條。沒被選的卡從此不佔位址。需要一個固定的目錄字,因為主機工具是靠絕對位址找東西的。</span></small>
+    <small><span class="en">The one that mattered, and it is done: a release card names no cave address at all, and the build check says so in those words. No directory word was needed &mdash; host tools ask the blob's symbol table where a word is, the same table the camera uses. The arena is <code>LOADER_END..0xC072EFB4</code>, 3,920 bytes in one run.</span><span class="zh">真正重要的那一條,已經做完:發布卡一個空洞區位址都不指定,建置檢查也是這樣寫的。不需要目錄字 —— 主機工具直接問 blob 的符號表,跟相機用的是同一張表。arena 是 <code>LOADER_END..0xC072EFB4</code>,3,920 bytes 單一連續。</span></small>
+  </div></li>
+  <li><span class="s todo-m">&mdash;</span><div>
+    <b><span class="en">Nothing proves the firmware will not write in the arena</span><span class="zh">沒有東西證明韌體不會寫進 arena</span></b>
+    <small><span class="en">The gap is inside the loaded firmware image, not the heap, so no allocator hands it out &mdash; a reboot restores it because the image is reloaded, not because anyone reclaimed it. But zero in the image only means zero at load: a rarely-used feature could own it as <code>.bss</code>. Measured after a boot and a take, all 972 unclaimed words read zero &mdash; that covers the paths we walk, not the ones we do not. Holding 32 bytes instead of 1,736 is the answer to that, not a claim that the gap is ours.</span><span class="zh">這段空隙在<em>載入的韌體映像裡面</em>,不是堆積,所以沒有分配器會把它發出去 —— 重開機會還原是因為映像重新載入,不是因為有人回收。但映像檔裡是零只代表載入時是零:某個少用的功能可能以 <code>.bss</code> 擁有它。開機加一趟錄影之後量過,未配置的 972 個字全是零 —— 那涵蓋我們走過的路徑,不涵蓋沒走過的。答案是只佔 32 bytes 而不是 1,736,不是宣稱這段空隙是我們的。</span></small>
   </div></li>
   <li><span class="s todo-m">&mdash;</span><div>
     <b><span class="en">Two things share <code>0xC072F700</code></span><span class="zh">兩個東西共用 <code>0xC072F700</code></span></b>
@@ -686,6 +701,20 @@ that violates one is wrong even if the camera boots.</p>
       said yes. If it refuses, arm nothing.</span>
       <span class="zh">韌體 hook <b>最後</b>才 arm,在配置器點頭之後。配置失敗就一個都不 arm。</span></td>
       <td class="w"><span class="en">source convention; a half-armed card logs nothing and looks fine</span><span class="zh">源碼慣例;半裝好的卡什麼都不記錄,而且看起來正常</span></td></tr>
+    <tr><td>
+      <span class="en"><b>No product names a cave address at build time.</b> Ask the
+      allocator at boot and keep only what the firmware has to branch to.</span>
+      <span class="zh"><b>任何產品都不准在 build 時指定空洞區位址。</b>
+      開機時跟配置器要,只留韌體非跳不可的落點。</span></td>
+      <td class="ok"><span class="en">build error &mdash; the release check lists every cave destination on the card and a release card must have none</span><span class="zh">建置錯誤 —— 發行檢查會列出卡上每個空洞區目的地,發布卡必須一個都沒有</span></td></tr>
+    <tr><td>
+      <span class="en"><b>A state word carries its size.</b> A displacement off a shared
+      word lands inside its own field or exactly on another's start, and a field walked
+      with writeback is wider than a word.</span>
+      <span class="zh"><b>狀態字要帶著自己的尺寸。</b>
+      對共用字做位移只能落在自己欄位內、或另一個欄位的起點;
+      被寫回指標走過的欄位不能只有一個字。</span></td>
+      <td class="ok"><span class="en">build error, mutation-tested &mdash; a cave <code>.equ</code> carried its size in the distance to the next address, and re-declaring the block lost it twice: once the camera froze after eight seconds, once immediately</span><span class="zh">建置錯誤,mutation 驗過 —— 空洞區的 <code>.equ</code> 用「到下一個位址的距離」帶著尺寸,重新宣告時丟了兩次:一次相機錄八秒後凍結,一次立刻凍結</span></td></tr>
     <tr><td>
       <span class="en">Written words are <b>published to both caches</b> before anything
       placed is allowed to run.</span>
