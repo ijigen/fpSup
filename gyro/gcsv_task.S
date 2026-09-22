@@ -608,25 +608,19 @@ writer_put:
     movw    ip, #:lower16:F_WRITE
     movt    ip, #:upper16:F_WRITE
     blx     ip
-    movw    ip, #:lower16:T_WRC
-    movt    ip, #:upper16:T_WRC
-    str     r0, [ip]
+    BLOBBASE ip                         @ one base, four counters
+    str     r0, [ip, #O_T_WRC]
 #else
-    movw    ip, #:lower16:T_WRC
-    movt    ip, #:upper16:T_WRC
+    BLOBBASE ip
     mov     r0, #1
-    str     r0, [ip]
+    str     r0, [ip, #O_T_WRC]
 #endif
-    movw    ip, #:lower16:T_BYTES
-    movt    ip, #:upper16:T_BYTES
-    ldr     r0, [ip]
+    ldr     r0, [ip, #O_T_BYTES]
     add     r0, r0, r6
-    str     r0, [ip]
-    movw    ip, #:lower16:T_WRITES
-    movt    ip, #:upper16:T_WRITES
-    ldr     r0, [ip]
+    str     r0, [ip, #O_T_BYTES]
+    ldr     r0, [ip, #O_T_WRITES]
     add     r0, r0, #1
-    str     r0, [ip]
+    str     r0, [ip, #O_T_WRITES]
 8:  pop     {r4, r5, r6, lr}
     bx      lr
 #else
@@ -664,30 +658,24 @@ writer_put:
     movw    ip, #:lower16:F_WRITE
     movt    ip, #:upper16:F_WRITE
     blx     ip
-    movw    ip, #:lower16:T_WRC
-    movt    ip, #:upper16:T_WRC
-    str     r0, [ip]
+    BLOBBASE ip                         @ one base for the counters below
+    str     r0, [ip, #O_T_WRC]
 #else
-    movw    ip, #:lower16:T_WRC
-    movt    ip, #:upper16:T_WRC
+    BLOBBASE ip
     mov     r0, #1
-    str     r0, [ip]
+    str     r0, [ip, #O_T_WRC]
 #endif
     sub     r2, r8, r7
-    movw    ip, #:lower16:T_BYTES
-    movt    ip, #:upper16:T_BYTES
-    ldr     r0, [ip]
+    ldr     r0, [ip, #O_T_BYTES]
     add     r0, r0, r2
-    str     r0, [ip]
-    movw    ip, #:lower16:T_POS
+    str     r0, [ip, #O_T_BYTES]
+    ldr     r0, [ip, #O_T_WRITES]
+    add     r0, r0, #1
+    str     r0, [ip, #O_T_WRITES]
+    movw    ip, #:lower16:T_POS             @ still a cave word: next group
     movt    ip, #:upper16:T_POS
     ldr     r0, [ip]
     add     r0, r0, r2
-    str     r0, [ip]
-    movw    ip, #:lower16:T_WRITES
-    movt    ip, #:upper16:T_WRITES
-    ldr     r0, [ip]
-    add     r0, r0, #1
     str     r0, [ip]
 
 2:  cmp     r9, #0

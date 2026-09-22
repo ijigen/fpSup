@@ -69,8 +69,6 @@ T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 W_THREAD, W_BODYOBJ, W_JOINRC = 0xC072EC00, 0xC072EC04, 0xC072EC08
 W_VT, W_VT_SLOT = 0xC072EC20, 0x0C
 W_OPENS, W_CLOSES, W_STAGE = 0xC072EC0C, 0xC072EC10, 0xC072EC14
-T_BYTES, T_WRITES = 0xC072E8E0, 0xC072E8E4
-T_WRC, T_LOST, T_WRAPS = 0xC072E8E8, 0xC072E8EC, 0xC072E8F0
 STREAM_SIGFN = 0xC072E1A8
 
 
@@ -113,9 +111,7 @@ def _check():
             'XT_CREATE': 0xC036E108, 'XT_ATTACH': 0xC036E1B8,
             'XT_JOIN': 0xC036E1F8, 'XT_DESTROY': 0xC036E168,
             'W_STAGE': W_STAGE,
-            'T_BYTES': T_BYTES,
-            'T_WRITES': T_WRITES, 'T_WRC': T_WRC, 'T_LOST': T_LOST,
-            'T_WRAPS': T_WRAPS, 'WRITER_PRI': 6}
+            'WRITER_PRI': 6}
     for name, value in want.items():
         m = re.search(rf'^\.equ\s+{name},\s*([^\s/@]+)', src, re.M)
         if not m:
@@ -321,8 +317,8 @@ def place_code():
     _setw(T_FOPEN, 0, 'the open flag')
     _setw(T_WANT, 0, 'the wanted state')
     _setw(T_STAGE, 0, 'the close stage')
-    for a in (T_BYTES, T_WRITES, T_WRC, T_LOST, T_WRAPS):
-        _setw(a, 0, 'a write counter')
+    # The write counters are words in the blob now, re-read from the card on
+    # every boot, so there is nothing here to clear.
     # No name is patched in any more.  take_path builds it at every take_open
     # from RecordFilePathMgrCinema -- the object the camera itself names clips
     # from -- so the log is \\GYRO\\A001_037.GYR beside clip A001_037, and two

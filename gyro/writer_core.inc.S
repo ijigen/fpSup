@@ -67,6 +67,50 @@ gsup_offsets:
     .word   0       @ +0x38  rec_stop
     .word   0       @ +0x3C  mode_hook (that edition only)
 
+/* Shared state, reached through the pool pointer rather than pc-relatively.
+ *
+ * A pc-relative load reaches +/-4095 FROM THE INSTRUCTION, which is enough when
+ * a word's only users sit together -- the stream cursors do, beside the hooks.
+ * These do not: the writer's counters are touched from the core down here and
+ * from the edition's own code four kilobytes further on, and no single place
+ * satisfies both.
+ *
+ * So the anchor is the one the blob already has.  FRAMEBUF is a firmware word,
+ * not a cave word, and blob_at has read the base out of it since the buffers
+ * stopped being reachable with `adr`:
+ *
+ *     BLOBBASE ip                      four instructions, once per function
+ *     ldr  r0, [ip, #O_T_BYTES]        one per access, from anywhere in the blob
+ *
+ * Now the +/-4095 is measured from the BLOB BASE, so a block in the first four
+ * kilobytes is reachable by every function in it however far apart they are.
+ * The cost is four instructions at the top of a function and one per access, so
+ * it pays from the third word touched; a function touching one word is better
+ * off pc-relative, and the stream cursors stayed that way.
+ *
+ * Nothing here is named in the cave.  FRAMEBUF is at a fixed firmware address
+ * that every gyro source has read for as long as there has been a pool. */
+    .align  2
+g_shared:
+g_t_bytes:  .word   0       /* bytes the writer has put on the card           */
+g_t_writes: .word   0       /* times it has written                           */
+g_t_wrc:    .word   0       /* what the last write returned                   */
+g_t_lost:   .word   0       /* records dropped                                */
+g_t_wraps:  .word   0       /* ring wraps                                     */
+
+.equ O_T_BYTES,  g_t_bytes  - gsup_offsets
+.equ O_T_WRITES, g_t_writes - gsup_offsets
+.equ O_T_WRC,    g_t_wrc    - gsup_offsets
+.equ O_T_LOST,   g_t_lost   - gsup_offsets
+.equ O_T_WRAPS,  g_t_wraps  - gsup_offsets
+
+.macro BLOBBASE reg
+    movw    \reg, #:lower16:FRAMEBUF
+    movt    \reg, #:upper16:FRAMEBUF
+    ldr     \reg, [\reg]
+    add     \reg, \reg, #CODE_POOL_OFF
+.endm
+
 /* blob_at -- r0 = a byte offset into gsup_offsets.  Returns that entry as an
  * address in this blob.
  *
@@ -836,10 +880,9 @@ take_close:
 writer_selftest:
     push    {r4, r5, r6, lr}
 
-    movw    r4, #:lower16:T_WRC
-    movt    r4, #:upper16:T_WRC
+    BLOBBASE r4                         @ r4 carries the base through the probe
     mov     r0, #0x11
-    str     r0, [r4]                    @ reached the entry
+    str     r0, [r4, #O_T_WRC]          @ reached the entry
 
     bl      writer_openfile
     movw    r5, #:lower16:T_FOPEN
@@ -847,17 +890,17 @@ writer_selftest:
     ldr     r5, [r5]
     cmp     r5, #0
     moveq   r0, #0x12                   @ the open failed
-    streq   r0, [r4]
+    streq   r0, [r4, #O_T_WRC]
     beq     9f
     mov     r0, #0x13
-    str     r0, [r4]                    @ open done, about to write
+    str     r0, [r4, #O_T_WRC]                    @ open done, about to write
 
     movw    r6, #:lower16:B_PTR
     movt    r6, #:upper16:B_PTR
     ldr     r6, [r6]                    @ the first block, if a take built any
     cmp     r6, #0
     moveq   r0, #0x14
-    streq   r0, [r4]
+    streq   r0, [r4, #O_T_WRC]
     beq     8f
 
     mov     r1, r6                      @ straight out of the block
@@ -870,14 +913,12 @@ writer_selftest:
     blx     ip
     mov     r1, r0
     mov     r0, #0x15
-    str     r0, [r4]                    @ the write returned
-    movw    r0, #:lower16:T_BYTES
-    movt    r0, #:upper16:T_BYTES
-    str     r1, [r0]                    @ ... and this is what it said
+    str     r0, [r4, #O_T_WRC]          @ the write returned
+    str     r1, [r4, #O_T_BYTES]        @ ... and this is what it said
 
 8:  bl      writer_closefile
     mov     r0, #0x16
-    str     r0, [r4]                    @ closed, all the way through
+    str     r0, [r4, #O_T_WRC]                    @ closed, all the way through
 
 9:  pop     {r4, r5, r6, lr}
     mov     r0, #0

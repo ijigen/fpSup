@@ -498,16 +498,10 @@
                                      * on its next wake, at most a doorbell
                                      * away -- about 400 ms, against a ring
                                      * that holds 6.6 seconds. */
-.equ T_BYTES,        0xC072E8E0     /* in the gap between the accel hook and
-                                     * the stream's own words; the accel hook
-                                     * grew into 0xC072E140 when the ring base
-                                     * became a variable.                    */     /* bytes written                          */
-.equ T_WRITES,       0xC072E8E4     /* F_WRITE calls                          */
-.equ T_WRC,          0xC072E8E8     /* what the last one returned             */
-.equ T_LOST,         0xC072E8EC     /* records overwritten before we took them.
-                                     * The one number that says the ring is
-                                     * too shallow; it must stay zero.       */
-.equ T_WRAPS,        0xC072E8F0     /* spans that had to be split at the end  */     /* what the mailbox create returned       */
+/* The five write counters left for the blob on 2026-09-22: they are words next
+ * to the routine table now, reached through the pool pointer, because the core
+ * touches them down here and the edition touches them four kilobytes further
+ * on and no pc-relative block satisfies both.  See writer_core.inc.S. */
 .equ T_DRAINED,      0xC072E0C8     /* records the writer has taken           */
 .equ T_MAXSPAN,      0xC072E0CC     /* the largest it ever found waiting.  If
                                      * this approaches the ring's capacity the
