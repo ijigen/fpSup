@@ -87,12 +87,7 @@ gyro_drain:
      * The audio producer is a DMA engine and tests nothing at all.  This is as
      * close to that as software gets. */
 10: mov     r0, r4
-    movw    ip, #:lower16:STREAM_CLAIMFN
-    movt    ip, #:upper16:STREAM_CLAIMFN
-    ldr     ip, [ip]
-    cmp     ip, #0
-    beq     9f
-    blx     ip                          @ r0 = where, r1 = how many
+    bl      stream_claim                @ r0 = where, r1 = how many
     cmp     r1, #0
     beq     9f
     mov     r7, r0
@@ -121,11 +116,7 @@ gyro_drain:
     bne     4b
 
     mov     r0, r8
-    movw    ip, #:lower16:STREAM_COMMITFN
-    movt    ip, #:upper16:STREAM_COMMITFN
-    ldr     ip, [ip]
-    cmp     ip, #0
-    blxne   ip                          @ and it decides whether a buffer filled
+    bl      stream_commit               @ and it decides whether a buffer filled
 
     cmp     r4, #0
     bne     10b

@@ -169,10 +169,14 @@ GSUP_ROUTINES = ('writer_body', 'take_open', 'take_close', 'writer_post',
                  # this blob (2026-09-22), so the four cave words that name
                  # them are resolved at boot like everything else here.
                  # APPEND ONLY: gsup_boot reads these by fixed offset.
-                 'gyro_drain', 'stream_claim', 'stream_commit', 'stream_flush',
                  # The four hook bodies.  Only an eight-byte veneer stays at the
                  # cave address the firmware branches to; gsup_boot fills it in
                  # from these.  APPEND ONLY.
+                 #
+                 # gyro_drain, stream_claim, stream_commit and stream_flush had
+                 # slots here while the cave held a pointer to each.  Hook and
+                 # body share a blob now, so the branch is resolved by the
+                 # assembler and the slots went with the words.
                  'accel_hook', 'rec_start', 'rec_stop', 'mode_hook')
 
 

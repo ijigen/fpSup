@@ -120,11 +120,12 @@ rec_start:
      * teardown hands over what is in flight.  This is the same idea, and it is
      * also what makes the stop job honestly last: it goes into the queue behind
      * ALL of the take's data, not just the part that had already been moved. */
-    movw    ip, #:lower16:STREAM_DRAINFN
-    movt    ip, #:upper16:STREAM_DRAINFN
-    ldr     ip, [ip]
-    cmp     ip, #0
-    blxne   ip
+/* Called directly.  These used to go through a word in the cave -- the hook
+ * was in the cave, the body was somewhere the build could not name, and a
+ * pointer was the only way across.  Both are sections of the same blob now, so
+ * the assembler resolves the branch and there is nothing to fill in, nothing to
+ * read, and nothing to guard against being zero. */
+    bl      gyro_drain
 
     movw    r0, #:lower16:T_WANT
     movt    r0, #:upper16:T_WANT

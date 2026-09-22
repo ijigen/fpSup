@@ -67,9 +67,7 @@
  * buffer declared out of the pool the way the audio writer declares its own. */
 .equ STREAM_R1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT when recording ended */
 .equ STREAM_R1_N,    0xC072E1D4     /* u32, times that has happened            */
-.equ STREAM_DRAINFN, 0xC072EC40     /* -> gyro_drain, in the pool: written by  */
                                     /* gsup_boot from the routine table        */
-.equ STREAM_FLUSHFN, 0xC072EC44    /* -> stream_flush, likewise               */
 .equ STREAM_R0_HEAD, 0xC072E1E0     /* u32, ring head offset at record start   */
 .equ STREAM_R0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
                                      * writer was constructed.  Beside F0_GC
@@ -96,8 +94,6 @@
 .equ STREAM_GHEAD,   0xC072E1F0     /* u32, gyro ring head we have consumed    */
 .equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
 .equ STREAM_GCOUNT,  0xC072E1FC     /* u32, gyro records only -- the rate ruler */
-.equ STREAM_CLAIMFN, 0xC072EC38     /* -> stream_claim, likewise               */
-.equ STREAM_COMMITFN,0xC072EC3C     /* -> stream_commit                        */     /* u32, gyro records only -- the rate ruler */
 .equ STREAM_SIGFN,   0xC072E1A8     /* u32, writer_signal's address, or 0     */
 
 /* The real ring, out of the pool.  16384 records is 128 KiB and 6.5 seconds at
@@ -314,35 +310,10 @@
  * ACC_MAX is the number that decides it.  A mean near 53 says "about 47 Hz";
  * only the maximum says whether the worst gap has margin against 600.
  */
-.equ ACC_STATE,      0xC072E8C0     /* the block, so a reader takes it in one  */
-.equ ACC_GHEAD,      0xC072E8C0     /* ring head at the previous accel visit   */
-.equ ACC_MAX,        0xC072E8C4     /* largest gap seen, in records            */
-.equ ACC_COUNT,      0xC072E8C8     /* accel visits that measured a gap        */
-.equ ACC_SUM,        0xC072E8CC     /* records across every gap -> the mean    */
-.equ ACC_OVER,       0xC072E8D0     /* gaps at or past ACC_DANGER              */
-.equ ACC_WORDS,      5
 
 /* 500 records = 200 ms, five sixths of the ring.  Anything at or past this is
  * already too close to call safe, whether or not it lost a sample. */
-.equ ACC_DANGER,     500
 
-.equ ACC_O_GHEAD,    0x00
-.equ ACC_O_MAX,      0x04
-.equ ACC_O_COUNT,    0x08
-.equ ACC_O_SUM,      0x0C
-.equ ACC_O_OVER,     0x10
 
-.if ACC_GHEAD + ACC_O_MAX   != ACC_MAX
-.err
-.endif
-.if ACC_GHEAD + ACC_O_COUNT != ACC_COUNT
-.err
-.endif
-.if ACC_GHEAD + ACC_O_SUM   != ACC_SUM
-.err
-.endif
-.if ACC_GHEAD + ACC_O_OVER  != ACC_OVER
-.err
-.endif
 
 #endif  /* IMU_STREAM_INC_S */

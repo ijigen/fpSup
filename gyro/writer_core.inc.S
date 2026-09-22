@@ -59,16 +59,13 @@ gsup_offsets:
     /* The four the cave used to answer for itself.  stream_space.S and
      * gyro_drain.S are sections of this blob now, so where they are is not
      * known until the pool is -- exactly like take_open above. */
-    .word   0       @ +0x30  gyro_drain
-    .word   0       @ +0x34  stream_claim
-    .word   0       @ +0x38  stream_commit
-    .word   0       @ +0x3C  stream_flush
-    /* The hook bodies.  The cave keeps an eight-byte veneer at each of the four
-     * addresses the firmware branches to; these say what it jumps on to. */
-    .word   0       @ +0x40  accel_hook
-    .word   0       @ +0x44  rec_start
-    .word   0       @ +0x48  rec_stop
-    .word   0       @ +0x4C  mode_hook (that edition only)
+    /* The hook bodies.  gsup_boot takes eight bytes from the cave allocator for
+     * each and writes a veneer that jumps here.  Nothing else needs a slot: the
+     * drain and the space provider are reached by an ordinary `bl` now. */
+    .word   0       @ +0x30  accel_hook
+    .word   0       @ +0x34  rec_start
+    .word   0       @ +0x38  rec_stop
+    .word   0       @ +0x3C  mode_hook (that edition only)
 
 /* blob_at -- r0 = a byte offset into gsup_offsets.  Returns that entry as an
  * address in this blob.
@@ -728,13 +725,9 @@ take_close:
      * Audio's DSP says which of its buffers is last; nothing says that to
      * us, so the end of the take says it.  One mailbox, so the order holds.
      *
-     * Off until the space provider is on: at stage 2 there are no blocks to
-     * flush and the pointer is zero. */
-    movw    ip, #:lower16:STREAM_FLUSHFN
-    movt    ip, #:upper16:STREAM_FLUSHFN
-    ldr     ip, [ip]
-    cmp     ip, #0
-    blxne   ip
+     * Called directly: the space provider is a section of this blob, so there
+     * is no pointer to be zero and nothing to guard. */
+    bl      stream_flush
 
     mov     r0, #1                      @ J_STOP
     mov     r1, #0
@@ -1055,39 +1048,13 @@ gsup_boot:
     movt    r1, #:upper16:STREAM_SIGFN
     str     r0, [r1]
 
-    /* The four call-throughs the producers reach the stream by.
+    /* The four call-through words are gone.
      *
-     * They were section values a build wrote, because the code they name sat
-     * at a fixed cave address.  It does not any more -- it is in this blob --
-     * so they are resolved here, from the same table and in the same shape as
-     * everything above.  Written well before the hooks are armed at the end of
-     * this routine, which is the ordering that matters: a hook that reads one
-     * of these words before it is written is a branch to zero, and every
-     * caller guards on zero for exactly that reason. */
-    ldr     r0, [r5, #48]               @ gyro_drain
-    add     r0, r0, r6
-    movw    r1, #:lower16:STREAM_DRAINFN
-    movt    r1, #:upper16:STREAM_DRAINFN
-    str     r0, [r1]
-
-    ldr     r0, [r5, #52]               @ stream_claim
-    add     r0, r0, r6
-    movw    r1, #:lower16:STREAM_CLAIMFN
-    movt    r1, #:upper16:STREAM_CLAIMFN
-    str     r0, [r1]
-
-    ldr     r0, [r5, #56]               @ stream_commit
-    add     r0, r0, r6
-    movw    r1, #:lower16:STREAM_COMMITFN
-    movt    r1, #:upper16:STREAM_COMMITFN
-    str     r0, [r1]
-
-    ldr     r0, [r5, #60]               @ stream_flush
-    add     r0, r0, r6
-    movw    r1, #:lower16:STREAM_FLUSHFN
-    movt    r1, #:upper16:STREAM_FLUSHFN
-    str     r0, [r1]
-
+     * They existed because a hook in the cave could not name a body the build
+     * could not place -- a pointer was the only way across.  Hook and body are
+     * sections of the same blob now, so the assembler resolves the branch:
+     * nothing to fill in, nothing to load, nothing to guard against being zero,
+     * and four fewer words in the cave. */
     add     r0, r4, #FOBJ_POOL_OFF
     movw    r1, #:lower16:T_FOBJ
     movt    r1, #:upper16:T_FOBJ
@@ -1196,20 +1163,20 @@ gsup_boot:
      *
      * The F_CACHE below publishes all of it: the veneers are instructions the
      * firmware is about to fetch, and so are the branch words. */
-    ldr     r0, [r5, #64]               @ accel_hook
+    ldr     r0, [r5, #48]               @ accel_hook
     movw    r1, #:lower16:ACCEL_SITE
     movt    r1, #:upper16:ACCEL_SITE
     bl      s_hook
-    ldr     r0, [r5, #68]               @ rec_start
+    ldr     r0, [r5, #52]               @ rec_start
     movw    r1, #:lower16:START_SITE
     movt    r1, #:upper16:START_SITE
     bl      s_hook
-    ldr     r0, [r5, #72]               @ rec_stop
+    ldr     r0, [r5, #56]               @ rec_stop
     movw    r1, #:lower16:STOP_SITE
     movt    r1, #:upper16:STOP_SITE
     bl      s_hook
 #ifdef WANT_MODE_HOOK
-    ldr     r0, [r5, #76]               @ mode_hook
+    ldr     r0, [r5, #60]               @ mode_hook
     movw    r1, #:lower16:MODE_SITE
     movt    r1, #:upper16:MODE_SITE
     bl      s_hook

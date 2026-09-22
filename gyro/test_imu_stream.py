@@ -104,8 +104,10 @@ class RecordShape(unittest.TestCase):
                               'STREAM_SIGFN'):
                 self.assertNotIn(forbidden, body,
                                  f'{name} is deciding something: {forbidden}')
-            self.assertIn('STREAM_CLAIMFN', body)
-            self.assertIn('STREAM_COMMITFN', body)
+            # Called directly now: hook and body are sections of one blob, so
+            # the pointer words they used to go through are gone.
+            self.assertIn('bl      stream_claim', body)
+            self.assertIn('bl      stream_commit', body)
 
     def test_the_block_state_is_locked(self):
         """B_CUR, B_FILL and B_DONE are read and written together, and two
@@ -503,39 +505,34 @@ class Editions(unittest.TestCase):
             self.assertIsNotNone(spec[3], f'{name} is in the cave with no hook '
                                           f'site -- it belongs in the blob')
 
-    def test_the_table_carries_the_four_call_throughs(self):
+    def test_the_table_carries_the_four_hook_bodies(self):
         """gsup_boot reads them by fixed offset, so the order of GSUP_ROUTINES
         is part of the ABI: appending is free, inserting is a branch into the
-        wrong routine."""
-        self.assertEqual(self.R.GSUP_ROUTINES[12:16],
-                         ('gyro_drain', 'stream_claim', 'stream_commit',
-                          'stream_flush'))
+        wrong routine.  The drain and the space provider had slots here while
+        the cave held a pointer to each; a direct `bl` replaced both."""
+        self.assertEqual(self.R.GSUP_ROUTINES[12:],
+                         ('accel_hook', 'rec_start', 'rec_stop', 'mode_hook'))
         code = self.R.patch_offsets(
             assemble(HERE / 'gcsv_task.S', ()), self.gcsv)
         got = struct.unpack_from('<4I', code, 12 * 4)
         for name, off in zip(self.R.GSUP_ROUTINES[12:], got):
             self.assertEqual(off, self.gcsv[name], name)
 
-    def test_the_card_places_nothing_in_the_cave(self):
-        """The hook stubs were the last thing a gyro card put there.
-
-        536 bytes for four bodies the firmware could have reached through eight
-        -- the `bl` needs a landing point within 32 MB, not a whole stub.  The
-        bodies are sections of this blob now and gsup_boot writes the veneers,
-        so a build that starts emitting cave sections again has undone it."""
-        import build_base_card as B
-        for edition in ('base', 'gcsv'):
-            self.assertEqual(B.sections(edition), [], edition)
-
-    def test_the_veneer_is_the_instruction_we_think_it_is(self):
-        """`ldr pc, [pc, #-4]`.  pc reads as the instruction plus eight, so
-        [pc,#-4] is the word straight after -- and nothing else is touched, not
-        even lr, which is why the body still returns to the firmware."""
-        import imu_stream_deploy as D
-        self.assertEqual(D.VENEER_LDR, 0xE51FF004)
-        self.assertEqual(D.veneer(0x45123456),
-                         struct.pack('<II', 0xE51FF004, 0x45123456))
-        self.assertEqual(len(D.veneer(0)), 8)
+    def test_the_call_through_words_are_gone(self):
+        """They existed because a hook in the cave could not name a body the
+        build could not place.  Both are in one blob now, so a pointer that
+        something has to remember to fill in is four words of cave and four
+        chances to be zero, for nothing."""
+        inc = (HERE / 'imu_stream.inc.S').read_text()
+        for gone in ('STREAM_CLAIMFN', 'STREAM_COMMITFN', 'STREAM_DRAINFN',
+                     'STREAM_FLUSHFN'):
+            self.assertNotIn(f'.equ {gone},', inc, f'{gone} is back')
+        for f in ('writer_core.inc.S', 'accel_hook.S', 'gyro_drain.S',
+                  'rec_trigger.S'):
+            code = re.sub(r'/\*.*?\*/', '', (HERE / f).read_text(), flags=re.S)
+            for gone in ('STREAM_CLAIMFN', 'STREAM_COMMITFN', 'STREAM_DRAINFN',
+                         'STREAM_FLUSHFN'):
+                self.assertNotIn(gone, code, f'{f} still goes through {gone}')
 
     def test_every_veneer_is_written_before_any_hook_is_armed(self):
         """A hook armed over a cave address nobody filled in branches into
@@ -561,27 +558,6 @@ class Editions(unittest.TestCase):
                         'the site is armed before the veneer exists')
         self.assertIn('bhi     9f', hook,
                       's_hook does not refuse when the cave is full')
-
-    def test_the_call_throughs_are_written_before_any_hook_is_armed(self):
-        """The ordering that makes the move safe.
-
-        A hook armed over a word nobody filled in is not a crash: every caller
-        guards on zero, so the producer silently does nothing and the take
-        comes out empty.  That is the failure this move could have introduced,
-        and it is invisible in a build -- so it is checked here, on the source,
-        the same way the block clearing above is."""
-        core = (HERE / 'writer_core.inc.S').read_text()
-        boot = core[core.index('\ngsup_boot:'):]
-        boot = boot[:boot.index('\n9:')]
-        code = re.sub(r'/\*.*?\*/', '', boot, flags=re.S)
-        code = re.sub(r'@.*', '', code)
-        first_arm = min(code.index(s) for s in
-                        ('ACCEL_SITE', 'START_SITE', 'STOP_SITE'))
-        for word in ('STREAM_DRAINFN', 'STREAM_CLAIMFN', 'STREAM_COMMITFN',
-                     'STREAM_FLUSHFN'):
-            self.assertIn(word, code, f'gsup_boot never writes {word}')
-            self.assertLess(code.index(word), first_arm,
-                            f'{word} is written after a hook is armed')
 
     def test_boot_forgets_the_last_power_ons_blocks(self):
         """blocks_open returns early when B_PTR already holds something, which
@@ -859,7 +835,7 @@ class AudioShape(unittest.TestCase):
         be posted as an ordinary job BEFORE the marker, or the tail of every
         take is lost."""
         c = self.whole('take_close')
-        flush = c.index('STREAM_FLUSHFN')
+        flush = c.index('bl      stream_flush')
         stop = c.index('bl      writer_make_job')
         self.assertLess(flush, stop,
                         'the tail must be posted before the stop marker')
@@ -969,9 +945,39 @@ class AudioShape(unittest.TestCase):
 
 
 class Assembly(unittest.TestCase):
+    def test_the_accel_measurement_is_gone_not_merely_off(self):
+        """It counted the gyro samples the ring gained between two visits of
+        the accelerometer hook, to answer whether the drain could live there.
+        It can, it does, and the define cannot reach the hook any more -- the
+        body is a section of the writer's blob.  A diagnostic that cannot be
+        switched on is worse than no diagnostic, because it looks available."""
+        src = re.sub(r'/\*.*?\*/', '', (HERE / 'accel_hook.S').read_text(), flags=re.S)
+        self.assertNotIn('ACC_MEASURE', src)
+        inc = (HERE / 'imu_stream.inc.S').read_text()
+        for gone in ('ACC_STATE', 'ACC_GHEAD', 'ACC_DANGER', 'ACC_WORDS'):
+            self.assertNotIn(f'.equ {gone},', inc, f'{gone} is back')
+
+    # The hook sources do not assemble on their own any anymore: they call the
+    # space provider and the drain with an ordinary `bl` now that all of them
+    # are sections of one blob, and armasm refuses a relocation it cannot
+    # resolve rather than emitting a branch to nowhere.  So a file's words are
+    # its symbol's slice of the blob.
+    SLICE = {'accel_hook.S': 'accel_hook', 'gyro_drain.S': 'gyro_drain',
+             'stream_space.S': 'stream_claim', 'mode_hook.S': 'mode_hook',
+             'rec_trigger.S': 'rec_start'}
+
     def words(self, path):
-        code = assemble(HERE / path)
-        return struct.unpack(f'<{len(code)//4}I', code)
+        name = self.SLICE.get(pathlib.Path(path).name)
+        if name is None:
+            code = assemble(HERE / path)
+            return struct.unpack(f'<{len(code)//4}I', code)
+        import ring_task_deploy as R
+        code = assemble(HERE / 'gcsv_task.S', ())
+        syms = R.symbols(HERE / 'gcsv_task.S', ())
+        start = syms[name]
+        after = [v for v in syms.values() if v > start]
+        end = min(after) if after else len(code)
+        return struct.unpack(f'<{(end-start)//4}I', code[start:end])
 
     def test_no_frame_leaves_the_stack_misaligned(self):
         """The stack must stay eight-byte aligned, full stop.
@@ -1038,25 +1044,6 @@ class Assembly(unittest.TestCase):
         nothing."""
         self.assertIn('0xC050D4C8', ACCEL)
         self.assertNotIn('.equ ACCEL_SITE,      0xC050D498', ACCEL)
-
-    def test_the_accel_measurement_is_off_by_default(self):
-        """A bisect with two variables in it is not a bisect.  Without the flag
-        the hook must be the same bytes it was before the counters existed:
-        the flag inserts a block after the push and changes nothing else."""
-        self.assertIn('#ifdef ACC_MEASURE', ACCEL)
-        plain = assemble(HERE / 'accel_hook.S', ())
-        measured = assemble(HERE / 'accel_hook.S', ('ACC_MEASURE',))
-        self.assertGreater(len(measured), len(plain))
-        self.assertEqual(measured[:4], plain[:4], 'the push moved')
-        self.assertEqual(measured[-(len(plain) - 4):], plain[4:],
-                         'the flag changed the work, not just added to it')
-
-    def test_the_gap_measurement_cannot_report_a_negative(self):
-        """The head is a byte offset that wraps at GYRO_RING_SPAN, so a visit
-        that straddles a wrap must add the span back, not produce a huge
-        unsigned number."""
-        self.assertIn('movwlo', ACCEL)
-        self.assertIn('GYRO_RING_SPAN', ACCEL)
 
     def test_all_of_them_fit_where_they_are_put(self):
         import imu_stream_deploy as D

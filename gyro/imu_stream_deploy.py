@@ -151,10 +151,6 @@ STREAM_GHEAD  = 0xC072E1F0
 STREAM_PADBAD = 0xC072E1F4
 STREAM_GCOUNT = 0xC072E1FC
 STREAM_SIGFN  = 0xC072E1A8
-STREAM_CLAIMFN  = 0xC072EC38
-STREAM_COMMITFN = 0xC072EC3C
-STREAM_DRAINFN  = 0xC072EC40
-STREAM_FLUSHFN  = 0xC072EC44
 T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 T_BUILD = 0xC072EC54
 T_TEARDOWN = 0xC072EC58
@@ -166,15 +162,6 @@ POOL_PTR      = 0xC3757A7C
 # GHEAD unarmed, everything else zero.
 STATE_INIT = struct.pack('<20I', *([0] * 16 + [0xFFFFFFFF, 0, 0, 0]))
 
-ACC_CODE_AT   = 0xC072E900   # only the measuring build needs the room.  The
-                             # space provider used to be here; stream_flush
-                             # pushed it past the writer words, which freed
-                             # 0xC072E900..0xC072EBA0 for the measuring build
-ACC_STATE     = 0xC072E8C0
-ACC_WORDS     = 5
-ACC_DANGER    = 500
-# GHEAD unarmed, then max/count/sum/over.
-ACC_INIT = struct.pack('<5I', 0xFFFFFFFF, 0, 0, 0, 0)
 
 GYRO_PERIOD_US = 400.0
 
@@ -187,8 +174,6 @@ def _check_header():
         'STREAM_R1_GC': STREAM_R1_GC, 'STREAM_R1_N': STREAM_R1_N,
         'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
         'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD, 'STREAM_GCOUNT': STREAM_GCOUNT,
-        'ACC_STATE': ACC_STATE, 'ACC_WORDS': ACC_WORDS,
-        'ACC_DANGER': ACC_DANGER,
         'STREAM_SIGFN': STREAM_SIGFN,
         'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
     }
@@ -218,7 +203,7 @@ def _check_header():
                              f'word 0x{orig:08X}')
 
 
-def _place(measure_accel=False):
+def _place():
     """Check nothing lands on anything else.
 
     ACC_MEASURE cannot be reached from here any more: the accelerometer hook is
@@ -234,12 +219,8 @@ def _place(measure_accel=False):
     -- which also means the words below can no longer sit on a hook's code,
     because no hook has code here.
     """
-    if measure_accel:
-        raise SystemExit('--measure-accel needs the blob built with ACC_MEASURE; '
-                         'the hook bodies are not placed from here any more')
     code_spans = []               # words may sit in data, never in code
     spans = [('state words', STATE_AT, STATE_WORDS * 4),
-              ('accel state', ACC_STATE, ACC_WORDS * 4),
               # ring_task_deploy owns these, but only this script knows
               # where the hooks land -- so the overlap check lives here.
               ('writer counters', 0xC072E8E0, 5 * 4),
@@ -338,12 +319,12 @@ def resolve_ring():
     return ring
 
 
-def arm(only=None, measure_accel=False):
+def arm(only=None):
     """Arm the producers.  `only` names a subset -- the record triggers sit
     INSIDE the firmware's audio teardown and rebuild, so being able to leave
     them out is how one tells whether they are what broke the audio."""
     _check_header()
-    _place(measure_accel)
+    _place()
 
     for name, (_src, _d, site, orig, _t) in PRODUCERS.items():
         if site is None:
@@ -374,8 +355,6 @@ def arm(only=None, measure_accel=False):
         P.put_slow(where, veneer(at[sym]), f'{name} veneer')
         VEN[name] = where
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
-    if measure_accel:
-        P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
 
     # The real ring lives in the pool, whose address is only known now.  Memory
     # from the firmware's allocator freezes the camera when held across a
@@ -388,22 +367,8 @@ def arm(only=None, measure_accel=False):
     print(f'buffers: {BUF_N} x {BUF_BYTES // 1024} KiB from the allocator at '
           f'record start = {BUF_N * BUF_BYTES / 8 / 2500:.1f} s')
 
-    # The producers call these, and what they call is in the pool now.  Set
-    # here as well as in place_code(): arm() is run on its own often enough
-    # (`--only`, a re-arm after a restore) and a hook armed over a word that
-    # nobody filled in is a producer that silently does nothing -- every caller
-    # guards on zero, which is safe and invisible.  Resolving from the blob
-    # rather than from a cave address is also what makes this agree with the
-    # card, where gsup_boot reads the same four table entries.
-    for word, name in ((STREAM_CLAIMFN, 'stream_claim'),
-                       (STREAM_COMMITFN, 'stream_commit'),
-                       (STREAM_FLUSHFN, 'stream_flush'),
-                       (STREAM_DRAINFN, 'gyro_drain')):
-        if name not in at:
-            raise SystemExit(f'the blob has no {name}: the pool build and this '
-                             f'deployer disagree about what moved out of the cave')
-        _setw(word, at[name], name)
-
+    # Nothing to wire.  The four call-through words are gone: hook and body are
+    # sections of one blob and the assembler resolves the branch.
     for name, (_src, _d, site, _orig, thumb) in PRODUCERS.items():
         if site is None:
             continue                    # nothing to arm: it is called, not hooked
@@ -444,7 +409,6 @@ def reset():
     firmware's current head.
     """
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
-    P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
     # The block bookkeeping too, so a stage that never builds a take still
     # reads cleanly.  B_CUR must be -1, not 0: zero means "block zero is mine",
     # and on a fresh boot block zero has no allocation behind it.
@@ -627,8 +591,6 @@ def main():
     g.add_argument('--rate', type=float, metavar='SECONDS')
     ap.add_argument('--step', type=float, default=30.0)
     ap.add_argument('--only', help='comma-separated producers to arm')
-    ap.add_argument('--measure-accel', action='store_true',
-                    help='build the accel hook with its interval counters')
     a = ap.parse_args()
     if a.restore:
         restore()
@@ -649,7 +611,7 @@ def main():
     elif a.rate:
         rate(a.rate, a.step)
     else:
-        arm(set(a.only.split(',')) if a.only else None, a.measure_accel)
+        arm(set(a.only.split(',')) if a.only else None)
     return 0
 
 
