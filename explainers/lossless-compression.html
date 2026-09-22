@@ -21,6 +21,22 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 <style>
+[data-lang="en"] .zh{display:none !important}
+[data-lang="zh"] .en{display:none !important}
+.topbar{display:flex; align-items:center; justify-content:space-between; gap:14px;
+  margin-bottom:22px}
+.lang{display:inline-flex; border:1px solid var(--line); border-radius:3px;
+  overflow:hidden; flex:none}
+.lang button{font-family:var(--mono); font-size:.72rem; letter-spacing:.04em;
+  padding:5px 11px; border:0; background:var(--panel); color:var(--dim);
+  cursor:pointer; transition:background .12s, color .12s}
+.lang button + button{border-left:1px solid var(--line)}
+.lang button:hover{color:var(--ink)}
+.lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
+  font-weight:600}
+.lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+.topbar .back{margin:0}
+
 /* ---- diagrams ----------------------------------------------------------- */
 figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
   background:var(--panel); padding:16px 14px 12px}
@@ -150,75 +166,103 @@ table.verd td.n{color:var(--warn); font-weight:600}
 </head>
 <body>
 
-<a class="back" href="../research.html">&larr; Firmware research</a>
+<div class="topbar">
+  <a class="back" href="../research.html"><span class="en">&larr; Firmware research</span><span class="zh">&larr; 韌體研究</span></a>
+  <div class="lang" role="group" aria-label="Language / 語言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="zh" aria-pressed="false">中文</button>
+  </div>
+</div>
 
 <header class="hero">
   <div class="hero-text">
-    <h1>In-camera lossless compression</h1>
-    <p class="lede">The fp has a hardware lossless-JPEG engine. It compresses every
+    <h1><span class="en">In-camera lossless compression</span><span class="zh">機身內的無損壓縮</span></h1>
+    <p class="lede en">The fp has a hardware lossless-JPEG engine. It compresses every
     still you take and it has never once touched a video frame. The engine works,
     the format is legal, the ratio is enough &mdash; what is tight is milliseconds
     per frame, and that number has now been measured.</p>
+    <p class="lede zh">fp 裡有一顆硬體的無損 JPEG 引擎。你拍的每一張照片都經過它,
+    而它<strong>從來沒有碰過任何一格影片</strong>。引擎是好的、格式是合法的、壓縮比也夠 ——
+    緊的是<strong>每一格有幾毫秒</strong>,而這個數字現在量出來了。</p>
     <ul class="chips">
-      <li><b>201.8</b> Mpix/s measured</li>
-      <li><b>2.0:1</b> design ratio</li>
-      <li><b>FHD</b> fits, UHD does not</li>
+      <li><b>201.8</b> <span class="en">Mpix/s measured</span><span class="zh">Mpix/s 實測</span></li>
+      <li><b>2.0:1</b> <span class="en">design ratio</span><span class="zh">設計壓縮比</span></li>
+      <li><b>FHD</b> <span class="en">fits, UHD does not</span><span class="zh">可行,UHD 不行</span></li>
     </ul>
   </div>
 </header>
 
 <div class="facts">
   <dl>
-    <dt>What is measured</dt>
-    <dd>The engine's full cost function, taken on the camera by wrapping the stills
+    <dt><span class="en">What is measured</span><span class="zh">量到的是什麼</span></dt>
+    <dd class="en">The engine's full cost function, taken on the camera by wrapping the stills
     path's own encode call. Three terms, fitted to four points, residual within
     &plusmn;2&nbsp;&micro;s. Compression ratios come from the engine's own size
     table, not from file sizes.</dd>
-    <dt>What is not</dt>
-    <dd>Nothing end-to-end. No compressed video frame has been written to a card by
+    <dd class="zh">引擎完整的成本函數,是在相機上把拍照路徑自己的編碼呼叫包起來量的。
+    三個項、用四個點擬合,殘差在 &plusmn;2&nbsp;&micro;s 以內。
+    壓縮比來自引擎自己的尺寸表,不是從檔案大小反推的。</dd>
+    <dt><span class="en">What is not</span><span class="zh">沒量到的是什麼</span></dt>
+    <dd class="en">Nothing end-to-end. No compressed video frame has been written to a card by
     the camera. The numbers below are a budget, not a recording.</dd>
-    <dt>The blocking question</dt>
-    <dd>Whether the camera can <em>play back</em> what it would write. The movie
+    <dd class="zh">沒有任何一條完整走通的路。<strong>相機從來沒有把一格壓縮過的影片寫進卡裡。</strong>
+    下面的數字是<strong>預算</strong>,不是錄影結果。</dd>
+    <dt><span class="en">The blocking question</span><span class="zh">卡住的問題</span></dt>
+    <dd class="en">Whether the camera can <em>play back</em> what it would write. The movie
     parser does not read the tile tags, so a compressed clip may be export-only
     &mdash; see <a href="#skipsec">dynamic frame-skip</a>.</dd>
+    <dd class="zh">相機能不能<em>播放</em>它自己寫出來的東西。影片解析器不讀 tile 標籤,
+    所以壓縮過的片段可能<strong>只能匯出、不能在機上播</strong> ——
+    見<a href="#skipsec">動態抽幀</a>。</dd>
   </dl>
 </div>
 
-<h2>Where compression sits</h2>
+<h2><span class="en">Where compression sits</span><span class="zh">壓縮在哪一關</span></h2>
 
-<p>Before any of the arithmetic, the one thing that decides what you are allowed to
+<p class="en">Before any of the arithmetic, the one thing that decides what you are allowed to
 plan: compression happens <em>last</em>.</p>
+<p class="zh">在算任何數字之前,先記住決定你「能規劃什麼」的那件事:
+<strong>壓縮發生在<em>最後</em></strong>。</p>
 
 <figure class="dia">
 <svg viewBox="0 0 820 250" role="img" aria-labelledby="p1t">
   <title id="p1t">The pipeline, with compression after all geometry is fixed</title>
   <g font-size="11">
     <rect class="bx" x="0" y="16" width="150" height="38" rx="3"/>
-    <text x="75" y="40" text-anchor="middle">sensor readout</text>
+    <text x="75" y="40" text-anchor="middle" class="en">sensor readout</text>
+    <text x="75" y="40" text-anchor="middle" class="zh">感光元件讀出</text>
 
     <rect class="bx" x="186" y="6" width="386" height="58" rx="3"/>
-    <text x="379" y="20" text-anchor="middle" font-size="9.5" class="t-dim">reduction &mdash; ONE branch of an 8-way selector, not both in series</text>
+    <text x="379" y="20" text-anchor="middle" font-size="9.5" class="t-dim en">reduction &mdash; ONE branch of an 8-way selector, not both in series</text>
+    <text x="379" y="20" text-anchor="middle" font-size="9.5" class="t-dim zh">縮減 &mdash; 八選一的其中一條,不是兩個串起來</text>
     <rect class="bx" x="196" y="26" width="178" height="30" rx="3"/>
-    <text x="285" y="45" text-anchor="middle" font-size="10">Hbin2 &nbsp;<tspan class="t-dim">36 profiles</tspan></text>
+    <text x="285" y="45" text-anchor="middle" font-size="10" class="en">Hbin2 &nbsp;<tspan class="t-dim">36 profiles</tspan></text>
+    <text x="285" y="45" text-anchor="middle" font-size="10" class="zh">Hbin2 &nbsp;<tspan class="t-dim">36 個 profile</tspan></text>
     <rect class="bx" x="384" y="26" width="178" height="30" rx="3"/>
-    <text x="473" y="45" text-anchor="middle" font-size="10">RWZM &nbsp;<tspan class="t-dim">53 profiles</tspan></text>
+    <text x="473" y="45" text-anchor="middle" font-size="10" class="en">RWZM &nbsp;<tspan class="t-dim">53 profiles</tspan></text>
+    <text x="473" y="45" text-anchor="middle" font-size="10" class="zh">RWZM &nbsp;<tspan class="t-dim">53 個 profile</tspan></text>
 
     <rect class="bx" x="608" y="16" width="212" height="38" rx="3"/>
-    <text x="714" y="34" text-anchor="middle">DRAM strip</text>
-    <text x="714" y="48" text-anchor="middle" font-size="9.5" class="t-dim">packed 12-bit CinemaDNG</text>
+    <text x="714" y="34" text-anchor="middle" class="en">DRAM strip</text>
+    <text x="714" y="34" text-anchor="middle" class="zh">DRAM strip</text>
+    <text x="714" y="48" text-anchor="middle" font-size="9.5" class="t-dim en">packed 12-bit CinemaDNG</text>
+    <text x="714" y="48" text-anchor="middle" font-size="9.5" class="t-dim zh">打包的 12-bit CinemaDNG</text>
   </g>
   <g class="ln">
     <path d="M150 35 h36"/><path d="M572 35 h36"/>
   </g>
   <!-- geometry bracket -->
   <path class="ln" d="M186 70 v6 H572 v-6"/>
-  <text x="379" y="90" text-anchor="middle" font-size="10" class="t-dim">all reduction happens here &mdash; 253 of 306 profiles reduce nothing at all</text>
+  <text x="379" y="90" text-anchor="middle" font-size="10" class="t-dim en">all reduction happens here &mdash; 253 of 306 profiles reduce nothing at all</text>
+    <text x="379" y="90" text-anchor="middle" font-size="10" class="t-dim zh">所有縮減都在這裡 &mdash; 306 個 profile 裡有 253 個完全不縮</text>
 
   <!-- down to engine -->
   <path class="ln-on" d="M714 54 v46"/>
   <rect class="bx-on" x="578" y="100" width="242" height="44" rx="3"/>
-  <text x="699" y="120" text-anchor="middle" font-size="11" font-weight="600">0x300D lossless JPEG</text>
-  <text x="699" y="135" text-anchor="middle" font-size="9.5" class="t-sig">compression happens here</text>
+  <text x="699" y="120" text-anchor="middle" font-size="11" font-weight="600" class="en">0x300D lossless JPEG</text>
+    <text x="699" y="120" text-anchor="middle" font-size="11" font-weight="600" class="zh">0x300D 無損 JPEG</text>
+  <text x="699" y="135" text-anchor="middle" font-size="9.5" class="t-sig en">compression happens here</text>
+    <text x="699" y="135" text-anchor="middle" font-size="9.5" class="t-sig zh">壓縮發生在這裡</text>
 
   <path class="ln-on" d="M699 144 v32"/>
   <rect class="bx" x="608" y="176" width="212" height="38" rx="3"/>
@@ -227,20 +271,26 @@ plan: compression happens <em>last</em>.</p>
   <!-- the forbidden return path -->
   <path class="ln-x" d="M578 122 H300 v-40"/>
   <g font-size="10.5">
-    <text x="440" y="152" text-anchor="middle" class="t-warn" font-weight="600">no way back</text>
-    <text x="440" y="168" text-anchor="middle" class="t-dim" font-size="9.5">after this the data is a bit-stream,</text>
-    <text x="440" y="181" text-anchor="middle" class="t-dim" font-size="9.5">not pixels</text>
+    <text x="440" y="152" text-anchor="middle" class="t-warn en" font-weight="600">no way back</text>
+    <text x="440" y="152" text-anchor="middle" class="t-warn zh" font-weight="600">回不去了</text>
+    <text x="440" y="168" text-anchor="middle" class="t-dim en" font-size="9.5">after this the data is a bit-stream,</text>
+    <text x="440" y="168" text-anchor="middle" class="t-dim zh" font-size="9.5">在這之後資料是位元流,</text>
+    <text x="440" y="181" text-anchor="middle" class="t-dim en" font-size="9.5">not pixels</text>
+    <text x="440" y="181" text-anchor="middle" class="t-dim zh" font-size="9.5">不是像素</text>
   </g>
   <g class="xmark" stroke-width="2.5" fill="none">
     <path d="M432 114 l16 16 M448 114 l-16 16"/>
   </g>
 </svg>
-<figcaption>The engine reads the finished CinemaDNG strip &mdash; the same buffer
+<figcaption class="en">The engine reads the finished CinemaDNG strip &mdash; the same buffer
 the writer is about to put on the card. <b>Once a frame is compressed you cannot
 hbin, vbin or RWZM it.</b></figcaption>
+<figcaption class="zh">引擎讀的是<strong>已經做完的 CinemaDNG strip</strong> ——
+就是 writer 正要寫進卡裡的那塊緩衝區。
+<b>一格畫面一旦被壓縮,就不能再 hbin、vbin 或 RWZM 了。</b></figcaption>
 </figure>
 
-<div class="warn"><b>Decide geometry first, then talk about compression.</b> Three
+<div class="warn en"><b>Decide geometry first, then talk about compression.</b> Three
 reasons, any one of which is enough. <b>Hardware order:</b> binning and resampling are
 branches of the CRCT pipeline &mdash; a profile takes one of them, not both in series
 &mdash; and all of them sit physically before the write to DRAM; the engine is after
@@ -251,20 +301,34 @@ camera's video path has no such decode. <b>Sizing:</b> compression changes bytes
 never geometry. Work out the frame size in
 <a href="frame-reduction.html">the reduction path</a> first; a ratio computed on a
 frame size you have not settled is a ratio for a frame that does not exist.</div>
+<div class="warn zh"><b>先把幾何決定好,再談壓縮。</b>三個理由,任何一個都足夠。<br>
+<b>硬體順序:</b>binning 與重取樣是 CRCT 管線的<strong>分支</strong> ——
+一個 profile 只會走其中一條,不是兩個串起來 —— 而且它們全部在寫進 DRAM 之前,引擎在那之後。
+(<a href="sensor-to-cinemadng.html#crct">分支普查</a>:253 個 profile 什麼都不縮、
+36 個走 Hbin2、17 個 RWZM 與 hbin 同時。)<br>
+<b>資料型態:</b>引擎的輸出是 Huffman 位元流,<strong>不是像素</strong> ——
+要再縮就得先完整解碼,而相機的影片路徑沒有這種解碼器。<br>
+<b>尺寸:</b>壓縮改變的是<strong>位元組</strong>,從來不改幾何。
+先去<a href="frame-reduction.html">縮減路徑那頁</a>把畫面尺寸定下來;
+在一個還沒定案的尺寸上算出來的壓縮比,是一個<strong>不存在的畫面</strong>的壓縮比。</div>
 
-<h2>What the engine costs</h2>
+<h2><span class="en">What the engine costs</span><span class="zh">引擎的成本</span></h2>
 
-<p>Measured on the camera, by wrapping the stills path's own encode call rather than
+<p class="en">Measured on the camera, by wrapping the stills path's own encode call rather than
 cold-calling the engine. Three terms, and they genuinely separate:</p>
+<p class="zh">在相機上量的,做法是把<strong>拍照路徑自己的編碼呼叫</strong>包起來,
+而不是冷呼叫引擎。三個項,而且是真的可以拆開的:</p>
 
 <figure class="dia">
 <svg viewBox="0 0 820 172" role="img" aria-labelledby="p2t">
   <title id="p2t">The three-term cost model and how it splits for each format</title>
   <text x="0" y="16" font-size="12.5">t(&micro;s) = 2,179 + 4,954.40 &times; alignedMpix + 40.926 &times; tiles</text>
   <g font-size="9" class="t-dim">
-    <text x="60"  y="32">per call</text>
+    <text x="60"  y="32" class="en">per call</text>
+    <text x="60"  y="32" class="zh">每次呼叫</text>
     <text x="196" y="32">201.8 Mpix/s</text>
-    <text x="416" y="32">per tile</text>
+    <text x="416" y="32" class="en">per tile</text>
+    <text x="416" y="32" class="zh">每個 tile</text>
   </g>
   <g class="ln"><path d="M74 20 v7"/><path d="M232 20 v7"/><path d="M434 20 v7"/></g>
 
@@ -299,34 +363,51 @@ cold-calling the engine. Three terms, and they genuinely separate:</p>
     <text x="708" y="156" font-size="10" class="t-dim">130.8 ms</text>
   </g>
   <g font-size="9" class="t-dim">
-    <rect class="f-line" x="470" y="24" width="9" height="9" rx="2"/><text x="484" y="32">call</text>
-    <rect class="f-sig"  x="520" y="24" width="9" height="9" rx="2"/><text x="534" y="32">pixels</text>
-    <rect class="f-dim"  x="580" y="24" width="9" height="9" rx="2"/><text x="594" y="32">tiles</text>
+    <rect class="f-line" x="470" y="24" width="9" height="9" rx="2"/><text x="484" y="32" class="en">call</text>
+    <text x="484" y="32" class="zh">呼叫</text>
+    <rect class="f-sig"  x="520" y="24" width="9" height="9" rx="2"/><text x="534" y="32" class="en">pixels</text>
+    <text x="534" y="32" class="zh">像素</text>
+    <rect class="f-dim"  x="580" y="24" width="9" height="9" rx="2"/><text x="594" y="32" class="en">tiles</text>
+    <text x="594" y="32" class="zh">tile</text>
   </g>
 </svg>
-<figcaption>The per-call term is a flat 2.18&nbsp;ms whatever you encode, so it hurts
+<figcaption class="en">The per-call term is a flat 2.18&nbsp;ms whatever you encode, so it hurts
 small frames most &mdash; it is 16% of an FHD frame and 1.7% of a 6K one. The
 per-tile term is why <b>fewer, larger tiles beat less padding</b>.</figcaption>
+<figcaption class="zh">「每次呼叫」那一項不管你編什麼都是固定 2.18&nbsp;ms,
+所以<strong>對小畫面傷害最大</strong> —— 它佔 FHD 一格的 16%,佔 6K 一格只有 1.7%。
+而「每個 tile」那一項,就是為什麼<b>用比較少、比較大的 tile,勝過減少 padding</b>。</figcaption>
 </figure>
 
-<div class="note"><b>Two older numbers you will find in the notes are wrong or
+<div class="note en"><b>Two older numbers you will find in the notes are wrong or
 misleading.</b> 32&nbsp;Mpix/s was a watchdog timeout, never a throughput.
 169.7&nbsp;Mpix/s is not wrong but is an <em>effective</em> rate at 256&times;256
 that swallows the per-tile term &mdash; splitting it out gives 201.8&nbsp;Mpix/s
 plus the other two terms. Always budget with all three.</div>
+<div class="note zh"><b>筆記裡有兩個舊數字,是錯的或會誤導。</b>
+32&nbsp;Mpix/s 是一個<strong>看門狗逾時</strong>,從來不是吞吐量。
+169.7&nbsp;Mpix/s 不算錯,但它是 256&times;256 之下的<em>有效</em>速率,
+把「每個 tile」那一項吃進去了 —— 拆開來是 201.8&nbsp;Mpix/s 再加另外兩項。
+<strong>算預算時三項都要算。</strong></div>
 
-<h3>Tile geometry is worth up to a quarter of the time</h3>
+<h3><span class="en">Tile geometry is worth up to a quarter of the time</span><span class="zh">Tile 幾何最多值四分之一的時間</span></h3>
 
-<p>The simulator searches this rather than looking it up, over the engine's own
+<p class="en">The simulator searches this rather than looking it up, over the engine's own
 limits &mdash; tile width 32&hellip;512 in steps of 32, tile height even and at most
 512, at most 326 tiles &mdash; plus TIFF's requirement that TileLength be a multiple
 of 16. That last constraint matters: without it the search picks 512&times;364 for
 FHD, which is genuinely faster and not a valid tag. With it, the search reproduces
 all four measured optima below exactly.</p>
+<p class="zh">模擬器是<strong>搜尋</strong>出來的,不是查表,搜尋範圍就是引擎自己的限制 ——
+tile 寬 32&hellip;512(32 的倍數)、tile 高是偶數且最多 512、最多 326 個 tile ——
+再加上 TIFF 要求 TileLength 必須是 16 的倍數。<br>
+最後這個限制很關鍵:沒有它的話,搜尋會替 FHD 挑出 512&times;364 ——
+那確實比較快,但<strong>不是合法的標籤值</strong>。加上它之後,
+搜尋結果與下面四個實測最佳值<strong>完全一致</strong>。</p>
 
 <div class="scroll">
 <table>
-  <thead><tr><th>format</th><th>best tile</th><th>tiles</th><th>encode</th><th>vs 256&times;256</th></tr></thead>
+  <thead><tr><th><span class="en">format</span><span class="zh">格式</span></th><th><span class="en">best tile</span><span class="zh">最佳 tile</span></th><th><span class="en">tiles</span><span class="zh">tile 數</span></th><th><span class="en">encode</span><span class="zh">編碼</span></th><th><span class="en">vs 256&times;256</span><span class="zh">對比 256&times;256</span></th></tr></thead>
   <tbody>
     <tr><td>FHD 1936&times;1090</td><td><b>512&times;368</b></td><td>12</td><td>13.87 ms</td><td>&minus;17.4%</td></tr>
     <tr><td>OG3K 3024&times;2010</td><td><b>512&times;512</b></td><td>24</td><td>34.33 ms</td><td>&minus;7.9%</td></tr>
@@ -336,35 +417,45 @@ all four measured optima below exactly.</p>
 </table>
 </div>
 
-<h2>Bit depth: 8-bit is a different strategy, not an extra one</h2>
+<h2><span class="en">Bit depth: 8-bit is a different strategy, not an extra one</span><span class="zh">位深:8-bit 是另一條路,不是多一個選項</span></h2>
 
-<p>The codec and the raw path do not agree about what a sample is. The engine's
+<p class="en">The codec and the raw path do not agree about what a sample is. The engine's
 setup function maps a bitdepth code to a width and refuses anything it does not
 recognise:</p>
+<p class="zh">codec 跟 raw 路徑對「一個取樣有多寬」的看法不一致。
+引擎的設定函式把位深代碼對應到寬度,認不得的一律拒絕:</p>
 
 <div class="scroll">
 <table>
-  <thead><tr><th>code</th><th>0</th><th>1</th><th>2</th><th>3</th><th>anything else</th></tr></thead>
+  <thead><tr><th><span class="en">code</span><span class="zh">代碼</span></th><th>0</th><th>1</th><th>2</th><th>3</th><th><span class="en">anything else</span><span class="zh">其他任何值</span></th></tr></thead>
   <tbody>
-    <tr><td>engine sample width</td><td>12</td><td>14</td><td>16</td><td>10</td>
-        <td><b>rejected</b> &mdash; the call returns failure</td></tr>
+    <tr><td><span class="en">engine sample width</span><span class="zh">引擎的取樣寬度</span></td><td>12</td><td>14</td><td>16</td><td>10</td>
+        <td><span class="en"><b>rejected</b> &mdash; the call returns failure</span><span class="zh"><b>直接拒絕</b> &mdash; 呼叫回傳失敗</span></td></tr>
   </tbody>
 </table>
 </div>
 
-<p>The <em>raw output</em> path does have 8-bit &mdash; its own depth field carries
+<p class="en">The <em>raw output</em> path does have 8-bit &mdash; its own depth field carries
 8, 10, 12 and 14, and the debug print has a branch for each. So 8-bit frames are
 something the camera can produce, and something the compressor will not touch.</p>
+<p class="zh"><em>raw 輸出</em>那條路<strong>確實有 8-bit</strong> ——
+它自己的位深欄位帶 8、10、12、14,而且除錯輸出每一種都有分支。
+所以 8-bit 的畫面是相機<strong>做得出來</strong>、但壓縮器<strong>不會碰</strong>的東西。</p>
 
 <figure class="dia">
 <svg viewBox="0 0 820 196" role="img" aria-labelledby="p5t">
   <title id="p5t">Ways to get FHD 29.97 under a card's sustained rate</title>
   <g font-size="10.5">
-    <text x="0" y="24" class="t-dim">12-bit, uncompressed</text>
-    <text x="0" y="54" class="t-dim">10-bit, uncompressed</text>
-    <text x="0" y="84" class="t-dim">8-bit, uncompressed</text>
-    <text x="0" y="114" class="t-dim">12-bit at 2.0:1</text>
-    <text x="0" y="144" class="t-dim">12-bit at 2.525:1</text>
+    <text x="0" y="24" class="t-dim en">12-bit, uncompressed</text>
+    <text x="0" y="24" class="t-dim zh">12-bit,未壓縮</text>
+    <text x="0" y="54" class="t-dim en">10-bit, uncompressed</text>
+    <text x="0" y="54" class="t-dim zh">10-bit,未壓縮</text>
+    <text x="0" y="84" class="t-dim en">8-bit, uncompressed</text>
+    <text x="0" y="84" class="t-dim zh">8-bit,未壓縮</text>
+    <text x="0" y="114" class="t-dim en">12-bit at 2.0:1</text>
+    <text x="0" y="114" class="t-dim zh">12-bit,2.0:1</text>
+    <text x="0" y="144" class="t-dim en">12-bit at 2.525:1</text>
+    <text x="0" y="144" class="t-dim zh">12-bit,2.525:1</text>
   </g>
   <g>
     <rect class="f-warn" x="180" y="12" width="640" height="17" rx="2" opacity=".85"/>
@@ -383,23 +474,33 @@ something the camera can produce, and something the compressor will not touch.</
   <!-- card line at 94 MB/s -->
   <path class="ln-x" d="M799 6 v152"/>
   <text x="799" y="172" text-anchor="end" font-size="9.5" class="t-warn">SD 94 MB/s</text>
-  <text x="180" y="190" font-size="9.5" class="t-dim">FHD 1936&times;1090 at 29.97, including the 78,848-byte header each frame carries</text>
+  <text x="180" y="190" font-size="9.5" class="t-dim en">FHD 1936&times;1090 at 29.97, including the 78,848-byte header each frame carries</text>
+    <text x="180" y="190" font-size="9.5" class="t-dim zh">FHD 1936&times;1090 @29.97,含每格 78,848 bytes 的標頭</text>
 </svg>
-<figcaption>Dropping to 8-bit costs a third of the data and <b>no engine time at
+<figcaption class="en">Dropping to 8-bit costs a third of the data and <b>no engine time at
 all</b>. Compressing at 2:1 saves more and is lossless, but costs 13.87&nbsp;ms a
 frame and only works at 10, 12, 14 or 16 bits. <b>You cannot have both.</b></figcaption>
+<figcaption class="zh">降到 8-bit 可以省掉三分之一的資料量,而且<b>完全不花引擎時間</b>。
+壓到 2:1 省更多而且是無損的,但每一格要花 13.87&nbsp;ms,
+而且只有 10、12、14、16 bit 能用。<b>兩者不可兼得。</b></figcaption>
 </figure>
 
-<p class="note">That makes 8-bit the cheap answer to a bandwidth problem and
+<p class="note en">That makes 8-bit the cheap answer to a bandwidth problem and
 compression the expensive one. 8-bit is lossy and instant; lossless compression
 keeps every bit and costs a large slice of the frame budget. Picking 8-bit in the
 simulator therefore switches compression off rather than stacking the two &mdash;
 which is what the hardware would do.</p>
+<p class="note zh">所以 8-bit 是頻寬問題的<strong>便宜解</strong>,壓縮是<strong>昂貴解</strong>。
+8-bit 有損但立即;無損壓縮保留每一個位元,但吃掉一格預算裡很大一塊。
+因此在模擬器裡選 8-bit 會<strong>把壓縮關掉</strong>,而不是兩者疊加 ——
+硬體本來就是這樣。</p>
 
-<h2>How much it actually compresses</h2>
+<h2><span class="en">How much it actually compresses</span><span class="zh">實際上壓得掉多少</span></h2>
 
-<p>Read out of the engine's own size table. It moves with the picture, and the
+<p class="en">Read out of the engine's own size table. It moves with the picture, and the
 spread is wide enough that it changes conclusions:</p>
+<p class="zh">這些是從引擎自己的尺寸表讀出來的。它<strong>會隨畫面內容變動</strong>,
+而且變動幅度大到<strong>足以改變結論</strong>:</p>
 
 <figure class="dia">
 <svg viewBox="0 0 820 104" role="img" aria-labelledby="p3t">
@@ -414,56 +515,81 @@ spread is wide enough that it changes conclusions:</p>
     <path class="ln" d="M820 30 v-8"/> <text x="820" y="18" text-anchor="end">2.8</text>
   </g>
   <g font-size="9.5" class="t-dim" text-anchor="middle">
-    <text x="123" y="68">stress floor</text>
-    <text x="369" y="68">12-bit design value</text>
-    <text x="615" y="68">dark-scene measured</text>
+    <text x="123" y="68" class="en">stress floor</text>
+    <text x="123" y="68" class="zh">最差情況下限</text>
+    <text x="369" y="68" class="en">12-bit design value</text>
+    <text x="369" y="68" class="zh">12-bit 設計值</text>
+    <text x="615" y="68" class="en">dark-scene measured</text>
+    <text x="615" y="68" class="zh">暗場景實測</text>
   </g>
-  <text x="0" y="94" font-size="9.5" class="t-dim">14-bit stills, effective samples: 1.67&ndash;2.08 &middot; 12-bit video frames measured so far: 2.51&ndash;2.74 (all one dark scene)</text>
+  <text x="0" y="94" font-size="9.5" class="t-dim en">14-bit stills, effective samples: 1.67&ndash;2.08 &middot; 12-bit video frames measured so far: 2.51&ndash;2.74 (all one dark scene)</text>
+    <text x="0" y="94" font-size="9.5" class="t-dim zh">14-bit 照片的有效取樣:1.67&ndash;2.08 &middot; 目前量到的 12-bit 影片格:2.51&ndash;2.74(全部來自同一個暗場景)</text>
 </svg>
-<figcaption>Plan against <b>1.65:1</b>, design against <b>2.0:1</b>, and treat 2.6:1
+<figcaption class="en">Plan against <b>1.65:1</b>, design against <b>2.0:1</b>, and treat 2.6:1
 as what a friendly scene gives you. The high-ISO-at-correct-exposure curve has still
 not been measured, because shutter and aperture cannot be written from the
 host.</figcaption>
+<figcaption class="zh">規劃時用 <b>1.65:1</b>,設計時用 <b>2.0:1</b>,
+2.6:1 當成「畫面很配合時的運氣」。<br>
+「高 ISO 但曝光正確」那條曲線<strong>還沒量到</strong>,因為快門和光圈沒辦法從主機端寫入。</figcaption>
 </figure>
 
-<div class="warn"><b>Do not derive a ratio from DNG file sizes.</b> A full still is
+<div class="warn en"><b>Do not derive a ratio from DNG file sizes.</b> A full still is
 mostly not raw tiles &mdash; one 36.33&nbsp;MB file holds 25.68&nbsp;MB of tiles and
 about 10.65&nbsp;MB of other IFDs and previews. Ratios here come from summing
 <code>TileByteCounts</code>, which is the engine's own accounting.</div>
+<div class="warn zh"><b>不要從 DNG 的檔案大小去反推壓縮比。</b>
+一張完整的照片裡<strong>大部分不是 raw tile</strong> ——
+一個 36.33&nbsp;MB 的檔案裡,tile 佔 25.68&nbsp;MB,
+另外約 10.65&nbsp;MB 是其他 IFD 和預覽圖。<br>
+這裡的壓縮比是把 <code>TileByteCounts</code> 加總出來的,那是<strong>引擎自己的帳</strong>。</div>
 
-<h2>The architecture is serial &mdash; encode and write add up</h2>
+<h2><span class="en">The architecture is serial &mdash; encode and write add up</span><span class="zh">架構是串列的 &mdash; 編碼和寫入要相加</span></h2>
 
-<p>This is the constraint that decides more than the engine speed does. In the
+<p class="en">This is the constraint that decides more than the engine speed does. In the
 current hook, one worker blocks on the encode, then blocks on the SD flush, and only
 then takes the next frame:</p>
+<p class="zh">這個限制比引擎速度更決定成敗。在目前的 hook 裡,
+一個 worker 先卡在編碼上,再卡在 SD 的 flush 上,<strong>然後才</strong>去拿下一格:</p>
 
 <figure class="dia">
 <svg viewBox="0 0 820 156" role="img" aria-labelledby="p4t">
   <title id="p4t">Serial encode-then-write versus a pipelined arrangement</title>
-  <text x="0" y="14" font-size="10" class="t-dim">today &mdash; one worker, serial</text>
+  <text x="0" y="14" font-size="10" class="t-dim en">today &mdash; one worker, serial</text>
+    <text x="0" y="14" font-size="10" class="t-dim zh">目前 &mdash; 一個 worker,串列</text>
   <rect class="f-sig" x="0"   y="24" width="200" height="22" rx="2"/>
-  <text x="100" y="39" text-anchor="middle" font-size="10" class="on-bar">encode 13.9</text>
+  <text x="100" y="39" text-anchor="middle" font-size="10" class="on-bar en">encode 13.9</text>
+    <text x="100" y="39" text-anchor="middle" font-size="10" class="on-bar zh">編碼 13.9</text>
   <rect class="f-dim" x="202" y="24" width="193" height="22" rx="2" opacity=".6"/>
-  <text x="298" y="39" text-anchor="middle" font-size="10">write 13.4</text>
+  <text x="298" y="39" text-anchor="middle" font-size="10" class="en">write 13.4</text>
+    <text x="298" y="39" text-anchor="middle" font-size="10" class="zh">寫入 13.4</text>
   <path class="ln-x" d="M600 18 v34"/>
-  <text x="606" y="39" font-size="10" class="t-warn">frame budget 33.4 ms @30p</text>
-  <text x="0" y="62" font-size="9.5" class="t-dim">service time 27.3 ms &mdash; fits, but both terms count</text>
+  <text x="606" y="39" font-size="10" class="t-warn en">frame budget 33.4 ms @30p</text>
+    <text x="606" y="39" font-size="10" class="t-warn zh">一格預算 33.4 ms @30p</text>
+  <text x="0" y="62" font-size="9.5" class="t-dim en">service time 27.3 ms &mdash; fits, but both terms count</text>
+    <text x="0" y="62" font-size="9.5" class="t-dim zh">服務時間 27.3 ms &mdash; 夠,但兩項都要算</text>
 
-  <text x="0" y="94" font-size="10" class="t-dim">OG3K at the same scale</text>
+  <text x="0" y="94" font-size="10" class="t-dim en">OG3K at the same scale</text>
+    <text x="0" y="94" font-size="10" class="t-dim zh">OG3K,同一個比例尺</text>
   <rect class="f-sig" x="0"   y="104" width="494" height="22" rx="2"/>
-  <text x="247" y="119" text-anchor="middle" font-size="10" class="on-bar">encode 34.3</text>
+  <text x="247" y="119" text-anchor="middle" font-size="10" class="on-bar en">encode 34.3</text>
+    <text x="247" y="119" text-anchor="middle" font-size="10" class="on-bar zh">編碼 34.3</text>
   <rect class="f-dim" x="496" y="104" width="514" height="22" rx="2" opacity=".6"/>
   <path class="ln-x" d="M600 98 v34"/>
-  <text x="0" y="146" font-size="9.5" class="t-warn">service time 70.0 ms &mdash; over budget before the write even finishes</text>
+  <text x="0" y="146" font-size="9.5" class="t-warn en">service time 70.0 ms &mdash; over budget before the write even finishes</text>
+    <text x="0" y="146" font-size="9.5" class="t-warn zh">服務時間 70.0 ms &mdash; 還沒寫完就已經超出預算</text>
 </svg>
-<figcaption>Engine duty and card speed are <b>not two resources that overlap</b> in
+<figcaption class="en">Engine duty and card speed are <b>not two resources that overlap</b> in
 the current design. Separating them into two workers with a queue is a real project,
 not a tuning knob &mdash; and it is what OG3K would need.</figcaption>
+<figcaption class="zh">在目前的設計下,引擎佔用與卡片速度<b>不是兩個會重疊的資源</b>。
+把它們拆成兩個 worker 加一個隊列<strong>是一個真正的專案,不是一個調校旋鈕</strong> ——
+而 OG3K 需要的正是這個。</figcaption>
 </figure>
 
-<h2 id="sim">Budget simulator</h2>
+<h2 id="sim"><span class="en">Budget simulator</span><span class="zh">預算模擬器</span></h2>
 
-<p>Everything above, wired together. The cost function only reads the frame size, so
+<p class="en">Everything above, wired together. The cost function only reads the frame size, so
 the list is the camera's <b>13 sensor rasters</b> (from the mode table at
 <code>0xC0B59DC0</code>) rather than all 70 modes &mdash; the mode id never changes a
 number here. Pick a raster and a frame rate independently, say how much is reduced
@@ -473,42 +599,62 @@ so you can cost a frame the camera does not currently have &mdash; it is checked
 against the engine's real limits (width 8&hellip;16384 in steps of 8, height
 2&hellip;16384 even, at most 326 tiles) and told to you when it falls outside
 them.</p>
+<p class="zh">把上面所有東西接起來。成本函數<strong>只讀畫面尺寸</strong>,
+所以清單是相機的 <b>13 個感光元件光柵</b>(來自 <code>0xC0B59DC0</code> 的模式表),
+而不是全部 70 個模式 —— mode id 在這裡不會改變任何一個數字。<br>
+光柵和格率<strong>各自獨立</strong>選,再指定進 codec 之前縮了多少,
+tile 幾何是<strong>搜尋</strong>出來的而不是猜的。<br>
+清單最後的<b>「custom size」</b>可以輸入任意寬高,
+所以你能替<strong>相機目前沒有的畫面</strong>算成本 ——
+輸入會對照引擎的真實限制檢查(寬 8&hellip;16384 且是 8 的倍數、
+高 2&hellip;16384 且是偶數、最多 326 個 tile),超出範圍會直接告訴你。</p>
 
-<p class="note">Two things about those numbers. <b>Frame rate is yours to choose</b>,
+<p class="note en">Two things about those numbers. <b>Frame rate is yours to choose</b>,
 not tied to the raster: every rate the mode table carries is in the list, including
 the exact NTSC variants (a mode that advertises 30 runs at 29.97, one that advertises
 78 runs at 77.27), and the detail line tells you which rates stock firmware actually
 offers at the raster you picked. And the reduction is plain arithmetic on the raster
 &mdash; the real path also crops, which is why 3032&times;1708 at 1.5625&times; lands
 on 1936&times;1092 here against the 1936&times;1090 the camera writes.</p>
+<p class="note zh">關於這些數字有兩件事。<b>格率由你選</b>,不綁在光柵上:
+模式表帶的每一個格率都在清單裡,包含精確的 NTSC 變體
+(標稱 30 的模式實跑 29.97、標稱 78 的實跑 77.27),
+而底下的明細行會告訴你原廠在你選的那個光柵上<strong>實際提供</strong>哪些格率。<br>
+另外,縮減在這裡是對光柵做<strong>單純的算術</strong> —— 真實路徑還會裁切,
+所以 3032&times;1708 在 1.5625&times; 之下這裡算出 1936&times;1092,
+而相機實際寫的是 1936&times;1090。</p>
 
-<p class="note"><b>Start with the <span style="color:var(--sig)">compression</span>
+<p class="note en"><b>Start with the <span style="color:var(--sig)">compression</span>
 switch.</b> Turn it off and every number becomes the raw rate, so what compression
 buys is the difference between the two. The other three toggles only shape <i>how</i>
 it compresses, and at a setting where the engine has time to spare none of them move
 the total &mdash; that is correct, not a fault.</p>
+<p class="note zh"><b>先動 <span style="color:var(--sig)">compression</span> 那個開關。</b>
+把它關掉,每個數字都會變成未壓縮的碼率,兩者的<strong>差</strong>就是壓縮實際換到的東西。<br>
+另外三個開關只影響<i>怎麼</i>壓;在一個引擎還有餘裕的設定下,
+它們<strong>都不會改變 total</strong> —— 那是正確的,不是壞掉。</p>
 
 <div class="sim">
-  <h4>Frame</h4>
+  <h4><span class="en">Frame</span><span class="zh">畫面</span></h4>
   <div class="ctl">
     <div>
-      <label for="fmt">sensor raster</label>
+      <label for="fmt"><span class="en">sensor raster</span><span class="zh">感光元件光柵</span></label>
       <select id="fmt"></select>
     </div>
     <div id="cwWrap" hidden>
-      <label for="cw">width &mdash; multiple of 8</label>
+      <label for="cw"><span class="en">width &mdash; multiple of 8</span><span class="zh">寬 &mdash; 8 的倍數</span></label>
       <input type="number" id="cw" value="4096" min="8" max="16384" step="8">
     </div>
     <div id="chWrap" hidden>
-      <label for="ch">height &mdash; even</label>
+      <label for="ch"><span class="en">height &mdash; even</span><span class="zh">高 &mdash; 偶數</span></label>
       <input type="number" id="ch" value="2160" min="2" max="16384" step="2">
     </div>
     <div>
-      <label for="fps">frame rate</label>
+      <label for="fps"><span class="en">frame rate</span><span class="zh">格率</span></label>
       <select id="fps"></select>
     </div>
     <div>
-      <label for="bits">bit depth</label>
+      <label for="bits"><span class="en">bit depth</span><span class="zh">位深</span></label>
       <select id="bits">
         <option value="8">8-bit &mdash; no compression</option>
         <option value="10">10-bit</option>
@@ -518,7 +664,7 @@ the total &mdash; that is correct, not a fault.</p>
       </select>
     </div>
     <div>
-      <label for="red">reduction before the codec</label>
+      <label for="red"><span class="en">reduction before the codec</span><span class="zh">進 codec 前的縮減</span></label>
       <select id="red">
         <option value="1" selected>none &mdash; codec sees the full readout</option>
         <option value="1.25">RWZM 1280 &mdash; 1.25&times;</option>
@@ -530,7 +676,7 @@ the total &mdash; that is correct, not a fault.</p>
       </select>
     </div>
     <div>
-      <label for="tile">tile geometry</label>
+      <label for="tile"><span class="en">tile geometry</span><span class="zh">tile 幾何</span></label>
       <select id="tile">
         <option value="best" selected>search for the fastest</option>
         <option value="256">256 &times; 256 (stock)</option>
@@ -538,7 +684,7 @@ the total &mdash; that is correct, not a fault.</p>
       </select>
     </div>
     <div>
-      <label for="dest">destination</label>
+      <label for="dest"><span class="en">destination</span><span class="zh">寫到哪</span></label>
       <select id="dest">
         <option value="94" selected>SD &mdash; 94 MB/s measured</option>
         <option value="66">SD &mdash; 66 MB/s pessimistic</option>
@@ -548,11 +694,11 @@ the total &mdash; that is correct, not a fault.</p>
     </div>
   </div>
 
-  <h4>Compression</h4>
+  <h4><span class="en">Compression</span><span class="zh">壓縮</span></h4>
   <div class="ctl">
     <div class="rng">
       <div class="rowlab">
-        <label for="ratio" style="margin:0">compression ratio</label>
+        <label for="ratio" style="margin:0"><span class="en">compression ratio</span><span class="zh">壓縮比</span></label>
         <output id="ratioOut">2.00 : 1</output>
       </div>
       <input type="range" id="ratio" min="1.5" max="2.8" step="0.05" value="2.0">
@@ -567,18 +713,18 @@ the total &mdash; that is correct, not a fault.</p>
     </div>
   </div>
 
-  <h4>Result</h4>
+  <h4><span class="en">Result</span><span class="zh">結果</span></h4>
   <div class="verdict" id="verdict">
     <span class="mk" id="vmk">&mdash;</span>
     <span class="why" id="vwhy"></span>
   </div>
 
   <dl class="rates">
-    <div><dt>engine can process</dt><dd id="rEng">&mdash;<small>MB/s</small></dd></div>
-    <div><dt>from compressed frames</dt><dd id="rCmp">&mdash;<small>MB/s</small></dd></div>
-    <div><dt>from uncompressed frames</dt><dd id="rUnc">&mdash;<small>MB/s</small></dd></div>
-    <div><dt>if nothing compressed</dt><dd id="rRaw">&mdash;<small>MB/s</small></dd></div>
-    <div class="hero-n"><dt>total to card</dt><dd id="rTot">&mdash;<small>MB/s</small></dd></div>
+    <div><dt><span class="en">engine can process</span><span class="zh">引擎處理得了</span></dt><dd id="rEng">&mdash;<small>MB/s</small></dd></div>
+    <div><dt><span class="en">from compressed frames</span><span class="zh">來自壓縮的幀</span></dt><dd id="rCmp">&mdash;<small>MB/s</small></dd></div>
+    <div><dt><span class="en">from uncompressed frames</span><span class="zh">來自沒壓的幀</span></dt><dd id="rUnc">&mdash;<small>MB/s</small></dd></div>
+    <div><dt><span class="en">if nothing compressed</span><span class="zh">完全不壓的話</span></dt><dd id="rRaw">&mdash;<small>MB/s</small></dd></div>
+    <div class="hero-n"><dt><span class="en">total to card</span><span class="zh">寫到卡的總量</span></dt><dd id="rTot">&mdash;<small>MB/s</small></dd></div>
   </dl>
 
   <div class="stack">
@@ -587,9 +733,9 @@ the total &mdash; that is correct, not a fault.</p>
     </div>
     <div class="lim" id="lim"></div>
     <div class="key">
-      <span class="c"><b></b>compressed payload</span>
-      <span class="u"><b></b>uncompressed payload</span>
-      <span class="h"><b></b>headers, 78,848 B/frame</span>
+      <span class="c"><b></b><span class="en">compressed payload</span><span class="zh">壓縮後的資料</span></span>
+      <span class="u"><b></b><span class="en">uncompressed payload</span><span class="zh">沒壓的資料</span></span>
+      <span class="h"><b></b><span class="en">headers, 78,848 B/frame</span><span class="zh">標頭,78,848 B/格</span></span>
     </div>
   </div>
 
@@ -598,132 +744,178 @@ the total &mdash; that is correct, not a fault.</p>
       <i class="enc" id="tEnc"></i><i class="wr" id="tWr"></i><i class="bud" id="tBud"></i>
     </div>
     <div class="lab">
-      <span>encode <b id="lEnc">&mdash;</b></span>
-      <span>write <b id="lWr">&mdash;</b></span>
-      <span>serial total <b id="lTot">&mdash;</b></span>
-      <span>budget <b id="lBud">&mdash;</b></span>
+      <span><span class="en">encode</span><span class="zh">編碼</span> <b id="lEnc">&mdash;</b></span>
+      <span><span class="en">write</span><span class="zh">寫入</span> <b id="lWr">&mdash;</b></span>
+      <span><span class="en">serial total</span><span class="zh">串列總和</span> <b id="lTot">&mdash;</b></span>
+      <span><span class="en">budget</span><span class="zh">一格預算</span> <b id="lBud">&mdash;</b></span>
     </div>
   </div>
 
   <div class="detail" id="detail"></div>
 </div>
 
-<h2 id="skipsec">Dynamic frame-skip: legal, but not free</h2>
+<h2 id="skipsec"><span class="en">Dynamic frame-skip: legal, but not free</span><span class="zh">動態抽幀:合法,但不是免費的</span></h2>
 
-<p>Compress the frames the engine can keep up with, write the rest uncompressed.
+<p class="en">Compress the frames the engine can keep up with, write the rest uncompressed.
 The format allows it outright &mdash; CinemaDNG is one file per frame and
 <code>Compression</code> is a per-IFD tag, so a clip with a mix of both is valid and
 no frame is dropped. Three things it does not solve:</p>
+<p class="zh">引擎跟得上的那些幀就壓,其餘的直接寫未壓縮。
+<strong>格式本身完全允許</strong> —— CinemaDNG 是一格一個檔,
+而 <code>Compression</code> 是<strong>每個 IFD 各自</strong>的標籤,
+所以一段片子裡兩種混著存是合法的,而且<strong>不會掉任何一格</strong>。
+但它有三件事解決不了:</p>
 
 <ol class="steps">
   <li>
-    <h3>It lowers the average, not the peak</h3>
-    <p>The uncompressed frames still arrive at full rate. A card fails on sustained
+    <h3><span class="en">It lowers the average, not the peak</span><span class="zh">它降的是平均,不是尖峰</span></h3>
+    <p class="en">The uncompressed frames still arrive at full rate. A card fails on sustained
     throughput, so &ldquo;25% less on average&rdquo; is not the same as &ldquo;the
     clip that used to drop frames now does not.&rdquo; Turn on partial-frame mode in
     the simulator to see the peak move instead.</p>
+    <p class="zh">沒被壓的那些幀<strong>還是整張全速送過來</strong>。
+    卡是在<strong>持續吞吐</strong>上垮掉的,所以「平均少了 25%」<strong>不等於</strong>
+    「本來會掉幀的片子現在不掉了」。<br>
+    在模擬器裡打開「部分畫面模式」,就會看到尖峰跟著動。</p>
   </li>
   <li>
-    <h3>The camera probably cannot play it back</h3>
-    <p>The movie parser reads <code>StripOffsets</code> and never looks at
+    <h3><span class="en">The camera probably cannot play it back</span><span class="zh">相機大概播不出來</span></h3>
+    <p class="en">The movie parser reads <code>StripOffsets</code> and never looks at
     <code>TileOffsets</code>, <code>TileWidth</code> or <code>Compression</code>. The
     stills path has a hardware LJPEG branch; the video path does not go through it.
     A compressed clip may be export-only.</p>
+    <p class="zh">影片解析器只讀 <code>StripOffsets</code>,
+    <strong>從來不看</strong> <code>TileOffsets</code>、<code>TileWidth</code> 或
+    <code>Compression</code>。拍照路徑有硬體 LJPEG 的分支;影片路徑不走那裡。
+    所以壓縮過的片子可能<strong>只能匯出,不能在機上播</strong>。</p>
   </li>
   <li>
-    <h3>The timeline breaks in three different ways</h3>
-    <p>Number the files consecutively and the skipped time vanishes &mdash; motion
+    <h3><span class="en">The timeline breaks in three different ways</span><span class="zh">時間軸有三種壞法</span></h3>
+    <p class="en">Number the files consecutively and the skipped time vanishes &mdash; motion
     speeds up. Keep the original numbers and you have gaps, and nobody has checked
     what the player does with those. Repeat the previous frame and you keep the
     timing but lose the I/O saving that was the point. Real variable-rate needs
     per-frame timestamps or a sidecar, and something that understands them.</p>
+    <p class="zh">檔名連號編下去,被跳過的時間就<strong>消失了</strong> —— 動作會變快。<br>
+    保留原本的編號就會有<strong>空號</strong>,而沒有人檢查過播放器拿到空號會怎樣。<br>
+    重複前一格可以保住時間,但就<strong>失去了當初要省的 I/O</strong>。<br>
+    真正的可變格率需要<strong>逐格時間戳或 sidecar</strong>,以及看得懂它們的東西。</p>
   </li>
 </ol>
 
-<p class="note"><b>So frame-skip cannot be hidden as an implementation detail.</b>
+<p class="note en"><b>So frame-skip cannot be hidden as an implementation detail.</b>
 The three safe product shapes are: drop the whole clip one frame-rate step, mark
 compressed clips export-only and ship a sidecar timeline, or build a playback layer
 that understands variable rate. Until one of those exists this stays a research
 probe.</p>
+<p class="note zh"><b>所以抽幀不能當成一個「實作細節」藏起來。</b>
+三個安全的產品形態是:整段片子降一階格率、
+把壓縮過的片子標成<strong>只能匯出</strong>並附一個 sidecar 時間軸、
+或者做一層看得懂可變格率的播放。<br>
+在這三者之一出現之前,這件事<strong>只是一個研究性的試探</strong>。</p>
 
-<h2>Partial-frame mode</h2>
+<h2><span class="en">Partial-frame mode</span><span class="zh">部分畫面模式</span></h2>
 
-<p>The simulator's third toggle compresses a <em>fraction of each frame</em> instead
+<p class="en">The simulator's third toggle compresses a <em>fraction of each frame</em> instead
 of a fraction of the frames. Arithmetically it turns the compressed fraction from a
 whole-frame ratchet into a continuous dial, and the useful consequence is that
 <b>every frame ends up the same size</b> &mdash; so the peak drops with the average
 instead of staying pinned at the uncompressed rate.</p>
+<p class="zh">模擬器的第三個開關,壓的是<em>每一格的一部分</em>,而不是一部分的格。
+算術上,它把「壓縮比例」從整格跳動的棘輪變成<strong>連續的旋鈕</strong>;
+有用的後果是 <b>每一格最後大小都一樣</b> ——
+所以<strong>尖峰會跟著平均一起降</strong>,而不是一直卡在未壓縮的碼率上。</p>
 
-<div class="warn"><b>It is not a legal DNG.</b> An IFD is either tiled
+<div class="warn en"><b>It is not a legal DNG.</b> An IFD is either tiled
 <code>Compression=7</code> or an uncompressed strip; there is no half-and-half
 encoding. Doing it for real means a custom container or a sidecar, which lands you
 right back in the playback problem above. The toggle is there to make the
 average-versus-peak difference visible, not because it can be shipped.</div>
+<div class="warn zh"><b>它不是合法的 DNG。</b>一個 IFD 要嘛是 tile 化的
+<code>Compression=7</code>,要嘛是未壓縮的 strip,<strong>沒有一半一半的編碼方式</strong>。
+真要做就得自訂容器或 sidecar,那又<strong>掉回上面那個播放問題</strong>。<br>
+這個開關存在的目的,是讓「平均 vs 尖峰」的差別看得見,<strong>不是因為它能出貨</strong>。</div>
 
-<h2>Verdict as it stands</h2>
+<h2><span class="en">Verdict as it stands</span><span class="zh">目前的結論</span></h2>
 
 <div class="scroll">
 <table class="verd">
-  <thead><tr><th>target</th><th></th><th>why</th></tr></thead>
+  <thead><tr><th><span class="en">target</span><span class="zh">目標</span></th><th></th><th><span class="en">why</span><span class="zh">理由</span></th></tr></thead>
   <tbody>
-    <tr><td>FHD 23.976 &rarr; SD</td><td class="y">yes</td>
-        <td>27.3 ms serial against a 41.7 ms budget. The first thing to try.</td></tr>
-    <tr><td>FHD 29.97 &rarr; SD</td><td class="y">likely</td>
-        <td>Same 27.3 ms against 33.4 ms. Fine on a 94 MB/s card, marginal at 66.</td></tr>
+    <tr><td>FHD 23.976 &rarr; SD</td><td class="y"><span class="en">yes</span><span class="zh">可以</span></td>
+        <td><span class="en">27.3 ms serial against a 41.7 ms budget. The first thing to try.</span><span class="zh">串列 27.3 ms,預算 41.7 ms。<strong>第一個該試的。</strong></span></td></tr>
+    <tr><td>FHD 29.97 &rarr; SD</td><td class="y"><span class="en">likely</span><span class="zh">應該可以</span></td>
+        <td><span class="en">Same 27.3 ms against 33.4 ms. Fine on a 94 MB/s card, marginal at 66.</span><span class="zh">一樣 27.3 ms,對 33.4 ms。94 MB/s 的卡沒問題,66 就很勉強。</span></td></tr>
     <tr><td>OG3K 30p &rarr; SD</td><td class="n">no</td>
-        <td>Engine 3% over (20% with contention), card 18% over. Both need solving and
-        the engine has no clock knob.</td></tr>
-    <tr><td>OG3K 30p &rarr; SSD</td><td>not needed</td>
-        <td>Uncompressed 275.6 MB/s already fits in 390. Compression buys recording
-        time, not feasibility.</td></tr>
+        <td><span class="en">Engine 3% over (20% with contention), card 18% over. Both need solving and the engine has no clock knob.</span><span class="zh">引擎超 3%(算爭用是 20%),卡超 18%。<strong>兩個都要解,而且引擎沒有時脈旋鈕。</strong></span></td></tr>
+    <tr><td>OG3K 30p &rarr; SSD</td><td><span class="en">not needed</span><span class="zh">不需要</span></td>
+        <td><span class="en">Uncompressed 275.6 MB/s already fits in 390. Compression buys recording time, not feasibility.</span><span class="zh">未壓縮的 275.6 MB/s 本來就塞得進 390。壓縮買到的是<strong>錄影時間</strong>,不是可行性。</span></td></tr>
     <tr><td>OG3K 18/24 &rarr; SD</td><td class="n">no</td>
-        <td>70&ndash;85 ms per frame serial. Needs a real pipeline, not a tile
-        change.</td></tr>
-    <tr><td>UHD, any rate</td><td class="n">no</td>
-        <td>Engine-bound at 44.91 ms. Nothing to do with the ratio.</td></tr>
+        <td><span class="en">70&ndash;85 ms per frame serial. Needs a real pipeline, not a tile change.</span><span class="zh">串列每格 70&ndash;85 ms。需要的是<strong>真正的管線</strong>,不是換 tile。</span></td></tr>
+    <tr><td><span class="en">UHD, any rate</span><span class="zh">UHD,任何格率</span></td><td class="n">no</td>
+        <td><span class="en">Engine-bound at 44.91 ms. Nothing to do with the ratio.</span><span class="zh">卡在引擎的 44.91 ms。<strong>跟壓縮比無關。</strong></span></td></tr>
     <tr><td>6K</td><td class="n">no</td>
-        <td>314% duty at 24p.</td></tr>
+        <td><span class="en">314% duty at 24p.</span><span class="zh">24p 之下負載 314%。</span></td></tr>
   </tbody>
 </table>
 </div>
 
-<h2>Still open</h2>
+<h2><span class="en">Still open</span><span class="zh">還沒解的</span></h2>
 
 <ul>
-  <li><b>Whether the camera can play back <code>Compression=7</code> video.</b> This
+  <li class="en"><b>Whether the camera can play back <code>Compression=7</code> video.</b> This
   is P0 &mdash; everything else is a probe until it is answered.</li>
-  <li>Where the flat 2.18 ms per call goes. The bring-up path shows register writes
+  <li class="zh"><b>相機到底能不能播放 <code>Compression=7</code> 的影片。</b>
+  這是 P0 &mdash; 在它有答案之前,其餘全部都只是試探。</li>
+  <li class="en">Where the flat 2.18 ms per call goes. The bring-up path shows register writes
   and no explicit sleep, so it is a hardware transition or an IRQ-to-task wake.</li>
-  <li>The compression ratio at high ISO with correct exposure.</li>
-  <li>Whether the DNG writer tolerates variable frame lengths. The player derives a
+  <li class="zh">每次呼叫固定的 2.18 ms 到底花在哪。啟動路徑上看到的是暫存器寫入、
+  沒有明確的 sleep,所以那是硬體狀態轉換或 IRQ 喚醒任務的時間。</li>
+  <li class="en">The compression ratio at high ISO with correct exposure.</li>
+  <li class="zh">高 ISO 且曝光正確時的壓縮比。</li>
+  <li class="en">Whether the DNG writer tolerates variable frame lengths. The player derives a
   shared capacity from the first frame, so later frames must be smaller &mdash; which
   is not a safe worst-case guarantee.</li>
-  <li>Mutual exclusion against the stills path. One engine, no mutex; colliding with
+  <li class="zh">DNG writer 能不能容忍每格長度不同。播放器會從<strong>第一格</strong>推出一個共用容量,
+  所以後面的格子必須更小 &mdash; 那<strong>不是一個安全的最壞情況保證</strong>。</li>
+  <li class="en">Mutual exclusion against the stills path. One engine, no mutex; colliding with
   a photo wedges IRQ 0x29 and needs a reboot.</li>
-  <li>The extrapolated tile geometries (512&times;368 and friends). Only
+  <li class="zh">跟拍照路徑的互斥。只有一顆引擎、沒有 mutex;
+  跟拍照撞在一起會把 IRQ 0x29 卡死,<strong>只能重開機</strong>。</li>
+  <li class="en">The extrapolated tile geometries (512&times;368 and friends). Only
   256&sup2; and 512&sup2; have a same-raster control pair behind them.</li>
+  <li class="zh">那些外推出來的 tile 幾何(512&times;368 之類)。
+  只有 256&sup2; 和 512&sup2; 背後有<strong>同光柵的對照組</strong>。</li>
 </ul>
 
-<h2>Sources</h2>
+<h2><span class="en">Sources</span><span class="zh">出處</span></h2>
 
-<p>The cost model, tile study and ratio measurements are from the in-camera lossless
+<p class="en">The cost model, tile study and ratio measurements are from the in-camera lossless
 work of 2026-09-15/16; the hardware inventory, engine ABI and cold-call analysis are
 from the raw-compression research of 2026-08-20; the pipeline position comes from
 <a href="frame-reduction.html">the reduction-path work</a>. A summary of all of it,
 with the numbers this page uses, is in
 <code>research/imaging-hw/notes/LOSSLESS_DEVELOPMENT_SUMMARY.md</code> in the
 repository.</p>
+<p class="zh">成本模型、tile 研究與壓縮比量測來自 2026-09-15/16 的機身內無損壓縮工作;
+硬體清單、引擎 ABI 與冷呼叫分析來自 2026-08-20 的 raw 壓縮研究;
+管線位置來自<a href="frame-reduction.html">縮減路徑那邊的工作</a>。<br>
+全部的彙整、以及這一頁用到的數字,在程式庫的
+<code>research/imaging-hw/notes/LOSSLESS_DEVELOPMENT_SUMMARY.md</code>。</p>
 
 <footer>
-  <p><a href="../research.html">Firmware research</a> &middot;
+  <p><a href="../research.html"><span class="en">Firmware research</span><span class="zh">韌體研究</span></a> &middot;
   <a href="../">fpSup</a> &middot;
   <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
-  <a href="https://github.com/ijigen/fpSup">Repository</a></p>
+  <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
 </footer>
 
 <script>
 (function(){
   // Measured cost model: t(us) = 2179 + 4954.40*alignedMpix + 40.926*tiles
+  var ZH = false;
+  function L(en, zh){ return ZH ? zh : en; }
+
   var CALL_US = 2179, US_PER_MPIX = 4954.40, US_PER_TILE = 40.926;
   // FUN_c062fff8 maps bitdepth code 0/1/2/3 to 12/14/16/10 and returns 1
   // (failure) for anything else. 8-bit exists in the raw path, not here.
@@ -755,6 +947,38 @@ repository.</p>
                80, 90, 100, 105, 119.88, 120, 240];
 
   var $ = function(id){ return document.getElementById(id); };
+  // <option> cannot carry markup, and a checkbox label's text node is not an
+  // element, so these two groups are swapped by script instead of by CSS.
+  var TXT = {
+    bits:  {'8':  ['8-bit \u2014 no compression','8-bit \u2014 不壓縮']},
+    red:   {'1':  ['none \u2014 codec sees the full readout','不縮 \u2014 codec 看到完整讀出'],
+            '1.5625': ['RWZM 1600 \u2014 1.5625\u00d7 (stock UHD/FHD)','RWZM 1600 \u2014 1.5625\u00d7(原廠 UHD/FHD)'],
+            '2':  ['RWZM 2048 \u2014 2\u00d7 (FP3K 3K)','RWZM 2048 \u2014 2\u00d7(FP3K 3K)'],
+            '3':  ['RWZM 3072 or hbin\u00f73+vbin\u00f73 \u2014 3\u00d7','RWZM 3072 或 hbin\u00f73+vbin\u00f73 \u2014 3\u00d7']},
+    tile:  {'best': ['search for the fastest','搜尋最快的'],
+            '256': ['256 \u00d7 256 (stock)','256 \u00d7 256(原廠)']},
+    dest:  {'94': ['SD \u2014 94 MB/s measured','SD \u2014 94 MB/s 實測'],
+            '66': ['SD \u2014 66 MB/s pessimistic','SD \u2014 66 MB/s 保守值'],
+            '0':  ['ignore storage','不管儲存']}
+  };
+  var TOGGLE = {comp:['compression','壓縮'], cont:['contention +17%','匯流排爭用 +17%'],
+                skip:['dynamic frame-skip','動態抽幀'], part:['partial-frame mode','部分畫面模式']};
+  function applyStaticText(){
+    Object.keys(TXT).forEach(function(sel){
+      var el = document.getElementById(sel); if(!el) return;
+      [].forEach.call(el.options, function(o){
+        var pair = TXT[sel][o.value];
+        if(pair) o.textContent = ZH ? pair[1] : pair[0];
+      });
+    });
+    Object.keys(TOGGLE).forEach(function(id){
+      var box = document.getElementById(id); if(!box) return;
+      var lbl = box.parentNode, pair = TOGGLE[id];
+      lbl.lastChild.textContent = ' ' + (ZH ? pair[1] : pair[0]);
+    });
+    var cust = document.querySelector('#fmt option[value="custom"]');
+    if(cust) cust.textContent = ZH ? '\u81ea\u8a02\u5c3a\u5bf8 \u2026' : 'custom size \u2026';
+  }
   var fmt = $('fmt'), fps = $('fps');
   if(!fmt) return;
 
@@ -921,6 +1145,7 @@ repository.</p>
   }
 
   function render(){
+    applyStaticText();
     var r = calc();
 
     $('ratioOut').textContent = n2(r.ratio) + ' : 1';
@@ -938,13 +1163,13 @@ repository.</p>
     });
 
     $('rEng').innerHTML = !r.compress
-      ? '<span style="font-size:.8rem;color:var(--dim)">not used</span>'
+      ? '<span style="font-size:.8rem;color:var(--dim)">' + L('not used','沒有用到') + '</span>'
       : r.engineOK
         ? n1(r.engineMBs) + '<small>MB/s</small>'
         : '<span style="font-size:.8rem;color:var(--warn)">' +
-          (!r.bitsOK ? 'rejects 8-bit'
-            : !r.geomOK ? 'size outside 8&hellip;16384'
-            : r.tiles + ' tiles &gt; 326') + '</span>';
+          (!r.bitsOK ? L('rejects 8-bit', '不吃 8-bit')
+            : !r.geomOK ? L('size outside 8&hellip;16384', '尺寸超出 8&hellip;16384')
+            : r.tiles + L(' tiles &gt; 326', ' 個 tile &gt; 326')) + '</span>';
     $('rCmp').innerHTML = n1(r.payC) + '<small>MB/s</small>';
     $('rUnc').innerHTML = n1(r.payU) + '<small>MB/s</small>';
     // The reference rate, so "what did compression actually save" is on screen.
@@ -967,8 +1192,8 @@ repository.</p>
       if(row) s.className = 'r2';
       lim.appendChild(s);
     }
-    if(r.store > 0) mark(r.store, 'card ' + r.store, 0);
-    mark(r.uncompressedAll, 'uncompressed ' + n1(r.uncompressedAll), 1);
+    if(r.store > 0) mark(r.store, L('card ','卡 ') + r.store, 0);
+    mark(r.uncompressedAll, L('uncompressed ','未壓縮 ') + n1(r.uncompressedAll), 1);
 
     // timing track
     var tscale = Math.max(r.serialMs, r.budgetMs) * 1.05;
@@ -977,7 +1202,7 @@ repository.</p>
     $('tWr').style.width = (r.writeMs / tscale * 100) + '%';
     $('tBud').style.left = (r.budgetMs / tscale * 100) + '%';
     $('tBud').style.width = '0px';
-    $('lEnc').textContent = r.engineOK ? n2(r.encMs) + ' ms' : 'not used';
+    $('lEnc').textContent = r.engineOK ? n2(r.encMs) + ' ms' : L('not used','沒用到');
     $('lWr').textContent = r.store > 0 ? n2(r.writeMs) + ' ms' : 'n/a';
     $('lTot').textContent = n2(r.serialMs) + ' ms';
     $('lBud').textContent = n2(r.budgetMs) + ' ms';
@@ -988,106 +1213,159 @@ repository.</p>
     // With frame-skip on, the engine running past one frame slot is exactly what
     // skip absorbs -- it is already priced into frac, and into the rate below.
     // Judging it again here made skip look useless whenever it was doing its job.
-    if(r.duty > 1 && !r.doSkip) reasons.push('engine tops out at ' + n2(1000 / r.encMs) +
-        ' fps at this size \u2014 needs ' + Math.round(r.duty * 100) + '% of the frame');
-    if(r.store > 0 && r.total > r.store) reasons.push('card is over by ' +
-        Math.round((r.total / r.store - 1) * 100) + '%');
+    if(r.duty > 1 && !r.doSkip) reasons.push(L(
+        'engine tops out at ' + n2(1000 / r.encMs) + ' fps at this size \u2014 needs ' +
+          Math.round(r.duty * 100) + '% of the frame',
+        '引擎在這個尺寸最多只能到 ' + n2(1000 / r.encMs) + ' fps \u2014 需要一格時間的 ' +
+          Math.round(r.duty * 100) + '%'));
+    if(r.store > 0 && r.total > r.store) reasons.push(L(
+        'card is over by ' + Math.round((r.total / r.store - 1) * 100) + '%',
+        '超過卡的能力 ' + Math.round((r.total / r.store - 1) * 100) + '%'));
     if(r.store > 0 && r.serialMs > r.budgetMs && !r.doSkip)
-      reasons.push('serial encode+write is ' + n2(r.serialMs) + ' ms against ' + n2(r.budgetMs));
+      reasons.push(L('serial encode+write is ' + n2(r.serialMs) + ' ms against ' + n2(r.budgetMs),
+                     '編碼+寫入串起來是 ' + n2(r.serialMs) + ' ms,而一格只有 ' + n2(r.budgetMs)));
     v.classList.remove('ok','no');
     var over8 = r.store > 0 && r.total > r.store;
     if(!r.compress){
       v.classList.add(over8 ? 'no' : 'ok');
-      mk.textContent = over8 ? 'does not fit' : 'fits';
-      why.textContent = 'Compression off \u2014 ' + n1(r.total) + ' MB/s' +
+      mk.textContent = over8 ? L('does not fit','不夠') : L('fits','夠');
+      why.textContent = L('Compression off \u2014 ','壓縮關閉 \u2014 ') + n1(r.total) + ' MB/s' +
         (r.store > 0
-          ? (over8 ? ', over the ' + r.store + ' MB/s destination by ' +
-                     Math.round((r.total / r.store - 1) * 100) + '%.'
-                   : ', inside the ' + r.store + ' MB/s destination.')
-          : '.');
+          ? (over8 ? L(', over the ' + r.store + ' MB/s destination by ' +
+                       Math.round((r.total / r.store - 1) * 100) + '%.',
+                       ',超過 ' + r.store + ' MB/s 的目標 ' +
+                       Math.round((r.total / r.store - 1) * 100) + '%。')
+                   : L(', inside the ' + r.store + ' MB/s destination.',
+                       ',在 ' + r.store + ' MB/s 的目標之內。'))
+          : L('.','。'));
     } else if(!r.engineOK){
       // The engine can be out for three different reasons; say which one.
       var noEngine = !r.bitsOK
-        ? 'The engine will not take 8-bit'
+        ? L('The engine will not take 8-bit','引擎不接受 8-bit')
         : !r.geomOK
-          ? 'That frame size is outside the engine\u2019s limits'
-          : r.tiles + ' tiles is past the engine\u2019s limit of 326';
+          ? L('That frame size is outside the engine\u2019s limits','這個畫面尺寸超出引擎的限制')
+          : L(r.tiles + ' tiles is past the engine\u2019s limit of 326',
+              r.tiles + ' 個 tile 超過引擎上限 326');
       v.classList.add(over8 ? 'no' : 'ok');
-      mk.textContent = over8 ? 'does not fit' : 'fits uncompressed';
+      mk.textContent = over8 ? L('does not fit','不夠') : L('fits uncompressed','不壓縮就夠');
       why.textContent = over8
-        ? noEngine + ', and ' + n1(r.total) + ' MB/s is over the card by ' +
-          Math.round((r.total / r.store - 1) * 100) + '%.'
-        : noEngine + ' \u2014 but at ' + n1(r.total) + ' MB/s it does not need to.' +
-          (r.bitsOK ? '' : ' That is what 8-bit is for.');
+        ? noEngine + L(', and ' + n1(r.total) + ' MB/s is over the card by ' +
+            Math.round((r.total / r.store - 1) * 100) + '%.',
+            ',而且 ' + n1(r.total) + ' MB/s 超過卡的能力 ' +
+            Math.round((r.total / r.store - 1) * 100) + '%。')
+        : noEngine + L(' \u2014 but at ' + n1(r.total) + ' MB/s it does not need to.',
+            ' \u2014 但在 ' + n1(r.total) + ' MB/s 之下本來也不需要壓。') +
+          (r.bitsOK ? '' : L(' That is what 8-bit is for.',' 8-bit 本來就是走這條路。'));
     } else if(reasons.length === 0){
-      v.classList.add('ok'); mk.textContent = 'fits';
+      v.classList.add('ok'); mk.textContent = L('fits','夠');
       why.textContent = (r.duty > 1 && r.doSkip
-          ? 'engine saturated at ' + Math.round(r.duty * 100) + '% and skipping to ' +
-            Math.round(r.frac * 100) + '% of frames, '
-          : 'engine at ' + Math.round(r.duty * 100) + '% duty, ') +
-        n1(r.total) + ' MB/s to a ' + (r.store > 0 ? r.store + ' MB/s' : 'n/a') +
-        ' destination.';
+          ? L('engine saturated at ' + Math.round(r.duty * 100) + '% and skipping to ' +
+                Math.round(r.frac * 100) + '% of frames, ',
+              '引擎滿載在 ' + Math.round(r.duty * 100) +
+                '%，抽幀後壓 ' + Math.round(r.frac * 100) + '% 的幀，')
+          : L('engine at ' + Math.round(r.duty * 100) + '% duty, ',
+              '引擎負載 ' + Math.round(r.duty * 100) + '%，')) +
+        n1(r.total) + L(' MB/s to a ' + (r.store > 0 ? r.store + ' MB/s' : 'n/a') + ' destination.',
+                        ' MB/s 寫到 ' + (r.store > 0 ? r.store + ' MB/s' : 'n/a') + ' 的目標。');
     } else {
-      v.classList.add('no'); mk.textContent = 'does not fit';
+      v.classList.add('no'); mk.textContent = L('does not fit','不夠');
       why.textContent = reasons.join(' · ');
     }
 
     // detail line
     var d = [];
     if(r.isCustom){
-      d.push('custom size <b>' + r.srcW + '&times;' + r.srcH + '</b>' +
-             (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : '') +
-             ' &mdash; ' + n2(r.srcW * r.srcH / 1e6) + ' Mpix, not a raster the camera has');
+      d.push(L('custom size <b>' + r.srcW + '&times;' + r.srcH + '</b>' +
+                 (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : '') +
+                 ' &mdash; ' + n2(r.srcW * r.srcH / 1e6) + ' Mpix, not a raster the camera has',
+               '自訂尺寸 <b>' + r.srcW + '&times;' + r.srcH + '</b>' +
+                 (r.red > 1 ? ',進 codec 前先縮 ' + n2(r.red) + '&times;' : '') +
+                 ' &mdash; ' + n2(r.srcW * r.srcH / 1e6) + ' Mpix,相機目前沒有這個光柵'));
     } else {
-      d.push('sensor reads <b>' + r.srcW + '&times;' + r.srcH + '</b> (' + r.ar +
-             (r.merge > 1 ? ', ' + r.merge + '&times; merge' : '') + ')' +
-             (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : '') +
-             ' &mdash; stock runs this size at ' + r.rates.join(' / ') + ' fps');
+      d.push(L('sensor reads <b>' + r.srcW + '&times;' + r.srcH + '</b> (' + r.ar +
+                 (r.merge > 1 ? ', ' + r.merge + '&times; merge' : '') + ')' +
+                 (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : '') +
+                 ' &mdash; stock runs this size at ' + r.rates.join(' / ') + ' fps',
+               '感光元件讀出 <b>' + r.srcW + '&times;' + r.srcH + '</b>(' + r.ar +
+                 (r.merge > 1 ? ',' + r.merge + '&times; 合併' : '') + ')' +
+                 (r.red > 1 ? ',進 codec 前先縮 ' + n2(r.red) + '&times;' : '') +
+                 ' &mdash; 原廠在這個尺寸跑 ' + r.rates.join(' / ') + ' fps'));
     }
     if(r.compress && !r.geomOK)
-      d.push('<b>outside the engine\u2019s geometry limits</b> \u2014 it takes width ' +
-             '8&hellip;16384 in steps of 8 and height 2&hellip;16384 even. ' +
-             'Everything below is the uncompressed rate.');
-    d.push('codec sees <b>' + r.W + '&times;' + r.H + '</b> at ' + r.bits + '-bit, ' +
-           r.tw + '&times;' + r.th + ' tiles (' + r.tiles + '), aligned ' +
-           n2(r.alignedMpix) + ' Mpix' +
-           ($('tile').value === 'best' ? ' \u2014 tile searched' : ''));
+      d.push(L('<b>outside the engine\u2019s geometry limits</b> \u2014 it takes width ' +
+                 '8&hellip;16384 in steps of 8 and height 2&hellip;16384 even. ' +
+                 'Everything below is the uncompressed rate.',
+               '<b>超出引擎的幾何限制</b> \u2014 它只吃寬 8&hellip;16384(8 的倍數)、' +
+                 '高 2&hellip;16384(偶數)。下面全部是未壓縮的碼率。'));
+    d.push(L('codec sees <b>' + r.W + '&times;' + r.H + '</b> at ' + r.bits + '-bit, ' +
+               r.tw + '&times;' + r.th + ' tiles (' + r.tiles + '), aligned ' +
+               n2(r.alignedMpix) + ' Mpix' +
+               ($('tile').value === 'best' ? ' \u2014 tile searched' : ''),
+             'codec 看到的是 <b>' + r.W + '&times;' + r.H + '</b>,' + r.bits + '-bit,' +
+               r.tw + '&times;' + r.th + ' 的 tile(共 ' + r.tiles + ' 個),對齊後 ' +
+               n2(r.alignedMpix) + ' Mpix' +
+               ($('tile').value === 'best' ? ' \u2014 tile 是搜出來的' : '')));
     if(!r.compress){
-      d.push('<b>compression off</b> \u2014 every number below is the raw rate. ' +
-             'Turn it back on to compare.');
+      d.push(L('<b>compression off</b> \u2014 every number below is the raw rate. ' +
+                 'Turn it back on to compare.',
+               '<b>壓縮已關閉</b> \u2014 下面每個數字都是未壓縮的碼率。開回來就能對照。'));
     }
     if(r.compress && !r.bitsOK){
-      d.push('<b>8-bit</b> \u2014 the codec\u2019s bitdepth field only encodes ' +
-             '10 / 12 / 14 / 16, and anything else is rejected outright. ' +
-             'Everything below is the uncompressed rate.');
+      d.push(L('<b>8-bit</b> \u2014 the codec\u2019s bitdepth field only encodes ' +
+                 '10 / 12 / 14 / 16, and anything else is rejected outright. ' +
+                 'Everything below is the uncompressed rate.',
+               '<b>8-bit</b> \u2014 codec 的位深欄位只編得出 10 / 12 / 14 / 16,' +
+                 '其他一律直接拒絕。下面全部是未壓縮的碼率。'));
     }
-    if(r.compress && r.engineOK) d.push('encode <b>' + n2(r.encMs) + ' ms</b> = ' +
-           n2(2179 / 1000 * (r.contention ? 1.17 : 1)) + ' call + ' +
-           n2(4954.40 * r.alignedMpix / 1000 * (r.contention ? 1.17 : 1)) + ' pixels + ' +
-           n2(40.926 * r.tiles / 1000 * (r.contention ? 1.17 : 1)) + ' tiles' +
-           (r.contention ? ' (incl. +17% contention)' : ''));
+    if(r.compress && r.engineOK) d.push(L(
+           'encode <b>' + n2(r.encMs) + ' ms</b> = ' +
+             n2(2179 / 1000 * (r.contention ? 1.17 : 1)) + ' call + ' +
+             n2(4954.40 * r.alignedMpix / 1000 * (r.contention ? 1.17 : 1)) + ' pixels + ' +
+             n2(40.926 * r.tiles / 1000 * (r.contention ? 1.17 : 1)) + ' tiles' +
+             (r.contention ? ' (incl. +17% contention)' : ''),
+           '編碼 <b>' + n2(r.encMs) + ' ms</b> = ' +
+             n2(2179 / 1000 * (r.contention ? 1.17 : 1)) + ' 呼叫 + ' +
+             n2(4954.40 * r.alignedMpix / 1000 * (r.contention ? 1.17 : 1)) + ' 像素 + ' +
+             n2(40.926 * r.tiles / 1000 * (r.contention ? 1.17 : 1)) + ' tile' +
+             (r.contention ? '(含 +17% 爭用)' : '')));
     // The single most useful number when nothing compresses: where the ceiling is.
     if(r.compress && r.engineOK && r.duty > 1)
-      d.push('<b>the engine cannot keep up at ' + n2(r.R) + ' fps</b> \u2014 at ' +
-             r.W + '&times;' + r.H + ' it tops out at <b>' + n2(1000 / r.encMs) +
-             ' fps</b>. ' + (r.doSkip
-               ? 'Frame-skip is absorbing that, so ' + Math.round(r.frac * 100) +
-                 '% of frames get compressed.'
-               : 'With frame-skip off it is all or nothing, so nothing is compressed. ' +
-                 'Turn frame-skip on, or drop below that rate.'));
-    if(r.compress && r.engineOK) d.push('compressed fraction <b>' + Math.round(r.frac * 100) + '%</b>' +
-           (r.partial ? ' of every frame' : ' of the frames') +
-           (r.doSkip ? '' : ' — frame-skip off, so it is all or nothing'));
-    d.push('uncompressed reference <b>' + n1(r.uncompressedAll) + ' MB/s</b> · ' +
-           'peak <b>' + n1(r.peak) + ' MB/s</b>' +
-           (!r.partial && r.frac < 1 && r.frac > 0
-             ? ' — unchanged, because the skipped frames still arrive full size'
-             : ''));
+      d.push(L('<b>the engine cannot keep up at ' + n2(r.R) + ' fps</b> \u2014 at ' +
+                 r.W + '&times;' + r.H + ' it tops out at <b>' + n2(1000 / r.encMs) +
+                 ' fps</b>. ' + (r.doSkip
+                   ? 'Frame-skip is absorbing that, so ' + Math.round(r.frac * 100) +
+                     '% of frames get compressed.'
+                   : 'With frame-skip off it is all or nothing, so nothing is compressed. ' +
+                     'Turn frame-skip on, or drop below that rate.'),
+               '<b>引擎在 ' + n2(r.R) + ' fps 跟不上</b> \u2014 在 ' +
+                 r.W + '&times;' + r.H + ' 之下它最多只能到 <b>' + n2(1000 / r.encMs) +
+                 ' fps</b>。' + (r.doSkip
+                   ? '抽幀正在吸收這件事,所以有 ' + Math.round(r.frac * 100) + '% 的幀被壓縮。'
+                   : '抽幀關掉的話是全有全無,所以一格都沒壓。把抽幀打開,或把格率降到那個數字以下。')));
+    if(r.compress && r.engineOK) d.push(L(
+           'compressed fraction <b>' + Math.round(r.frac * 100) + '%</b>' +
+             (r.partial ? ' of every frame' : ' of the frames') +
+             (r.doSkip ? '' : ' \u2014 frame-skip off, so it is all or nothing'),
+           '壓縮比例 <b>' + Math.round(r.frac * 100) + '%</b>' +
+             (r.partial ? '(每一格的比例)' : '(佔所有幀的比例)') +
+             (r.doSkip ? '' : ' \u2014 抽幀關閉,所以是全有全無')));
+    d.push(L('uncompressed reference <b>' + n1(r.uncompressedAll) + ' MB/s</b> \u00b7 ' +
+               'peak <b>' + n1(r.peak) + ' MB/s</b>' +
+               (!r.partial && r.frac < 1 && r.frac > 0
+                 ? ' \u2014 unchanged, because the skipped frames still arrive full size'
+                 : ''),
+             '未壓縮參考值 <b>' + n1(r.uncompressedAll) + ' MB/s</b> \u00b7 ' +
+               '尖峰 <b>' + n1(r.peak) + ' MB/s</b>' +
+               (!r.partial && r.frac < 1 && r.frac > 0
+                 ? ' \u2014 沒變,因為沒被壓的那些幀還是整張full size 送過來'
+                 : '')));
     if(r.store > 0){
       // r.total is decimal MB/s, so the card's advertised GB are decimal too
       var mins = function(gb){ return (gb * 1000 * 0.93) / r.total / 60; };
-      d.push('recording time <b>' + n1(mins(128)) + ' min</b> per 128 GB · ' +
-             n1(mins(512)) + ' min per 512 GB');
+      d.push(L('recording time <b>' + n1(mins(128)) + ' min</b> per 128 GB \u00b7 ' +
+                 n1(mins(512)) + ' min per 512 GB',
+               '可錄時間 <b>' + n1(mins(128)) + ' 分鐘</b>/128 GB \u00b7 ' +
+                 n1(mins(512)) + ' 分鐘/512 GB'));
     }
     $('detail').innerHTML = d.join('<br>');
   }
@@ -1099,6 +1377,30 @@ repository.</p>
     el.addEventListener('change', render);   // selects driven by keyboard
   });
   render();
+
+  // ---- language switch: both languages live in the DOM, CSS hides one, and
+  // the generated strings are re-rendered through L so they follow too -------
+  var KEY = 'fpsup-lang', root = document.documentElement;
+  var lbtn = [].slice.call(document.querySelectorAll('.lang button[data-set]'));
+  function applyLang(lang, remember){
+    root.setAttribute('data-lang', lang);
+    root.setAttribute('lang', lang === 'zh' ? 'zh-Hant' : 'en');
+    lbtn.forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-set') === lang));
+    });
+    ZH = lang === 'zh';
+    if(remember){ try{ localStorage.setItem(KEY, lang); }catch(e){} }
+    render();
+  }
+  var saved = null;
+  try{ saved = localStorage.getItem(KEY); }catch(e){}
+  if(saved !== 'zh' && saved !== 'en'){
+    saved = /^zh\b/i.test(navigator.language || '') ? 'zh' : 'en';
+  }
+  lbtn.forEach(function(b){
+    b.addEventListener('click', function(){ applyLang(b.getAttribute('data-set'), true); });
+  });
+  applyLang(saved, false);
 })();
 </script>
 
