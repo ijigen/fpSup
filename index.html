@@ -24,6 +24,14 @@
 </head>
 <body>
 
+<div class="langbar">
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
+  </div>
+</div>
+
 <header class="hero">
   <picture>
     <source srcset="assets/fpsup-logo.webp" type="image/webp">
@@ -31,38 +39,47 @@
   </picture>
   <div class="hero-text">
     <h1 class="sr">fpSup</h1>
-    <p class="lede">Record the full 3:2 sensor. Get Gyroflow motion files while you
+    <p class="lede en">Record the full 3:2 sensor. Get Gyroflow motion files while you
     shoot. Your SIGMA fp can already do these things &mdash; it takes one file on the
     SD card to switch them on.</p>
+    <p class="lede zh">錄下完整的 3:2 感光元件。拍攝的同時就拿到 Gyroflow 的運動檔。
+    你的 SIGMA fp <strong>本來就做得到</strong>這些事 —— 只需要記憶卡上的一個檔案把它們打開。</p>
     <ul class="chips">
-      <li><b>SIGMA fp</b> &nbsp;not the fp L</li>
-      <li>firmware <b>Ver.5.02</b></li>
-      <li><b>nothing</b> installed on the camera</li>
+      <li><b>SIGMA fp</b> &nbsp;<span class="en">not the fp L</span><span class="zh">不是 fp L</span></li>
+      <li><span class="en">firmware</span><span class="zh">韌體</span> <b>Ver.5.02</b></li>
+      <li><span class="en"><b>nothing</b> installed on the camera</span><span class="zh">相機上<b>什麼都不安裝</b></span></li>
     </ul>
     <div class="support compact">
       <a class="discord" href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
         Discord</a>
+      <a class="youtube" href="https://www.youtube.com/@fp-sup" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>YouTube</a>
       <a class="kofi" href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/></svg>
-        supMe on Ko-fi</a>
+        <span class="en">supMe on Ko-fi</span><span class="zh">在 Ko-fi 支持我</span></a>
     </div>
   </div>
 </header>
 
-<h2>Will this work on my camera</h2>
+<h2><span class="en">Will this work on my camera</span><span class="zh">我的相機可以用嗎</span></h2>
 <div class="facts">
   <dl>
-    <dt>Camera</dt>
-    <dd><b>SIGMA fp.</b> Not the fp L. That is a different camera with a different
+    <dt><span class="en">Camera</span><span class="zh">相機</span></dt>
+    <dd class="en"><b>SIGMA fp.</b> Not the fp L. That is a different camera with a different
       sensor, and nothing here works on it.</dd>
-    <dt>Firmware</dt>
-    <dd><b>Ver.5.02 only.</b> Not "5.02 or newer" &mdash; only this version. A card
+    <dd class="zh"><b>SIGMA fp。</b>不是 fp L。那是另一台相機、另一顆感光元件,
+      這裡的東西在它上面<strong>一樣都不能用</strong>。</dd>
+    <dt><span class="en">Firmware</span><span class="zh">韌體</span></dt>
+    <dd class="en"><b>Ver.5.02 only.</b> Not "5.02 or newer" &mdash; only this version. A card
       is built for the exact places things sit in Ver.5.02, and on any other version
       it writes to the wrong ones. Check under
       <code>MENU &rarr; SYSTEM &rarr; Information</code>.</dd>
-    <dt>Card</dt>
-    <dd><b>Open gate 3K needs an SSD, not a card.</b> It wants about
+    <dd class="zh"><b>只有 Ver.5.02。</b>不是「5.02 或更新」—— <strong>只有這一版</strong>。
+      卡片是照著 Ver.5.02 裡東西所在的<strong>確切位置</strong>做的,
+      在其他版本上它會寫到錯的地方。<br>
+      在 <code>MENU &rarr; SYSTEM &rarr; Information</code> 底下確認。</dd>
+    <dt><span class="en">Card</span><span class="zh">記憶卡</span></dt>
+    <dd class="en"><b>Open gate 3K needs an SSD, not a card.</b> It wants about
       221&nbsp;MB/s at 24p; the UHS-II SD card we measured does 94, and only
       66 at the 9.2&nbsp;MB one-frame writes CinemaDNG actually makes. That is a
       <b>3&times;</b> gap, not a few percent &mdash; every open gate 3K clip we
@@ -70,155 +87,211 @@
       USB-C measured 390. <b>OG2K needs only 98&nbsp;MB/s</b>, the same as normal
       FHD, and is the open gate you can record to a card. A slow card is the most
       common problem people have.</dd>
-    <dt>Risk</dt>
-    <dd><b>Nothing is installed on the camera.</b> It only lives in memory while
+    <dd class="zh"><b>Open gate 3K 需要 SSD,不是記憶卡。</b>它在 24p 要大約
+      221&nbsp;MB/s;我們量過的 UHS-II SD 卡是 94,而在 CinemaDNG 實際會做的
+      9.2&nbsp;MB 單格寫入之下<strong>只有 66</strong>。<br>
+      那是 <b>3 倍</b>的差距,不是差幾個百分點 ——
+      我們錄到那張卡上的每一段 open gate 3K,<strong>全部停在 4.1 秒以內</strong>。
+      USB-C 外接 SSD 量到 390。<br>
+      <b>OG2K 只需要 98&nbsp;MB/s</b>,跟一般 FHD 一樣,
+      那才是<strong>記憶卡錄得動的 open gate</strong>。<br>
+      卡太慢是大家最常遇到的問題。</dd>
+    <dt><span class="en">Risk</span><span class="zh">風險</span></dt>
+    <dd class="en"><b>Nothing is installed on the camera.</b> It only lives in memory while
       the power is on, so there is no firmware to flash back. You remove it by
       deleting a file &mdash; but in the right order. The camera remembers menu
       settings on its own, so put those back to normal first. The guide shows
       you how.</dd>
+    <dd class="zh"><b>相機上什麼都不會被安裝。</b>它只在開著電的時候活在記憶體裡,
+      所以<strong>沒有韌體需要刷回去</strong>。<br>
+      移除的方式是刪掉一個檔案 —— 但要<strong>照順序</strong>。
+      相機會自己記住選單設定,所以要先把那些設回正常。指南裡有寫怎麼做。</dd>
   </dl>
 </div>
 
-<h2>Start</h2>
+<h2><span class="en">Start</span><span class="zh">開始</span></h2>
 <a class="cta" href="guide.html">
   <span>
-    <b>How to use it</b>
-    <small>Eight steps, from an empty SD card to a working camera. Whatever you
+    <b><span class="en">How to use it</span><span class="zh">怎麼用</span></b>
+    <small class="en">Eight steps, from an empty SD card to a working camera. Whatever you
       put on it &mdash; and how to remove it again.</small>
+    <small class="zh">八個步驟,從一張空白記憶卡到一台能用的相機。
+      不管你放什麼進去 —— 以及怎麼再把它移除。</small>
   </span>
   <span class="arw" aria-hidden="true">&rarr;</span>
 </a>
-<p class="secondary">Done this before? <a href="tools/card-composer/">Go straight to
+<p class="secondary en">Done this before? <a href="tools/card-composer/">Go straight to
 fpSup-Merge</a> and make your card.</p>
+<p class="secondary zh">已經做過了?<a href="tools/card-composer/">直接去 fpSup-Merge</a>做你的卡。</p>
 
-<h2>See it working</h2>
+<h2><span class="en">See it working</span><span class="zh">看它運作</span></h2>
 <div class="videos">
   <figure class="vid">
     <button type="button" data-yt="pSl9yCzgV0E" aria-label="Play: SIGMA fp Open Gate">
       <img src="assets/video/pSl9yCzgV0E.webp" width="800" height="450" alt="">
       <span class="play"><svg viewBox="0 0 68 48" aria-hidden="true"><rect width="68" height="48" rx="12"/><path d="M 27,33 27,15 44,24 z"/></svg></span>
     </button>
-    <figcaption><b>SIGMA fp Open Gate</b><span>the full 3:2 sensor, recorded</span></figcaption>
+    <figcaption><b>SIGMA fp Open Gate</b><span><span class="en">the full 3:2 sensor, recorded</span><span class="zh">完整的 3:2 感光元件,錄下來</span></span></figcaption>
   </figure>
   <figure class="vid">
     <button type="button" data-yt="07-4N3bhVSo" aria-label="Play: Stabilised in Gyroflow">
       <img src="assets/video/07-4N3bhVSo.webp" width="800" height="450" alt="">
       <span class="play"><svg viewBox="0 0 68 48" aria-hidden="true"><rect width="68" height="48" rx="12"/><path d="M 27,33 27,15 44,24 z"/></svg></span>
     </button>
-    <figcaption><b>Stabilised in Gyroflow</b><span>no extra hardware, no rig</span></figcaption>
+    <figcaption><b><span class="en">Stabilised in Gyroflow</span><span class="zh">用 Gyroflow 穩定</span></b><span><span class="en">no extra hardware, no rig</span><span class="zh">不用額外硬體,不用外掛</span></span></figcaption>
   </figure>
 </div>
 
-<h3 style="margin-top:26px">Someone else's test</h3>
-<p class="lede">Not ours. If you would rather see the footage from a person who is not
+<h3 style="margin-top:26px"><span class="en">Someone else's test</span><span class="zh">別人做的測試</span></h3>
+<p class="lede en">Not ours. If you would rather see the footage from a person who is not
 selling you anything, start here.</p>
+<p class="lede zh">不是我們拍的。如果你比較想看<strong>沒有要賣你任何東西</strong>的人拍出來的畫面,
+從這裡開始。</p>
 <div class="videos">
   <figure class="vid">
     <button type="button" data-yt="XOygnvam3QM" aria-label="Play: Sigma fp &mdash; fpSup 3K Open Gate">
       <img src="assets/video/XOygnvam3QM.webp" width="480" height="270" alt="">
       <span class="play"><svg viewBox="0 0 68 48" aria-hidden="true"><rect width="68" height="48" rx="12"/><path d="M 27,33 27,15 44,24 z"/></svg></span>
     </button>
-    <figcaption><b>Sigma fp &mdash; fpSup 3K Open Gate</b><span>a user's own test of OG3K</span></figcaption>
+    <figcaption><b>Sigma fp &mdash; fpSup 3K Open Gate</b><span><span class="en">a user's own test of OG3K</span><span class="zh">一位使用者自己做的 OG3K 測試</span></span></figcaption>
   </figure>
 </div>
 
-<h2>What you can put on a card</h2>
+<h2><span class="en">What you can put on a card</span><span class="zh">可以放進卡裡的東西</span></h2>
 <div class="scroll">
 <table>
-  <thead><tr><th>product</th><th>version</th><th>what it does</th></tr></thead>
+  <thead><tr><th><span class="en">product</span><span class="zh">產品</span></th><th><span class="en">version</span><span class="zh">版本</span></th><th><span class="en">what it does</span><span class="zh">做什麼</span></th></tr></thead>
   <tbody>
 <!-- releases:begin -->
     <tr><td><a href="releases/fpsup-gyro-v1.12.1/README.txt">fpsup-gyro</a></td><td>v1.12.1</td>
-        <td>Writes Gyroflow's <code>.gcsv</code> and <code>.json</code> while recording — every sample at 2500 Hz, distortion read off the lens. The profile now carries the size the take was actually recorded at, which open gate got wrong.</td></tr>
+        <td><span class="en">Writes Gyroflow's <code>.gcsv</code> and <code>.json</code> while recording — every sample at 2500 Hz, distortion read off the lens. The profile now carries the size the take was actually recorded at, which open gate got wrong.</span><span class="zh">錄影當下就把 Gyroflow 要的 <code>.gcsv</code> 與 <code>.json</code> 寫進片段資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭。profile 的尺寸改成實際錄下的那個 —— open gate 下先前是錯的。</span></td></tr>
     <tr><td><a href="releases/fpsup-og2k-v0.1.1a/README.txt">fpsup-og2k</a></td><td>v0.1.1a</td>
-        <td>The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.</td></tr>
+        <td><span class="en">The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.</span><span class="zh">同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。</span></td></tr>
     <tr><td><a href="releases/fpsup-og3k-v0.2.4a/README.txt">fpsup-og3k</a></td><td>v0.2.4a</td>
-        <td>The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha.</td></tr>
+        <td><span class="en">The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha.</span><span class="zh">感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。</span></td></tr>
     <tr><td><a href="releases/fpsup-usbshell-v3.1.1/README.txt">fpsup-usbshell</a></td><td>v3.1.1</td>
-        <td>The shell that answers <code>shl</code> over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints.</td></tr>
+        <td><span class="en">The shell that answers <code>shl</code> over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints.</span><span class="zh">透過 USB 回應 <code>shl</code> 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。</span></td></tr>
 <!-- releases:end -->
   </tbody>
 </table>
 </div>
-<p class="note"><b>You do not download these one by one.</b> You tick the ones you
+<p class="note en"><b>You do not download these one by one.</b> You tick the ones you
 want in fpSup-Merge and it makes a single card with all of them on it. Click a name
 above to read that release's notes &mdash; what was tested, and what was not.</p>
-<p class="note"><b><code>fpsup-usbshell</code> is not for shooting.</b> It is a
+<p class="note zh"><b>你不用一個一個下載。</b>在 fpSup-Merge 裡勾你要的,
+它會做出<strong>一張</strong>把它們全部裝進去的卡。<br>
+點上面的名字可以讀那個發行版的說明 —— 哪些測過、哪些沒測。</p>
+<p class="note en"><b><code>fpsup-usbshell</code> is not for shooting.</b> It is a
 development tool that lets a computer talk to the camera over USB. It adds nothing
 you can see or use on the camera. If you are here to record, you want
 <code>og3k</code> or <code>og2k</code>, and <code>gyro</code>.</p>
-<p class="note"><b>Both open-gate builds show the same picture.</b> OG2K is smaller:
+<p class="note zh"><b><code>fpsup-usbshell</code> 不是拿來拍片的。</b>
+那是一個開發工具,讓電腦透過 USB 跟相機對話,
+在相機上<strong>看不到也用不到任何東西</strong>。<br>
+如果你是來錄影的,你要的是 <code>og3k</code> 或 <code>og2k</code>,
+再加上 <code>gyro</code>。</p>
+<p class="note en"><b>Both open-gate builds show the same picture.</b> OG2K is smaller:
 a third of the data, less rolling shutter (8.3&nbsp;ms instead of 12.4), and the
 sensor's quiet readout at every frame rate including 100p. Pick OG2K if your card is
 not fast enough for OG3K. They cannot go on the same card. Both are still being
 tested. Open gate on an fp was first done by
 <a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly&nbsp;Li</a>.</p>
+<p class="note zh"><b>兩個 open gate 版本呈現的畫面是一樣的。</b>OG2K 比較小:
+資料量是三分之一、捲簾比較少(8.3&nbsp;ms 而不是 12.4),
+而且在<strong>每一個格率</strong>(包含 100p)都走感光元件的安靜讀出。<br>
+如果你的卡不夠快跑 OG3K,就選 OG2K。兩者<strong>不能放在同一張卡上</strong>,
+而且都還在測試中。<br>
+在 fp 上做出 open gate 的第一個人是
+<a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly&nbsp;Li</a>。</p>
 
-<h2>Tools</h2>
+<h2><span class="en">Tools</span><span class="zh">工具</span></h2>
 <div class="grid">
   <a class="row" href="tools/card-composer/">
     <b>fpSup-Merge</b>
-    <small>Tick what you want and get your two files. This is the only place that
+    <small class="en">Tick what you want and get your two files. This is the only place that
     can put more than one of them on a single card.</small>
-    <span class="m">runs in your browser &middot; before you shoot</span>
+    <small class="zh">勾你要的,拿到那兩個檔案。這是<strong>唯一</strong>能把多個東西
+    放進同一張卡的地方。</small>
+    <span class="m"><span class="en">runs in your browser &middot; before you shoot</span><span class="zh">在你的瀏覽器裡執行 &middot; 拍攝前</span></span>
   </a>
   <a class="row" href="gyro/convert/">
-    <b>.GYR converter</b>
-    <small>Turns a raw <code>.GYR</code> file into the <code>.gcsv</code> and
+    <b><span class="en">.GYR converter</span><span class="zh">.GYR 轉換器</span></b>
+    <small class="en">Turns a raw <code>.GYR</code> file into the <code>.gcsv</code> and
     <code>.json</code> that Gyroflow reads. Use this if what you recorded left you
     with a <code>.GYR</code> rather than the two files.</small>
-    <span class="m">runs in your browser &middot; after you shoot</span>
+    <small class="zh">把原始的 <code>.GYR</code> 檔轉成 Gyroflow 讀得懂的
+    <code>.gcsv</code> 和 <code>.json</code>。<br>
+    如果你錄完之後拿到的是一個 <code>.GYR</code> 而不是那兩個檔案,就用這個。</small>
+    <span class="m"><span class="en">runs in your browser &middot; after you shoot</span><span class="zh">在你的瀏覽器裡執行 &middot; 拍攝後</span></span>
   </a>
 </div>
 
-<h2>Why this is possible</h2>
+<h2><span class="en">Why this is possible</span><span class="zh">為什麼這件事做得到</span></h2>
 <div class="grid">
   <a class="row" href="how-it-works.html">
-    <b>What AutoRun.txt actually is</b>
-    <small>The fp already has a factory shell with 77 commands, and it reads a
+    <b><span class="en">What AutoRun.txt actually is</span><span class="zh">AutoRun.txt 到底是什麼</span></b>
+    <small class="en">The fp already has a factory shell with 77 commands, and it reads a
     script from the SD card when it starts &mdash; with nothing asking permission.
     How that became a recording mode, and what went wrong on the way.</small>
+    <small class="zh">fp 本來就有一個帶著 77 個指令的工廠 shell,
+    而且開機時會從記憶卡讀一個腳本 —— <strong>不問任何許可</strong>。<br>
+    這件事怎麼變成一個錄影模式,以及過程中出了什麼錯。</small>
   </a>
 </div>
 
-<h2>Questions, and things that went wrong</h2>
-<p class="lede">Bugs, cards that will not start, footage that looks wrong &mdash;
+<h2><span class="en">Questions, and things that went wrong</span><span class="zh">問題,以及出錯的地方</span></h2>
+<p class="lede en">Bugs, cards that will not start, footage that looks wrong &mdash;
 ask on the Discord. New test builds go there first.</p>
+<p class="lede zh">Bug、卡片開不起來、畫面看起來不對 —— 到 Discord 上問。
+新的測試版都會先發在那裡。</p>
 <div class="support">
   <a class="discord" href="https://discord.gg/XeFK5zNZpT" target="_blank" rel="noopener">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
-    Join the Discord</a>
+    <span class="en">Join the Discord</span><span class="zh">加入 Discord</span></a>
+  <a class="youtube" href="https://www.youtube.com/@fp-sup" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>YouTube</a>
 </div>
 
-<h2>Support the work</h2>
-<p class="lede">This is one person reading disassembly. Everything here is free and
+<h2><span class="en">Support the work</span><span class="zh">支持這份工作</span></h2>
+<p class="lede en">This is one person reading disassembly. Everything here is free and
 will stay free. Ko-fi is what pays for the time.</p>
+<p class="lede zh">這是<strong>一個人</strong>在讀反組譯。這裡的一切都是免費的,而且會一直免費。
+Ko-fi 支付的是這些時間。</p>
 <div class="support">
   <a class="kofi" href="https://ko-fi.com/fpsup" target="_blank" rel="noopener">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/></svg>
-    supMe on Ko-fi</a>
+    <span class="en">supMe on Ko-fi</span><span class="zh">在 Ko-fi 支持我</span></a>
 </div>
 
-<h2>The research underneath</h2>
+<h2><span class="en">The research underneath</span><span class="zh">底下的研究</span></h2>
 <div class="grid">
   <a class="row" href="research.html">
-    <b>Firmware research</b>
-    <small>How the IMX410's ISO and gain really work, the sensor's readout modes,
+    <b><span class="en">Firmware research</span><span class="zh">韌體研究</span></b>
+    <small class="en">How the IMX410's ISO and gain really work, the sensor's readout modes,
     the USB transport, the firmware map. Nine projects &mdash; each one says what is
     proven and what is still unknown.</small>
-    <span class="m">for people who want to read, or to help</span>
+    <small class="zh">IMX410 的 ISO 與增益到底怎麼運作、感光元件的讀出模式、
+    USB 傳輸、韌體地圖。九個專案 —— 每一個都寫明什麼已經證實、什麼還不知道。</small>
+    <span class="m"><span class="en">for people who want to read, or to help</span><span class="zh">給想讀、或想幫忙的人</span></span>
   </a>
 </div>
 
 <footer>
-  <p class="removal"><b>To remove it:</b> first set the resolution back to a normal
+  <p class="removal en"><b>To remove it:</b> first set the resolution back to a normal
   one. The camera remembers your choice, and deleting the file does not clear it.
   <b>Then</b> delete <code>AutoRun.txt</code>, turn the camera off, take the battery
   out, and turn it on again. <a href="guide.html#remove">Full instructions.</a></p>
-  <p>SIGMA fp, firmware Ver.5.02 only. Everything runs from the card, in memory.
+  <p class="removal zh"><b>要移除的話:</b>先把解析度設回正常的。
+  相機記住的是你的選擇,刪掉檔案<strong>不會</strong>把它清掉。<br>
+  <b>然後</b>刪掉 <code>AutoRun.txt</code>、關機、把電池拿出來、再開機。
+  <a href="guide.html#remove">完整說明在這裡。</a></p>
+  <p class="en">SIGMA fp, firmware Ver.5.02 only. Everything runs from the card, in memory.
   Everything here is still being tested &mdash; each release has a
   <code>README.txt</code> saying exactly what was tested and what was not.
   <a href="https://github.com/ijigen/fpSup">Source on GitHub</a>.</p>
+  <p class="zh">SIGMA fp,只有韌體 Ver.5.02。所有東西都從卡片執行、跑在記憶體裡。<br>
+  這裡的一切<strong>都還在測試中</strong> —— 每個發行版都有一個
+  <code>README.txt</code>,寫明哪些測過、哪些沒測。
+  <a href="https://github.com/ijigen/fpSup">GitHub 原始碼</a>。</p>
 </footer>
 
 
@@ -237,5 +310,6 @@ document.querySelectorAll('.vid button[data-yt]').forEach(function (b) {
   });
 });
 </script>
+<script src="assets/lang.js?v=9fef0135" defer></script>
 </body>
 </html>

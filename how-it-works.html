@@ -23,64 +23,104 @@
 </head>
 <body>
 
+<div class="langbar">
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
+  </div>
+</div>
 <a class="back" href="./">&larr; fpSup</a>
 
 <header class="hero">
-  <h1>What AutoRun.txt actually is</h1>
-  <p class="lede">Nothing here is an exploit, and nothing is patched into the
+  <h1><span class="en">What AutoRun.txt actually is</span><span class="zh">AutoRun.txt 到底是什麼</span></h1>
+  <p class="lede en">Nothing here is an exploit, and nothing is patched into the
   camera. The fp ships with a factory shell, and it reads a script off the SD card
   at boot without asking anyone's permission. Everything else follows from that.</p>
+  <p class="lede zh">這裡沒有任何東西是<strong>漏洞利用</strong>,
+  也沒有任何東西被<strong>修補進相機</strong>。<br>
+  fp 出廠時就帶著一個工廠用的 shell,而且它開機時會從記憶卡讀一個腳本,
+  <strong>不問任何人的許可</strong>。其餘的一切,都是從這件事延伸出來的。</p>
 </header>
 
-<h2>The camera already had a shell</h2>
-<p>Inside Ver.5.02 there is a debug and factory shell with <b>77 top-level
+<h2><span class="en">The camera already had a shell</span><span class="zh">相機本來就有一個 shell</span></h2>
+<p class="en">Inside Ver.5.02 there is a debug and factory shell with <b>77 top-level
 commands</b> &mdash; the thing a service technician would drive over a serial line.
 It is not hidden behind a jumper or a signed unlock. The command table sits at
 <code>0xC0BAC14C</code> as 77 entries of <code>{ char name[0x14]; void *handler; }</code>,
 and the dispatcher tokenises a line, compares the name, and calls the handler.</p>
-<p>Those commands read and write memory, poke hardware registers, drive the sensor's
+<p class="zh">Ver.5.02 裡面有一個除錯兼工廠用的 shell,帶著 <b>77 個頂層指令</b> ——
+就是維修技師會透過序列埠去操作的那種東西。<br>
+它<strong>沒有</strong>藏在跳線或簽章解鎖後面。指令表放在 <code>0xC0BAC14C</code>,
+是 77 筆 <code>{ char name[0x14]; void *handler; }</code>;
+分派器把一行文字切成 token、比對名字、然後呼叫對應的 handler。</p>
+<p class="en">Those commands read and write memory, poke hardware registers, drive the sensor's
 readout modes, and set menu values. <a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_COMMANDS.md">The full list is
 written down</a>, with the usage text asked from a live camera rather than
 reconstructed &mdash; that is the firmware's own help, printing itself.</p>
+<p class="zh">這些指令能讀寫記憶體、戳硬體暫存器、驅動感光元件的讀出模式、設定選單數值。
+<a href="https://github.com/ijigen/fpSup/blob/main/docs/SHELL_COMMANDS.md">完整清單記在這裡</a>,
+其中的用法說明是<strong>跟實機要出來的</strong>,不是重建的 ——
+那是韌體自己的說明,自己印出來的。</p>
 
-<h2>And it reads a script off the card</h2>
-<p>At boot the firmware calls <code>XC_ShellScriptAutoRun</code>, which looks for
+<h2><span class="en">And it reads a script off the card</span><span class="zh">而且它會從卡片讀一個腳本</span></h2>
+<p class="en">At boot the firmware calls <code>XC_ShellScriptAutoRun</code>, which looks for
 <code>AutoRun.txt</code> at the root of the SD card and feeds every line of it to
 that same dispatcher, on a shell task, <b>with no permission gate of any kind</b>.</p>
-<p>So a card is not a modified firmware. It is a list of commands the camera was
+<p class="zh">開機時韌體會呼叫 <code>XC_ShellScriptAutoRun</code>,
+它去找記憶卡根目錄下的 <code>AutoRun.txt</code>,
+把裡面每一行餵給同一個分派器,在一個 shell 任務上執行,
+而且<b>沒有任何形式的權限關卡</b>。</p>
+<p class="en">So a card is not a modified firmware. It is a list of commands the camera was
 always willing to run, in a file the camera always looked for.</p>
+<p class="zh">所以一張卡<strong>不是被改過的韌體</strong>。
+它是一份相機本來就願意執行的指令清單,放在一個相機本來就會去找的檔案裡。</p>
 
-<h2>From running commands to adding a recording mode</h2>
-<p>Shell commands alone will not give you a new sensor mode &mdash; there are too
+<h2><span class="en">From running commands to adding a recording mode</span><span class="zh">從執行指令,到加進一個錄影模式</span></h2>
+<p class="en">Shell commands alone will not give you a new sensor mode &mdash; there are too
 many writes, and a text file of them would take minutes to execute. So the
 <code>AutoRun.txt</code> is a loader. It writes a small stage-one routine into an
 unused region of RAM, hands it the payload sitting next to it in
 <code>fpSup.BIN</code>, and branches to it.</p>
-<p><code>fpSup.BIN</code> is a plain container: the tag <code>"VBIN"</code>, a section
+<p class="zh">光靠 shell 指令<strong>做不出</strong>一個新的感光元件模式 ——
+要寫的東西太多了,寫成文字檔要跑好幾分鐘。<br>
+所以 <code>AutoRun.txt</code> 是一個<strong>載入器</strong>:
+它把一小段第一階段的程式寫進 RAM 沒在用的區域,
+把旁邊 <code>fpSup.BIN</code> 裡的酬載交給它,然後跳過去執行。</p>
+<p class="en"><code>fpSup.BIN</code> is a plain container: the tag <code>"VBIN"</code>, a section
 count, the entry address, the payload length, then one <code>(destination, length)</code>
 record per section with the blobs aligned to four bytes. The region it writes into is
 mapped out byte by byte:</p>
+<p class="zh"><code>fpSup.BIN</code> 是一個很單純的容器:標記 <code>"VBIN"</code>、
+區段數量、進入點位址、酬載長度,接著每個區段一筆
+<code>(目的位址, 長度)</code> 記錄,資料本體對齊到四位元組。
+它寫進去的那塊區域,是逐位元組畫出來的:</p>
 <div class="scroll">
 <table>
-  <thead><tr><th>address</th><th>what lives there</th></tr></thead>
+  <thead><tr><th><span class="en">address</span><span class="zh">位址</span></th><th><span class="en">what lives there</span><span class="zh">那裡放什麼</span></th></tr></thead>
   <tbody>
-    <tr><td>0xC072DE64</td><td>the loader</td></tr>
-    <tr><td>0xC072E064</td><td>payload &mdash; the recording mode, the gyro writer</td></tr>
-    <tr><td>0xC072EFB4</td><td>park stub</td></tr>
-    <tr><td>0xC072F000</td><td>shell state</td></tr>
-    <tr><td>0xC072F050</td><td>the USB worker</td></tr>
+    <tr><td>0xC072DE64</td><td><span class="en">the loader</span><span class="zh">載入器</span></td></tr>
+    <tr><td>0xC072E064</td><td><span class="en">payload &mdash; the recording mode, the gyro writer</span><span class="zh">酬載 &mdash; 錄影模式、陀螺儀寫檔器</span></td></tr>
+    <tr><td>0xC072EFB4</td><td><span class="en">park stub</span><span class="zh">park stub</span></td></tr>
+    <tr><td>0xC072F000</td><td><span class="en">shell state</span><span class="zh">shell 狀態</span></td></tr>
+    <tr><td>0xC072F050</td><td><span class="en">the USB worker</span><span class="zh">USB worker</span></td></tr>
   </tbody>
 </table>
 </div>
-<p>Depending on what is on the card, the AutoRun is 135, 189 or 195 commands, and the
+<p class="en">Depending on what is on the card, the AutoRun is 135, 189 or 195 commands, and the
 camera reaches its banner in about ten seconds. The progress bar you watch at boot is
 the loader reporting which block it is on.</p>
+<p class="zh">看卡上放了什麼,AutoRun 會是 135、189 或 195 條指令,
+相機大約十秒鐘會走到開機畫面。<br>
+你開機時看到的那條進度條,就是載入器在回報它正在處理第幾個區塊。</p>
 
-<h2>Why the camera is not at risk</h2>
-<p>All of it lands in RAM. There is no flashing step, which is why there is no
+<h2><span class="en">Why the camera is not at risk</span><span class="zh">為什麼相機不會有風險</span></h2>
+<p class="en">All of it lands in RAM. There is no flashing step, which is why there is no
 un-flashing step: the camera rebuilds the whole thing from the card on every power-on,
 and a boot without the file is a boot without any of the code.</p>
-<p><b>One thing does survive, and it is worth being precise about.</b> A mode that
+<p class="zh">全部都落在 RAM 裡。<strong>沒有燒錄這一步,所以也沒有「反燒錄」這一步</strong>:
+相機每次開機都從卡片重新建立整套東西,而<strong>沒有那個檔案的開機,就是完全沒有那些程式碼的開機</strong>。</p>
+<p class="en"><b>One thing does survive, and it is worth being precise about.</b> A mode that
 appears in the camera's own menus is selected the way any setting is selected, and the
 camera records that choice in its own settings storage &mdash; the same storage that
 remembers your ISO and your file format, which was always non-volatile and which
@@ -88,18 +128,35 @@ nothing here writes to directly. Delete the card's files and that choice is stil
 there, now pointing at a mode with no code behind it. So a clean removal is
 <a href="guide.html#remove">settings back to stock first, file second</a>. It is
 recoverable either way: load the card again and the mode exists again.</p>
-<p>The firmware <i>does</i> have a command that writes non-volatile storage &mdash;
+<p class="zh"><b>有一樣東西確實會留下來,這點值得講精確。</b>
+一個出現在相機自家選單裡的模式,選它的方式就跟選任何設定一樣,
+而相機會把那個選擇記進<strong>它自己的設定儲存區</strong> ——
+就是記住你的 ISO 和檔案格式的那個儲存區,它本來就是非揮發性的,
+而這裡的東西<strong>不會直接去寫它</strong>。<br>
+把卡上的檔案刪掉,那個選擇還在,只是現在指向一個<strong>背後已經沒有程式碼</strong>的模式。
+所以乾淨的移除方式是
+<a href="guide.html#remove">先把設定設回原廠,再刪檔案</a>。<br>
+不過兩種順序都救得回來:把卡再載入一次,那個模式就又存在了。</p>
+<p class="en">The firmware <i>does</i> have a command that writes non-volatile storage &mdash;
 <code>prom write</code>, which can destroy the camera's calibration. Nothing shipped
 here goes anywhere near it, and the reference marks it accordingly. The worst a
 mistake in RAM can do is require the battery to come out.</p>
+<p class="zh">韌體<i>確實</i>有一個會寫非揮發性儲存的指令 —— <code>prom write</code>,
+它可以<strong>毀掉相機的校正資料</strong>。<br>
+這裡發行的東西<strong>完全不會靠近它</strong>,參考文件也標明了這點。
+在 RAM 裡出錯,最糟也不過是要把電池拿出來。</p>
 
-<h2 id="freeze">What went wrong: the freeze</h2>
-<p>An early USB shell froze the camera. Not immediately &mdash; it would run, record,
+<h2 id="freeze"><span class="en">What went wrong: the freeze</span><span class="zh">出過的錯:凍結</span></h2>
+<p class="en">An early USB shell froze the camera. Not immediately &mdash; it would run, record,
 and then some minutes later lock up hard enough that only pulling the battery helped.
 There were six different observed behaviours, and they contradicted each other. Being
 connected to a host prevented it, unless you recorded. Never connecting a host at all
 also prevented the shutdown case, but not the idle one.</p>
-<p>All six came down to a single mechanism. The worker had claimed two USB endpoints
+<p class="zh">早期的 USB shell 會把相機凍住。不是馬上 —— 它會正常跑、正常錄,
+然後過幾分鐘卡死到<strong>只有拔電池才有用</strong>。<br>
+觀察到的行為有六種,而且<strong>彼此矛盾</strong>:接著主機就不會發生,除非你在錄影;
+完全不接主機也能避免關機時那一種,但避不掉閒置那一種。</p>
+<p class="en">All six came down to a single mechanism. The worker had claimed two USB endpoints
 by writing the enable register directly, which meant it sat outside the firmware's own
 USB state machine entirely. The camera stayed alive only while the host held the link
 up and the native configuration was never re-run. Anything that tore the link down
@@ -107,45 +164,82 @@ up and the native configuration was never re-run. Anything that tore the link do
 soft disconnect at shutdown &mdash; ran into the worker still arming endpoints the
 firmware had just disabled underneath it. The command register never cleared, a
 60-second busy-spin started, and the interrupt storm took the camera with it.</p>
-<p>The fix was to stop owning anything. The shell that ships is <b>parasitic on the
+<p class="zh">六種全部歸結到<strong>同一個機制</strong>。<br>
+那個 worker 是<strong>直接寫致能暫存器</strong>去佔用兩個 USB 端點的,
+這表示它完全站在韌體自己的 USB 狀態機<strong>外面</strong>。
+相機能活著,只是因為主機一直把連線撐著、而原生的組態設定從來沒有被重跑。<br>
+任何會把連線拆掉的事情 —— 閒置暫停、錄影開始時發生的 USB 重新組態、關機時的軟中斷 ——
+都會撞上那個 worker:它還在對端點下命令,而韌體剛剛在它底下把那些端點關掉了。
+命令暫存器永遠清不掉,一個 60 秒的忙等開始跑,然後中斷風暴把相機一起帶走。</p>
+<p class="en">The fix was to stop owning anything. The shell that ships is <b>parasitic on the
 camera's own PTP gadget</b>: the firmware keeps the endpoints, creates and re-creates
 them across a recording reconfiguration, and the shell simply rides along. Recording
 survives it, and so does unplugging the cable.
 <a href="https://github.com/ijigen/fpSup/blob/main/docs/FREEZE_ROOTCAUSE.md">The full analysis is here</a>, six symptoms to one
 mechanism, every step confirmed in the disassembly.</p>
+<p class="zh">修法是<strong>什麼都不要擁有</strong>。現在發行的 shell 是
+<b>寄生在相機自己的 PTP gadget 上</b>:端點由韌體持有,
+錄影重新組態時由韌體去建立與重建,shell 只是搭順風車。<br>
+這樣錄影撐得過去,拔線也撐得過去。
+<a href="https://github.com/ijigen/fpSup/blob/main/docs/FREEZE_ROOTCAUSE.md">完整分析在這裡</a> ——
+六個症狀收斂到一個機制,每一步都在反組譯裡確認過。</p>
 
-<h2 id="merge">What went wrong: the card that was quietly wrong</h2>
-<p>A build script used to emit a combined open-gate-plus-gyro card directly, and for
+<h2 id="merge"><span class="en">What went wrong: the card that was quietly wrong</span><span class="zh">出過的錯:一張悄悄是錯的卡</span></h2>
+<p class="en">A build script used to emit a combined open-gate-plus-gyro card directly, and for
 weeks it emitted the wrong one. It called one builder while the gyro release had been
 built by a different one, and the two produce completely different payloads. The card
 was named as a release. Its manifest said &ldquo;gyro&rdquo;. The gyro inside it was
 not the gyro that had been shipped and tested.</p>
-<p><b>Nothing failed.</b> No error, no crash, no bad footage anyone noticed. It was
+<p class="zh">以前有一支建置腳本會直接產生「open gate 加陀螺儀」的合併卡,
+而它有好幾週產生的都是<strong>錯的那一個</strong>。<br>
+它呼叫的是某一支建置器,但陀螺儀的發行版是<strong>另一支</strong>建置出來的,
+兩者產生的酬載完全不同。<br>
+那張卡掛著發行版的名字,它的清單上寫著「gyro」,
+但裡面的陀螺儀<strong>不是那個發行過、測試過的陀螺儀</strong>。</p>
+<p class="en"><b>Nothing failed.</b> No error, no crash, no bad footage anyone noticed. It was
 found by comparing the two artefacts section by section, long after the fact.</p>
-<p>That is the reason merged cards are now produced in exactly one place &mdash;
+<p class="zh"><b>沒有任何東西出錯。</b>沒有錯誤訊息、沒有當機、沒有人注意到畫面不對。
+它是很久以後,靠著<strong>逐個區段比對兩個產出物</strong>才被發現的。</p>
+<p class="en">That is the reason merged cards are now produced in exactly one place &mdash;
 <a href="tools/card-composer/">fpSup-Merge</a> &mdash; and why it checks its own
 output against the shipping releases byte for byte before it will even render. The
 build scripts can still create a card; what they no longer do is combine two.</p>
+<p class="zh">這就是為什麼合併卡現在<strong>只在一個地方</strong>產生 ——
+<a href="tools/card-composer/">fpSup-Merge</a> ——
+也是為什麼它在渲染之前,會先把自己的輸出<strong>逐位元組</strong>對照發行版檢查一遍。<br>
+建置腳本還是可以做一張卡;它們不再做的事,是<strong>把兩張合起來</strong>。</p>
 
-<h2>The menus are the camera's own</h2>
-<p>The new resolution is not an overlay drawn on top of the interface. Every menu item
+<h2><span class="en">The menus are the camera's own</span><span class="zh">選單是相機自己的</span></h2>
+<p class="en">The new resolution is not an overlay drawn on top of the interface. Every menu item
 in the fp carries its own metadata in ROM, immediately after its name string &mdash;
 which means a mode can be given a real entry that behaves like the others, in Settings
 and in Quick Set. <a href="https://github.com/ijigen/fpSup/blob/main/docs/MENU_MODIFICATION.md">How that was worked out</a>.</p>
+<p class="zh">那個新解析度<strong>不是</strong>畫在介面上面的疊圖。<br>
+fp 裡每一個選單項目都在 ROM 裡帶著自己的 metadata,就緊接在它的名稱字串後面 ——
+這表示一個模式可以擁有一個<strong>真正的選單項目</strong>,
+行為跟其他項目一樣,在 Settings 和 Quick Set 裡都是。
+<a href="https://github.com/ijigen/fpSup/blob/main/docs/MENU_MODIFICATION.md">這是怎麼弄清楚的</a>。</p>
 
-<h2>Credit</h2>
-<p>Open gate on an fp was first done by
+<h2><span class="en">Credit</span><span class="zh">致謝</span></h2>
+<p class="en">Open gate on an fp was first done by
 <a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly&nbsp;Li</a>.
 The work here is a different implementation, and it started from knowing it was
 possible.</p>
+<p class="zh">在 fp 上做出 open gate 的<strong>第一個人是</strong>
+<a href="https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/">Vitaly&nbsp;Li</a>。<br>
+這裡的工作是另一套實作,而它的起點,是<strong>知道這件事做得到</strong>。</p>
 
 <footer>
-  <p>If you want to read further, the
+  <p class="en">If you want to read further, the
   <a href="research.html">research pages</a> go subsystem by subsystem, and each one
   separates what has been proven from what is still open.</p>
-  <p><a href="./">fpSup</a> &middot; <a href="guide.html">How to use it</a> &middot;
-  <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
+  <p class="zh">想再往下讀的話,<a href="research.html">研究頁面</a>是一個子系統一個子系統寫的,
+  而且每一份都把<strong>已經證實的</strong>和<strong>還沒解的</strong>分開。</p>
+  <p><a href="./">fpSup</a> &middot; <a href="guide.html"><span class="en">How to use it</span><span class="zh">怎麼用</span></a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://www.youtube.com/@fp-sup">YouTube</a></p>
 </footer>
 
+<script src="assets/lang.js?v=9fef0135" defer></script>
 </body>
 </html>

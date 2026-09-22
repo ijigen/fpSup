@@ -190,6 +190,25 @@ figure.shot figcaption{font-size:.84rem; color:var(--dim); margin-top:7px}
 .vid figcaption span{display:block; color:var(--dim); font-size:.8rem;
   font-family:var(--mono); margin-top:3px}
 
+/* ---- language ------------------------------------------------------------
+   Three settings, two sources: pages carry English and Traditional Chinese, and
+   Simplified is produced from the Traditional at runtime. data-lang="zh" is
+   Traditional, matching the explainer pages so one choice covers the whole site. */
+[data-lang="en"] .zh{display:none !important}
+[data-lang="zh"] .en{display:none !important}
+[data-lang="cn"] .en{display:none !important}
+.langbar{display:flex; justify-content:flex-end; margin:0 0 18px}
+.lang{display:inline-flex; border:1px solid var(--line); border-radius:3px;
+  overflow:hidden; flex:none}
+.lang button{font-family:var(--mono); font-size:.72rem; letter-spacing:.04em;
+  padding:5px 11px; border:0; background:var(--panel); color:var(--dim);
+  cursor:pointer; transition:background .12s, color .12s}
+.lang button + button{border-left:1px solid var(--line)}
+.lang button:hover{color:var(--ink)}
+.lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
+  font-weight:600}
+.lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+
 /* ---- support buttons ---------------------------------------------------- */
 .support{display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin:14px 0 0}
 .support a{display:inline-flex; align-items:center; gap:7px; font-size:.86rem;
@@ -199,6 +218,8 @@ figure.shot figcaption{font-size:.84rem; color:var(--dim); margin-top:7px}
 .support svg{width:16px; height:16px; flex:none; display:block}
 .support .kofi svg{fill:#FF5E5B}
 .support .discord svg{fill:#5865F2}
+.support .youtube svg{fill:#FF0000}
+.support .youtube:hover{border-color:#FF0000; background:#FF000014}
 .support .kofi:hover{border-color:#FF5E5B; background:#FF5E5B14}
 .support .discord:hover{border-color:#5865F2; background:#5865F214}
 .support a:focus-visible{outline:2px solid currentColor; outline-offset:2px}

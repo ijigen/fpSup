@@ -112,7 +112,9 @@ def rows_html(rels):
     for _, d, m in rels:
         b = blurb(d)
         out.append(f'    <tr><td><a href="releases/{d.name}/README.txt">fpsup-{m["product"]}</a></td>'
-                   f'<td>v{m["num"]}{m["qual"]}</td>\n        <td>{to_html(b["en"])}</td></tr>')
+                   f'<td>v{m["num"]}{m["qual"]}</td>\n'
+                   f'        <td><span class="en">{to_html(b["en"])}</span>'
+                   f'<span class="zh">{to_html(b["zh"])}</span></td></tr>')
     return '\n'.join(out)
 
 

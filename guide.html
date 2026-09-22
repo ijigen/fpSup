@@ -49,91 +49,135 @@
   size instead of being blown up into mush.
 -->
 
+<div class="langbar">
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
+  </div>
+</div>
 <a class="back" href="./">&larr; fpSup</a>
 
 <header class="hero">
-  <h1>How to use it</h1>
-  <p class="lede">This takes you from an empty SD card to a working camera. Steps 1
+  <h1><span class="en">How to use it</span><span class="zh">怎麼用</span></h1>
+  <p class="lede en">This takes you from an empty SD card to a working camera. Steps 1
   to 6 are the same for everyone. Step 7 depends on what you put on the card. Step 8
   is how to remove it.</p>
+  <p class="lede zh">這會帶你從一張空白記憶卡走到一台能用的相機。
+  第 1 到 6 步對每個人都一樣,第 7 步看你放了什麼進卡裡,第 8 步是怎麼移除。</p>
 </header>
 
 <div class="warn">
-  <b>Steps 3 to 5 need a computer.</b> You have to copy two files onto an SD card.
+  <span class="en"><b>Steps 3 to 5 need a computer.</b> You have to copy two files onto an SD card.
   A phone cannot do this. If you are reading on a phone, read to the end now, then
   come back when you have a computer and a card reader. The whole guide is on this
-  one page.
+  one page.</span>
+  <span class="zh"><b>第 3 到 5 步需要電腦。</b>你得把兩個檔案複製到記憶卡上,
+  <strong>手機做不到</strong>。如果你現在用手機看,先把整篇讀完,
+  等你有電腦和讀卡機時再回來。整份指南都在這一頁上。</span>
 </div>
 
 <ol class="steps">
 
 <li id="firmware">
-  <h3>Check your camera and firmware</h3>
-  <p>You need a <b>SIGMA fp</b> with firmware <b>Ver.5.02</b>.</p>
-  <p>To check: <code>MENU &rarr; SYSTEM &rarr; Information</code>.</p>
+  <h3><span class="en">Check your camera and firmware</span><span class="zh">確認你的相機和韌體</span></h3>
+  <p class="en">You need a <b>SIGMA fp</b> with firmware <b>Ver.5.02</b>.</p>
+  <p class="zh">你需要一台<b>SIGMA fp</b>,韌體是 <b>Ver.5.02</b>。</p>
+  <p class="en">To check: <code>MENU &rarr; SYSTEM &rarr; Information</code>.</p>
+  <p class="zh">怎麼看:<code>MENU &rarr; SYSTEM &rarr; Information</code>。</p>
   <figure class="shot">
     <img src="assets/guide/01-firmware-menu.webp" width="1024" height="682"
          alt="The SYSTEM tab of the camera menu, with Information highlighted">
-    <figcaption>In the <b>SYSTEM</b> tab, choose <b>Information</b>. Not
+    <figcaption class="en">In the <b>SYSTEM</b> tab, choose <b>Information</b>. Not
       &ldquo;Firmware Update&rdquo; &mdash; that is the item below it, and you do not
       need it.</figcaption>
+    <figcaption class="zh">在 <b>SYSTEM</b> 分頁裡選 <b>Information</b>。
+      不是「Firmware Update」—— 那是它下面那一項,你不需要用到。</figcaption>
   </figure>
   <figure class="shot">
     <img src="assets/guide/01-firmware-info.webp" width="1024" height="682"
          alt="The Information screen showing Model SIGMA fp and Version 5.02">
-    <figcaption><b>Version</b> must say <b>5.02</b>. Model must say
+    <figcaption class="en"><b>Version</b> must say <b>5.02</b>. Model must say
       <b>SIGMA fp</b>.</figcaption>
+    <figcaption class="zh"><b>Version</b> 必須是 <b>5.02</b>,Model 必須是
+      <b>SIGMA fp</b>。</figcaption>
   </figure>
-  <div class="warn"><b>Both things matter.</b><br>
+  <div class="warn en"><b>Both things matter.</b><br>
   The <b>fp L</b> is a different camera with a different sensor. Nothing here works
   on it.<br>
   And Ver.5.02 is not a minimum. A card is built for the exact places things sit in
   Ver.5.02. On any other version it writes to the wrong places, and it can go wrong
   in bad ways. <b>If your camera is not on Ver.5.02, stop here.</b></div>
+  <div class="warn zh"><b>兩件事都很重要。</b><br>
+  <b>fp L</b> 是另一台相機、另一顆感光元件,這裡的東西<strong>在它上面都不能用</strong>。<br>
+  還有,Ver.5.02 <strong>不是最低版本</strong>。卡片是照著 Ver.5.02 裡東西所在的確切位置做的,
+  在其他版本上它會寫到錯的地方,而且可能<strong>出很糟的錯</strong>。
+  <b>如果你的相機不是 Ver.5.02,到這裡就停下來。</b></div>
 </li>
 
 <li id="card">
-  <h3>Check your card is fast enough</h3>
-  <p>Open gate and the gyro both write to the card while you record. <b>A slow card
+  <h3><span class="en">Check your card is fast enough</span><span class="zh">確認你的卡夠快</span></h3>
+  <p class="en">Open gate and the gyro both write to the card while you record. <b>A slow card
   is the most common reason something here does not work.</b></p>
-  <p>Open gate needs a lot of speed:</p>
+  <p class="zh">Open gate 和陀螺儀在你錄影時<strong>都會寫卡</strong>。
+  <b>卡太慢是這裡的東西不能用最常見的原因。</b></p>
+  <p class="en">Open gate needs a lot of speed:</p>
+  <p class="zh">Open gate 需要的速度很高:</p>
   <div class="scroll">
   <table>
-    <thead><tr><th>what you record</th><th>speed needed</th></tr></thead>
+    <thead><tr><th><span class="en">what you record</span><span class="zh">你錄什麼</span></th><th><span class="en">speed needed</span><span class="zh">需要的速度</span></th></tr></thead>
     <tbody>
-      <tr><td>Open gate 3K, 24p, 12-bit</td><td>221 MB/s</td></tr>
-      <tr><td>Open gate 3K, 24p, 10-bit</td><td>184 MB/s</td></tr>
-      <tr><td>Open gate 3K, 24p, 8-bit</td><td>148 MB/s</td></tr>
-      <tr><td>Open gate 2K, 24p, 12-bit</td><td>98 MB/s</td></tr>
-      <tr><td>Normal FHD, 12-bit</td><td>97 MB/s</td></tr>
-      <tr class="hl"><td><i>the UHS-II SD card we measured</i></td><td><i>94 MB/s</i></td></tr>
-      <tr class="hl"><td><i>an external SSD we measured</i></td><td><i>390 MB/s</i></td></tr>
+      <tr><td><span class="en">Open gate 3K, 24p, 12-bit</span><span class="zh">Open gate 3K,24p,12-bit</span></td><td>221 MB/s</td></tr>
+      <tr><td><span class="en">Open gate 3K, 24p, 10-bit</span><span class="zh">Open gate 3K,24p,10-bit</span></td><td>184 MB/s</td></tr>
+      <tr><td><span class="en">Open gate 3K, 24p, 8-bit</span><span class="zh">Open gate 3K,24p,8-bit</span></td><td>148 MB/s</td></tr>
+      <tr><td><span class="en">Open gate 2K, 24p, 12-bit</span><span class="zh">Open gate 2K,24p,12-bit</span></td><td>98 MB/s</td></tr>
+      <tr><td><span class="en">Normal FHD, 12-bit</span><span class="zh">一般 FHD,12-bit</span></td><td>97 MB/s</td></tr>
+      <tr class="hl"><td><i><span class="en">the UHS-II SD card we measured</span><span class="zh">我們量過的 UHS-II SD 卡</span></i></td><td><i>94 MB/s</i></td></tr>
+      <tr class="hl"><td><i><span class="en">an external SSD we measured</span><span class="zh">我們量過的外接 SSD</span></i></td><td><i>390 MB/s</i></td></tr>
     </tbody>
   </table>
   </div>
-  <p>If the card is too slow, the camera <b>stops recording</b> after a few seconds.
+  <p class="en">If the card is too slow, the camera <b>stops recording</b> after a few seconds.
   This is the card, not a bug. No setting can fix it. We have 31 open gate 3K clips
   recorded to that 94 MB/s card and <b>every one of them stops at 4.1 seconds or
   less</b> &mdash; the camera fills its ~600&ndash;750 MB buffer at a 127 MB/s deficit
   and then has to stop.</p>
+  <p class="zh">如果卡太慢,相機會在幾秒後<b>停止錄影</b>。
+  這是卡的問題,<strong>不是 bug</strong>,沒有任何設定救得了。<br>
+  我們在那張 94 MB/s 的卡上錄了 31 段 open gate 3K,
+  <b>每一段都停在 4.1 秒以內</b> ——
+  相機以 127 MB/s 的赤字把大約 600&ndash;750 MB 的緩衝吃完,然後就只能停。</p>
 
-  <p class="warn"><b>Open gate 3K is not an SD card away.</b> The gap is not a few
+  <p class="warn en"><b>Open gate 3K is not an SD card away.</b> The gap is not a few
   percent like FHD &mdash; it is <b>2.4&times;</b>. And it is worse than the table
   looks: CinemaDNG writes <b>one file per frame</b>, and one open gate 3K frame is
   9.2 MB. On our card, writes that size run at <b>66 MB/s</b>, not 94 &mdash; 94 is
   what it manages in 50 MB blocks, which is not how the camera writes. So the real
   gap is closer to 3&times;.</p>
+  <p class="warn zh"><b>Open gate 3K 不是換張卡就能解決的。</b>
+  這個差距不像 FHD 那樣只差幾個百分點 —— 是 <b>2.4 倍</b>。<br>
+  而且比表上看起來更糟:CinemaDNG 是<b>一格一個檔</b>,
+  而一格 open gate 3K 是 9.2 MB。在我們那張卡上,這個大小的寫入只跑 <b>66 MB/s</b>,不是 94 ——
+  94 是它在 50 MB 大區塊下的成績,而<strong>相機不是那樣寫的</strong>。
+  所以真實差距更接近 <b>3 倍</b>。</p>
 
-  <p>We have only measured one SD card, and we never found where its curve flattens,
+  <p class="en">We have only measured one SD card, and we never found where its curve flattens,
   so we cannot tell you that <i>no</i> SD card can do this. What we can tell you is
   that nothing we have measured in an SD slot is close, and the only storage we have
   measured that is comfortably fast enough is an <b>external SSD over USB-C</b>.
   If you want to try a faster card, run the benchmark below first &mdash; the number
   printed on the card is not the number you get.</p>
-  <p><a href="tools/storage-benchmark/README.txt">The storage benchmark</a> measures
+  <p class="zh">我們<strong>只量過一張</strong> SD 卡,而且沒有量到它的速度曲線在哪裡走平,
+  所以我們<i>不能</i>跟你說「沒有任何 SD 卡做得到」。<br>
+  我們能說的是:我們在 SD 插槽裡量過的東西<strong>沒有一個接近</strong>,
+  而唯一我們量過、而且餘裕充足的儲存,是 <b>USB-C 外接 SSD</b>。<br>
+  想試更快的卡的話,先跑下面那個 benchmark —— <strong>卡上印的數字不是你拿到的數字</strong>。</p>
+  <p class="en"><a href="tools/storage-benchmark/README.txt">The storage benchmark</a> measures
   your real speed on the camera. The number printed on the card is often higher than
   the speed you actually get.</p>
-  <p class="note"><b>If you want to stay on SD, use OG2K.</b> It needs 98 MB/s, which
+  <p class="zh"><a href="tools/storage-benchmark/README.txt">儲存 benchmark</a>
+  會在相機上量出你的真實速度。卡上印的數字,通常比你實際拿到的高。</p>
+  <p class="note en"><b>If you want to stay on SD, use OG2K.</b> It needs 98 MB/s, which
   is essentially the camera's own FHD rate (97). So the test is simple: <b>if your card
   records normal FHD cleanly, it records OG2K.</b> It shows the same full-sensor 3:2
   picture and uses well under half the data of OG3K.<br><br>
@@ -141,68 +185,104 @@
   works because the camera buffers, but that is exactly why gyro samples get dropped
   and why writes can stall for a few hundred milliseconds. Faster card, fewer of those
   problems.</p>
-  <div class="warn"><b>The gyro needs a good card too.</b> It writes its files while
+  <p class="note zh"><b>想繼續用 SD 卡的話,用 OG2K。</b>它需要 98 MB/s,
+  基本上就是相機自己的 FHD 碼率(97)。所以判斷方式很簡單:
+  <b>你的卡能乾淨錄一般 FHD,就能錄 OG2K。</b>
+  它呈現的是同樣的全感光元件 3:2 畫面,資料量<strong>遠不到 OG3K 的一半</strong>。<br><br>
+  要知道的是,在這個碼率下,一張 94 MB/s 的卡<strong>已經是滿載</strong> ——
+  它能動是因為相機有緩衝,但那正是陀螺儀樣本會掉、
+  以及寫入會卡住幾百毫秒的原因。卡越快,這些問題越少。</p>
+  <div class="warn en"><b>The gyro needs a good card too.</b> It writes its files while
   you record, so it shares the card with the video. If the card is struggling, the
   gyro files are the first thing to go missing. You still get the clip, but the
   motion files are missing or incomplete. If that happens, check the card before you
   blame the build.</div>
+  <div class="warn zh"><b>陀螺儀也需要一張好卡。</b>它在你錄影的同時寫檔,
+  所以是<strong>跟影片共用同一張卡</strong>。<br>
+  如果卡在吃力,<strong>陀螺儀檔案會是第一個不見的東西</strong>。
+  片子你還是有,但運動檔會缺少或不完整。<br>
+  遇到這種情況,先檢查卡,再去怪版本。</div>
 </li>
 
 <li id="choose">
-  <h3>Choose what goes on the card</h3>
-  <p>Open <a href="tools/card-composer/"><b>fpSup-Merge</b></a> and tick what you
+  <h3><span class="en">Choose what goes on the card</span><span class="zh">選擇卡片上要放什麼</span></h3>
+  <p class="en">Open <a href="tools/card-composer/"><b>fpSup-Merge</b></a> and tick what you
   want. It all runs in your browser. Nothing is uploaded and you install nothing.</p>
+  <p class="zh">打開 <a href="tools/card-composer/"><b>fpSup-Merge</b></a>,勾選你要的東西。
+  全部在你的瀏覽器裡執行,<strong>不會上傳任何東西,你也不用安裝任何東西</strong>。</p>
   <div class="scroll">
   <table>
-    <thead><tr><th>tick</th><th>what you get</th></tr></thead>
+    <thead><tr><th><span class="en">tick</span><span class="zh">勾選</span></th><th><span class="en">what you get</span><span class="zh">你會得到</span></th></tr></thead>
     <tbody>
       <tr><td>og3k <i>or</i> og2k</td>
-          <td>The full 3:2 sensor, as a new resolution in the camera menu</td></tr>
+          <td><span class="en">The full 3:2 sensor, as a new resolution in the camera menu</span><span class="zh">完整的 3:2 感光元件,以一個新解析度出現在相機選單裡</span></td></tr>
       <tr><td>gyro</td>
-          <td>Gyroflow motion files, written next to your clip as you record</td></tr>
+          <td><span class="en">Gyroflow motion files, written next to your clip as you record</span><span class="zh">Gyroflow 運動檔,在你錄影時寫在片子旁邊</span></td></tr>
     </tbody>
   </table>
   </div>
   <figure class="shot">
     <img src="assets/guide/03-merge.webp" width="1192" height="1694"
          alt="fpSup-Merge with fpGyroSup and OpenGate 3K ticked, and the two download buttons below">
-    <figcaption>Tick what you want, then download the two files. The line at the
+    <figcaption class="en">Tick what you want, then download the two files. The line at the
       bottom turns green when the card is sound.</figcaption>
+    <figcaption class="zh">勾選你要的,然後下載那兩個檔案。
+      底下那一行在卡片內容無誤時會變成綠色。</figcaption>
   </figure>
-  <p class="note"><b>You will also see <code>shell</code> on the list. Leave it
+  <p class="note en"><b>You will also see <code>shell</code> on the list. Leave it
   off.</b> It is a tool for developers: it lets a computer talk to the camera over
   USB, and it adds nothing you can see or use on the camera itself. If you do want
   it, the setup is in
   <a href="https://github.com/ijigen/fpSup/tree/main/fp_usb_shell">the fp_usb_shell
   README</a>.</p>
-  <p>Everything you tick goes on <b>one</b> card and works together.</p>
-  <p>This is the only place that can combine them. <b>Do not</b> try to combine two
+  <p class="note zh"><b>清單上你還會看到 <code>shell</code>,不要勾它。</b>
+  那是給開發者用的工具:它讓電腦透過 USB 跟相機對話,
+  在相機本身上<strong>看不到也用不到任何東西</strong>。<br>
+  如果你真的想要,設定方式在
+  <a href="https://github.com/ijigen/fpSup/tree/main/fp_usb_shell">fp_usb_shell 的 README</a>。</p>
+  <p class="en">Everything you tick goes on <b>one</b> card and works together.</p>
+  <p class="zh">你勾的所有東西會放進<b>同一張</b>卡,而且可以一起運作。</p>
+  <p class="en">This is the only place that can combine them. <b>Do not</b> try to combine two
   releases by copying both sets of files yourself. That card will not start.</p>
-  <div class="note"><b>One rule:</b> OG2K and OG3K cannot go on the same card. The
+  <p class="zh">這是<strong>唯一</strong>能把它們合併起來的地方。
+  <b>不要</b>自己把兩個發行版的檔案都複製過去想手動合併 —— 那張卡<strong>開不起來</strong>。</p>
+  <div class="note en"><b>One rule:</b> OG2K and OG3K cannot go on the same card. The
   camera has three resolution slots and each one needs the third slot. Pick one. The
   page will not let you tick both.</div>
+  <div class="note zh"><b>一條規則:</b>OG2K 和 OG3K <strong>不能放在同一張卡上</strong>。
+  相機有三個解析度欄位,而它們兩個都需要第三個欄位。選一個就好 ——
+  那個頁面也不會讓你兩個都勾。</div>
 </li>
 
 <li id="download">
-  <h3>Download the two files</h3>
-  <p>You get <code>AutoRun.txt</code> and <code>fpSup.BIN</code> (a download
+  <h3><span class="en">Download the two files</span><span class="zh">下載那兩個檔案</span></h3>
+  <p class="en">You get <code>AutoRun.txt</code> and <code>fpSup.BIN</code> (a download
   published before 2026-09-19 names the second file <code>VSHL.BIN</code>; the
   two files always travel together, so use whichever pair you downloaded). That
   is the whole
   card. There is nothing to unzip and nothing to install. This is true no matter how
   many things you ticked.</p>
-  <p>If you changed the banner text, use plain English letters and numbers only. The
+  <p class="zh">你會拿到 <code>AutoRun.txt</code> 和 <code>fpSup.BIN</code>
+  (2026-09-19 之前發布的下載,第二個檔案叫 <code>VSHL.BIN</code>;
+  這兩個檔案永遠是一組的,所以你下載到哪一組就用哪一組)。<br>
+  <strong>那就是整張卡的全部內容</strong>。沒有東西要解壓縮,也沒有東西要安裝 ——
+  不管你勾了幾項都一樣。</p>
+  <p class="en">If you changed the banner text, use plain English letters and numbers only. The
   camera's screen font cannot show anything else.</p>
+  <p class="zh">如果你改了開機橫幅的文字,<strong>只能用英文字母和數字</strong>。
+  相機螢幕的字型顯示不出其他東西。</p>
 </li>
 
 <li id="copy">
-  <h3>Copy the files to the card</h3>
-  <p>Turn the camera off and <b>take the battery out</b>. Then take the card out and
+  <h3><span class="en">Copy the files to the card</span><span class="zh">把檔案複製到卡上</span></h3>
+  <p class="en">Turn the camera off and <b>take the battery out</b>. Then take the card out and
   put it in a card reader.</p>
-  <p>Copy both files to the <b>top level</b> of the card:</p>
+  <p class="zh">關機,然後<b>把電池拿出來</b>。接著把卡拿出來,插進讀卡機。</p>
+  <p class="en">Copy both files to the <b>top level</b> of the card:</p>
+  <p class="zh">把兩個檔案都複製到卡的<b>最上層</b>:</p>
   <div class="scroll">
   <table>
-    <thead><tr><th>correct</th><th>will not work</th></tr></thead>
+    <thead><tr><th><span class="en">correct</span><span class="zh">正確</span></th><th><span class="en">will not work</span><span class="zh">不會動</span></th></tr></thead>
     <tbody>
       <tr><td><code>/AutoRun.txt</code><br><code>/fpSup.BIN</code></td>
           <td><code>/fpSup/AutoRun.txt</code><br><code>/DCIM/AutoRun.txt</code></td></tr>
@@ -213,218 +293,330 @@
     <img class="actual" src="assets/guide/05-card-root.webp" width="268" height="180"
          alt="An SD card opened on a computer: AutoRun.txt and VSHL.BIN at the top level,
               beside the CINEMA and DCIM folders">
-    <figcaption>Both files sit at the top level, beside <code>CINEMA</code> and
+    <figcaption class="en">Both files sit at the top level, beside <code>CINEMA</code> and
       <code>DCIM</code>. Do not put them in a folder.</figcaption>
+    <figcaption class="zh">兩個檔案都放在最上層,跟 <code>CINEMA</code> 和
+      <code>DCIM</code> 並排。<strong>不要放進資料夾裡。</strong></figcaption>
   </figure>
-  <p>Do not make a folder. Do not rename anything. Do not convert anything.</p>
-  <p>Also check the small lock switch on the side of the card is <b>not</b> locked.
+  <p class="en">Do not make a folder. Do not rename anything. Do not convert anything.</p>
+  <p class="zh">不要建資料夾。不要改名字。不要轉換任何格式。</p>
+  <p class="en">Also check the small lock switch on the side of the card is <b>not</b> locked.
   A locked card is the most common reason nothing happens in step 6.</p>
+  <p class="zh">另外檢查卡片側邊那個小鎖扣,確認它<b>沒有</b>鎖上。
+  卡片被鎖住,是第 6 步什麼都沒發生最常見的原因。</p>
 </li>
 
 <li id="boot">
-  <h3>Put the card in and turn the camera on</h3>
-  <p>A counter appears in the <b>top left</b> of the screen and fills up:</p>
+  <h3><span class="en">Put the card in and turn the camera on</span><span class="zh">把卡插進去,開機</span></h3>
+  <p class="en">A counter appears in the <b>top left</b> of the screen and fills up:</p>
+  <p class="zh">螢幕<b>左上角</b>會出現一個計數器,然後慢慢填滿:</p>
   <p><code>fpSup[####....]050</code></p>
-  <p>When it finishes, it is replaced by a banner naming what you loaded, ending
+  <p class="en">When it finishes, it is replaced by a banner naming what you loaded, ending
   with <code>!</code>. The name is whatever you set in fpSup-Merge &mdash; for
   example <code>fpSup!</code> or <code>fpSup-OG3K-v0.2.3a!</code>.</p>
-  <p>Expect ten to twenty seconds, depending on how much is on the card.</p>
+  <p class="zh">跑完之後,它會被一行橫幅取代,寫著你載入了什麼,結尾是 <code>!</code>。
+  那個名字就是你在 fpSup-Merge 裡設定的 —— 例如
+  <code>fpSup!</code> 或 <code>fpSup-OG3K-v0.2.3a!</code>。</p>
+  <p class="en">Expect ten to twenty seconds, depending on how much is on the card.</p>
+  <p class="zh">大概十到二十秒,看卡上放了多少東西。</p>
   <figure class="shot">
     <video controls preload="metadata" playsinline
            poster="assets/guide/06-boot-poster.webp"
            src="assets/guide/06-boot.mp4"
            width="1000" height="666"></video>
-    <figcaption>The counter runs in the top left, then the banner replaces it.
+    <figcaption class="en">The counter runs in the top left, then the banner replaces it.
       The card in this clip is a development one, so its banner reads
       <code>fpShell-dbg1!</code> &mdash; yours will say whatever you named it.</figcaption>
+    <figcaption class="zh">計數器在左上角跑,然後橫幅取代它。<br>
+      這段影片裡用的是開發版的卡,所以橫幅寫的是
+      <code>fpShell-dbg1!</code> —— 你的會顯示你自己取的名字。</figcaption>
   </figure>
-  <p><b>The banner means it worked.</b> If you see it, go on to step 7. If you do not
+  <p class="en"><b>The banner means it worked.</b> If you see it, go on to step 7. If you do not
   see it, go to <a href="#trouble">the problems list</a> instead of trying again.</p>
-  <p class="note">This happens every time you turn the camera on, as long as the file
+  <p class="zh"><b>看到橫幅就表示成功了。</b>看到的話,繼續做第 7 步。
+  沒看到的話,<strong>不要再試一次</strong>,去看<a href="#trouble">問題清單</a>。</p>
+  <p class="note en">This happens every time you turn the camera on, as long as the file
   is on the card. Nothing is installed. The camera reads the card and builds it all
   again in memory each time. That is why removing it is easy.</p>
+  <p class="note zh">只要那個檔案還在卡上,<strong>每次開機都會這樣</strong>。
+  沒有任何東西被安裝。相機每次都重新讀卡、在記憶體裡把整套東西再建一次 ——
+  這就是為什麼要移除很容易。</p>
 </li>
 
 <li id="use">
-  <h3>Use what you loaded</h3>
-  <p>This step depends on what you ticked in step 3. If you ticked both, they both
+  <h3><span class="en">Use what you loaded</span><span class="zh">使用你載入的東西</span></h3>
+  <p class="en">This step depends on what you ticked in step 3. If you ticked both, they both
   work at the same time.</p>
+  <p class="zh">這一步要看你在第 3 步勾了什麼。兩個都勾的話,兩個會<strong>同時生效</strong>。</p>
 
-  <h4>Open gate &mdash; OG3K or OG2K</h4>
-  <p><b>First, turn Super35 / crop off.</b> OG3K cannot record while crop is on. You
+  <h4><span class="en">Open gate &mdash; OG3K or OG2K</span><span class="zh">Open gate &mdash; OG3K 或 OG2K</span></h4>
+  <p class="en"><b>First, turn Super35 / crop off.</b> OG3K cannot record while crop is on. You
   press record and nothing happens, and the camera does not tell you why. Check this
   before you blame the card.</p>
-  <p>Then choose the new resolution in the camera's normal menu:
+  <p class="zh"><b>先把 Super35 / crop 關掉。</b>裁切開著的時候 OG3K <strong>錄不了</strong>。
+  你按下錄影會什麼都沒發生,而相機<strong>不會告訴你為什麼</strong>。
+  在怪卡片之前,先檢查這個。</p>
+  <p class="en">Then choose the new resolution in the camera's normal menu:
   <code>MENU &rarr; recording &rarr; resolution</code>, or
   <code>Quick Set &rarr; RES</code>. Choose the frame rate and CinemaDNG quality as
   you normally would.</p>
+  <p class="zh">然後在相機一般的選單裡選那個新解析度:
+  <code>MENU &rarr; recording &rarr; resolution</code>,或
+  <code>Quick Set &rarr; RES</code>。<br>
+  格率和 CinemaDNG 品質就照你平常的方式選。</p>
   <figure class="shot">
     <img src="assets/guide/07-resolution.webp" width="1640" height="1096"
          alt="Quick Set with RES. set to OG3K 29.97p, and UHD / FHD / OG3K along the bottom">
-    <figcaption>OG3K in Quick Set. Along the bottom are the camera's three
+    <figcaption class="en">OG3K in Quick Set. Along the bottom are the camera's three
       resolution slots &mdash; <b>UHD, FHD and OG3K</b>. That third slot is the one
       the open-gate build takes, which is why OG2K and OG3K cannot share a card.</figcaption>
+    <figcaption class="zh">Quick Set 裡的 OG3K。底下那一排是相機的三個解析度欄位 ——
+      <b>UHD、FHD 和 OG3K</b>。<br>
+      open gate 版佔用的就是第三個欄位,這也是為什麼 OG2K 和 OG3K 不能共用一張卡。</figcaption>
   </figure>
-  <p class="note">This is a real menu item, so the camera remembers your choice. That
+  <p class="note en">This is a real menu item, so the camera remembers your choice. That
   is why <a href="#remove">step 8</a> has an order you need to follow.</p>
+  <p class="note zh">這是一個<strong>真正的選單項目</strong>,所以相機會記住你的選擇。
+  這就是為什麼<a href="#remove">第 8 步</a>有一個你必須照著走的順序。</p>
 
-  <h4>Gyro</h4>
-  <p>There is nothing to turn on and no menu to find. While you record, it writes two
+  <h4><span class="en">Gyro</span><span class="zh">陀螺儀</span></h4>
+  <p class="en">There is nothing to turn on and no menu to find. While you record, it writes two
   files inside the clip's own folder:</p>
+  <p class="zh"><strong>沒有東西要開,也沒有選單要找。</strong>
+  你錄影的時候,它會在片子自己的資料夾裡寫兩個檔案:</p>
   <div class="scroll">
   <table>
     <tbody>
-      <tr><td><code>A001_037.gcsv</code></td><td>the motion log</td></tr>
-      <tr><td><code>A001_037.json</code></td><td>the lens profile</td></tr>
+      <tr><td><code>A001_037.gcsv</code></td><td><span class="en">the motion log</span><span class="zh">運動記錄</span></td></tr>
+      <tr><td><code>A001_037.json</code></td><td><span class="en">the lens profile</span><span class="zh">鏡頭 profile</span></td></tr>
     </tbody>
   </table>
   </div>
   <figure class="shot">
     <img class="actual" src="assets/guide/07-gyro-files.webp" width="590" height="316"
          alt="A clip folder: the .gcsv and .json sit with the DNG frames and the WAV">
-    <figcaption>Both files appear in the clip folder on their own, beside the DNG
+    <figcaption class="en">Both files appear in the clip folder on their own, beside the DNG
       frames.</figcaption>
+    <figcaption class="zh">兩個檔案會自己出現在片子的資料夾裡,跟 DNG 影格並排。</figcaption>
   </figure>
-  <div class="warn"><b>CinemaDNG only.</b> A MOV take gets no files. MOV records
+  <div class="warn en"><b>CinemaDNG only.</b> A MOV take gets no files. MOV records
   through a different path that this build does not touch.</div>
-  <p>In Gyroflow, load the frames and both files, then <b>run the sync</b>.</p>
-  <p>You cannot skip the sync, and you cannot reuse a number from last time.
+  <div class="warn zh"><b>只有 CinemaDNG。</b>用 MOV 拍<strong>不會有這些檔案</strong>。
+  MOV 走的是另一條路徑,這個版本沒有碰到那裡。</div>
+  <p class="en">In Gyroflow, load the frames and both files, then <b>run the sync</b>.</p>
+  <p class="zh">在 Gyroflow 裡載入影格和那兩個檔案,然後<b>執行同步</b>。</p>
+  <p class="en">You cannot skip the sync, and you cannot reuse a number from last time.
   CinemaDNG has no timecode, and the log starts about half a second after the first
   frame &mdash; between 470 and 570 ms, and different in every take.</p>
+  <p class="zh"><strong>同步不能跳過,也不能沿用上次的數字。</strong>
+  CinemaDNG 沒有時間碼,而記錄的起點比第一個影格晚大約半秒 ——
+  落在 470 到 570 ms 之間,而且<strong>每一次拍攝都不一樣</strong>。</p>
   <figure class="shot">
     <video controls preload="metadata" playsinline
            poster="assets/guide/07-gyroflow-poster.webp"
            src="assets/guide/07-gyroflow.mp4"
            width="1280" height="802"></video>
-    <figcaption>The Gyroflow side: load the frames, answer the frame-rate prompt,
+    <figcaption class="en">The Gyroflow side: load the frames, answer the frame-rate prompt,
       then sync.</figcaption>
+    <figcaption class="zh">Gyroflow 這一邊:載入影格、回答它問的格率、然後同步。</figcaption>
   </figure>
-  <p class="note">Gyroflow asks for a frame rate when you give it a DNG sequence.
+  <p class="note en">Gyroflow asks for a frame rate when you give it a DNG sequence.
   Enter the rate you recorded at &mdash; it cannot read that from the frames.</p>
+  <p class="note zh">你把 DNG 序列丟給 Gyroflow 時,它會問你格率。
+  填你錄影時用的那個 —— <strong>它沒辦法從影格裡讀出來</strong>。</p>
 
-  <h4>If you work in DaVinci Resolve</h4>
-  <p>There is a Gyroflow plugin for Resolve, so you can stabilise on the timeline
+  <h4><span class="en">If you work in DaVinci Resolve</span><span class="zh">如果你用 DaVinci Resolve</span></h4>
+  <p class="en">There is a Gyroflow plugin for Resolve, so you can stabilise on the timeline
   instead of exporting from Gyroflow first. The two sidecar files are the same
   ones; the plugin reads them.</p>
+  <p class="zh">Resolve 有 Gyroflow 的外掛,所以你可以<strong>直接在時間軸上穩定</strong>,
+  不用先從 Gyroflow 匯出。<br>
+  那兩個 sidecar 檔案是同樣的東西,外掛讀得懂。</p>
   <figure class="shot">
     <video controls preload="metadata" playsinline
            poster="assets/guide/07-resolve-poster.webp"
            src="assets/guide/07-resolve.mp4"
            width="1280" height="802"></video>
-    <figcaption>The same clip stabilised inside Resolve with the Gyroflow plugin.</figcaption>
+    <figcaption class="en">The same clip stabilised inside Resolve with the Gyroflow plugin.</figcaption>
+    <figcaption class="zh">同一段片子,用 Gyroflow 外掛在 Resolve 裡穩定。</figcaption>
   </figure>
 
-  <h4>If you use an adapter or a manual lens</h4>
-  <p>The <code>.json</code> is the lens profile. The camera makes it from its own
+  <h4><span class="en">If you use an adapter or a manual lens</span><span class="zh">如果你用轉接環或手動鏡頭</span></h4>
+  <p class="en">The <code>.json</code> is the lens profile. The camera makes it from its own
   calibration data for the lens that is mounted, so <b>it needs a lens with
   electronic contacts</b>.</p>
-  <p>With a manual lens, or through an adapter, the camera may not know the lens or
+  <p class="zh"><code>.json</code> 是<strong>鏡頭 profile</strong>。
+  相機是用它自己對「目前掛上的那顆鏡頭」的校正資料做出來的,
+  所以<b>需要一顆有電子接點的鏡頭</b>。</p>
+  <p class="en">With a manual lens, or through an adapter, the camera may not know the lens or
   may report the wrong one. The <code>.json</code> is then wrong, and Gyroflow will
   correct the picture in a way that does not match your real lens. The motion log
   (<code>.gcsv</code>) is not affected &mdash; that part is always correct.</p>
-  <p><b>What to do:</b> do not use the <code>.json</code>. Use <b>Gyroflow's own lens
+  <p class="zh">用手動鏡頭、或透過轉接環時,相機可能<strong>不認得那顆鏡頭</strong>、
+  或是回報成錯的那一顆。那樣 <code>.json</code> 就是錯的,
+  Gyroflow 會用一組<strong>跟你真實鏡頭對不上</strong>的參數去修正畫面。<br>
+  運動記錄(<code>.gcsv</code>)<strong>不受影響</strong> —— 那部分永遠是對的。</p>
+  <p class="en"><b>What to do:</b> do not use the <code>.json</code>. Use <b>Gyroflow's own lens
   calibration</b> instead. It is built in: you film a calibration target, and
   Gyroflow works out the real distortion of your lens and saves a profile you can
   reuse for that lens.</p>
+  <p class="zh"><b>怎麼辦:</b>不要用那個 <code>.json</code>,
+  改用 <b>Gyroflow 自己的鏡頭校正</b>。<br>
+  它本來就內建:你拍一張校正圖卡,Gyroflow 會算出你鏡頭真正的畸變,
+  存成一個 profile,以後那顆鏡頭都能重複用。</p>
 
-  <p class="note">Portrait takes need nothing special &mdash; the camera records every
+  <p class="note en">Portrait takes need nothing special &mdash; the camera records every
   frame landscape upright, so Gyroflow reads them like any other take. Leave horizon
   lock off.</p>
-  <p class="note">Some builds write a single raw <code>.GYR</code> file instead of
+  <p class="note zh">直拍的素材<strong>不用做任何特別處理</strong> ——
+  相機每一格都是以橫向正立記錄的,所以 Gyroflow 讀它跟讀其他素材一樣。
+  水平鎖定<strong>維持關閉</strong>就好。</p>
+  <p class="note en">Some builds write a single raw <code>.GYR</code> file instead of
   these two. If that is what you have, the <a href="gyro/convert/">converter</a> turns it
   into the same pair, in your browser.</p>
+  <p class="note zh">有些版本寫出來的是<strong>一個原始的 <code>.GYR</code> 檔</strong>,
+  而不是這兩個。如果你拿到的是那個,
+  <a href="gyro/convert/">轉換器</a>會在你的瀏覽器裡把它變成同樣的那一對。</p>
 
-  <div class="note pad"><b>Test before you shoot something important.</b> Everything
+  <div class="note pad en"><b>Test before you shoot something important.</b> Everything
   here is still being tested. Every release has a <code>README.txt</code> that says
   what was tested and what was not. Read the one for what you loaded. Then record
   something you do not need, and check it, before you record something you do.</div>
+  <div class="note pad zh"><b>拍重要的東西之前,先測試。</b>
+  這裡的一切<strong>都還在測試中</strong>。每個發行版都有一個 <code>README.txt</code>,
+  寫明哪些測過、哪些沒測 —— 讀你載入的那一個。<br>
+  然後先錄一段<strong>你不需要的東西</strong>、檢查它,再去錄你真正需要的。</div>
 </li>
 
 <li id="remove">
-  <h3>Removing it &mdash; put your settings back first</h3>
-  <div class="warn"><b>The order matters. This is the step people get wrong.</b><br>
+  <h3><span class="en">Removing it &mdash; put your settings back first</span><span class="zh">移除 &mdash; 先把設定改回去</span></h3>
+  <div class="warn en"><b>The order matters. This is the step people get wrong.</b><br>
   The camera remembers menu settings on its own. Deleting the files does not clear
   them. So if you leave the camera set to an fpSup resolution and then delete the
   files, the camera is still set to something that is no longer there. It will not
   record properly.</div>
-  <p><b>First, while the card still works:</b></p>
-  <p>Set the resolution back to a normal one &mdash; UHD or FHD &mdash; in
+  <div class="warn zh"><b>順序很重要。這就是大家會做錯的那一步。</b><br>
+  相機會自己記住選單設定,<strong>刪掉檔案不會把它清掉</strong>。<br>
+  所以如果你把相機停在 fpSup 的解析度上、然後才刪檔案,
+  相機就還停在一個<strong>已經不存在的東西</strong>上,那樣<strong>錄不出正常的東西</strong>。</div>
+  <p class="en"><b>First, while the card still works:</b></p>
+  <p class="zh"><b>第一步,趁卡片還能運作的時候:</b></p>
+  <p class="en">Set the resolution back to a normal one &mdash; UHD or FHD &mdash; in
   <code>MENU &rarr; recording &rarr; resolution</code> or
   <code>Quick Set &rarr; RES</code>. If you changed any other fpSup menu item, set
   that back too.</p>
+  <p class="zh">在 <code>MENU &rarr; recording &rarr; resolution</code> 或
+  <code>Quick Set &rarr; RES</code> 裡,把解析度設回正常的 —— UHD 或 FHD。<br>
+  如果你還改過其他 fpSup 的選單項目,也一起設回去。</p>
   <figure class="shot">
     <img src="assets/guide/08-reset.webp" width="1640" height="1086"
          alt="The same Quick Set screen with RES. back on FHD, and FHD highlighted along the bottom">
-    <figcaption>The same screen with <b>FHD</b> chosen again. This is what the camera
+    <figcaption class="en">The same screen with <b>FHD</b> chosen again. This is what the camera
       has to be set to <i>before</i> you delete the files.</figcaption>
+    <figcaption class="zh">同一個畫面,重新選回 <b>FHD</b>。
+      這是你<i>刪檔案之前</i>,相機必須停在的狀態。</figcaption>
   </figure>
-  <p><b>Then:</b></p>
-  <p>Delete <code>AutoRun.txt</code> from the card. Turn the camera off.
+  <p class="en"><b>Then:</b></p>
+  <p class="zh"><b>然後:</b></p>
+  <p class="en">Delete <code>AutoRun.txt</code> from the card. Turn the camera off.
   <b>Take the battery out.</b> Put it back and turn the camera on.</p>
-  <p>Your camera is now completely normal. Nothing was written to the camera itself,
+  <p class="zh">把卡上的 <code>AutoRun.txt</code> 刪掉。關機。
+  <b>把電池拿出來。</b>裝回去,再開機。</p>
+  <p class="en">Your camera is now completely normal. Nothing was written to the camera itself,
   so there is nothing else to undo.</p>
-  <p>Take the battery out, do not just restart. A warm restart has not been tested.</p>
-  <div class="note"><b>Did you already do it in the wrong order?</b> Nothing is
+  <p class="zh">你的相機現在<strong>完全恢復正常</strong>。
+  相機本體上什麼都沒有被寫入,所以也沒有別的東西要還原。</p>
+  <p class="en">Take the battery out, do not just restart. A warm restart has not been tested.</p>
+  <p class="zh">要<strong>把電池拿出來</strong>,不要只是重開。熱重開<strong>沒有測試過</strong>。</p>
+  <div class="note en"><b>Did you already do it in the wrong order?</b> Nothing is
   broken. Put the card back in with its <code>AutoRun.txt</code>, turn the camera on
   so the resolution exists again, set it back to a normal one, and then delete the
   file. The setting is only a problem while the code behind it is missing.</div>
+  <div class="note zh"><b>已經照錯的順序做了?</b><strong>沒有東西壞掉。</strong><br>
+  把帶著 <code>AutoRun.txt</code> 的卡插回去、開機讓那個解析度重新存在、
+  設回正常的、然後再刪檔案。<br>
+  那個設定<strong>只有在背後的程式碼不見時</strong>才會是問題。</div>
 </li>
 
 </ol>
 
-<h2 id="trouble">If something does not work</h2>
+<h2 id="trouble"><span class="en">If something does not work</span><span class="zh">如果有東西不能用</span></h2>
 <div class="scroll">
 <table>
-  <thead><tr><th>what happens</th><th>what to do</th></tr></thead>
+  <thead><tr><th><span class="en">what happens</span><span class="zh">發生什麼</span></th><th><span class="en">what to do</span><span class="zh">怎麼辦</span></th></tr></thead>
   <tbody>
-    <tr><td>Nothing appears on the screen</td>
-        <td>The card did not run. Check the file is called
+    <tr><td><span class="en">Nothing appears on the screen</span><span class="zh">螢幕上什麼都沒出現</span></td>
+        <td><span class="en">The card did not run. Check the file is called
         <code>AutoRun.txt</code> and is at the top level of the card. Check the lock
-        switch on the card is off.</td></tr>
-    <tr><td>The progress bar stops in the middle</td>
-        <td>The load failed there. Build the card again instead of reusing it. Bring
-        the text on screen to the Discord.</td></tr>
-    <tr><td>The banner appeared but nothing changed</td>
-        <td>Check where you are looking &mdash; <a href="#use">step 7</a>. Open gate
+        switch on the card is off.</span><span class="zh">卡片沒有執行。確認檔案名稱是
+        <code>AutoRun.txt</code>、而且在卡的<strong>最上層</strong>。
+        另外確認卡片上的鎖扣是關的。</span></td></tr>
+    <tr><td><span class="en">The progress bar stops in the middle</span><span class="zh">進度條停在中間</span></td>
+        <td><span class="en">The load failed there. Build the card again instead of reusing it. Bring
+        the text on screen to the Discord.</span><span class="zh">載入在那裡失敗了。
+        <strong>重做一張卡</strong>,不要沿用原本那張。把螢幕上的文字帶到 Discord 上問。</span></td></tr>
+    <tr><td><span class="en">The banner appeared but nothing changed</span><span class="zh">橫幅出現了,但什麼都沒變</span></td>
+        <td><span class="en">Check where you are looking &mdash; <a href="#use">step 7</a>. Open gate
         is a resolution in the menu. The gyro has no menu at all; it makes files next
-        to your clip.</td></tr>
-    <tr><td>No new resolution in the menu</td>
-        <td>Super35 / crop is on, or the camera is not set to CinemaDNG.</td></tr>
-    <tr><td>No <code>.gcsv</code> next to the clip</td>
-        <td>Two possible causes. First check the banner really named the gyro build.
+        to your clip.</span><span class="zh">先確認你在看哪裡 ——
+        <a href="#use">第 7 步</a>。Open gate 是選單裡的一個<strong>解析度</strong>;
+        陀螺儀<strong>完全沒有選單</strong>,它是在你的片子旁邊產生檔案。</span></td></tr>
+    <tr><td><span class="en">No new resolution in the menu</span><span class="zh">選單裡沒有新的解析度</span></td>
+        <td><span class="en">Super35 / crop is on, or the camera is not set to CinemaDNG.</span><span class="zh">Super35 / crop 開著,或者相機沒有設成 CinemaDNG。</span></td></tr>
+    <tr><td><span class="en">No <code>.gcsv</code> next to the clip</span><span class="zh">片子旁邊沒有 <code>.gcsv</code></span></td>
+        <td><span class="en">Two possible causes. First check the banner really named the gyro build.
         If it did, the card is probably too slow: these files are written while you
-        record, and a slow card loses them first. See <a href="#card">step 2</a>.</td></tr>
-    <tr><td>Gyroflow stabilises, but the picture looks bent or stretched</td>
-        <td>The lens profile does not match your lens. This happens with adapters and
+        record, and a slow card loses them first. See <a href="#card">step 2</a>.</span><span class="zh">兩種可能。
+        先確認開機橫幅上<strong>真的有</strong>寫到陀螺儀版本。<br>
+        如果有,那多半是<strong>卡太慢</strong>:這些檔案是在你錄影的同時寫的,
+        而卡一慢,它們會第一個不見。見<a href="#card">第 2 步</a>。</span></td></tr>
+    <tr><td><span class="en">Gyroflow stabilises, but the picture looks bent or stretched</span><span class="zh">Gyroflow 穩定了,但畫面看起來彎掉或被拉伸</span></td>
+        <td><span class="en">The lens profile does not match your lens. This happens with adapters and
         manual lenses. Use Gyroflow's own lens calibration instead of the
-        <code>.json</code> &mdash; <a href="#use">step 7</a>.</td></tr>
-    <tr><td>Recording stops after a few seconds</td>
-        <td>The card is too slow. <a href="#card">Step 2</a>. This is the most common
-        problem, and it is the card.</td></tr>
-    <tr><td>You removed the files and now recording is wrong</td>
-        <td>A setting is still pointing at something that is gone. Put the card back,
+        <code>.json</code> &mdash; <a href="#use">step 7</a>.</span><span class="zh">鏡頭 profile
+        跟你的鏡頭對不上。用轉接環和手動鏡頭時會這樣。<br>
+        改用 Gyroflow 自己的鏡頭校正,不要用那個 <code>.json</code> ——
+        <a href="#use">第 7 步</a>。</span></td></tr>
+    <tr><td><span class="en">Recording stops after a few seconds</span><span class="zh">錄影幾秒後就停了</span></td>
+        <td><span class="en">The card is too slow. <a href="#card">Step 2</a>. This is the most common
+        problem, and it is the card.</span><span class="zh">卡太慢。<a href="#card">第 2 步</a>。
+        這是<strong>最常見</strong>的問題,而且原因就是卡。</span></td></tr>
+    <tr><td><span class="en">You removed the files and now recording is wrong</span><span class="zh">你把檔案刪了,現在錄影不正常</span></td>
+        <td><span class="en">A setting is still pointing at something that is gone. Put the card back,
         set the resolution to a normal one, then remove it again &mdash;
-        <a href="#remove">step 8</a>.</td></tr>
-    <tr><td>The camera does not respond at all</td>
-        <td>Take the battery out. Nothing here is permanent, so the next start is
-        clean.</td></tr>
+        <a href="#remove">step 8</a>.</span><span class="zh">有一個設定還指著<strong>已經不存在的東西</strong>。
+        把卡插回去、把解析度設回正常的、然後再移除一次 ——
+        <a href="#remove">第 8 步</a>。</span></td></tr>
+    <tr><td><span class="en">The camera does not respond at all</span><span class="zh">相機完全沒反應</span></td>
+        <td><span class="en">Take the battery out. Nothing here is permanent, so the next start is
+        clean.</span><span class="zh">把電池拿出來。這裡沒有任何東西是永久的,
+        所以<strong>下一次開機就是乾淨的</strong>。</span></td></tr>
   </tbody>
 </table>
 </div>
 
-<p class="note" style="margin-top:20px"><b>Still stuck?</b> Ask on the
-<a href="https://discord.gg/XeFK5zNZpT">Discord</a>. Tell us the banner text you saw
+<p class="note en" style="margin-top:20px"><b>Still stuck?</b> Ask on the
+<a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://www.youtube.com/@fp-sup">YouTube</a>. Tell us the banner text you saw
 on screen, which card you use, your firmware version, and what you ticked in
 fpSup-Merge.</p>
+<p class="note zh" style="margin-top:20px"><b>還是卡住?</b>到
+<a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+<a href="https://www.youtube.com/@fp-sup">YouTube</a> 上問。<br>
+告訴我們你在螢幕上看到的橫幅文字、你用哪張卡、你的韌體版本,
+以及你在 fpSup-Merge 裡勾了什麼。</p>
 
 <footer>
-  <p class="removal"><b>Step 8 in short:</b> set the resolution back to a normal one
+  <p class="removal en"><b>Step 8 in short:</b> set the resolution back to a normal one
   <i>first</i>. <b>Then</b> delete <code>AutoRun.txt</code>, turn the camera off,
   take the battery out, and turn it on again. The camera remembers your menu choice
   even after the files are gone, so the order is what makes it clean.</p>
-  <p><a href="./">fpSup</a> &middot; <a href="how-it-works.html">Why this is
-  possible</a> &middot; <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
+  <p class="removal zh"><b>第 8 步的濃縮版:</b><i>先</i>把解析度設回正常的。
+  <b>然後</b>刪掉 <code>AutoRun.txt</code>、關機、把電池拿出來、再開機。<br>
+  檔案沒了之後相機還是記得你的選單選擇,所以<strong>順序才是乾淨移除的關鍵</strong>。</p>
+  <p><a href="./">fpSup</a> &middot; <a href="how-it-works.html"><span class="en">Why this is possible</span><span class="zh">為什麼這件事做得到</span></a> &middot; <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
 </footer>
 
+<script src="assets/lang.js?v=9fef0135" defer></script>
 </body>
 </html>

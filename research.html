@@ -75,6 +75,18 @@
     306 recording profiles. Interactive.</small>
     <span class="m">new &middot; corrects three claims in the older notes</span>
   </a>
+  <a class="row" href="explainers/reduction-kernels.html">
+    <b>What the IMX410&rsquo;s binning actually does</b>
+    <small>The same reduction stages, measured from frames instead of read from
+    disassembly. Vertically the sensor really does combine rows &mdash; and leaves an
+    uneven output grid that proves it. Horizontally it never does: it interpolates, with
+    a kernel that pre-filters nothing at any ratio. The &divide;3 mode combines two rows
+    out of every three, exactly what the firmware's own merge tuple has been saying, and
+    the whole thing averages rather than sums, so it buys no light. With the RWZM kernel
+    solved to sixteen phases, every route ranked on five materials, and the row artefact
+    graded.</small>
+    <span class="m">measured on a camera &middot; ranks every route, shipped and proposed &middot; EN / 中文</span>
+  </a>
   <a class="row" href="explainers/lossless-compression.html">
     <b>In-camera lossless compression</b>
     <small>The fp compresses every still it takes and has never compressed a video
@@ -181,7 +193,8 @@ Markdown and this site does not.</p>
 <p class="lede">The most useful thing anyone can contribute is a measurement: a card's
 sustained write rate, a frame rate nobody has tested, footage from a body other than
 the one everything here was developed on. The
-<a href="https://discord.gg/XeFK5zNZpT">Discord</a> is where that gets coordinated,
+<a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://www.youtube.com/@fp-sup">YouTube</a> is where that gets coordinated,
 and <a href="https://github.com/ijigen/fpSup">the repository</a> has all of it.</p>
 
 <footer>
