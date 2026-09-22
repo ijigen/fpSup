@@ -665,9 +665,9 @@ payload does not have to be arranged around anybody.</p>
     <b><span class="en">Nothing proves the firmware will not write in the arena</span><span class="zh">沒有東西證明韌體不會寫進 arena</span></b>
     <small><span class="en">The gap is inside the loaded firmware image, not the heap, so no allocator hands it out &mdash; a reboot restores it because the image is reloaded, not because anyone reclaimed it. But zero in the image only means zero at load: a rarely-used feature could own it as <code>.bss</code>. Measured after a boot and a take, all 972 unclaimed words read zero &mdash; that covers the paths we walk, not the ones we do not. Holding 32 bytes instead of 1,736 is the answer to that, not a claim that the gap is ours.</span><span class="zh">這段空隙在<em>載入的韌體映像裡面</em>,不是堆積,所以沒有分配器會把它發出去 —— 重開機會還原是因為映像重新載入,不是因為有人回收。但映像檔裡是零只代表載入時是零:某個少用的功能可能以 <code>.bss</code> 擁有它。開機加一趟錄影之後量過,未配置的 972 個字全是零 —— 那涵蓋我們走過的路徑,不涵蓋沒走過的。答案是只佔 32 bytes 而不是 1,736,不是宣稱這段空隙是我們的。</span></small>
   </div></li>
-  <li><span class="s todo-m">&mdash;</span><div>
-    <b><span class="en">Two things share <code>0xC072F700</code></span><span class="zh">兩個東西共用 <code>0xC072F700</code></span></b>
-    <small><span class="en">The fast-start bootstrap and the host file tools' scratch. Harmless today only because the bootstrap has already run. Nothing writes that down.</span><span class="zh">快載入的 bootstrap 和主機檔案工具的暫存區。今天無害只是因為 bootstrap 早就跑完了,而且沒有任何地方寫著這件事。</span></small>
+  <li><span class="s done">&#10003;</span><div>
+    <b><span class="en">Two things shared <code>0xC072F700</code></span><span class="zh">兩個東西共用 <code>0xC072F700</code></span></b>
+    <small><span class="en">The fast-start bootstrap and the host file tools' parameter block &mdash; and, it turned out, <code>oneshot.S</code> and four probes as well. The host moved out rather than the bootstrap: <code>fp_usb_shell/cave.py</code> asks the same bump pointer stage2 resets, so a host tool's blocks come from the arena and the bootstrap word has one owner. The host names no cave address now either.</span><span class="zh">快載入的 bootstrap 和主機檔案工具的參數區 —— 後來發現 <code>oneshot.S</code> 和四個探針也在同一個位址。搬走的是主機不是 bootstrap:<code>fp_usb_shell/cave.py</code> 跟 stage2 重設的同一個 bump 指標要空間,所以主機工具的區塊來自 arena,那個 bootstrap 字只剩一個主人。主機端現在也一個空洞區位址都不指定。</span></small>
   </div></li>
 </ul>
 
@@ -707,6 +707,12 @@ that violates one is wrong even if the camera boots.</p>
       <span class="zh"><b>任何產品都不准在 build 時指定空洞區位址。</b>
       開機時跟配置器要,只留韌體非跳不可的落點。</span></td>
       <td class="ok"><span class="en">build error &mdash; the release check lists every cave destination on the card and a release card must have none</span><span class="zh">建置錯誤 —— 發行檢查會列出卡上每個空洞區目的地,發布卡必須一個都沒有</span></td></tr>
+    <tr><td>
+      <span class="en"><b>A host tool asks for its block too.</b> `cave.claim(name, n)`
+      off the same bump pointer, and a template is told where its block is.</span>
+      <span class="zh"><b>主機端工具也要用要的。</b>
+      用同一個 bump 指標 <code>cave.claim(name, n)</code>,而且要告訴模板它的區塊在哪。</span></td>
+      <td class="ok"><span class="en">build error, mutation-tested &mdash; nothing may name an address inside the arena, and every <code>assemble()</code> of a template that takes a block must pass one</span><span class="zh">建置錯誤,mutation 驗過 —— 任何地方都不准指定 arena 內的位址,而且會接收區塊的模板,每一次 <code>assemble()</code> 都必須傳給它</span></td></tr>
     <tr><td>
       <span class="en"><b>A state word carries its size.</b> A displacement off a shared
       word lands inside its own field or exactly on another's start, and a field walked
