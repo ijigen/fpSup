@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The fpSup load chain &mdash; fpSup</title>
+<meta name="description" content="How a SIGMA fp card loads: four layers from the AutoRun interpreter to each product's own entry, measured with the camera's own microsecond clock. The load itself takes 3.5 ms; everything else is the camera booting and the AutoRun's commands.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/fpsup-load-chain.html">
+<meta property="og:title" content="The fpSup load chain">
+<meta property="og:description" content="Four layers, timed by the camera itself. The load takes 3.5 ms out of 11.7 seconds — which is why moving work out of the AutoRun and into the file has been the right direction every time.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+/* ---- language switch ---------------------------------------------------- */
+[data-lang="en"] .zh{display:none !important}
+[data-lang="zh"] .en{display:none !important}
+.topbar{display:flex; align-items:center; justify-content:space-between;
+  gap:16px; margin-bottom:22px}
+.topbar .back{margin-bottom:0}
+.lang{display:inline-flex; border:1px solid var(--line); border-radius:3px;
+  overflow:hidden; flex:none}
+.lang button{font-family:var(--mono); font-size:.72rem; letter-spacing:.04em;
+  padding:5px 11px; border:0; background:var(--panel); color:var(--dim);
+  cursor:pointer; transition:background .12s, color .12s}
+.lang button + button{border-left:1px solid var(--line)}
+.lang button:hover{color:var(--ink)}
+.lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
+  font-weight:600}
+.lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+[data-lang="zh"] body{line-height:1.75}
+[data-lang="zh"] .lede{max-width:40em}
+
+/* ---- diagrams ----------------------------------------------------------- */
+figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:16px 14px 12px}
+figure.dia svg{display:block; width:100%; height:auto}
+figure.dia figcaption{font-size:.84rem; color:var(--dim); margin-top:11px;
+  padding-top:10px; border-top:1px solid var(--line)}
+figure.dia figcaption b{color:var(--ink); font-weight:600}
+.dia text{font-family:var(--mono); fill:var(--ink)}
+.dia .t-dim{fill:var(--dim)}
+.dia .t-sig{fill:var(--sig)}
+.dia .t-warn{fill:var(--warn)}
+.dia .bx{fill:var(--paper); stroke:var(--line); stroke-width:1}
+.dia .bx-on{fill:var(--sig-soft); stroke:var(--sig); stroke-width:1.5}
+.dia .ln{stroke:var(--line); stroke-width:1.5; fill:none}
+.dia .ln-on{stroke:var(--sig); stroke-width:1.5; fill:none}
+.dia .f-cam{fill:var(--dim)}
+.dia .f-auto{fill:var(--sig)}
+.dia .f-load{fill:var(--warn)}
+
+/* ---- price / result tables ---------------------------------------------- */
+table.num td:not(:first-child), table.num th:not(:first-child){text-align:right;
+  font-variant-numeric:tabular-nums; white-space:nowrap}
+table.num td:first-child{white-space:nowrap}
+table.gloss td:first-child{white-space:nowrap; width:1%; padding-right:16px;
+  vertical-align:top; color:var(--sig)}
+table.gloss td:last-child{font-family:var(--sans); font-size:.88rem}
+table.gloss b{color:var(--ink)}
+table.inv td{font-family:var(--sans); font-size:.88rem}
+table.inv td.ok, table.inv td.w{font-family:var(--mono); font-size:.76rem; width:34%}
+table.inv td.ok{color:var(--sig)}
+table.inv td.w{color:var(--warn)}
+table.inv b{font-weight:600}
+tr.best td{color:var(--sig); font-weight:600}
+
+/* ---- progress ----------------------------------------------------------- */
+ul.todo{list-style:none; padding:0; margin:14px 0 0}
+ul.todo li{display:grid; grid-template-columns:22px 1fr; gap:10px;
+  padding:9px 0; border-bottom:1px solid var(--line); font-size:.9rem}
+ul.todo li:last-child{border-bottom:0}
+ul.todo .s{font-family:var(--mono); font-size:.8rem; text-align:center}
+ul.todo .done{color:var(--sig)}
+ul.todo .todo-m{color:var(--dim)}
+ul.todo b{font-weight:600}
+ul.todo small{display:block; color:var(--dim); font-size:.82rem; margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="../research.html"><span class="en">&larr; Firmware research</span><span class="zh">&larr; 韌體研究</span></a>
+  <div class="lang" role="group" aria-label="Language / 語言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="zh" aria-pressed="false">中文</button>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1><span class="en">The fpSup load chain</span><span class="zh">fpSup 載入鏈</span></h1>
+    <p class="lede en">A card is two files. Between the firmware's AutoRun interpreter
+    and a product doing its job there are four layers, each owning something
+    different. This is all of them &mdash; the rules that hold them together, and what
+    the camera's own clock says about where a boot actually goes.</p>
+    <p class="lede zh">一張卡只有兩個檔。從韌體的 AutoRun 直譯器,到產品真的開始工作,
+    中間有四層,每一層負責的東西都不一樣。這頁把四層攤開,列出撐住它們的規則,
+    並附上相機自己的時鐘對「開機時間花在哪」給的答案。</p>
+    <ul class="chips">
+      <li><b>4</b> <span class="en">layers</span><span class="zh">層</span></li>
+      <li><b>3.5 ms</b> <span class="en">the load itself</span><span class="zh">是載入本身</span></li>
+      <li><b>10</b> <span class="en">invariants</span><span class="zh">條不變量</span></li>
+    </ul>
+  </div>
+</header>
+
+<div class="facts">
+  <dl>
+    <dt><span class="en">What this is</span><span class="zh">這頁是什麼</span></dt>
+    <dd class="en">A reference for anyone writing a card, and a yardstick to hold work
+    against. Every rule below is enforced somewhere &mdash; a build check, a runtime
+    guard, or a measurement &mdash; and where it is not yet, it says so.</dd>
+    <dd class="zh">寫卡的人要看的參考,也是拿來比對成果的尺。下面每一條規則背後都有東西撐著
+    —— 建置檢查、執行期守衛、或實測 —— 還沒有的,會寫明。</dd>
+    <dt><span class="en">Where the numbers come from</span><span class="zh">數字怎麼來的</span></dt>
+    <dd class="en">The camera's own microsecond counter, stamped when the loader gets
+    control and again when the load finishes. No host, no USB, no stopwatch. Ver.5.02.</dd>
+    <dd class="zh">相機自己的微秒計數器,在 loader 拿到控制權和載入完成時各寫一個字。
+    沒有主機、沒有 USB、沒有碼錶。Ver.5.02。</dd>
+    <dt><span class="en">Nothing here is flashed</span><span class="zh">這裡沒有任何東西寫進韌體</span></dt>
+    <dd class="en">Every address on this page is RAM and is gone at power-off. The one
+    exception is fast start, which writes the loader into a settings block &mdash; and
+    that is opt-in, on the card-composer page, for exactly that reason.</dd>
+    <dd class="zh">這頁上的位址全是 RAM,關機就沒了。唯一的例外是快載入 ——
+    它會把 loader 寫進設定區,正因為如此,它是在合併器頁面上由使用者自己勾的。</dd>
+  </dl>
+</div>
+
+<h2><span class="en">The words</span><span class="zh">名詞對照</span></h2>
+
+<p class="en">The code and the notes use the English throughout. This is what each one
+means.</p>
+<p class="zh">程式碼和筆記一律用英文,這裡是它們各自指什麼。</p>
+
+<div class="scroll">
+<table class="gloss">
+  <tbody>
+    <tr><td><code>cave</code></td><td>
+      <span class="en"><b>The injection cave.</b> One 12 KB gap in firmware RAM,
+      <code>0xC072D000..0xC0730000</code>, that nothing else uses. Our code has to live
+      here because it is the only RAM the firmware can branch to.</span>
+      <span class="zh"><b>空洞區 / 注入區。</b>韌體 RAM 裡一段沒人用的 12 KB 空隙,
+      <code>0xC072D000..0xC0730000</code>。我們的程式碼只能住這裡,因為韌體跳得到的只有它。</span>
+    </td></tr>
+    <tr><td><code>stage1</code></td><td>
+      <span class="en">The <b>loader</b>, 284 bytes, in the cave. Only what has to exist
+      before the file is in memory &mdash; so every word of it costs the AutoRun one
+      <code>mem set</code>.</span>
+      <span class="zh"><b>loader</b>,284 bytes,住空洞區。只放「檔案進記憶體之前非做不可」的事
+      —— 所以它每一個字都要 AutoRun 用一條 <code>mem set</code> 拼出來。</span>
+    </td></tr>
+    <tr><td><code>stage2</code></td><td>
+      <span class="en">The loader's second half, carried as the <b>first section of
+      <code>fpSup.BIN</code></b> and run where it lands. However much it does, it costs
+      the boot nothing.</span>
+      <span class="zh">loader 的後半,是 <b><code>fpSup.BIN</code> 的第一個區段</b>,
+      就地執行。做再多都不花開機時間。</span>
+    </td></tr>
+    <tr><td><code>VBIN</code></td><td>
+      <span class="en">The container: magic, section count, entry, payload length, then
+      one <code>(destination, length)</code> record per section. Merging two cards is
+      concatenation plus checks.</span>
+      <span class="zh">容器格式:magic、區段數、entry、資料長度,然後每個區段一筆
+      <code>(目的位址, 長度)</code>。合併兩張卡就是把它們串起來再檢查。</span>
+    </td></tr>
+    <tr><td><code>section</code></td><td>
+      <span class="en">Destination <code>&ge;0x40000000</code> is a firmware address;
+      below it is an <b>offset into a pool</b>; zero means <b>run where the file
+      landed</b>.</span>
+      <span class="zh">目的位址 <code>&ge;0x40000000</code> 是韌體位址;小於它是<b>池的位移</b>;
+      等於 0 是<b>就地執行</b>。</span>
+    </td></tr>
+    <tr><td><code>entry</code></td><td>
+      <span class="en">The word at <code>+0x08</code> of the header. stage2
+      <b>calls</b> it once &mdash; not branches &mdash; and it must return.</span>
+      <span class="zh">表頭 <code>+0x08</code> 那個字。stage2 <b>呼叫</b>它一次
+      (不是跳),而且它必須返回。</span>
+    </td></tr>
+    <tr><td><code>trampoline</code></td><td>
+      <span class="en">A merged card has several payloads and the header has one entry
+      word, so the entry is a dispatcher that calls each product in turn. Boot only.</span>
+      <span class="zh">合併卡有好幾個 payload,但表頭只有一個 entry 字,
+      所以 entry 是一個分派器,逐張呼叫。只在開機跑一次。</span>
+    </td></tr>
+    <tr><td><code>veneer</code></td><td>
+      <span class="en">An 8-byte hop, for when a branch cannot reach its target. One per
+      hook, no decisions. See below.</span>
+      <span class="zh">8 bytes 的跳板,用在「分支跳不夠遠」的時候。一個 hook 一個,不做判斷。見下。</span>
+    </td></tr>
+    <tr><td><code>pool</code></td><td>
+      <span class="en">A block from the firmware's allocator, around
+      <code>0x45xxxxxx</code>. Room to spare &mdash; but a firmware <code>bl</code>
+      cannot reach it.</span>
+      <span class="zh">跟韌體配置器要來的一塊記憶體,大約在 <code>0x45xxxxxx</code>。
+      空間充裕 —— 但韌體的 <code>bl</code> 跳不到。</span>
+    </td></tr>
+    <tr><td><code>publish</code></td><td>
+      <span class="en">Freshly written words are still <em>data</em> to the caches.
+      Clean the D-cache, invalidate the I-cache, and only then are they instructions.</span>
+      <span class="zh">剛寫進去的字對快取來說還是<em>資料</em>。清 D-cache、廢 I-cache,
+      它們才真的是指令。</span>
+    </td></tr>
+    <tr><td><code>store_boot</code></td><td>
+      <span class="en">Fast start's bootstrap, 104 bytes. Checks a hash, copies the
+      loader out of the settings block, branches into it.</span>
+      <span class="zh">快載入的 bootstrap,104 bytes。比對雜湊、把 loader 從設定區複製出來、跳進去。</span>
+    </td></tr>
+    <tr><td><code>abort</code></td><td>
+      <span class="en">Stops the AutoRun interpreter early. It owes three things: close
+      the script's file, pop the registration, clear the running byte.</span>
+      <span class="zh">提早停止 AutoRun 直譯器。它欠三件事:關腳本的檔、彈出註冊項、清 running byte。</span>
+    </td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2><span class="en">Four layers</span><span class="zh">四層</span></h2>
+
+<figure class="dia">
+  <svg viewBox="0 0 760 470" role="img" aria-label="Four layers: the AutoRun script writes a bootstrap and borrows the echo handler; store_boot copies the loader out of the settings block; the loader reads fpSup.BIN; stage2 places the sections, calls each product's entry and comes back.">
+    <rect class="bx" x="20" y="16" width="520" height="74" rx="3"/>
+    <text x="34" y="36" font-size="13" font-weight="600">1 &nbsp;AutoRun.txt</text>
+    <text x="34" y="56" font-size="11" class="t-dim">display &times; N &middot; mem set &times; N &middot; echo</text>
+    <text x="34" y="76" font-size="11" class="t-dim en">the only layer whose size costs time</text>
+    <text x="34" y="76" font-size="11" class="t-dim zh">唯一「長度會變成時間」的一層</text>
+    <text x="556" y="52" font-size="11" class="t-sig">72&ndash;83 ms</text>
+    <text x="556" y="67" font-size="11" class="t-sig en">per command</text>
+    <text x="556" y="67" font-size="11" class="t-sig zh">每條指令</text>
+    <path class="ln" d="M280,90 L280,110" marker-end="url(#a1)"/>
+
+    <rect class="bx" x="20" y="112" width="520" height="62" rx="3" stroke-dasharray="4 3"/>
+    <text x="34" y="132" font-size="13" font-weight="600" class="en">2 &nbsp;store_boot &mdash; fast start only</text>
+    <text x="34" y="132" font-size="13" font-weight="600" class="zh">2 &nbsp;store_boot —— 只有快載入卡有</text>
+    <text x="34" y="152" font-size="11" class="t-dim en">magic == sha256(loader) ? copy it out of the settings block : return</text>
+    <text x="34" y="152" font-size="11" class="t-dim zh">magic == sha256(loader) ? 從設定區複製出來 : 原樣返回</text>
+    <text x="34" y="168" font-size="11" class="t-dim en">26 words instead of 64 &mdash; that is the whole saving</text>
+    <text x="34" y="168" font-size="11" class="t-dim zh">26 個字取代 64 個 —— 省的就是這個</text>
+    <path class="ln" d="M280,174 L280,194" marker-end="url(#a1)"/>
+
+    <rect class="bx" x="20" y="196" width="520" height="70" rx="3"/>
+    <text x="34" y="216" font-size="13" font-weight="600" class="en">3 &nbsp;loader &mdash; 284 bytes in the cave</text>
+    <text x="34" y="216" font-size="13" font-weight="600" class="zh">3 &nbsp;loader —— 空洞區裡的 284 bytes</text>
+    <text x="34" y="236" font-size="11" class="t-dim en">ask for 64 KiB &middot; open \fpSup.BIN &middot; read &middot; check "VBIN" &middot; publish</text>
+    <text x="34" y="236" font-size="11" class="t-dim zh">要 64 KiB · 開 \fpSup.BIN · 讀 · 驗 "VBIN" · 發佈快取</text>
+    <text x="34" y="256" font-size="11" class="t-dim en">fails safe: a missing file leaves the camera stock</text>
+    <text x="34" y="256" font-size="11" class="t-dim zh">失敗就收手:檔案不在,相機就是原廠相機</text>
+    <path class="ln" d="M280,266 L280,286" marker-end="url(#a1)"/>
+
+    <rect class="bx bx-on" x="20" y="288" width="520" height="136" rx="3"/>
+    <text x="34" y="308" font-size="13" font-weight="600" class="en">4 &nbsp;stage2 &mdash; carried in the file, runs where it lands</text>
+    <text x="34" y="308" font-size="13" font-weight="600" class="zh">4 &nbsp;stage2 —— 在檔案裡,就地執行</text>
+    <rect class="bx" x="34" y="318" width="492" height="24" rx="2"/>
+    <text x="44" y="334" font-size="11" class="en">place every firmware-address section &rarr; publish</text>
+    <text x="44" y="334" font-size="11" class="zh">放所有韌體位址的區段 → 發佈快取</text>
+    <rect class="bx" x="34" y="346" width="492" height="24" rx="2" stroke="var(--sig)"/>
+    <text x="44" y="362" font-size="11" class="t-sig en">call each product's entry &mdash; and it must come back</text>
+    <text x="44" y="362" font-size="11" class="t-sig zh">呼叫每個產品的 entry —— 而且它必須回來</text>
+    <rect class="bx" x="34" y="374" width="492" height="22" rx="2"/>
+    <text x="44" y="389" font-size="11" class="en">provision the settings block &middot; arm the stop</text>
+    <text x="44" y="389" font-size="11" class="zh">種設定區 · 武裝停止</text>
+    <text x="34" y="414" font-size="11" class="t-dim en">free, however much it does: it travels in fpSup.BIN</text>
+    <text x="34" y="414" font-size="11" class="t-dim zh">做再多都免費:它跟著 fpSup.BIN 一起進來</text>
+    <text x="556" y="316" font-size="11" class="t-warn">3.5 ms</text>
+    <text x="556" y="331" font-size="11" class="t-warn en">all four boxes</text>
+    <text x="556" y="331" font-size="11" class="t-warn zh">四個框加起來</text>
+
+    <path class="ln-on" d="M540,358 L600,358 L600,444 L392,444" marker-end="url(#a2)"/>
+    <rect class="bx" x="20" y="430" width="372" height="28" rx="3"/>
+    <text x="34" y="449" font-size="11" class="en">each product: allocate &middot; publish &middot; arm hooks last &middot; return</text>
+    <text x="34" y="449" font-size="11" class="zh">每個產品:自己配記憶體 · 發佈 · 最後才 arm hook · 返回</text>
+
+    <defs>
+      <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker>
+      <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--sig)"/></marker>
+    </defs>
+  </svg>
+  <figcaption>
+    <span class="en"><b>The loader only promises two things:</b> your bytes are at the
+    address you named, and your entry is called once. Memory, pointers and hooks are
+    each product's own business &mdash; which is why open&nbsp;gate allocates nothing
+    and the gyro logger takes a megabyte.</span>
+    <span class="zh"><b>載入器只保證兩件事:</b>你的位元組在你說的位址上,而且你的 entry
+    會被呼叫一次。記憶體、指標、hook 全是各張卡自己的事 ——
+    所以 open gate 一個位元組都不配,而陀螺記錄器要一整個 MB。</span>
+  </figcaption>
+</figure>
+
+
+<h3><span class="en">stage2, opened up</span><span class="zh">stage2 拆開來看</span></h3>
+
+<p class="en">It is two passes with the entry in the middle, and the order is not
+arbitrary.</p>
+<p class="zh">它是兩趟,中間夾著 entry,而這個順序不是隨便排的。</p>
+
+<div class="scroll">
+<table class="num">
+  <tbody>
+    <tr><td><b>pass 1</b></td><td style="text-align:left">
+      <span class="en">Place every section whose destination is a firmware address.</span>
+      <span class="zh">放所有目的位址是韌體位址的區段。</span></td></tr>
+    <tr><td><b>publish</b></td><td style="text-align:left">
+      <span class="en">Before anything placed is allowed to run.</span>
+      <span class="zh">在任何放進去的東西被執行之前。</span></td></tr>
+    <tr><td><b>entry</b></td><td style="text-align:left">
+      <span class="en">Call each product. It allocates, publishes its pool address,
+      writes its own pointer words, arms its firmware hooks <em>last</em>, and returns.</span>
+      <span class="zh">呼叫每個產品。它自己配記憶體、發佈池位址、寫自己的指標字、
+      <em>最後</em>才 arm 韌體 hook,然後返回。</span></td></tr>
+    <tr><td><b>pass 2</b></td><td style="text-align:left">
+      <span class="en">Place the sections whose destination is an offset into the memory
+      the entry just published. They could not be placed before it &mdash; nobody owned
+      a pool yet.</span>
+      <span class="zh">放那些目的位址是「剛剛發佈的那塊記憶體的位移」的區段。
+      在 entry 之前放不了 —— 那時還沒有人擁有一塊池。</span></td></tr>
+    <tr><td><b>provision</b></td><td style="text-align:left">
+      <span class="en">Write the loader into the settings block, if what is there is not
+      already this build. The magic goes <em>last</em>, so a store half-written by a power
+      cut cannot look valid.</span>
+      <span class="zh">如果設定區裡不是這一版,就把 loader 寫進去。magic <em>最後</em>寫 ——
+      斷電寫到一半的 store 不能看起來是有效的。</span></td></tr>
+    <tr><td><b>arm abort</b></td><td style="text-align:left">
+      <span class="en">Point the echo handler at the routine that stops the script. The
+      script's next line runs it.</span>
+      <span class="zh">把 echo handler 指向停止腳本的那段。腳本的下一行就會執行它。</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="warn">
+  <p class="en"><b>If an entry does not return:</b> its own firmware sections are in
+  place, pass 2 never happens, the settings block is not seeded, the script is not
+  stopped &mdash; and there is no diagnosis, because nobody is left alive to give one.
+  <em>Install yourself and return</em> is the whole contract.</p>
+  <p class="zh"><b>entry 如果不返回:</b>它自己的韌體區段有了,pass 2 沒了,
+  設定區沒種,腳本沒停 —— 而且沒有任何診斷,因為沒人活著能講話。
+  <em>裝好你自己,然後回來</em>,契約就這一句。</p>
+</div>
+
+<p class="en">Placing is also where a card is proved to be RAM-only: every destination
+is checked, and the NAND is not in the address space at all, so a section has no way to
+reach it.</p>
+<p class="zh">放區段這一步也是「這張卡只碰 RAM」的證明:每個目的位址都被檢查,
+而 NAND 根本不在位址空間裡,所以一個區段沒有辦法碰到它。</p>
+
+<h2><span class="en">Where the boot actually goes</span><span class="zh">開機時間到底花在哪</span></h2>
+
+<p class="en">Two stamps split an 11.7-second boot into three parts. One of them is
+not what anybody expected.</p>
+<p class="zh">兩個戳記把 11.7 秒的開機切成三段,其中一段跟所有人的預期都不一樣。</p>
+
+<figure class="dia">
+  <svg viewBox="0 0 760 210" role="img" aria-label="An 11,692 ms boot: 8,876 ms is the camera booting, 2,813 ms is the AutoRun's 42 commands, and 3.5 ms is the whole load.">
+    <text x="20" y="22" font-size="11" class="t-dim en">power-on</text>
+    <text x="20" y="22" font-size="11" class="t-dim zh">通電</text>
+    <text x="740" y="22" font-size="11" text-anchor="end" class="t-dim en">worker running</text>
+    <text x="740" y="22" font-size="11" text-anchor="end" class="t-dim zh">worker 開始跑</text>
+
+    <rect class="f-cam" x="20" y="34" width="547" height="40"/>
+    <rect class="f-auto" x="569" y="34" width="171" height="40"/>
+    <rect class="f-load" x="739" y="34" width="1.5" height="40"/>
+
+    <text x="293" y="59" font-size="12" text-anchor="middle" fill="var(--paper)" font-weight="600">8,876 ms</text>
+    <text x="654" y="59" font-size="12" text-anchor="middle" fill="var(--paper)" font-weight="600">2,813 ms</text>
+
+    <text x="293" y="92" font-size="11" text-anchor="middle" class="en">the camera booting &mdash; not ours</text>
+    <text x="293" y="92" font-size="11" text-anchor="middle" class="zh">相機自己開機 —— 不歸我們管</text>
+    <text x="654" y="92" font-size="11" text-anchor="middle" class="t-sig en">the AutoRun's 42 commands</text>
+    <text x="654" y="92" font-size="11" text-anchor="middle" class="t-sig zh">AutoRun 的 42 條指令</text>
+
+    <path class="ln" d="M740,78 L740,120 L640,120" fill="none"/>
+    <text x="632" y="124" font-size="11" text-anchor="end" class="t-warn en">3.5 ms &mdash; the entire load</text>
+    <text x="632" y="124" font-size="11" text-anchor="end" class="t-warn zh">3.5 ms —— 整個載入</text>
+
+    <rect class="bx" x="20" y="142" width="720" height="52" rx="3"/>
+    <text x="34" y="162" font-size="11" class="t-dim en">In those 3.5 ms: allocate 64 KiB, open and read a 32 KB file, close it, check the magic,</text>
+    <text x="34" y="162" font-size="11" class="t-dim zh">那 3.5 毫秒裡有:配 64 KiB、開檔讀 32 KB、關檔、驗 magic、</text>
+    <text x="34" y="180" font-size="11" class="t-dim en">two whole-cache operations, place 10 sections, run the entry, write flash, arm the stop.</text>
+    <text x="34" y="180" font-size="11" class="t-dim zh">兩次整份快取、放 10 個區段、跑 entry、寫 flash、武裝停止。</text>
+  </svg>
+  <figcaption>
+    <span class="en"><b>What goes in <code>fpSup.BIN</code> is effectively free.</b>
+    Open&nbsp;gate places 80 sections from 3,307 writes; the shell places 10. The
+    difference is milliseconds. Only the AutoRun's length is worth arguing about
+    &mdash; which is why moving work out of it and into the file has been the right
+    direction every single time.</span>
+    <span class="zh"><b><code>fpSup.BIN</code> 裡放什麼,實質上免費。</b>
+    open gate 放 80 個區段、3,307 筆寫入;shell 放 10 個。差別在毫秒。
+    唯一值得爭論的是 AutoRun 的長度 ——
+    所以「把工作從 AutoRun 搬進檔案」這個方向,每一次都是對的。</span>
+  </figcaption>
+</figure>
+
+<h2><span class="en">What a command costs</span><span class="zh">一條指令多少錢</span></h2>
+
+<p class="en">Everything the AutoRun does costs about the same, and the surprise is
+which half of a progress-bar frame is the expensive one.</p>
+<p class="zh">AutoRun 做的每件事單價都差不多,而意外的是進度條一格裡貴的是哪一半。</p>
+
+<div class="scroll">
+<table class="num">
+  <thead><tr>
+    <th><span class="en">command</span><span class="zh">指令</span></th>
+    <th><span class="en">cost</span><span class="zh">單價</span></th>
+    <th><span class="en">what it is</span><span class="zh">是什麼</span></th>
+  </tr></thead>
+  <tbody>
+    <tr><td><code>display osd</code></td><td>76 ms</td><td><span class="en">opens the OSD layer &mdash; and one follows every <code>display text</code></span><span class="zh">打開 OSD 圖層 —— 而每條 <code>display text</code> 後面都跟一條</span></td></tr>
+    <tr><td><code>display monitor</code></td><td>83 ms</td><td><span class="en">once, at the top</span><span class="zh">整份只有開頭一條</span></td></tr>
+    <tr><td><code>mem set</code></td><td>72 ms</td><td><span class="en">one 32-bit word; there is no batch form</span><span class="zh">一個 32-bit 字;沒有批次寫法</span></td></tr>
+    <tr><td><code>display text</code></td><td>38 ms</td><td><span class="en">the cheap half</span><span class="zh">便宜的那一半</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <p class="en"><b>The layer runs three buffers</b>, so a bar frame is sent three times
+  &mdash; three texts <em>and</em> three layer-opens, 342 ms a frame, of which 228 ms is
+  the opens. Cutting the intermediate frames saved 1.18 s; cutting the screen entirely
+  saved 1.87 s.</p>
+  <p class="zh"><b>圖層是三緩衝</b>,所以一格要送三次 —— 三次文字<em>加上</em>三次開圖層,
+  一格 342 ms,其中 228 ms 是開圖層。砍掉中間幾格省 1.18 秒,畫面全關省 1.87 秒。</p>
+</div>
+
+<div class="warn">
+  <p class="en"><b>Ruled out on the camera:</b> <code>mem set</code> takes exactly one
+  value. Three arguments print the usage line and write nothing; a comma-separated pair
+  writes only the first. Compressing the loader's 64 writes into a handful is not
+  available.</p>
+  <p class="zh"><b>實機排除:</b><code>mem set</code> 只吃一個值。給三個參數會印出用法而且
+  一個字都不寫;逗號形式只寫進第一個。「把 loader 的 64 條寫入壓成幾條」這條路不通。</p>
+</div>
+
+<h2><span class="en">Fast start</span><span class="zh">快載入</span></h2>
+
+<p class="en">Fast start keeps the loader in a flash-backed settings block, so the
+AutoRun writes a 26-word bootstrap instead of spelling out 64 words of loader.</p>
+<p class="zh">快載入把 loader 放在 flash 支撐的設定區裡,所以 AutoRun 只要寫 26 個字的
+bootstrap,不必拼出 64 個字的 loader。</p>
+
+<div class="scroll">
+<table class="num">
+  <tbody>
+    <tr class="best"><td><span class="en">saved, every boot</span><span class="zh">每次開機省</span></td><td>2.18 s</td></tr>
+    <tr><td><span class="en">paid, once</span><span class="zh">第一次多付</span></td><td>4.35 s</td></tr>
+    <tr><td><span class="en">breaks even</span><span class="zh">回本</span></td><td><span class="en">2nd boot</span><span class="zh">第 2 次開機</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="en">Obvious for development. Close to a wash for someone who switches the
+camera on twice a day &mdash; and the price is a settings block that survives a battery
+pull. <b>So it is not the default and a release card must not carry it</b>; the
+card-composer page asks instead, and <code>release_card.py</code> refuses a card that
+has it.</p>
+<p class="zh">開發時明顯划算;一天只開一兩次的人幾乎打平,而代價是設定區被寫進東西、
+撐得過拔電池。<b>所以它不是預設值,發行版的卡也不准帶它</b> ——
+由合併器頁面問使用者,而 <code>release_card.py</code> 會拒絕帶著它的卡。</p>
+
+<div class="note">
+  <p class="en"><b>The check is a hash of the loader's own bytes</b>, not a string, so
+  "the settings block holds a different build of the loader" is unreachable rather than
+  unlikely &mdash; change the loader by one instruction and the magic changes with it.
+  A store that does not match is not an error: the card falls back to spelling the loader
+  out, and re-seeds the block on the way.</p>
+  <p class="zh"><b>那個檢查是 loader 自己位元組的雜湊</b>,不是字串,
+  所以「設定區裡是另一版 loader」這個狀態不可能發生,而不只是不太可能 ——
+  loader 改一條指令,magic 就跟著變。對不上也不是錯誤:卡片退回把 loader 拼出來,
+  並且順手把設定區重新種好。</p>
+</div>
+
+<h2><span class="en">The cave, and what is left to do</span><span class="zh">空洞區,以及還沒做的</span></h2>
+
+<p class="en">Everything above runs in one 12 KB gap in firmware RAM &mdash;
+<code>0xC072D000..0xC0730000</code>, of which 3,640 bytes are the firmware's own. It is
+the scarcest thing on the camera, and the reason is not size but addressing: every cave
+address is a build-time constant, so products must be hand-arranged around each other and
+<em>a card you did not select still holds its addresses</em>.</p>
+<p class="zh">上面這一切都跑在韌體 RAM 裡的一段 12 KB 空隙裡 ——
+<code>0xC072D000..0xC0730000</code>,其中 3,640 bytes 是韌體自己的。
+它是這台相機上最稀缺的東西,而原因不是大小是定址:每個空洞區位址都是 build 時的常數,
+所以產品之間要手工錯開,而且<em>沒被選到的卡照樣佔著它的位址</em>。</p>
+
+<div class="scroll">
+<table class="num">
+  <thead><tr>
+    <th><span class="en">the cave</span><span class="zh">空洞區</span></th>
+    <th><span class="en">bytes</span><span class="zh">位元組</span></th>
+  </tr></thead>
+  <tbody>
+    <tr><td><span class="en">the gap</span><span class="zh">整段空隙</span></td><td>12,288</td></tr>
+    <tr><td><span class="en">the firmware's own</span><span class="zh">韌體本來就佔的</span></td><td>3,640</td></tr>
+    <tr><td><span class="en">addresses claimed by constants</span><span class="zh">被常數宣告的位址</span></td><td>7,712</td></tr>
+    <tr class="best"><td><span class="en">bytes any one card actually writes</span><span class="zh">任何一張卡實際寫入的</span></td><td>708</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="en"><b>89% of the claimed address space is held by constants, not by bytes.</b>
+Fixing that &mdash; not saving bytes &mdash; is the actual goal.</p>
+<p class="zh"><b>89% 的位址是被常數佔著的,不是被位元組佔著的。</b>
+要解決的是那個,不是省位元組。</p>
+
+
+<figure class="dia">
+  <svg viewBox="0 0 760 250" role="img" aria-label="The payload window before and after the gyro drain and space provider moved into the pool: 1,964 bytes used with a largest free run of 684, versus 840 used with a largest free run of 856.">
+    <text x="20" y="18" font-size="10" class="t-dim">0xC072E064</text>
+    <text x="740" y="18" font-size="10" text-anchor="end" class="t-dim">0xC072EFB4</text>
+    <text x="380" y="18" font-size="10" text-anchor="middle" class="t-dim en">payload window &mdash; 3,920 B</text>
+    <text x="380" y="18" font-size="10" text-anchor="middle" class="t-dim zh">payload 視窗 —— 3,920 B</text>
+    <line x1="20" y1="26" x2="740" y2="26" class="ln"/>
+
+    <text x="20" y="48" font-size="11" class="en">before</text>
+    <text x="20" y="48" font-size="11" class="zh">搬之前</text>
+    <text x="740" y="48" font-size="10" text-anchor="end" class="t-dim">1,964 B &middot; 684 B</text>
+    <rect class="bx" x="20" y="56" width="720" height="26"/>
+    <rect class="f-cam" x="81.0" y="56" width="14.7" height="26"/>
+    <rect class="f-auto" x="95.7" y="56" width="27.9" height="26"/>
+    <rect class="f-load" x="142.7" y="56" width="59.5" height="26"/>
+    <rect class="f-auto" x="230.9" y="56" width="36.0" height="26"/>
+    <rect class="f-auto" x="289.6" y="56" width="22.8" height="26"/>
+    <rect class="f-auto" x="313.2" y="56" width="11.8" height="26"/>
+    <rect class="f-cam" x="413.1" y="56" width="3.7" height="26"/>
+    <rect class="f-cam" x="418.9" y="56" width="3.7" height="26"/>
+    <rect class="f-cam" x="548.2" y="56" width="16.9" height="26"/>
+    <rect class="f-cam" x="565.8" y="56" width="16.9" height="26"/>
+    <rect class="f-load" x="583.5" y="56" width="144.0" height="26"/>
+    <text x="172" y="98" font-size="10" text-anchor="middle" class="t-warn">drain 324</text>
+    <text x="655" y="98" font-size="10" text-anchor="middle" class="t-warn">space 784</text>
+
+    <text x="20" y="136" font-size="11" class="en">after</text>
+    <text x="20" y="136" font-size="11" class="zh">搬之後</text>
+    <text x="740" y="136" font-size="10" text-anchor="end" class="t-dim">840 B &middot; 856 B</text>
+    <rect class="bx" x="20" y="144" width="720" height="26"/>
+    <rect class="f-cam" x="81.0" y="144" width="14.7" height="26"/>
+    <rect class="f-auto" x="95.7" y="144" width="27.9" height="26"/>
+    <rect class="f-auto" x="230.9" y="144" width="36.0" height="26"/>
+    <rect class="f-auto" x="289.6" y="144" width="22.8" height="26"/>
+    <rect class="f-auto" x="313.2" y="144" width="11.8" height="26"/>
+    <rect class="f-cam" x="413.1" y="144" width="3.7" height="26"/>
+    <rect class="f-cam" x="418.9" y="144" width="3.7" height="26"/>
+    <rect class="f-cam" x="548.2" y="144" width="16.9" height="26"/>
+    <rect class="f-cam" x="565.8" y="144" width="16.9" height="26"/>
+    <line x1="582.8" y1="178" x2="740" y2="178" class="ln-on"/>
+    <text x="661" y="192" font-size="10" text-anchor="middle" class="t-sig en">largest run 856 B</text>
+    <text x="661" y="192" font-size="10" text-anchor="middle" class="t-sig zh">最大連續 856 B</text>
+
+    <rect class="f-auto" x="20" y="222" width="10" height="10"/>
+    <text x="36" y="231" font-size="10" class="t-dim en">hook stub &mdash; the firmware branches here</text>
+    <text x="36" y="231" font-size="10" class="t-dim zh">hook stub —— 韌體跳進來的落點</text>
+    <rect class="f-load" x="270" y="222" width="10" height="10"/>
+    <text x="286" y="231" font-size="10" class="t-dim en">nothing branches here &mdash; moved out</text>
+    <text x="286" y="231" font-size="10" class="t-dim zh">沒人跳進來 —— 已搬走</text>
+    <rect class="f-cam" x="530" y="222" width="10" height="10"/>
+    <text x="546" y="231" font-size="10" class="t-dim en">state words and pointers</text>
+    <text x="546" y="231" font-size="10" class="t-dim zh">狀態字與指標</text>
+  </svg>
+  <figcaption>
+    <span class="en"><b>1,124 bytes came back, and the largest free run moved only from
+    684 to 856.</b> What fragments the window is the scattered state words, not the code
+    that moved. Wanting one big run is a different job from wanting bytes.</span>
+    <span class="zh"><b>拿回 1,124 bytes,但最大連續只從 684 變 856。</b>
+    切碎這個視窗的是散落的狀態字,不是搬走的那兩段程式碼。
+    「要一大塊連續空間」和「要位元組」是兩件不同的工作。</span>
+  </figcaption>
+</figure>
+
+<h3><span class="en">Why the landing point has to stay</span><span class="zh">為什麼落點非留在空洞區不可</span></h3>
+
+<figure class="dia">
+  <svg viewBox="0 0 760 240" role="img" aria-label="A firmware bl reaches 32 MB; the pool is 2 GB away, so the hook body cannot live there directly. An 8-byte veneer in the cave loads the full address into pc and hops to the body in the pool.">
+    <text x="20" y="20" font-size="11" class="en">now &mdash; the whole stub sits in the cave</text>
+    <text x="20" y="20" font-size="11" class="zh">現在 —— 整段 stub 住在空洞區</text>
+    <rect class="bx" x="20" y="30" width="180" height="46"/>
+    <text x="110" y="49" font-size="10" text-anchor="middle">0xC050D4C8</text>
+    <text x="110" y="65" font-size="10" text-anchor="middle" class="t-dim en">firmware</text>
+    <text x="110" y="65" font-size="10" text-anchor="middle" class="t-dim zh">韌體</text>
+    <path class="ln" d="M200,53 L280,53" marker-end="url(#v1)"/>
+    <text x="240" y="46" font-size="10" text-anchor="middle" class="t-dim">bl</text>
+    <rect class="bx" x="280" y="30" width="220" height="46" stroke="var(--sig)"/>
+    <text x="390" y="49" font-size="10" text-anchor="middle" class="t-sig en">cave &mdash; stub body, 152 B</text>
+    <text x="390" y="49" font-size="10" text-anchor="middle" class="t-sig zh">空洞區 —— stub 本體 152 B</text>
+    <text x="390" y="65" font-size="10" text-anchor="middle" class="t-dim en">the scarcest memory on the camera</text>
+    <text x="390" y="65" font-size="10" text-anchor="middle" class="t-dim zh">相機上最稀缺的記憶體</text>
+    <path class="ln" d="M500,53 L570,53" marker-end="url(#v1)"/>
+    <text x="580" y="57" font-size="10" class="t-dim">bx lr</text>
+
+    <line x1="20" y1="98" x2="740" y2="98" class="ln"/>
+
+    <text x="20" y="122" font-size="11" class="t-sig en">with a veneer &mdash; only the landing point stays</text>
+    <text x="20" y="122" font-size="11" class="t-sig zh">改用 veneer —— 只有落點留下</text>
+    <rect class="bx" x="20" y="132" width="180" height="46"/>
+    <text x="110" y="151" font-size="10" text-anchor="middle">0xC050D4C8</text>
+    <text x="110" y="167" font-size="10" text-anchor="middle" class="t-dim en">unchanged</text>
+    <text x="110" y="167" font-size="10" text-anchor="middle" class="t-dim zh">完全不變</text>
+    <path class="ln" d="M200,155 L250,155" marker-end="url(#v1)"/>
+    <text x="225" y="148" font-size="10" text-anchor="middle" class="t-dim">bl</text>
+    <rect class="bx" x="250" y="132" width="130" height="46" stroke="var(--sig)"/>
+    <text x="315" y="151" font-size="10" text-anchor="middle" class="t-sig">veneer &mdash; 8 B</text>
+    <text x="315" y="167" font-size="9" text-anchor="middle" class="t-dim">ldr pc,[pc,#-4]</text>
+    <path class="ln-on" d="M380,155 L470,155" marker-end="url(#v2)"/>
+    <text x="425" y="148" font-size="10" text-anchor="middle" class="t-sig">.word</text>
+    <rect class="bx" x="470" y="132" width="220" height="46"/>
+    <text x="580" y="151" font-size="10" text-anchor="middle" class="en">pool &mdash; stub body, 152 B</text>
+    <text x="580" y="151" font-size="10" text-anchor="middle" class="zh">池 —— stub 本體 152 B</text>
+    <text x="580" y="167" font-size="10" text-anchor="middle" class="t-dim en">room to spare</text>
+    <text x="580" y="167" font-size="10" text-anchor="middle" class="t-dim zh">空間充裕</text>
+
+    <path d="M110,178 C110,212 340,222 580,196" fill="none" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <line x1="320" y1="206" x2="352" y2="226" stroke="var(--warn)" stroke-width="2"/>
+    <line x1="352" y1="206" x2="320" y2="226" stroke="var(--warn)" stroke-width="2"/>
+    <text x="376" y="232" font-size="10" class="t-warn en">bl reaches &plusmn;32 MB; the pool is 2 GB away &mdash; this branch cannot exist</text>
+    <text x="376" y="232" font-size="10" class="t-warn zh">bl 只到 &plusmn;32 MB,池在 2 GB 外 —— 這條分支不可能存在</text>
+
+    <defs>
+      <marker id="v1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker>
+      <marker id="v2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--sig)"/></marker>
+    </defs>
+  </svg>
+  <figcaption>
+    <span class="en"><b>A veneer decides nothing.</b> One instruction and one word, filled
+    in at boot, one per hook. It touches no register and not <code>lr</code>, so the body
+    still returns straight to the firmware and the caller cannot tell. Four hooks:
+    <b>536 &rarr; 32 bytes</b>.</span>
+    <span class="zh"><b>veneer 不做任何判斷。</b>一條指令加一個字,開機時填,一個 hook 一個。
+    它不碰任何暫存器,也不碰 <code>lr</code>,所以本體照樣直接回到韌體,
+    呼叫方分不出中間有一層。四個 hook:<b>536 → 32 bytes</b>。</span>
+  </figcaption>
+</figure>
+
+<ul class="todo">
+  <li><span class="s done">&#10003;</span><div>
+    <b><span class="en">The gyro drain and space provider moved into the pool</span><span class="zh">陀螺的 drain 與 space 搬進池</span></b>
+    <small><span class="en">1,736 &rarr; 612 bytes of cave. Nothing branches to them &mdash; the hooks reach them through four words &mdash; so they never needed a fixed address. Verified on the camera; not yet released.</span><span class="zh">cave 從 1,736 降到 612 bytes。沒有任何東西跳進它們(hook 是透過四個字呼叫的),所以它們本來就不需要固定位址。上機驗過,尚未發行。</span></small>
+  </div></li>
+  <li><span class="s todo-m">&mdash;</span><div>
+    <b><span class="en">Hook stubs become 8-byte veneers</span><span class="zh">hook stub 改成 8 bytes 的跳板</span></b>
+    <small><span class="en">A firmware <code>bl</code> reaches &plusmn;32 MB, and the pool is 2 GB away &mdash; so the landing point must stay in the cave, but only the landing point. 536 &rarr; 32 bytes.</span><span class="zh">韌體的 <code>bl</code> 只到 &plusmn;32 MB,而池在 2 GB 外 —— 所以落點非留在 cave 不可,但只有落點。536 → 32 bytes。</span></small>
+  </div></li>
+  <li><span class="s todo-m">&mdash;</span><div>
+    <b><span class="en">Allocate cave space at boot instead of naming it in a build</span><span class="zh">空洞區改成開機時配置,不要在 build 裡指定</span></b>
+    <small><span class="en">The one that matters. A card that is not selected then costs nothing. Needs a fixed directory word, because host tools find things by absolute address.</span><span class="zh">真正重要的那一條。沒被選的卡從此不佔位址。需要一個固定的目錄字,因為主機工具是靠絕對位址找東西的。</span></small>
+  </div></li>
+  <li><span class="s todo-m">&mdash;</span><div>
+    <b><span class="en">Two things share <code>0xC072F700</code></span><span class="zh">兩個東西共用 <code>0xC072F700</code></span></b>
+    <small><span class="en">The fast-start bootstrap and the host file tools' scratch. Harmless today only because the bootstrap has already run. Nothing writes that down.</span><span class="zh">快載入的 bootstrap 和主機檔案工具的暫存區。今天無害只是因為 bootstrap 早就跑完了,而且沒有任何地方寫著這件事。</span></small>
+  </div></li>
+</ul>
+
+<h2><span class="en">Invariants</span><span class="zh">不變量</span></h2>
+
+<p class="en">These are the rules that hold the chain together. Each one says what
+enforces it &mdash; a build error, a runtime guard, a policy, or nothing yet. A change
+that violates one is wrong even if the camera boots.</p>
+<p class="zh">下面是撐住這條鏈的規則。每一條都寫明是什麼在執行它 ——
+建置錯誤、執行期守衛、政策,或者目前還沒有。<b>違反其中任何一條就是錯的,
+即使相機開得起來。</b></p>
+
+<div class="scroll">
+<table class="inv">
+  <thead><tr>
+    <th><span class="en">rule</span><span class="zh">規則</span></th>
+    <th><span class="en">enforced by</span><span class="zh">誰在執行</span></th>
+  </tr></thead>
+  <tbody>
+    <tr><td>
+      <span class="en">An entry is <b>called</b> and must <b>return</b>.</span>
+      <span class="zh">entry 是被<b>呼叫</b>的,而且必須<b>返回</b>。</span></td>
+      <td class="w"><span class="en">nothing &mdash; a card that hangs here gives no diagnosis</span><span class="zh">沒有 —— 掛在這裡不會有任何診斷</span></td></tr>
+    <tr><td>
+      <span class="en">A payload <b>allocates its own memory</b> and must not assume
+      anyone else published a pool.</span>
+      <span class="zh">payload <b>自己配記憶體</b>,不可以假設別人已經發佈了一塊池。</span></td>
+      <td class="w"><span class="en">nothing &mdash; convention</span><span class="zh">沒有 —— 靠慣例</span></td></tr>
+    <tr><td>
+      <span class="en">Firmware hooks are armed <b>last</b>, after the allocator has
+      said yes. If it refuses, arm nothing.</span>
+      <span class="zh">韌體 hook <b>最後</b>才 arm,在配置器點頭之後。配置失敗就一個都不 arm。</span></td>
+      <td class="w"><span class="en">source convention; a half-armed card logs nothing and looks fine</span><span class="zh">源碼慣例;半裝好的卡什麼都不記錄,而且看起來正常</span></td></tr>
+    <tr><td>
+      <span class="en">Written words are <b>published to both caches</b> before anything
+      placed is allowed to run.</span>
+      <span class="zh">寫進去的字在任何東西被執行之前<b>發佈到兩級快取</b>。</span></td>
+      <td class="ok"><span class="en">build error &mdash; the emitted machine code is decoded and the two cache calls must be there, in order</span><span class="zh">建置錯誤 —— 解碼產出的機器碼,兩個快取呼叫必須在、而且順序對</span></td></tr>
+    <tr><td>
+      <span class="en">In the loader, <b>no call before <code>lr</code> is saved</b>.</span>
+      <span class="zh">在 loader 裡,<b>任何呼叫都要排在存 <code>lr</code> 之後</b>。</span></td>
+      <td class="ok"><span class="en">build error, mutation-tested</span><span class="zh">建置錯誤,mutation 驗過</span></td></tr>
+    <tr><td>
+      <span class="en"><b>No caller-saved register carries <code>sp</code></b> across a
+      call (<code>r0&ndash;r3</code>, <code>ip</code>).</span>
+      <span class="zh"><b>不可以用 caller-saved 暫存器跨呼叫扛 <code>sp</code></b>
+      (<code>r0&ndash;r3</code>、<code>ip</code>)。</span></td>
+      <td class="ok"><span class="en">build error, mutation-tested</span><span class="zh">建置錯誤,mutation 驗過</span></td></tr>
+    <tr><td>
+      <span class="en">The stack stays <b>8-byte aligned</b> &mdash; an interrupt will
+      use ours, and the firmware's <code>LDRD</code> requires it.</span>
+      <span class="zh">堆疊維持 <b>8 位元組對齊</b> —— 中斷會用我們的堆疊,
+      而韌體的 <code>LDRD</code> 要求對齊。</span></td>
+      <td class="w"><span class="en">nothing &mdash; source convention only</span><span class="zh">沒有 —— 只有源碼慣例</span></td></tr>
+    <tr><td>
+      <span class="en">A change to the <b>loader</b> is proven on a live camera
+      before it goes near the boot path.</span>
+      <span class="zh"><b>loader</b> 的改動要先在活著的相機上證明,才准靠近開機路徑。</span></td>
+      <td class="w"><span class="en">process &mdash; write it into the cave, borrow the shell's <code>echo</code> handler, run it once, check it came back and the shell is alive</span><span class="zh">程序 —— 寫進空洞區、借 shell 的 <code>echo</code> handler 跑一次、確認它回來了而且 shell 還活著</span></td></tr>
+    <tr><td>
+      <span class="en">A release card <b>must not</b> write the settings block.</span>
+      <span class="zh">發行版的卡<b>不准</b>寫設定區。</span></td>
+      <td class="ok"><span class="en">policy, checked by the release script</span><span class="zh">政策,發行腳本會擋</span></td></tr>
+    <tr><td>
+      <span class="en">Whatever stops the AutoRun interpreter <b>owes everything its
+      teardown does</b>: close the script's file, pop the registration, clear the
+      running byte.</span>
+      <span class="zh">凡是提早停止 AutoRun 直譯器的,<b>就欠它收尾會做的每一件事</b>:
+      關腳本的檔、彈出註冊項、清 running byte。</span></td>
+      <td class="w"><span class="en">source &mdash; learned by losing a day to a file nothing could open</span><span class="zh">源碼 —— 用「任何東西都開不了那個檔」的一天換來的</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="warn">
+  <p class="en"><b>Why the loader rules are build errors and not comments.</b> Both were
+  written as comments first, and both were then violated by the same person on
+  consecutive attempts &mdash; a call above the push, then <code>sp</code> carried in
+  <code>r1</code>. Each one froze the camera on <em>every</em> boot, and a loader that
+  hangs leaves no shell to repair it with, so the card comes out of the slot. The checks
+  decode the emitted machine code rather than reading the source, because a comment or a
+  renamed macro can make a build look safe.</p>
+  <p class="zh"><b>為什麼 loader 那兩條是建置錯誤而不是註解。</b>
+  兩條一開始都只是註解,然後連續兩次被同一個人違反 ——
+  呼叫排在 push 之前,接著用 <code>r1</code> 扛 <code>sp</code>。
+  每一次都讓相機<em>每次開機</em>都凍,而 loader 一掛就沒有 shell 能救,卡只能從卡槽拔出來。
+  檢查讀的是產出的機器碼不是源碼,因為註解和改個巨集名字都能讓建置看起來安全。</p>
+</div>
+
+<div class="cta">
+  <p class="en">The full measurements, the two failed attempts in detail, and what is
+  still wrong with the upload path are in the project notes. The cards themselves come
+  from the <a href="../tools/card-composer/index.html">card composer</a>, where fast
+  start is a checkbox.</p>
+  <p class="zh">完整的量測數字、兩次失敗的細節,以及上傳路徑還有什麼問題,
+  都在專案筆記裡。卡片本身請用<a href="../tools/card-composer/index.html">合併器</a>產生,
+  快載入在那裡是一個勾選框。</p>
+</div>
+
+<script>
+(function(){
+  var KEY = 'fpsup-lang';
+  var root = document.documentElement;
+  var btns = [].slice.call(document.querySelectorAll('.lang button[data-set]'));
+  if(!btns.length) return;
+
+  function apply(lang, remember){
+    root.setAttribute('data-lang', lang);
+    root.setAttribute('lang', lang === 'zh' ? 'zh-Hant' : 'en');
+    btns.forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-set') === lang));
+    });
+    if(remember){ try{ localStorage.setItem(KEY, lang); }catch(e){} }
+  }
+
+  var saved = null;
+  try{ saved = localStorage.getItem(KEY); }catch(e){}
+  if(saved !== 'zh' && saved !== 'en'){
+    saved = /^zh\b/i.test(navigator.language || '') ? 'zh' : 'en';
+  }
+  apply(saved, false);
+
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){ apply(b.getAttribute('data-set'), true); });
+  });
+})();
+</script>
+
+</body>
+</html>
