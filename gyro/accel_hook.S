@@ -63,8 +63,7 @@ accel_hook:
     /* Nothing is recording: append nothing.  Same reason as the gyro producer
      * -- see the note there.  Unlike it, this hook has no tail worth reaching,
      * so the gate goes straight to the exit. */
-    movw    ip, #:lower16:T_WANT
-    movt    ip, #:upper16:T_WANT
+    SHAREDAT    ip, O_T_WANT
     ldr     ip, [ip]
     cmp     ip, #0
     beq     3f

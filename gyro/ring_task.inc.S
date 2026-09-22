@@ -119,50 +119,18 @@
  * record start and destroys all three at stop; these are the words that hold
  * them for one take.  Above everything else in the cave, clear of the
  * measuring accel build at 0xC072E900..0xC072EA04. */
-.equ W_THREAD,       0xC072EC00     /* the holder XT_CREATE fills             */
-.equ W_BODYOBJ,      0xC072EC04     /* our body object: one word, its vtable  */
-.equ W_JOINRC,       0xC072EC08     /* reserved                               */
-.equ W_OPENS,        0xC072EC0C     /* takes built                            */
-.equ W_CLOSES,       0xC072EC10     /* takes torn down                        */
-.equ W_STAGE,        0xC072EC14     /* how far the build or the teardown got  */
-.equ W_VT,           0xC072EC20     /* 16 bytes.  The pool worker calls slot
-                                     * +0xC of whatever object it is handed;
-                                     * that is the whole interface, so this is
-                                     * the whole class.  The deployer writes
-                                     * writer_body into +0xC because only it
-                                     * knows where the pool landed.          */
 .equ W_VT_SLOT,      0x0C
 
 /* Placed by the deployer: the record hooks live in the
  * cave and these live in the pool, so the address is only known at deploy. */
-.equ T_OPENFN,       0xC072EC30     /* -> take_open                           */
-.equ T_CLOSEFN,      0xC072EC34     /* -> take_close                          */
 
 /* Below the accel hook, clear of the stream's own words at 0xC072E1B0. */
-.equ T_DESC,         0xC072E080     /* 32 bytes, the task descriptor          */
-.equ T_PKT,          0xC072E0A0     /* 32 bytes, the mailbox message.  Real
-                                     * memory, because the kernel links it.   */
 /* T_DOOR and writer_signal are gone.  They were a doorbell of my own
  * design: a flag claimed with LDREX, a fixed packet, a producer ringing
  * it.  Audio has nothing of the kind -- sending the job IS the wake-up,
  * and the message IS the work.  Nothing had called writer_signal since
  * the job queue went in; it was a leftover from the wrong design. */
-.equ T_MBX,          0xC072E0C4     /* the mailbox id                         */
 
-.equ T_ID,           0xC072E0D0     /* the task id                            */
-.equ T_CRE_RC,       0xC072E0D4
-.equ T_STA_RC,       0xC072E0D8
-.equ T_WAKES,        0xC072E0DC     /* times the task woke                    */
-.equ T_SIGNALS,      0xC072E0E0     /* times a producer rang the doorbell     */
-.equ T_ENTRY,        0xC072E0E4     /* the task body, placed by the deployer  */
-.equ T_RECV_RC,      0xC072E0E8     /* what receive returned when it stopped
-                                     * returning zero                         */
-.equ T_POS,          0xC072EC18     /* where the file is, in bytes.  Audio keeps
-                                     * this at writer+0x14; it is the other half
-                                     * of J_OFF.                              */
-.equ T_SEEKS,        0xC072EC1C     /* times the two disagreed -- every one of
-                                     * these is a job that never made it       */
-.equ T_MBX_RC,       0xC072E0EC     /* what the mailbox create returned       */
 
 /* ---- the card write ---------------------------------------------------- */
 
@@ -315,7 +283,6 @@
  * the 576 bytes between the stop hook's end and the counters at 0xC072E8E0. */
 .equ MODE_SITE,      0xC0058310
 
-.equ W_VT_BODY,      W_VT + W_VT_SLOT   /* the slot the pool worker calls */
 /* The gcsv writer's state, in the gap the space provider left when it moved
  * above the writer words: 0xC072E8F4..0xC072EBA0 is 684 bytes of nothing.
  *
@@ -440,8 +407,6 @@
                                      * the call AudF_W makes right after the
                                      * open.  Takes the card lock and stamps  */
 
-.equ T_FOBJ,         0xC072E0F8     /* the file object, placed by the deployer */
-.equ T_FOPEN,        0xC072E0FC     /* non-zero once it is open               */
 /* T_BYTES and friends used to sit at 0xC072E180, in what was then a gap
  * above the accel hook.  The gate that stops the producers touching the
  * ring when nothing is recording made that hook 140 bytes and took the gap
@@ -461,32 +426,8 @@
  *   4  + the thread, built but not attached
  *   5  + attached and running        (the whole thing)
  */
-.equ T_BUILD,        0xC072EC54
-.equ T_TEARDOWN,     0xC072EC58     /* 0 = take_close does nothing and leaves
-                                     * the take standing for the shell to
-                                     * dismantle later.  Splits "open at
-                                     * record start" from "close at record
-                                     * stop", which are the two halves of
-                                     * the smallest step and froze together. */
 
-.equ T_JSEQ,         0xC072EC48     /* jobs posted, so a dump can see order   */
-.equ T_JOBSLOT,      0xC072EC4C     /* where MBX_RECV leaves the descriptor   */
-.equ T_WANT,         0xC072EC50     /* 1 = a take wants the file, 0 = it does
-                                     * not.  The recording hooks set this and
-                                     * nothing else: opening a file is far too
-                                     * heavy for a firmware callback, and those
-                                     * two contexts have never been shown safe
-                                     * for a syscall.  The writer reconciles it
-                                     * on its next wake, at most a doorbell
-                                     * away -- about 400 ms, against a ring
-                                     * that holds 6.6 seconds. */
 /* The five write counters left for the blob on 2026-09-22: they are words next
  * to the routine table now, reached through the pool pointer, because the core
  * touches them down here and the edition touches them four kilobytes further
  * on and no pc-relative block satisfies both.  See writer_core.inc.S. */
-.equ T_DRAINED,      0xC072E0C8     /* records the writer has taken           */
-.equ T_MAXSPAN,      0xC072E0CC     /* the largest it ever found waiting.  If
-                                     * this approaches the ring's capacity the
-                                     * writer is falling behind, which is the
-                                     * one failure the depth is there to stop
-                                     * and the one number that says so.      */     /* what the mailbox create returned       */

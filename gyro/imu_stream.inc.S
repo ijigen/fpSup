@@ -99,27 +99,6 @@
 .equ BUF_BYTES,      0x4000                 /* what AudF_W's blocks are        */
 .equ BUF_RECORDS,    (BUF_BYTES / 8)
 
-.equ B_PTR,          0xC072EBA0             /* BUF_N words: the allocations    */
-.equ B_BUSY,         0xC072EBC0             /* BUF_N words: 0 free, 1 with the
-                                             * writer.  Audio has no such flag
-                                             * -- its DSP simply reuses its two
-                                             * blocks on schedule and the writer
-                                             * has to keep up.  Ours cannot be
-                                             * throttled, so a block that is
-                                             * still being written must not be
-                                             * refilled: that is a drop, and a
-                                             * drop we can count.             */
-.equ B_CUR,          0xC072EBE0             /* which block is filling, -1 none */
-.equ B_FILL,         0xC072EBE4             /* records claimed in it           */
-.equ B_DONE,         0xC072EBE8             /* records written into it         */
-.equ B_OFF,          0xC072EBEC             /* file offset of its first byte    */
-.equ B_DROPS,        0xC072EBF0             /* times no block was free          */
-.equ B_HANDED,       0xC072EBF4             /* blocks handed to the writer      */
-.equ T_JBLK,         0xC072EBF8             /* the block writer_post is about to
-                                             * describe.  One producer posts, so
-                                             * a word is enough and it saves
-                                             * threading a fifth argument through
-                                             * a hand-written call.            */             /* blocks handed to the writer      */
 
 .equ B_NONE,         -1
 
@@ -246,14 +225,6 @@
 
 .equ JOB_COUNT,      32             /* what audio's pool holds                */
 
-.equ T_FOPEN,        0xC072E0FC     /* shared with ring_task.inc.S */
-.equ T_OPENFN,       0xC072EC30     /* shared with ring_task.inc.S: -> take_open  */
-.equ T_CLOSEFN,      0xC072EC34     /* shared with ring_task.inc.S: -> take_close */
-.equ T_WANT,         0xC072EC50     /* shared with ring_task.inc.S: 1 = a take
-                                     * wants the file.  Declared in both because
-                                     * the producers and the writer are placed
-                                     * by different scripts; the deployers check
-                                     * the two agree. */
 
 .equ HEAD_UNARMED,   0xFFFFFFFF
 

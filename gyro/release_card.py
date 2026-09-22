@@ -36,8 +36,13 @@ SHARED = {}
 # check -- what proves they are aboard is the routine table, below: a zero
 # there is exactly the "built but dropped" failure this list exists to catch,
 # and it is checked for every routine the blob must carry, not just these.
-BLOB_ROUTINES = ('gyro_drain', 'stream_claim', 'stream_commit', 'stream_flush',
-                 'accel_hook', 'rec_start', 'rec_stop',
+#
+# gyro_drain, stream_claim, stream_commit and stream_flush are NOT here.  They
+# had slots while the cave held a pointer to each; hook and body share a blob
+# now and the branch is an ordinary `bl`, so a build that dropped one does not
+# ship a zero -- it fails to assemble.  Listing them here only made this check
+# look for table entries that no longer exist.
+BLOB_ROUTINES = ('accel_hook', 'rec_start', 'rec_stop',
                  'writer_body', 'take_open', 'take_close', 'writer_post',
                  'mpool_init_jobs', 'blocks_open', 'gsup_boot')
 EXPECT = {'base': SHARED, 'gcsv': SHARED}
@@ -123,15 +128,24 @@ def check_sections(path, edition):
     table = d[lo + blob_off: lo + blob_off + len(R.GSUP_ROUTINES) * 4]
     got = dict(zip(R.GSUP_ROUTINES, struct.unpack(f'<{len(table)//4}I', table)))
     want_routines = BLOB_ROUTINES + EDITION_ROUTINES[edition]
-    missing = [r for r in want_routines if not got.get(r)]
+    # A name here that the table does not have reads as "missing from the
+    # card", which is how the four `bl`-reached routines turned a good build
+    # into a failed release check.  Say which it really is.
+    unknown = [r for r in want_routines if r not in got]
+    if unknown:
+        raise SystemExit(f'{path}: the routine table has no slot for '
+                         + ', '.join(unknown)
+                         + ' -- BLOB_ROUTINES has drifted from GSUP_ROUTINES')
+    missing = [r for r in want_routines if not got[r]]
     if missing:
         raise SystemExit(f'{path}: the blob\'s routine table has no '
                          + ', '.join(missing))
     print(f'  sections: {n}, entry 0x{entry:08X} in the {ln}-byte launcher, '
-          f'all {len(want)} accounted for')
+          + (f'all {len(want)} cave destinations accounted for' if want else
+             'no cave destinations: nothing is placed at a build-time address'))
     print(f'  blob: {len(want_routines)} routines resolved, '
-          f'gyro_drain at +0x{got["gyro_drain"]:X}, '
-          f'stream_claim at +0x{got["stream_claim"]:X}')
+          f'gsup_boot at +0x{got["gsup_boot"]:X}, '
+          f'accel_hook at +0x{got["accel_hook"]:X}')
 
 
 def main():

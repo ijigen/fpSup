@@ -185,10 +185,19 @@ CAVE_BUMP  = 0xC072E060   # the cave's next free address, and the ONLY cave word
 CAVE_ARENA_END = 0xC072EFB4   # the park stub.  An allocation that would cross it
                               # is refused, and the payload stands down the same
                               # way it does when the pool allocator says no.
-CAVE_ARENA = 0xC072EC60   # where handing out begins.  Above the gyro state words
-                          # for now, which are still build-time addresses; when
-                          # they move this drops to LOADER_END and the arena
-                          # becomes the whole payload window.
+CAVE_ARENA = LOADER_END   # where handing out begins: everything above the
+                          # loader's own block.  It sat at 0xC072EC60 while the
+                          # gyro's state words were build-time cave addresses
+                          # and the arena had to start above them; they are
+                          # fields of the blob's shared block now, so the arena
+                          # is the whole payload window -- 3,920 bytes instead
+                          # of 852.  Nothing else is in it: the fallback card's
+                          # worker at WORKER_AT is in this stretch, but that
+                          # card has no stage2 and therefore no arena at all,
+                          # and a --loader card does not place a worker in the
+                          # cave.  test_the_branch_reaches_anywhere_the_
+                          # allocator_can_hand_out re-checks every hook's reach
+                          # against the wider range.
 
 # Where the worker's code goes on the FALLBACK card, the one that spells the
 # whole thing out with `mem set` and hooks `bootstrap`.  It used to go at

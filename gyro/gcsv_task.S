@@ -86,15 +86,13 @@
 writer_openfile:
     push    {r4, r5, r6, lr}
 #ifdef DRY_RUN
-    movw    ip, #:lower16:T_FOPEN
-    movt    ip, #:upper16:T_FOPEN
+    SHAREDAT    ip, O_T_FOPEN
     mov     r0, #1
     str     r0, [ip]
     pop     {r4, r5, r6, lr}
     bx      lr
 #endif
-    movw    r4, #:lower16:T_FOBJ
-    movt    r4, #:upper16:T_FOBJ
+    SHAREDAT    r4, O_T_FOBJ
     ldr     r4, [r4]
     cmp     r4, #0
     beq     9f
@@ -171,8 +169,7 @@ writer_openfile:
     SHAREDAT    ip, O_D_OPEN3
     str     r0, [ip]
 
-7:  movw    ip, #:lower16:T_FOPEN
-    movt    ip, #:upper16:T_FOPEN
+7:  SHAREDAT    ip, O_T_FOPEN
     str     r0, [ip]
     cmp     r0, #0
     beq     8f
@@ -430,18 +427,15 @@ gyr_header:
     str     r5, [r4, #16]
 
     mov     r2, #GYR_HDR_BYTES
-    movw    ip, #:lower16:T_POS
-    movt    ip, #:upper16:T_POS
+    SHAREDAT    ip, O_T_POS
     str     r2, [ip]                    @ the file is at the end of the header
-    movw    ip, #:lower16:B_OFF
-    movt    ip, #:upper16:B_OFF
+    SHAREDAT    ip, O_B_OFF
     str     r2, [ip]                    @ and so is the first block.  Here, not
                                         @ in take_open: --dropfile after a
                                         @ freeze opens nothing and closes what
                                         @ is there, and an owner further out
                                         @ stamped the PREVIOUS take's length.
-    movw    r0, #:lower16:T_FOBJ
-    movt    r0, #:upper16:T_FOBJ
+    SHAREDAT    r0, O_T_FOBJ
     ldr     r0, [r0]
     mov     r1, r4
     movw    ip, #:lower16:F_WRITE
@@ -494,11 +488,9 @@ gcsv_header:
     mov     r5, r0
 
     sub     r2, r5, r4
-    movw    ip, #:lower16:T_POS
-    movt    ip, #:upper16:T_POS
+    SHAREDAT    ip, O_T_POS
     str     r2, [ip]                    @ the file is at the end of the header
-    movw    r0, #:lower16:T_FOBJ
-    movt    r0, #:upper16:T_FOBJ
+    SHAREDAT    r0, O_T_FOBJ
     ldr     r0, [r0]
     mov     r1, r4
     movw    ip, #:lower16:F_WRITE
@@ -554,15 +546,13 @@ writer_put:
      * and nothing in the file shows it.  Comparing J_OFF against T_POS catches
      * it, and T_SEEKS counts how often. */
     push    {r4, r5, r6, lr}
-    movw    r5, #:lower16:T_POS
-    movt    r5, #:upper16:T_POS
+    SHAREDAT    r5, O_T_POS
     ldr     r6, [r5]
     ldr     r0, [r4, #J_OFF]
     cmp     r6, r0
     beq     2f
 #ifndef DRY_RUN
-    movw    r1, #:lower16:T_FOBJ
-    movt    r1, #:upper16:T_FOBJ
+    SHAREDAT    r1, O_T_FOBJ
     ldr     r1, [r1]
     mov     r2, r0
     mov     r0, r1
@@ -572,8 +562,7 @@ writer_put:
     movt    ip, #:upper16:F_SEEK
     blx     ip
 #endif
-    movw    ip, #:lower16:T_SEEKS
-    movt    ip, #:upper16:T_SEEKS
+    SHAREDAT    ip, O_T_SEEKS
     ldr     r0, [ip]
     add     r0, r0, #1
     str     r0, [ip]                    @ every one of these is a job that was lost
@@ -588,8 +577,7 @@ writer_put:
 #ifndef DRY_RUN
     mov     r2, r6
     mov     r1, r5
-    movw    r0, #:lower16:T_FOBJ
-    movt    r0, #:upper16:T_FOBJ
+    SHAREDAT    r0, O_T_FOBJ
     ldr     r0, [r0]
     movw    ip, #:lower16:F_WRITE
     movt    ip, #:upper16:F_WRITE
@@ -637,8 +625,7 @@ writer_put:
     beq     2f
 #ifndef DRY_RUN
     mov     r1, r7
-    movw    r0, #:lower16:T_FOBJ
-    movt    r0, #:upper16:T_FOBJ
+    SHAREDAT    r0, O_T_FOBJ
     ldr     r0, [r0]
     movw    ip, #:lower16:F_WRITE
     movt    ip, #:upper16:F_WRITE
@@ -657,8 +644,7 @@ writer_put:
     ldr     r0, [ip, #O_T_WRITES]
     add     r0, r0, #1
     str     r0, [ip, #O_T_WRITES]
-    movw    ip, #:lower16:T_POS             @ still a cave word: next group
-    movt    ip, #:upper16:T_POS
+    SHAREDAT    ip, O_T_POS
     ldr     r0, [ip]
     add     r0, r0, r2
     str     r0, [ip]
@@ -691,8 +677,7 @@ writer_closefile:
     str     r0, [r6, #O_T_STAGE]
 
 
-    movw    r4, #:lower16:T_FOPEN
-    movt    r4, #:upper16:T_FOPEN
+    SHAREDAT    r4, O_T_FOPEN
     ldr     r5, [r4]
     cmp     r5, #0
     beq     9f
@@ -721,8 +706,7 @@ writer_closefile:
     subs    r2, r0, r5
     beq     2f
     mov     r1, r5
-    movw    r0, #:lower16:T_FOBJ
-    movt    r0, #:upper16:T_FOBJ
+    SHAREDAT    r0, O_T_FOBJ
     ldr     r0, [r0]
     movw    ip, #:lower16:F_WRITE
     movt    ip, #:upper16:F_WRITE
@@ -734,21 +718,18 @@ writer_closefile:
     ldr     r5, [r5]
     cmp     r5, #0
     beq     3f
-    movw    r0, #:lower16:B_DROPS
-    movt    r0, #:upper16:B_DROPS
+    SHAREDAT    r0, O_B_DROPS
     ldr     r0, [r0]
     mov     r1, r5
     bl      put_u32_6
-    movw    r0, #:lower16:T_FOBJ
-    movt    r0, #:upper16:T_FOBJ
+    SHAREDAT    r0, O_T_FOBJ
     ldr     r0, [r0]
     mov     r1, #NOTE_DROPS_AT
     mov     r2, #0
     movw    ip, #:lower16:F_SEEK
     movt    ip, #:upper16:F_SEEK
     blx     ip
-    movw    r0, #:lower16:T_FOBJ
-    movt    r0, #:upper16:T_FOBJ
+    SHAREDAT    r0, O_T_FOBJ
     ldr     r0, [r0]
     mov     r1, r5
     mov     r2, #NOTE_DROPS_N
@@ -759,8 +740,7 @@ writer_closefile:
 #endif
 3:  mov     r0, #0x24
     str     r0, [r6, #O_T_STAGE]
-    movw    r5, #:lower16:T_FOBJ
-    movt    r5, #:upper16:T_FOBJ
+    SHAREDAT    r5, O_T_FOBJ
     ldr     r5, [r5]
     mov     r0, r5
     mov     r1, #2

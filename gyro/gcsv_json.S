@@ -694,8 +694,7 @@ j_name:
  * the object goes in the page already reserved for the log's. */
 j_open:
     push    {r4, r5, r6, lr}
-    movw    r4, #:lower16:T_FOBJ
-    movt    r4, #:upper16:T_FOBJ
+    SHAREDAT    r4, O_T_FOBJ
     ldr     r4, [r4]
     cmp     r4, #0
     beq     9f

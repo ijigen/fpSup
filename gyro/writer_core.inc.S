@@ -118,6 +118,57 @@ g_d_path:   .space  48      /* the path it tried -- FORTY-EIGHT bytes.  dbg_path
                              * copies into it with strb writeback, so a single
                              * word here writes 44 bytes of code.           */
 
+/* The writer task and the block state.  The last group to leave the cave:
+ * thirty-nine fields the kernel, the pool worker and the hooks all touch, and
+ * not one of them is a build-time address any more.  T_DESC went no further
+ * than this list -- nothing had read or written it since the take started
+ * building its own task, and carrying a dead word across would have made it
+ * look alive.
+ *
+ * SIZES ARE LOAD-BEARING.  T_PKT is the descriptor MBX_CREATE reads, B_PTR and
+ * B_BUSY are BUF_N words each, and W_VT is a four-slot class -- the cave
+ * carried those in the distance to the next address, and this block has to
+ * carry them explicitly.  See SharedBlockTests. */
+g_t_pkt:      .space  32    /* the mailbox descriptor: exinf, mbxatr, two more */
+g_t_mbx:      .word   0     /* the mailbox id */
+g_t_drained:  .word   0     /* records the writer took */
+g_t_maxspan:  .word   0     /* most ever waiting */
+g_t_id:       .word   0     /* the task id.  T_ID..T_MBX_RC are read as eight */
+g_t_cre_rc:   .word   0     /* consecutive words by --state, so they stay in */
+g_t_sta_rc:   .word   0     /* this order and stay adjacent. */
+g_t_wakes:    .word   0
+g_t_signals:  .word   0
+g_t_entry:    .word   0
+g_t_recv_rc:  .word   0
+g_t_mbx_rc:   .word   0
+g_t_fobj:     .word   0     /* the file object (a pointer) */
+g_t_fopen:    .word   0     /* non-zero once it is open */
+g_b_ptr:      .space  32    /* BUF_N words: the allocations */
+g_b_busy:     .space  32    /* BUF_N words: 0 free, 1 with the writer */
+g_b_cur:      .word   0     /* the block being filled */
+g_b_fill:     .word   0     /* claimed in it */
+g_b_done:     .word   0     /* committed in it */
+g_b_off:      .word   0     /* where the file is */
+g_b_drops:    .word   0     /* blocks the writer could not take */
+g_b_handed:   .word   0     /* blocks handed over */
+g_t_jblk:     .word   0     /* the block writer_post is about to describe */
+g_w_thread:   .word   0     /* the take's task */
+g_w_bodyobj:  .word   0     /* one word holding &W_VT -- the worker is handed */
+g_w_joinrc:   .word   0     /* ITS address, not W_VT's */
+g_w_opens:    .word   0     /* takes built */
+g_w_closes:   .word   0     /* takes torn down */
+g_w_stage:    .word   0     /* how far the last one got */
+g_t_pos:      .word   0     /* where the file is, as we believe it */
+g_t_seeks:    .word   0     /* times that disagreed with J_OFF */
+g_w_vt:       .space  16    /* 16 bytes: the whole class.  The pool worker calls */
+g_t_openfn:   .word   0     /* -> take_open */
+g_t_closefn:  .word   0     /* -> take_close */
+g_t_jseq:     .word   0     /* jobs posted */
+g_t_jobslot:  .word   0     /* the job the kernel handed back */
+g_t_want:     .word   0     /* 1 = a take wants the file */
+g_t_build:    .word   0     /* how far take_open may build */
+g_t_teardown: .word   0     /* how far take_close may tear down */
+
 .equ O_T_BYTES,  g_t_bytes  - gsup_offsets
 .equ O_T_WRITES, g_t_writes - gsup_offsets
 .equ O_T_WRC,    g_t_wrc    - gsup_offsets
@@ -138,6 +189,45 @@ g_d_path:   .space  48      /* the path it tried -- FORTY-EIGHT bytes.  dbg_path
 .equ O_D_OPEN2, g_d_open2 - gsup_offsets
 .equ O_D_OPEN3, g_d_open3 - gsup_offsets
 .equ O_D_PATH, g_d_path - gsup_offsets
+.equ O_T_PKT, g_t_pkt - gsup_offsets
+.equ O_T_MBX, g_t_mbx - gsup_offsets
+.equ O_T_DRAINED, g_t_drained - gsup_offsets
+.equ O_T_MAXSPAN, g_t_maxspan - gsup_offsets
+.equ O_T_ID, g_t_id - gsup_offsets
+.equ O_T_CRE_RC, g_t_cre_rc - gsup_offsets
+.equ O_T_STA_RC, g_t_sta_rc - gsup_offsets
+.equ O_T_WAKES, g_t_wakes - gsup_offsets
+.equ O_T_SIGNALS, g_t_signals - gsup_offsets
+.equ O_T_ENTRY, g_t_entry - gsup_offsets
+.equ O_T_RECV_RC, g_t_recv_rc - gsup_offsets
+.equ O_T_MBX_RC, g_t_mbx_rc - gsup_offsets
+.equ O_T_FOBJ, g_t_fobj - gsup_offsets
+.equ O_T_FOPEN, g_t_fopen - gsup_offsets
+.equ O_B_PTR, g_b_ptr - gsup_offsets
+.equ O_B_BUSY, g_b_busy - gsup_offsets
+.equ O_B_CUR, g_b_cur - gsup_offsets
+.equ O_B_FILL, g_b_fill - gsup_offsets
+.equ O_B_DONE, g_b_done - gsup_offsets
+.equ O_B_OFF, g_b_off - gsup_offsets
+.equ O_B_DROPS, g_b_drops - gsup_offsets
+.equ O_B_HANDED, g_b_handed - gsup_offsets
+.equ O_T_JBLK, g_t_jblk - gsup_offsets
+.equ O_W_THREAD, g_w_thread - gsup_offsets
+.equ O_W_BODYOBJ, g_w_bodyobj - gsup_offsets
+.equ O_W_JOINRC, g_w_joinrc - gsup_offsets
+.equ O_W_OPENS, g_w_opens - gsup_offsets
+.equ O_W_CLOSES, g_w_closes - gsup_offsets
+.equ O_W_STAGE, g_w_stage - gsup_offsets
+.equ O_T_POS, g_t_pos - gsup_offsets
+.equ O_T_SEEKS, g_t_seeks - gsup_offsets
+.equ O_W_VT, g_w_vt - gsup_offsets
+.equ O_T_OPENFN, g_t_openfn - gsup_offsets
+.equ O_T_CLOSEFN, g_t_closefn - gsup_offsets
+.equ O_T_JSEQ, g_t_jseq - gsup_offsets
+.equ O_T_JOBSLOT, g_t_jobslot - gsup_offsets
+.equ O_T_WANT, g_t_want - gsup_offsets
+.equ O_T_BUILD, g_t_build - gsup_offsets
+.equ O_T_TEARDOWN, g_t_teardown - gsup_offsets
 
 /* The job pool is not a word either: it is a fixed offset from the same pool
  * the blob sits in, so it can be worked out instead of stored -- which leaves
@@ -221,13 +311,11 @@ blob_at:
 writer_body:
     push    {r4, lr}
 
-1:  movw    r0, #:lower16:T_MBX
-    movt    r0, #:upper16:T_MBX
+1:  SHAREDAT    r0, O_T_MBX
     ldr     r0, [r0]
     cmp     r0, #0
     beq     8f
-    movw    r1, #:lower16:T_JOBSLOT
-    movt    r1, #:upper16:T_JOBSLOT
+    SHAREDAT    r1, O_T_JOBSLOT
     mvn     r2, #0                      @ TMO_FEVR
     movw    ip, #:lower16:MBX_RECV
     movt    ip, #:upper16:MBX_RECV
@@ -239,14 +327,12 @@ writer_body:
     cmp     r0, #0
     bne     8f
 
-    movw    ip, #:lower16:T_WAKES
-    movt    ip, #:upper16:T_WAKES
+    SHAREDAT    ip, O_T_WAKES
     ldr     r1, [ip]
     add     r1, r1, #1
     str     r1, [ip]
 
-    movw    ip, #:lower16:T_JOBSLOT
-    movt    ip, #:upper16:T_JOBSLOT
+    SHAREDAT    ip, O_T_JOBSLOT
     ldr     r4, [ip]
     cmp     r4, #0
     beq     1b
@@ -266,8 +352,7 @@ writer_body:
     pop     {r4, lr}
     bx      lr
 
-8:  movw    ip, #:lower16:T_RECV_RC
-    movt    ip, #:upper16:T_RECV_RC
+8:  SHAREDAT    ip, O_T_RECV_RC
     str     r0, [ip]
     pop     {r4, lr}
     bx      lr
@@ -301,12 +386,10 @@ writer_post:
     mov     r5, r0
     mov     r6, r1
     mov     r7, r2
-    movw    ip, #:lower16:T_JBLK
-    movt    ip, #:upper16:T_JBLK
+    SHAREDAT    ip, O_T_JBLK
     str     r3, [ip]
 
-    movw    r0, #:lower16:T_FOPEN
-    movt    r0, #:upper16:T_FOPEN
+    SHAREDAT    r0, O_T_FOPEN
     ldr     r0, [r0]
     cmp     r0, #0
     beq     9f                          @ no file: the block is dropped, and
@@ -343,19 +426,16 @@ writer_make_job:
     str     r5, [r0, #J_PTR]
     str     r6, [r0, #J_LEN]
     str     r4, [r0, #J_STOP]
-    movw    ip, #:lower16:T_JBLK
-    movt    ip, #:upper16:T_JBLK
+    SHAREDAT    ip, O_T_JBLK
     ldr     r1, [ip]
     str     r1, [r0, #J_BLK]            @ so the writer can hand the block back
-    movw    ip, #:lower16:T_JSEQ
-    movt    ip, #:upper16:T_JSEQ
+    SHAREDAT    ip, O_T_JSEQ
     ldr     r1, [ip]
     add     r1, r1, #1
     str     r1, [ip]
 
     mov     r1, r0                      @ the message is the descriptor
-    movw    r0, #:lower16:T_MBX
-    movt    r0, #:upper16:T_MBX
+    SHAREDAT    r0, O_T_MBX
     ldr     r0, [r0]
     cmp     r0, #0
     beq     8f
@@ -381,8 +461,7 @@ writer_release:
      * schedule.  Ours cannot be throttled, so the producer must be told when a
      * block is safe to refill -- and until it is told, it counts a drop rather
      * than writing over data the card has not seen. */
-    movw    r0, #:lower16:T_JOBSLOT
-    movt    r0, #:upper16:T_JOBSLOT
+    SHAREDAT    r0, O_T_JOBSLOT
     ldr     r0, [r0]
     cmp     r0, #0
     beq     1f
@@ -392,14 +471,12 @@ writer_release:
     ldr     r1, [r0, #J_BLK]
     cmp     r1, #BUF_N
     bhs     1f
-    movw    r2, #:lower16:B_BUSY
-    movt    r2, #:upper16:B_BUSY
+    SHAREDAT    r2, O_B_BUSY
     mov     r3, #0
     str     r3, [r2, r1, lsl #2]
 
 1:  JPOOLAT r0
-    movw    r1, #:lower16:T_JOBSLOT
-    movt    r1, #:upper16:T_JOBSLOT
+    SHAREDAT    r1, O_T_JOBSLOT
     ldr     r1, [r1]
     bl      mpool_free
     pop     {r0, r1, r2, r3, ip, lr}
@@ -411,8 +488,7 @@ writer_release:
     .global make_writer
 make_writer:
     push    {r4, lr}
-    movw    r4, #:lower16:T_PKT
-    movt    r4, #:upper16:T_PKT
+    SHAREDAT    r4, O_T_PKT
     mov     r0, #0
     str     r0, [r4]                    @ exinf
     mov     r1, #1
@@ -423,13 +499,11 @@ make_writer:
     movw    ip, #:lower16:MBX_CREATE
     movt    ip, #:upper16:MBX_CREATE
     blx     ip
-    movw    r1, #:lower16:T_MBX_RC
-    movt    r1, #:upper16:T_MBX_RC
+    SHAREDAT    r1, O_T_MBX_RC
     str     r0, [r1]
     cmp     r0, #0
     ble     9f
-    movw    r1, #:lower16:T_MBX
-    movt    r1, #:upper16:T_MBX
+    SHAREDAT    r1, O_T_MBX
     str     r0, [r1]
 9:  pop     {r4, lr}
     bx      lr
@@ -464,8 +538,7 @@ free_blocks:
     beq     9f
     mov     r5, r0
     mov     r6, #0
-    movw    r4, #:lower16:B_PTR
-    movt    r4, #:upper16:B_PTR
+    SHAREDAT    r4, O_B_PTR
 1:  ldr     r1, [r4, r6, lsl #2]
     cmp     r1, #0
     beq     2f
@@ -514,8 +587,7 @@ free_blocks:
 blocks_open:
     push    {r4, r5, r6, r7, ip, lr}
 
-    movw    r0, #:lower16:B_PTR
-    movt    r0, #:upper16:B_PTR
+    SHAREDAT    r0, O_B_PTR
     ldr     r0, [r0]
     cmp     r0, #0
     bne     9f                          @ already ours
@@ -542,11 +614,9 @@ blocks_open:
     add     sp, sp, #8
     cmp     r0, #0
     beq     2f                          @ refused: give back what we took
-    movw    ip, #:lower16:B_PTR
-    movt    ip, #:upper16:B_PTR
+    SHAREDAT    ip, O_B_PTR
     str     r0, [ip, r6, lsl #2]
-    movw    ip, #:lower16:B_BUSY
-    movt    ip, #:upper16:B_BUSY
+    SHAREDAT    ip, O_B_BUSY
     mov     r1, #0
     str     r1, [ip, r6, lsl #2]
     add     r6, r6, #1
@@ -578,25 +648,19 @@ blocks_open:
     b       9f
 
 3:  /* Nothing is filling yet, and the file starts at byte zero. */
-    movw    ip, #:lower16:B_CUR
-    movt    ip, #:upper16:B_CUR
+    SHAREDAT    ip, O_B_CUR
     mvn     r0, #0
     str     r0, [ip]
     mov     r0, #0
-    movw    ip, #:lower16:B_FILL
-    movt    ip, #:upper16:B_FILL
+    SHAREDAT    ip, O_B_FILL
     str     r0, [ip]
-    movw    ip, #:lower16:B_DONE
-    movt    ip, #:upper16:B_DONE
+    SHAREDAT    ip, O_B_DONE
     str     r0, [ip]
-    movw    ip, #:lower16:B_OFF
-    movt    ip, #:upper16:B_OFF
+    SHAREDAT    ip, O_B_OFF
     str     r0, [ip]
-    movw    ip, #:lower16:B_DROPS
-    movt    ip, #:upper16:B_DROPS
+    SHAREDAT    ip, O_B_DROPS
     str     r0, [ip]
-    movw    ip, #:lower16:B_HANDED
-    movt    ip, #:upper16:B_HANDED
+    SHAREDAT    ip, O_B_HANDED
     str     r0, [ip]
 
 9:  pop     {r4, r5, r6, r7, ip, lr}
@@ -614,13 +678,11 @@ blocks_close:
     .global take_open
 take_open:
     push    {r4, r5, r6, r7, ip, lr}
-    movw    r4, #:lower16:W_STAGE
-    movt    r4, #:upper16:W_STAGE
+    SHAREDAT    r4, O_W_STAGE
     mov     r0, #0x01
     str     r0, [r4]
 
-    movw    r0, #:lower16:T_FOPEN
-    movt    r0, #:upper16:T_FOPEN
+    SHAREDAT    r0, O_T_FOPEN
     ldr     r0, [r0]
     cmp     r0, #0
     bne     9f                          @ a take is already built
@@ -637,8 +699,7 @@ take_open:
      * recording anywhere near.  Audio can ask at capture start because it asks
      * class 6, which is MOVAUDIO and is nobody else's; we ask class 0, which is
      * the generic one, so we ask early and hold it. */
-    movw    r0, #:lower16:B_PTR
-    movt    r0, #:upper16:B_PTR
+    SHAREDAT    r0, O_B_PTR
     ldr     r0, [r0]
     cmp     r0, #0
     mov     r0, #0x06
@@ -648,42 +709,35 @@ take_open:
     /* The drop and hand counts describe THIS take, and this take is what the
      * header reports.  B_OFF is not here: take_header sets it, because opening
      * the file is what starts one. */
-    movw    r0, #:lower16:B_DROPS
-    movt    r0, #:upper16:B_DROPS
+    SHAREDAT    r0, O_B_DROPS
     mov     r1, #0
     str     r1, [r0]
-    movw    r0, #:lower16:B_HANDED
-    movt    r0, #:upper16:B_HANDED
+    SHAREDAT    r0, O_B_HANDED
     str     r1, [r0]
 
-    movw    r0, #:lower16:T_BUILD
-    movt    r0, #:upper16:T_BUILD
+    SHAREDAT    r0, O_T_BUILD
     ldr     r7, [r0]
     cmp     r7, #1
     blo     9f
 
     bl      writer_openfile
-    movw    r0, #:lower16:T_FOPEN
-    movt    r0, #:upper16:T_FOPEN
+    SHAREDAT    r0, O_T_FOPEN
     ldr     r0, [r0]
     cmp     r0, #0
     mov     r0, #0x02
     str     r0, [r4]                    @ neither mov nor str touches the flags
     beq     9f
 
-    movw    r0, #:lower16:T_POS
-    movt    r0, #:upper16:T_POS
+    SHAREDAT    r0, O_T_POS
     mov     r1, #0
     str     r1, [r0]                    @ a fresh file starts at byte zero
-    movw    r0, #:lower16:T_SEEKS
-    movt    r0, #:upper16:T_SEEKS
+    SHAREDAT    r0, O_T_SEEKS
     str     r1, [r0]
 
     cmp     r7, #2
     blo     9f
     bl      make_writer                 @ the mailbox
-    movw    r0, #:lower16:T_MBX
-    movt    r0, #:upper16:T_MBX
+    SHAREDAT    r0, O_T_MBX
     ldr     r0, [r0]
     cmp     r0, #0
     mov     r0, #0x03
@@ -696,14 +750,11 @@ take_open:
     /* The object the pool worker will call.  Its whole interface is slot +0xC
      * of the vtable its first word points at, so this is the whole class: one
      * word, and a table the deployer put writer_body into. */
-    movw    r0, #:lower16:W_BODYOBJ
-    movt    r0, #:upper16:W_BODYOBJ
-    movw    r1, #:lower16:W_VT
-    movt    r1, #:upper16:W_VT
+    SHAREDAT    r0, O_W_BODYOBJ
+    SHAREDAT    r1, O_W_VT
     str     r1, [r0]
 
-    movw    r0, #:lower16:W_THREAD
-    movt    r0, #:upper16:W_THREAD
+    SHAREDAT    r0, O_W_THREAD
     mov     r1, #WRITER_PRI
     movw    r2, #WRITER_STKSZ
     adr     r3, writer_name
@@ -713,8 +764,7 @@ take_open:
     mov     r0, #0x04
     str     r0, [r4]
 
-    movw    r0, #:lower16:W_THREAD
-    movt    r0, #:upper16:W_THREAD
+    SHAREDAT    r0, O_W_THREAD
     ldr     r1, [r0]
     cmp     r1, #0
     beq     9f                          @ the pool refused: leave it unstarted
@@ -728,16 +778,14 @@ take_open:
      * vtable: the instant it was woken it called a garbage pointer.  Build 3,
      * which never wakes it, ran; every build that woke it died on the spot,
      * at either site, with either stack. */
-    movw    r1, #:lower16:W_BODYOBJ
-    movt    r1, #:upper16:W_BODYOBJ
+    SHAREDAT    r1, O_W_BODYOBJ
     movw    ip, #:lower16:XT_ATTACH
     movt    ip, #:upper16:XT_ATTACH
     blx     ip                          @ the writer is running from here
 
     mov     r0, #0x05
     str     r0, [r4]
-    movw    r0, #:lower16:W_OPENS
-    movt    r0, #:upper16:W_OPENS
+    SHAREDAT    r0, O_W_OPENS
     ldr     r1, [r0]
     add     r1, r1, #1
     str     r1, [r0]
@@ -766,8 +814,7 @@ writer_name:
     .global take_close
 take_close:
     push    {r4, r5, r6, lr}
-    movw    r4, #:lower16:W_STAGE
-    movt    r4, #:upper16:W_STAGE
+    SHAREDAT    r4, O_W_STAGE
     mov     r0, #0x11
     str     r0, [r4]
 
@@ -787,22 +834,19 @@ take_close:
      * That is AudioFileWriter::v0's order, not the one this comment used to
      * claim: the writer leaves the system first, the file goes last.
      */
-    movw    r0, #:lower16:T_TEARDOWN
-    movt    r0, #:upper16:T_TEARDOWN
+    SHAREDAT    r0, O_T_TEARDOWN
     ldr     r6, [r0]
     cmp     r6, #0
     beq     9f                          @ leave it all standing; --close later
 
     /* Each piece is undone only if it was built: the build is a ladder now and
      * a half-built take must still give everything back. */
-    movw    r0, #:lower16:T_MBX
-    movt    r0, #:upper16:T_MBX
+    SHAREDAT    r0, O_T_MBX
     ldr     r0, [r0]
     cmp     r0, #0
     ble     4f                          @ no mailbox: no stop job, no join
 
-    movw    r0, #:lower16:W_THREAD
-    movt    r0, #:upper16:W_THREAD
+    SHAREDAT    r0, O_W_THREAD
     ldr     r0, [r0]
     cmp     r0, #0
     beq     4f                          @ no thread: nothing to wait for
@@ -830,8 +874,7 @@ take_close:
     cmp     r6, #2
     blo     9f
 
-    movw    r5, #:lower16:W_THREAD
-    movt    r5, #:upper16:W_THREAD
+    SHAREDAT    r5, O_W_THREAD
     ldr     r0, [r5]
     cmp     r0, #0
     beq     3f
@@ -857,8 +900,7 @@ take_close:
      * the writer out of the system before it touches the file, so nothing
      * priority 6 is left standing when the volume lock is taken in the task
      * SRecFile is waiting on. */
-    movw    r5, #:lower16:T_MBX
-    movt    r5, #:upper16:T_MBX
+    SHAREDAT    r5, O_T_MBX
     ldr     r0, [r5]
     cmp     r0, #0
     ble     4f
@@ -873,8 +915,7 @@ take_close:
     cmp     r6, #4
     blo     9f
 
-    movw    r5, #:lower16:W_THREAD
-    movt    r5, #:upper16:W_THREAD
+    SHAREDAT    r5, O_W_THREAD
     ldr     r0, [r5]
     cmp     r0, #0
     beq     5f
@@ -899,8 +940,7 @@ take_close:
 
 6:  mov     r0, #0x16
     str     r0, [r4]
-    movw    r0, #:lower16:W_CLOSES
-    movt    r0, #:upper16:W_CLOSES
+    SHAREDAT    r0, O_W_CLOSES
     ldr     r1, [r0]
     add     r1, r1, #1
     str     r1, [r0]
@@ -930,8 +970,7 @@ writer_selftest:
     str     r0, [r4, #O_T_WRC]          @ reached the entry
 
     bl      writer_openfile
-    movw    r5, #:lower16:T_FOPEN
-    movt    r5, #:upper16:T_FOPEN
+    SHAREDAT    r5, O_T_FOPEN
     ldr     r5, [r5]
     cmp     r5, #0
     moveq   r0, #0x12                   @ the open failed
@@ -940,8 +979,7 @@ writer_selftest:
     mov     r0, #0x13
     str     r0, [r4, #O_T_WRC]                    @ open done, about to write
 
-    movw    r6, #:lower16:B_PTR
-    movt    r6, #:upper16:B_PTR
+    SHAREDAT    r6, O_B_PTR
     ldr     r6, [r6]                    @ the first block, if a take built any
     cmp     r6, #0
     moveq   r0, #0x14
@@ -950,8 +988,7 @@ writer_selftest:
 
     mov     r1, r6                      @ straight out of the block
     movw    r2, #1024
-    movw    r0, #:lower16:T_FOBJ
-    movt    r0, #:upper16:T_FOBJ
+    SHAREDAT    r0, O_T_FOBJ
     ldr     r0, [r0]
     movw    ip, #:lower16:F_WRITE
     movt    ip, #:upper16:F_WRITE
@@ -1109,23 +1146,19 @@ gsup_boot:
      * word so a reader can see what it was given. */
     ldr     r0, [r5, #0]
     add     r0, r0, r6
-    movw    r1, #:lower16:W_VT_BODY
-    movt    r1, #:upper16:W_VT_BODY
+    SHAREDAT    r1, (O_W_VT + W_VT_SLOT)    @ the slot the pool worker calls
     str     r0, [r1]
-    movw    r1, #:lower16:T_ENTRY
-    movt    r1, #:upper16:T_ENTRY
+    SHAREDAT    r1, O_T_ENTRY
     str     r0, [r1]
 
     ldr     r0, [r5, #4]                @ take_open
     add     r0, r0, r6
-    movw    r1, #:lower16:T_OPENFN
-    movt    r1, #:upper16:T_OPENFN
+    SHAREDAT    r1, O_T_OPENFN
     str     r0, [r1]
 
     ldr     r0, [r5, #8]                @ take_close
     add     r0, r0, r6
-    movw    r1, #:lower16:T_CLOSEFN
-    movt    r1, #:upper16:T_CLOSEFN
+    SHAREDAT    r1, O_T_CLOSEFN
     str     r0, [r1]
 
     /* The four call-through words are gone.
@@ -1136,8 +1169,7 @@ gsup_boot:
      * nothing to fill in, nothing to load, nothing to guard against being zero,
      * and four fewer words in the cave. */
     add     r0, r4, #FOBJ_POOL_OFF
-    movw    r1, #:lower16:T_FOBJ
-    movt    r1, #:upper16:T_FOBJ
+    SHAREDAT    r1, O_T_FOBJ
     str     r0, [r1]
 
     /* Every word the deploy scripts clear, cleared here.  A soft power cycle
@@ -1159,14 +1191,12 @@ gsup_boot:
      * B_BUSY goes with it (a stale one marks a block we no longer own as
      * in use) and so does G_TEXT, which is a ninth allocation with the same
      * lifetime. */
-    movw    r1, #:lower16:B_PTR
-    movt    r1, #:upper16:B_PTR
+    SHAREDAT    r1, O_B_PTR
     mov     r2, #BUF_N
 7:  str     r0, [r1], #4
     subs    r2, r2, #1
     bne     7b
-    movw    r1, #:lower16:B_BUSY
-    movt    r1, #:upper16:B_BUSY
+    SHAREDAT    r1, O_B_BUSY
     mov     r2, #BUF_N
 7:  str     r0, [r1], #4
     subs    r2, r2, #1
@@ -1174,28 +1204,21 @@ gsup_boot:
     SHAREDAT    r1, O_G_TEXT
     str     r0, [r1]
 
-    movw    r1, #:lower16:T_FOPEN
-    movt    r1, #:upper16:T_FOPEN
+    SHAREDAT    r1, O_T_FOPEN
     str     r0, [r1]
-    movw    r1, #:lower16:T_WANT
-    movt    r1, #:upper16:T_WANT
+    SHAREDAT    r1, O_T_WANT
     str     r0, [r1]
     BLOBBASE r1
     str     r0, [r1, #O_T_STAGE]
-    movw    r1, #:lower16:T_POS
-    movt    r1, #:upper16:T_POS
+    SHAREDAT    r1, O_T_POS
     str     r0, [r1]
-    movw    r1, #:lower16:T_JSEQ
-    movt    r1, #:upper16:T_JSEQ
+    SHAREDAT    r1, O_T_JSEQ
     str     r0, [r1]
-    movw    r1, #:lower16:T_JOBSLOT
-    movt    r1, #:upper16:T_JOBSLOT
+    SHAREDAT    r1, O_T_JOBSLOT
     str     r0, [r1]
-    movw    r1, #:lower16:W_THREAD
-    movt    r1, #:upper16:W_THREAD
+    SHAREDAT    r1, O_W_THREAD
     str     r0, [r1]
-    movw    r1, #:lower16:T_MBX
-    movt    r1, #:upper16:T_MBX
+    SHAREDAT    r1, O_T_MBX
     str     r0, [r1]
 #ifdef WANT_MODE_HOOK
     /* The cave outlives a re-place, so a stale count from the last blob would
@@ -1207,11 +1230,9 @@ gsup_boot:
     /* The release builds and tears down the whole take.  The ladders are the
      * bisection's, and there is nothing left to bisect. */
     mov     r0, #5
-    movw    r1, #:lower16:T_BUILD
-    movt    r1, #:upper16:T_BUILD
+    SHAREDAT    r1, O_T_BUILD
     str     r0, [r1]
-    movw    r1, #:lower16:T_TEARDOWN
-    movt    r1, #:upper16:T_TEARDOWN
+    SHAREDAT    r1, O_T_TEARDOWN
     str     r0, [r1]
 
     /* The free list, before anything can take a descriptor from it. */
@@ -1224,8 +1245,7 @@ gsup_boot:
     ldr     r0, [r5, #20]               @ blocks_open
     add     r0, r0, r6
     blx     r0
-    movw    r0, #:lower16:B_PTR
-    movt    r0, #:upper16:B_PTR
+    SHAREDAT    r0, O_B_PTR
     ldr     r0, [r0]
     cmp     r0, #0
     beq     9f                          @ refused: arm nothing

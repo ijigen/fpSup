@@ -1289,7 +1289,7 @@ class ModeHook(unittest.TestCase):
         not one displacement but every displacement the arena can produce."""
         inc = (HERE / 'ring_task.inc.S').read_text()
         ba = (HERE.parent / 'fp_usb_shell' / 'build_autorun.py').read_text()
-        lo = int(re.search(r'^CAVE_ARENA\s*=\s*(0x[0-9A-Fa-f]+)', ba, re.M).group(1), 0)
+        lo = _const('CAVE_ARENA', ba)
         hi = int(equ('CAVE_ARENA_END', inc), 0)
         self.assertEqual(int(equ('MODE_SITE', inc), 0), self.site)
         import imu_stream_deploy as D
@@ -1299,6 +1299,29 @@ class ModeHook(unittest.TestCase):
                 disp = (dest - site - 8) >> 2
                 self.assertEqual(disp, ((disp << 8) >> 8),
                                  f'a bl from 0x{site:08X} cannot reach 0x{dest:08X}')
+
+
+def _const(name, src, depth=0):
+    """One module-level constant out of build_autorun.py, without importing it.
+
+    That file reads argv at module scope, so importing it from a test runs its
+    argument parser.  A plain regex for a hex literal was enough while every
+    constant was one; CAVE_ARENA is LOADER_END now, and the regex simply
+    stopped matching -- the test errored rather than checking anything.  So:
+    follow one name to the next, and allow the `+ 0x...` form the cave map
+    uses.
+    """
+    if depth > 4:
+        raise AssertionError(f'{name}: too many hops in build_autorun.py')
+    m = re.search(rf'^{name}\s*=\s*([^#\n]+)', src, re.M)
+    if not m:
+        raise AssertionError(f'build_autorun.py has no {name}')
+    expr = m.group(1).strip()
+    mm = re.fullmatch(r'(\w+)(?:\s*\+\s*(0x[0-9A-Fa-f]+|\d+))?', expr)
+    if mm and not mm.group(1).startswith('0'):
+        base = _const(mm.group(1), src, depth + 1)
+        return base + (int(mm.group(2), 0) if mm.group(2) else 0)
+    return int(expr, 0)
 
 
 if __name__ == '__main__':

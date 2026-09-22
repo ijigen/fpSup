@@ -141,12 +141,7 @@ def branch_word(site, target, thumb):
 
 # Must agree with imu_stream.inc.S; _check_header() proves they do.
 GYRO_RING_SPAN = 0x12C0
-T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
-T_BUILD = 0xC072EC54
-T_TEARDOWN = 0xC072EC58
 BUF_N, BUF_BYTES = 8, 0x4000
-B_CUR, B_FILL, B_DONE = 0xC072EBE0, 0xC072EBE4, 0xC072EBE8
-B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
 POOL_PTR      = 0xC3757A7C
 
 
@@ -204,16 +199,12 @@ def _place():
     because no hook has code here.
     """
     code_spans = []               # words may sit in data, never in code
-    spans = [
-              # ring_task_deploy owns these, but only this script knows
-              # where the hooks land -- so the overlap check lives here.
-              ('writer counters', 0xC072E8E0, 5 * 4),
-              # the blocks are the allocator's; only their bookkeeping is here
-              ('block state', 0xC072EBA0, (2 * BUF_N + 7) * 4),
-              # the writer's own words and the four call-throughs.  These
-              # used to sit under the space provider, and W_VT sat on top of
-              # T_POS: putting them in the map is what stops that happening.
-              ('writer words', 0xC072EC00, 0x5C)]
+    # Nothing of ours is placed in the cave any more.  The writer counters, the
+    # block state and the writer's own words were the last three spans here;
+    # they are fields of the blob's shared block now, so there is no address to
+    # reserve and nothing to overlap.  The list stays, and so does the check
+    # below: the next payload that wants cave space is placed through it.
+    spans = []
     for name, at, n in spans:
         if at < CAVE_LO or at + n > CAVE_HI:
             raise SystemExit(f'{name}: 0x{at:08X}..0x{at+n:08X} leaves the cave '
@@ -234,7 +225,9 @@ def _place():
         for m in re.finditer(r'^\.equ\s+([A-Z_0-9]+),\s*(0xC072E[0-9A-Fa-f]{3})',
                              text, re.M):
             caves[m.group(1)] = int(m.group(2), 16)
-    sized = {'T_DESC': 32, 'T_PKT': 32, 'W_VT': 16, 'B_PTR': 32, 'B_BUSY': 32}
+    # The sizes the cave equates carried implicitly.  All of the wide ones
+    # have left; a name added back here needs its size added with it.
+    sized = {}
     # Three of the cave equates NAME code rather than reserving a word.
     # gsup_boot computes the three branch encodings from them at build time, so
     # they have to be the addresses the hooks are placed at -- being "inside"
@@ -413,13 +406,20 @@ def _ms(samples):
     return samples * GYRO_PERIOD_US / 1000.0
 
 
+# The ladder stops at 2.
+#
+# Stages 3 to 5 turned the space provider, the drain and the posting on one
+# word at a time, and the word was a function pointer in the cave.  Those four
+# pointers are gone: the hook and the body share a blob now, the branch is
+# resolved by the assembler, and there is nothing left to null out from here.
+# Saying "stage 4" and quietly doing nothing would be worse than not offering
+# it, so it is not offered.  --build and --teardown still gate how far a take
+# gets, which is most of what the upper rungs were for; below that, the step
+# is a rebuild.
 STAGES = {
     0: 'nothing armed',
     1: 'the accelerometer hook, entered and left',
     2: '+ the take is built and torn down',
-    3: '+ the space provider: blocks fill, nothing is posted',
-    4: '+ the gyro drain',
-    5: '+ posting and writing',
 }
 
 
@@ -437,21 +437,11 @@ def stage(n):
     import ring_task_deploy as R
     _code, at = R.place()               # assembles and resolves; writes nothing
     want = {
-        T_OPENFN:        at['take_open']   if n >= 2 else 0,
-        T_CLOSEFN:       at['take_close']  if n >= 2 else 0,
-        STREAM_CLAIMFN:  None              if n >= 3 else 0,
-        STREAM_COMMITFN: None              if n >= 3 else 0,
-        STREAM_FLUSHFN:  None              if n >= 3 else 0,
-        STREAM_DRAINFN:  None              if n >= 4 else 0,
+        shared('T_OPENFN'):  at['take_open']   if n >= 2 else 0,
+        shared('T_CLOSEFN'): at['take_close']  if n >= 2 else 0,
     }
-    real = {STREAM_CLAIMFN: at['stream_claim'],
-            STREAM_COMMITFN: at['stream_commit'],
-            STREAM_FLUSHFN: at['stream_flush'],
-            STREAM_DRAINFN: at['gyro_drain']}
-    names = {T_OPENFN: 'take_open', T_CLOSEFN: 'take_close',
-             STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
-             STREAM_FLUSHFN: 'stream_flush',
-             STREAM_DRAINFN: 'gyro_drain'}
+    names = {shared('T_OPENFN'): 'take_open',
+             shared('T_CLOSEFN'): 'take_close'}
     # A stage sets pointers; it does not install hooks.  After a reboot the
     # cave is empty, and a stage on its own then looks exactly like a working
     # deploy right up until the take produces nothing -- which has now cost two
@@ -465,11 +455,10 @@ def stage(n):
             f'  run ./gyro/imu_stream_deploy.py with no arguments first -- that '
             f'is what arms them.')
 
-    _setw(T_BUILD, 5, 'how far take_open builds')
-    _setw(T_TEARDOWN, 5, 'how far take_close tears down')
+    _setw(shared('T_BUILD'), 5, 'how far take_open builds')
+    _setw(shared('T_TEARDOWN'), 5, 'how far take_close tears down')
     print(f'stage {n}: {STAGES[n]}')
     for addr, v in want.items():
-        v = real[addr] if v is None else v
         _setw(addr, v, names[addr])
         print(f'  {names[addr]:14s} ' + (f'0x{v:08X}' if v else '(off)'))
 
@@ -493,9 +482,9 @@ def take():
     r1_gc, r1_n = got['r1_gc'], got['r1_n']
     r0_head, r0_gc, r0_n = got['r0_head'], got['r0_gc'], got['r0_n']
     padbad, gcount = got['padbad'], got['gcount']
-    handed, drops = P.mem_get(B_HANDED)[0], P.mem_get(B_DROPS)[0]
-    cur, fill, done = (P.mem_get(B_CUR)[0], P.mem_get(B_FILL)[0],
-                       P.mem_get(B_DONE)[0])
+    handed, drops = P.mem_get(shared('B_HANDED'))[0], P.mem_get(shared('B_DROPS'))[0]
+    cur, fill, done = (P.mem_get(shared('B_CUR'))[0], P.mem_get(shared('B_FILL'))[0],
+                       P.mem_get(shared('B_DONE'))[0])
     print(f'gyro {gcount}   bad pads {padbad}')
     print(f'blocks {handed} handed to the writer   {drops} dropped'
           + ('   <- the writer did not keep up' if drops else ''))
@@ -564,7 +553,7 @@ def main():
     g.add_argument('--restore', action='store_true')
     g.add_argument('--reset', action='store_true')
     g.add_argument('--take', action='store_true')
-    g.add_argument('--stage', type=int, choices=range(6),
+    g.add_argument('--stage', type=int, choices=range(3),
                    help='turn the flow on one step at a time')
     g.add_argument('--teardown', type=int, choices=range(6),
                    help='how much of take_close to run: 0 nothing, 1 stop job, '
@@ -587,10 +576,10 @@ def main():
     elif a.stage is not None:
         stage(a.stage)
     elif a.teardown is not None:
-        _setw(T_TEARDOWN, a.teardown, 'how far take_close tears down')
+        _setw(shared('T_TEARDOWN'), a.teardown, 'how far take_close tears down')
         print(f'take_close will run {a.teardown} of 5 steps')
     elif a.build is not None:
-        _setw(T_BUILD, a.build, 'how far take_open builds')
+        _setw(shared('T_BUILD'), a.build, 'how far take_open builds')
         print(f'take_open will build {a.build} of 5 steps')
     elif a.accel:
         accel_interval()

@@ -52,21 +52,9 @@ JOB_COUNT = 32
 BUF_N, BUF_BYTES = 8, 0x4000
 JOB_SIZE = 24
 
-T_ID, T_CRE_RC, T_STA_RC = 0xC072E0D0, 0xC072E0D4, 0xC072E0D8
-T_WAKES, T_SIGNALS, T_ENTRY = 0xC072E0DC, 0xC072E0E0, 0xC072E0E4
-T_RECV_RC, T_MBX_RC = 0xC072E0E8, 0xC072E0EC
-T_DESC, T_PKT, T_MBX = 0xC072E080, 0xC072E0A0, 0xC072E0C4
-T_DRAINED, T_MAXSPAN = 0xC072E0C8, 0xC072E0CC
-T_FOBJ, T_FOPEN = 0xC072E0F8, 0xC072E0FC
-T_WANT = 0xC072EC50
-T_JSEQ = 0xC072EC48
-T_JOBSLOT = 0xC072EC4C
 STREAM_POSTED = 0xC072E1AC
 STREAM_INDEX, STREAM_TAIL = 0xC072E1F8, 0xC072E1A4
-T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
-W_THREAD, W_BODYOBJ, W_JOINRC = 0xC072EC00, 0xC072EC04, 0xC072EC08
-W_VT, W_VT_SLOT = 0xC072EC20, 0x0C
-W_OPENS, W_CLOSES, W_STAGE = 0xC072EC0C, 0xC072EC10, 0xC072EC14
+W_VT_SLOT = 0x0C
 
 
 def symbols(src, defines=()):
@@ -96,18 +84,12 @@ def symbols(src, defines=()):
 def _check():
     """The addresses here are duplicated from the assembly; prove they match."""
     src = (HERE / 'ring_task.inc.S').read_text()
-    want = {'T_ID': T_ID, 'T_CRE_RC': T_CRE_RC, 'T_STA_RC': T_STA_RC,
-            'T_WAKES': T_WAKES, 'T_SIGNALS': T_SIGNALS, 'T_ENTRY': T_ENTRY,
-            'T_RECV_RC': T_RECV_RC, 'T_MBX_RC': T_MBX_RC, 'T_DESC': T_DESC,
-            'T_PKT': T_PKT, 'T_MBX': T_MBX,
-            'T_DRAINED': T_DRAINED, 'T_MAXSPAN': T_MAXSPAN,
-            'T_FOBJ': T_FOBJ, 'T_FOPEN': T_FOPEN, 'T_WANT': T_WANT,
-            'T_OPENFN': T_OPENFN, 'T_CLOSEFN': T_CLOSEFN,
-            'W_THREAD': W_THREAD, 'W_BODYOBJ': W_BODYOBJ, 'W_VT': W_VT,
-            'W_OPENS': W_OPENS, 'W_CLOSES': W_CLOSES,
-            'XT_CREATE': 0xC036E108, 'XT_ATTACH': 0xC036E1B8,
+    # What is left is the firmware's own addresses and the writer's priority.
+    # The task and block words are labels in the blob now -- there is no
+    # address here to disagree with the header, and shared() reads the one
+    # symbol table both sides use.
+    want = {'XT_CREATE': 0xC036E108, 'XT_ATTACH': 0xC036E1B8,
             'XT_JOIN': 0xC036E1F8, 'XT_DESTROY': 0xC036E168,
-            'W_STAGE': W_STAGE,
             'WRITER_PRI': 6}
     for name, value in want.items():
         m = re.search(rf'^\.equ\s+{name},\s*([^\s/@]+)', src, re.M)
@@ -313,12 +295,12 @@ def place_code():
     echo_into(F_CACHE, 'the cache maintenance routine')
     # The pool worker calls slot +0xC of the object it is handed.  That slot
     # is the only interface it has, and only we know where the body landed.
-    _setw(W_VT + W_VT_SLOT, at['writer_body'], 'the body, in the vtable slot')
-    _setw(T_ENTRY, at['writer_body'], 'the body, for reading back')
+    _setw(shared('W_VT') + W_VT_SLOT, at['writer_body'], 'the body, in the vtable slot')
+    _setw(shared('T_ENTRY'), at['writer_body'], 'the body, for reading back')
     # The record hooks live in the cave and these live in the pool, so the
     # hooks reach them through a word only the deployer can fill in.
-    _setw(T_OPENFN, at['take_open'], 'what the record start calls')
-    _setw(T_CLOSEFN, at['take_close'], 'what the record stop calls')
+    _setw(shared('T_OPENFN'), at['take_open'], 'what the record start calls')
+    _setw(shared('T_CLOSEFN'), at['take_close'], 'what the record stop calls')
 
     # The blocks come from the allocator NOW, with the camera idle -- the rule
     # is that they have to be taken before the movie path takes what it needs,
@@ -346,9 +328,9 @@ def place_code():
           f'0x{got[0]:08X}..0x{got[-1] + BUF_BYTES:08X}')
     _setw(shared('T_FINGER'), fingerprint(code), 'the blob fingerprint')
     pool = pool_base()
-    _setw(T_FOBJ, pool + FOBJ_POOL_OFF, 'the file object')
+    _setw(shared('T_FOBJ'), pool + FOBJ_POOL_OFF, 'the file object')
     _setw(STREAM_POSTED, 0, 'the posted mark')
-    for a in (T_JSEQ, T_JOBSLOT):
+    for a in (shared('T_JSEQ'), shared('T_JOBSLOT')):
         _setw(a, 0, 'a job word')
     # Build the free list before anything can take a descriptor from it.
     echo_into(at['mpool_init_jobs'], 'mpool_init_jobs')
@@ -356,8 +338,8 @@ def place_code():
     print(f'job pool at 0x{pool + JPOOL_POOL_OFF:08X}: {free} free')
     if free != JOB_COUNT:
         raise SystemExit(f'the job pool says {free} free, not {JOB_COUNT}')
-    _setw(T_FOPEN, 0, 'the open flag')
-    _setw(T_WANT, 0, 'the wanted state')
+    _setw(shared('T_FOPEN'), 0, 'the open flag')
+    _setw(shared('T_WANT'), 0, 'the wanted state')
     # The write counters are words in the blob now, re-read from the card on
     # every boot, so there is nothing here to clear.
     # No name is patched in any more.  take_path builds it at every take_open
@@ -494,11 +476,11 @@ def signal(times, at=None):
     if at is None:
         _code, at = place()
         _verify_placed(_code, at)
-    before = P.mem_get(T_WAKES)[0]
+    before = P.mem_get(shared('T_WAKES'))[0]
     for _ in range(times):
         raise SystemExit('writer_signal is gone: the job IS the wake-up')
     time.sleep(0.5)
-    after = P.mem_get(T_WAKES)[0]
+    after = P.mem_get(shared('T_WAKES'))[0]
     print(f'signalled {times}x   wakes {before} -> {after}')
     if after == before:
         print('  the task did not wake: it is not running, or the id is wrong')
@@ -509,21 +491,21 @@ def signal(times, at=None):
 
 
 def state():
-    mbx = P.mem_get(T_MBX)[0]
-    drained, maxspan = P.mem_get(T_DRAINED)[0], P.mem_get(T_MAXSPAN)[0]
-    fopen, wr, by = (P.mem_get(T_FOPEN)[0], P.mem_get(shared('T_WRITES'))[0],
+    mbx = P.mem_get(shared('T_MBX'))[0]
+    drained, maxspan = P.mem_get(shared('T_DRAINED'))[0], P.mem_get(shared('T_MAXSPAN'))[0]
+    fopen, wr, by = (P.mem_get(shared('T_FOPEN'))[0], P.mem_get(shared('T_WRITES'))[0],
                      P.mem_get(shared('T_BYTES'))[0])
     lost, wraps, wrc = (P.mem_get(shared('T_LOST'))[0],
                         P.mem_get(shared('T_WRAPS'))[0],
                         P.mem_get(shared('T_WRC'))[0])
-    want = P.mem_get(T_WANT)[0]
+    want = P.mem_get(shared('T_WANT'))[0]
     st = P.mem_get(shared('T_STAGE'))[0]
     where = {0x21: 'entered close', 0x22: 'about to drain', 0x23: 'drained, about to close',
              0x24: 'closed, about to destroy', 0x25: 'destroyed, all the way'}.get(st)
     print(f'  T_MBX      {mbx}   wanted {want}   file open {fopen}')
     if st:
         print(f'  close got to 0x{st:X}' + (f' -- {where}' if where else ''))
-    jseq = P.mem_get(T_JSEQ)[0]
+    jseq = P.mem_get(shared('T_JSEQ'))[0]
     jfree = P.mem_get((pool_base() + JPOOL_POOL_OFF) + 4)[0]
     jfail = P.mem_get((pool_base() + JPOOL_POOL_OFF) + 0x10)[0]
     print(f'  writes     {wr}   bytes {by}   last result {wrc}')
@@ -534,8 +516,8 @@ def state():
     print(f'  drained    {drained} records   most ever waiting {maxspan}')
 
     # The take's own lifecycle, the part that now mirrors AudF_W.
-    opens, closes = P.mem_get(W_OPENS)[0], P.mem_get(W_CLOSES)[0]
-    wst, thr = P.mem_get(W_STAGE)[0], P.mem_get(W_THREAD)[0]
+    opens, closes = P.mem_get(shared('W_OPENS'))[0], P.mem_get(shared('W_CLOSES'))[0]
+    wst, thr = P.mem_get(shared('W_STAGE'))[0], P.mem_get(shared('W_THREAD'))[0]
     stage = {0x01: 'take_open entered', 0x02: 'the file is open',
              0x03: 'flag made, about to make the thread',
              0x04: 'thread made, about to attach',
@@ -547,7 +529,7 @@ def state():
     print(f'  takes      {opens} built   {closes} torn down   '
           f'thread 0x{(thr or 0):08X}')
     print(f'  last stage 0x{(wst or 0):02X}' + (f' -- {stage}' if stage else ''))
-    w = P.mem_get(T_ID, 8)
+    w = P.mem_get(shared('T_ID'), 8)
     names = ('T_ID', 'T_CRE_RC', 'T_STA_RC', 'T_WAKES', 'T_SIGNALS', 'T_ENTRY',
              'T_RECV_RC', 'T_MBX_RC')
     for n, v in zip(names, w):
@@ -641,7 +623,7 @@ def main():
         # exercises the path the record hook uses rather than a second one.
         head = P.mem_get(STREAM_INDEX)[0]
         _setw(STREAM_POSTED, head, 'the posted mark')
-        _setw(T_WANT, 1, 'the wanted state')
+        _setw(shared('T_WANT'), 1, 'the wanted state')
         print(f'asked for a file, take starts at record {head}')
         time.sleep(1.0)
         state()
@@ -651,7 +633,7 @@ def main():
         echo_into(at['blocks_close'], 'blocks_close')
         print('blocks given back')
     elif a.close:
-        _setw(T_WANT, 0, 'the wanted state')
+        _setw(shared('T_WANT'), 0, 'the wanted state')
         print('asked for it to be closed; the producer posts a stop job')
         time.sleep(2.0)
         state()

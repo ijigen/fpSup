@@ -30,8 +30,7 @@ stream_claim:
     mov     r4, r0                      @ wanted
     st_lock r6
 
-    movw    r5, #:lower16:B_CUR
-    movt    r5, #:upper16:B_CUR
+    SHAREDAT    r5, O_B_CUR
     ldr     r0, [r5]
     cmn     r0, #1
     bne     2f
@@ -42,8 +41,7 @@ stream_claim:
      * would simply overwrite.  We would rather count it, because J_OFF then
      * leaves the hole in the right place and every later record keeps its own
      * time. */
-    movw    r2, #:lower16:B_BUSY
-    movt    r2, #:upper16:B_BUSY
+    SHAREDAT    r2, O_B_BUSY
     mov     r0, #0
 1:  ldr     r3, [r2, r0, lsl #2]
     cmp     r3, #0
@@ -52,8 +50,7 @@ stream_claim:
     cmp     r0, #BUF_N
     blo     1b
 
-    movw    r2, #:lower16:B_DROPS
-    movt    r2, #:upper16:B_DROPS
+    SHAREDAT    r2, O_B_DROPS
     ldr     r3, [r2]
     add     r3, r3, #1
     str     r3, [r2]
@@ -64,17 +61,14 @@ stream_claim:
     bx      lr
 
 3:  str     r0, [r5]                    @ B_CUR = the block we just took
-    movw    r2, #:lower16:B_FILL
-    movt    r2, #:upper16:B_FILL
+    SHAREDAT    r2, O_B_FILL
     mov     r3, #0
     str     r3, [r2]
-    movw    r2, #:lower16:B_DONE
-    movt    r2, #:upper16:B_DONE
+    SHAREDAT    r2, O_B_DONE
     str     r3, [r2]
 
 2:  /* r0 = the block.  How much of it is left, and where in it we are. */
-    movw    r2, #:lower16:B_FILL
-    movt    r2, #:upper16:B_FILL
+    SHAREDAT    r2, O_B_FILL
     ldr     r3, [r2]
     movw    r1, #:lower16:BUF_RECORDS
     movt    r1, #:upper16:BUF_RECORDS
@@ -84,8 +78,7 @@ stream_claim:
     add     ip, r3, r1
     str     ip, [r2]                    @ B_FILL += given
 
-    movw    r2, #:lower16:B_PTR
-    movt    r2, #:upper16:B_PTR
+    SHAREDAT    r2, O_B_PTR
     ldr     r0, [r2, r0, lsl #2]
     cmp     r0, #0
     beq     8f                          @ no allocation behind it: hand out
@@ -103,8 +96,7 @@ stream_claim:
 8:  /* The block has no memory behind it.  Undo the claim and give nothing.
      * r2 is B_PTR by now, so B_FILL has to be addressed again -- r3 still holds
      * what it was before the claim. */
-    movw    r2, #:lower16:B_FILL
-    movt    r2, #:upper16:B_FILL
+    SHAREDAT    r2, O_B_FILL
     str     r3, [r2]
     mov     r0, #0
     mov     r1, #0
@@ -125,14 +117,12 @@ stream_commit:
     mov     r4, r0
     st_lock r7
 
-    movw    r5, #:lower16:B_CUR
-    movt    r5, #:upper16:B_CUR
+    SHAREDAT    r5, O_B_CUR
     ldr     r5, [r5]
     cmn     r5, #1
     beq     9f                          @ nothing was given, nothing to commit
 
-    movw    r2, #:lower16:B_DONE
-    movt    r2, #:upper16:B_DONE
+    SHAREDAT    r2, O_B_DONE
     ldr     r3, [r2]
     add     r3, r3, r4
     str     r3, [r2]
@@ -143,32 +133,27 @@ stream_commit:
     blo     9f                          @ this block still has room in it
 
     /* Used up.  Hand it over. */
-    movw    r1, #:lower16:B_BUSY
-    movt    r1, #:upper16:B_BUSY
+    SHAREDAT    r1, O_B_BUSY
     mov     r2, #1
     str     r2, [r1, r5, lsl #2]
 
-    movw    r1, #:lower16:B_HANDED
-    movt    r1, #:upper16:B_HANDED
+    SHAREDAT    r1, O_B_HANDED
     ldr     r2, [r1]
     add     r2, r2, #1
     str     r2, [r1]
 
-    movw    r1, #:lower16:B_PTR
-    movt    r1, #:upper16:B_PTR
+    SHAREDAT    r1, O_B_PTR
     ldr     r0, [r1, r5, lsl #2]        @ r0 = the block
     movw    r1, #:lower16:BUF_BYTES
     movt    r1, #:upper16:BUF_BYTES     @ r1 = its length
-    movw    r2, #:lower16:B_OFF
-    movt    r2, #:upper16:B_OFF
+    SHAREDAT    r2, O_B_OFF
     ldr     r3, [r2]                    @ r3 = where it belongs in the file
     add     r4, r3, r1
     str     r4, [r2]                    @ the next block starts after it
     mov     r2, r3
     mov     r3, r5                      @ r3 = which block, so it can be freed
 
-    movw    ip, #:lower16:B_CUR
-    movt    ip, #:upper16:B_CUR
+    SHAREDAT    ip, O_B_CUR
     mvn     r4, #0
     str     r4, [ip]                    @ take a fresh one on the next claim
 
@@ -210,43 +195,36 @@ stream_flush:
     push    {r4, r5, r6, lr}
     st_lock r6
 
-    movw    r5, #:lower16:B_CUR
-    movt    r5, #:upper16:B_CUR
+    SHAREDAT    r5, O_B_CUR
     ldr     r5, [r5]
     cmn     r5, #1
     beq     9f                          @ no block in hand: nothing to flush
 
-    movw    r4, #:lower16:B_DONE
-    movt    r4, #:upper16:B_DONE
+    SHAREDAT    r4, O_B_DONE
     ldr     r4, [r4]
     cmp     r4, #0
     beq     9f                          @ empty: leave it for the next take
 
-    movw    r1, #:lower16:B_BUSY
-    movt    r1, #:upper16:B_BUSY
+    SHAREDAT    r1, O_B_BUSY
     mov     r2, #1
     str     r2, [r1, r5, lsl #2]
 
-    movw    r1, #:lower16:B_HANDED
-    movt    r1, #:upper16:B_HANDED
+    SHAREDAT    r1, O_B_HANDED
     ldr     r2, [r1]
     add     r2, r2, #1
     str     r2, [r1]
 
-    movw    r1, #:lower16:B_PTR
-    movt    r1, #:upper16:B_PTR
+    SHAREDAT    r1, O_B_PTR
     ldr     r0, [r1, r5, lsl #2]        @ r0 = the block
     lsl     r1, r4, #3                  @ r1 = committed records, in bytes
-    movw    r2, #:lower16:B_OFF
-    movt    r2, #:upper16:B_OFF
+    SHAREDAT    r2, O_B_OFF
     ldr     r3, [r2]
     add     r4, r3, r1
     str     r4, [r2]                    @ the next take starts after it
     mov     r2, r3                      @ r2 = where it belongs in the file
     mov     r3, r5                      @ r3 = which block, so it can be freed
 
-    movw    ip, #:lower16:B_CUR
-    movt    ip, #:upper16:B_CUR
+    SHAREDAT    ip, O_B_CUR
     mvn     r4, #0
     str     r4, [ip]                    @ take a fresh one on the next claim
 

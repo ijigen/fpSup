@@ -121,13 +121,11 @@ rec_start:
  * read, and nothing to guard against being zero. */
     bl      gyro_drain
 
-    movw    r0, #:lower16:T_WANT
-    movt    r0, #:upper16:T_WANT
+    SHAREDAT    r0, O_T_WANT
     mov     r1, #0
     str     r1, [r0]
 #else
-    movw    r0, #:lower16:T_WANT
-    movt    r0, #:upper16:T_WANT
+    SHAREDAT    r0, O_T_WANT
     mov     r1, #1
     str     r1, [r0]
 
@@ -158,11 +156,9 @@ rec_start:
     /* Build the take, or tear it down.  XC_AudioRecorder::Start and ::Stop do
      * this, in the recorder's own task; both hooks run in that task. */
 #ifdef REC_STOP
-    movw    ip, #:lower16:T_CLOSEFN
-    movt    ip, #:upper16:T_CLOSEFN
+    SHAREDAT    ip, O_T_CLOSEFN
 #else
-    movw    ip, #:lower16:T_OPENFN
-    movt    ip, #:upper16:T_OPENFN
+    SHAREDAT    ip, O_T_OPENFN
 #endif
     ldr     ip, [ip]
     cmp     ip, #0
