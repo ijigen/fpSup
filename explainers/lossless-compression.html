@@ -88,9 +88,10 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
 .verdict .why{font-size:.87rem; color:var(--dim)}
 .verdict.ok .why, .verdict.no .why{color:var(--ink)}
 
-.rates{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px;
+.rates{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px;
   background:var(--line); border:1px solid var(--line); border-radius:3px;
   overflow:hidden; margin-bottom:14px}
+@media(max-width:900px){.rates{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.rates{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .rates div{background:var(--paper); padding:12px 13px}
 .rates dt{font-family:var(--mono); font-size:.63rem; text-transform:uppercase;
@@ -551,6 +552,7 @@ which is why mode 106 at 1.5625&times; lands on 1936&times;1092 here against the
     <div><dt>engine can process</dt><dd id="rEng">&mdash;<small>MB/s</small></dd></div>
     <div><dt>from compressed frames</dt><dd id="rCmp">&mdash;<small>MB/s</small></dd></div>
     <div><dt>from uncompressed frames</dt><dd id="rUnc">&mdash;<small>MB/s</small></dd></div>
+    <div><dt>if nothing compressed</dt><dd id="rRaw">&mdash;<small>MB/s</small></dd></div>
     <div class="hero-n"><dt>total to card</dt><dd id="rTot">&mdash;<small>MB/s</small></dd></div>
   </dl>
 
@@ -745,23 +747,14 @@ repository.</p>
     fps.appendChild(o);
   });
 
-  // Keep the chosen rate if stock offers it at this size, otherwise land on the
-  // nearest rate to the fastest one it does offer.
-  function syncRate(){
-    var g = MODES[+fmt.value];
-    if(!g) return;
-    var cur = parseFloat(fps.value);
-    if(g.rates.some(function(r){ return Math.abs(r - cur) < 0.5; })) return;
-    var want = g.rates[0], best = RATES[0];
-    RATES.forEach(function(r){
-      if(Math.abs(r - want) < Math.abs(best - want)) best = r;
-    });
-    fps.value = best;
-  }
+  // Resolution and frame rate are independent here: the cost model reads the
+  // frame size, and the rate is whatever you want to ask about. An earlier
+  // version re-pointed the rate at the fastest one stock offers for the new
+  // size, which silently turned 24 fps into 120 and made a passing setup fail.
+  // Which rates stock actually offers at a size is stated in the detail line.
   fmt.value = String(MODES.findIndex(function(g){ return g.w === 3032 && g.h === 1708; }));
   fps.value = 30;                 // the FHD source: 3032x1708 at 30p
-  syncRate();
-  fmt.addEventListener('change', function(){ syncRate(); render(); });
+  fmt.addEventListener('change', render);
 
   // Engine guard: width 8..0x4000 and a multiple of 8, height 2..0x4000 and
   // even, tileW 0x20..0x200 in steps of 32, tileH 2..0x200 and even. TIFF
@@ -888,6 +881,10 @@ repository.</p>
         (r.bitsOK ? r.tiles + ' tiles &gt; 326' : 'rejects 8-bit') + '</span>';
     $('rCmp').innerHTML = n1(r.payC) + '<small>MB/s</small>';
     $('rUnc').innerHTML = n1(r.payU) + '<small>MB/s</small>';
+    // The reference rate, so "what did compression actually save" is on screen.
+    // Without this cell, "from uncompressed frames" reads 0.0 whenever every
+    // frame compresses, which looks like the rate vanished.
+    $('rRaw').innerHTML = n1(r.uncompressedAll) + '<small>MB/s</small>';
     $('rTot').innerHTML = n1(r.total) + '<small>MB/s</small>';
 
     // stacked bar, scaled against the uncompressed rate or the card, whichever is bigger
@@ -993,7 +990,9 @@ repository.</p>
 
   ['fps','bits','tile','dest','ratio','cont','skip','part','red'].forEach(function(id){
     var el = $(id);
-    if(el) el.addEventListener('input', render);
+    if(!el) return;
+    el.addEventListener('input', render);
+    el.addEventListener('change', render);   // selects driven by keyboard
   });
   render();
 })();
