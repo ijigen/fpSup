@@ -15,8 +15,13 @@
  * fired through the shell's borrowed command handler, which calls it with
  * whatever happened to be in r0 and r1.
  */
+/* The host says where these are: it asks the cave allocator and passes the
+ * address in.  The values below are only so the file still assembles on its
+ * own -- nothing reaches them through a run. */
+#ifndef MP_ARG_POOL
 .equ MP_ARG_POOL,    0xC072E0F0
-.equ MP_ARG_RESULT,  0xC072E0F4
+#endif
+.equ MP_ARG_RESULT,  MP_ARG_POOL + 4
 .equ N_BLOCKS,   4
 .equ PAYLOAD,    24
 

@@ -20,7 +20,12 @@
  * ========================================================================== */
 
 .equ HOOK_TARGET, 0xC01EC6F9
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef SCRATCH
 .equ SCRATCH,     0xC072E800
+#endif
 .equ PATH_MGR_SD, 0xC3438400
 
 .macro LDA reg, value

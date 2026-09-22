@@ -29,7 +29,12 @@
  * templates use.  Sharing +0x14 with them cost a silent failure: loading
  * getfile.S through this loader advanced that word past getfile's own buffer,
  * so the read landed somewhere else and every byte came back as poison. */
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef P
 .equ P,        0xC072F7F8
+#endif
 .equ P_BUF,    0x00           /* destination, advanced here */
 .equ P_ACTUAL, 0x04           /* bytes taken, cumulative    */
 

@@ -30,12 +30,53 @@ from armasm import assemble
 HERE = pathlib.Path(__file__).resolve().parent
 SOCK = '/tmp/fpshd.sock'
 
-CODE      = 0xC072F800          # the working template
-CODE_END  = 0xC072FA00
-BULK      = 0xC072FA00          # the bulk loader, resident alongside it
-BULK_STATE = 0xC072F7F8         # its own two words, clear of the parameter block
-DUMP      = 0xC072FB00          # the raw reader, in a slot of its own
-DUMP_END  = 0xC072FC00          # memcpy_scratch starts here
+# Where this tool's blocks are: asked for, not chosen.  These used to be six
+# hand-picked addresses in a row -- and the parameter block's was 0xC072F700,
+# which store_boot.S and four probes had also picked.  cave.claim gives the same
+# address for the same name all boot, so the bulk loader stays resident between
+# invocations exactly as it did, and a reboot re-issues everything.
+#
+# They resolve on first use rather than at import: importing this module must
+# not talk to the camera, because half the tree imports it for mem_get alone.
+# Once resolved they are cached in globals(), so a process that outlives a
+# camera reboot would hold stale ones -- no tool here does, and cave.claim
+# stays the authority.
+_LAYOUT = {
+    'P':          ('putfile.parm',    256),   # the parameter block
+    'CODE':       ('putfile.code',    512),   # the working template
+    'BULK_STATE': ('bulkload.state',    8),   # the bulk loader's two words
+    'BULK':       ('bulkload.code',   256),   # resident alongside it
+    'DUMP':       ('dumpraw.code',    256),   # the raw reader
+    'DIRECT':     ('dumpdirect.code', 256),   # the direct reader
+}
+_ENDS = {'CODE_END': 'CODE', 'BULK_END': 'BULK', 'DUMP_END': 'DUMP'}
+
+
+def __getattr__(name):
+    """For importers: `putfile.CODE` resolves the claim on first touch.
+
+    PEP 562 only covers attribute access from OUTSIDE the module -- a bare
+    `CODE` inside a function here is an ordinary global lookup and never
+    reaches this.  So functions in this file call _claims() first; forgetting
+    it is a NameError on that path, which is loud.
+    """
+    if name in _LAYOUT or name in _ENDS:
+        _claims()
+        return globals()[name]
+    raise AttributeError(name)
+
+
+def _claims():
+    """Resolve every block this tool owns, once per process."""
+    if 'CODE' in globals():
+        return
+    import cave
+    for nm, (key, n) in _LAYOUT.items():
+        globals()[nm] = cave.claim(key, n)
+    for nm, base in _ENDS.items():
+        globals()[nm] = globals()[base] + _LAYOUT[base][1]
+
+
 DUMP_CAP  = 0x4000              # dumpraw's own ceiling; it truncates past this
                                 # without saying so, and a short block leaves the
                                 # host waiting for bytes that never come
@@ -66,9 +107,7 @@ READ_TIMEOUT = 200              # ms
 # is left is genuinely gone rather than slow. Being early costs more than being
 # late here -- the camera has the block ready, and walking away from one it has
 # prepared is what leaves the worker unable to answer anything again.
-BULK_END  = 0xC072FB00
 CHUNK     = 240                 # bytes per command; the line holds about 502 chars
-P         = 0xC072F700          # parameter block
 ECHO_SLOT = 0xC0BAC2F8          # command table entry 17, echo's handler pointer
 ECHO_ORIG = 0xC03D99A0
 # The WORKER's pool, not the card's.  0xC3757A7C was the one pool the AutoRun
@@ -289,11 +328,11 @@ _dump_loaded = False
 _stale = [0]        # blocks that answered a different address
 
 
-DIRECT = 0xC072FC00             # dumpdirect, past dumpraw's slot
 _direct_loaded = False
 
 
 def ensure_direct():
+    _claims()
     global _direct_loaded
     if not _direct_loaded:
         code = assemble(HERE / 'templates' / 'dumpdirect.S')
@@ -302,9 +341,10 @@ def ensure_direct():
 
 
 def ensure_dump():
+    _claims()
     global _dump_loaded
     if not _dump_loaded:
-        code = assemble(HERE / 'templates' / 'dumpraw.S')
+        code = assemble(HERE / 'templates' / 'dumpraw.S', [f'P=0x{P:08X}'])
         if DUMP + len(code) > DUMP_END:
             raise SystemExit(f'dumpraw is {len(code)} bytes and would run into '
                              f'the scratch at 0x{DUMP_END:08X}')
@@ -332,6 +372,7 @@ def read_direct(addr, nbytes, label='direct'):
     mattered when there were two thousand of them; at thirty-two it is a
     different bet, and one worth knowing you are making.
     """
+    _claims()
     ensure_direct()
     orig = mem_get(ECHO_SLOT)
     if not orig or orig[0] not in (ECHO_ORIG, DIRECT):
@@ -383,6 +424,7 @@ def read_bulk(addr, nbytes, label='read  '):
     command line now, so a chunk is one command and there is nothing to set up
     and nothing remembered between calls.
     """
+    _claims()
     ensure_dump()
     orig = mem_get(ECHO_SLOT)
     if not orig or orig[0] not in (ECHO_ORIG, DUMP):
@@ -444,10 +486,12 @@ def read_bulk(addr, nbytes, label='read  '):
 
 def ensure_bulk():
     """Put the bulk loader on the camera, once per run."""
+    _claims()
     global _bulk_loaded
     if _bulk_loaded:
         return
-    code = assemble(HERE / 'templates' / 'bulkload.S')
+    code = assemble(HERE / 'templates' / 'bulkload.S',
+                        [f'P=0x{BULK_STATE:08X}'])
     if BULK + len(code) > BULK_END:
         raise SystemExit('bulkload does not fit its region')
     put_slow(BULK, code, 'bulk  ')
@@ -466,6 +510,7 @@ def put(addr, blob, label, passes=6):
     and whole commands go missing, so a chunk that never arrives leaves a 240
     byte hole.  Repairs go one word at a time, which is exact.
     """
+    _claims()
     if len(blob) <= 256:
         return put_slow(addr, blob, label, passes)
 
@@ -516,6 +561,7 @@ def put(addr, blob, label, passes=6):
 
 
 def main():
+    _claims()
     ap = argparse.ArgumentParser()
     ap.add_argument('local')
     ap.add_argument('remote', help=r'camera path, e.g. \TEST.TXT')
@@ -553,10 +599,18 @@ def main():
                      (P_LEN, len(data)), (P_FOBJ, fobj), (P_MODE, a.mode)):
         mem_set(P + off, val)
     pw = path + b'\0' * (-len(path) % 4)
+    # The path is the only variable-length thing in the block, and nothing used
+    # to bound it: a long one ran off the end into whatever came next.  That is
+    # how a forty-eight byte buffer declared as one word froze the camera on the
+    # gyro side; here the block's size is known, so say so.
+    if P_PATH + len(pw) > _LAYOUT['P'][1]:
+        raise SystemExit(
+            f'the path is {len(path)} bytes and the parameter block holds '
+            f'{_LAYOUT["P"][1] - P_PATH} past its header -- widen the claim')
     for i, word in enumerate(struct.unpack(f'<{len(pw)//4}I', pw)):
         mem_set(P + P_PATH + i * 4, word)
 
-    code = assemble(HERE / 'templates' / 'putfile.S')
+    code = assemble(HERE / 'templates' / 'putfile.S', [f'P=0x{P:08X}'])
     if CODE + len(code) > CODE_END:
         raise SystemExit('template does not fit the code region')
     put(CODE, code, 'code  ')

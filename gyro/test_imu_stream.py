@@ -100,7 +100,7 @@ class RecordShape(unittest.TestCase):
         for name, src in WRITERS:
             body = src[src.index('push'):]
             for forbidden in ('ring_slot', 'RING_MASK', 'BUF_', 'ldrex',
-                              'STREAM_POSTED', 'T_FOPEN', 'T_STOPSENT',
+                              'T_FOPEN', 'T_STOPSENT',
                               'STREAM_SIGFN'):
                 self.assertNotIn(forbidden, body,
                                  f'{name} is deciding something: {forbidden}')

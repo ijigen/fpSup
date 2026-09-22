@@ -22,7 +22,7 @@ _loaded = [False]
 def call(fn, r0=0, r1=0, r2=0, r3=0, r4=0, r5=0, r10=0, verbose=True):
     """Run `fn` once.  Returns (returned_ok, value)."""
     if not _loaded[0]:
-        code = assemble(HERE / 'templates' / 'callfn.S')
+        code = assemble(HERE / 'templates' / 'callfn.S', [f'P=0x{P:08X}'])
         if CODE + len(code) > CODE_END:
             raise SystemExit('callfn does not fit')
         put(CODE, code, 'callfn')

@@ -49,7 +49,12 @@
  * own. Ask for what is needed, hand it back promptly, and check for zero.
  * ========================================================================== */
 
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef P
 .equ P,        0xC072F700
+#endif
 .equ P_OP,     0x00
 .equ P_TYPE,   0x04
 .equ P_SIZE,   0x08

@@ -37,7 +37,12 @@
  *      +0x0C  last non-zero return from StartTransfer
  * ========================================================================== */
 
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef P
 .equ P,          0xC072F700
+#endif
 .equ TRB_TBL,    0xC31E3264     /* the per-context TRB pointers, ctx * 4      */
 .equ TRB_ARMED,  0x813
 /* Which endpoint to try is read from the parameter block: the old push code

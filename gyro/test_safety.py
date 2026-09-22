@@ -840,5 +840,195 @@ class SharedBlockTests(unittest.TestCase):
                     found += 1
         self.assertGreater(found, 0, "the scan found no writeback to check")
 
+class CaveTemplateTests(unittest.TestCase):
+    """A host template's block address comes from the caller, or from nobody.
+
+    Ten templates each declared `.equ P, 0xC072F700` and every host tool wrote
+    its parameters there, which worked because they all agreed.  The moment the
+    host started ASKING for that block instead of naming it, the agreement had
+    to be carried in the call -- and getfile.S was not converted with the rest.
+    The host wrote the parameters into the arena, the template read 0xC072F700,
+    and the injected code hung with the shell behind it.  A power cycle.
+
+    This is the config-duplication failure, so the check is mechanical: a
+    template that takes one of these names must guard it, and every assemble()
+    of that template anywhere in the tree must pass it.  It lives in the gyro
+    suite because that is the suite that runs, and it already reaches into
+    fp_usb_shell/templates for park.S and loader.S.
+    """
+
+    # Names the HOST decides and the template must be told.
+    #
+    # Not FRAMEBUF or CAP_LEN: those are the resident worker's rendezvous,
+    # fixed on both sides because the worker carries them.
+    #
+    # Not store_boot.S's BOOT_AT either, and that one is worth writing down.
+    # It runs BEFORE stage2 -- it is what copies the loader out of the settings
+    # block -- so there is no arena to allocate from yet, exactly as the
+    # loader's own block cannot be allocated.  It shared 0xC072F700 with the
+    # host's parameter block for months; the host moving out is what ends that,
+    # not store_boot moving.
+    HOST_NAMED = ('P', 'SCRATCH')
+    TEMPLATES = ROOT / 'fp_usb_shell' / 'templates'
+
+    def guarded(self):
+        """{template stem: {names it takes from the caller}}."""
+        out = {}
+        for f in sorted(self.TEMPLATES.glob('*.S')):
+            text = f.read_text()
+            takes = set()
+            for name in self.HOST_NAMED:
+                m = re.search(rf'^\.equ\s+{name},\s*0xC072[0-9A-Fa-f]{{4}}',
+                              text, re.M)
+                if not m:
+                    continue
+                before = text[:m.start()]
+                self.assertRegex(
+                    before[-120:], rf'#ifndef\s+{name}\s*\n\s*$',
+                    f'{f.name}: `.equ {name}` is a cave address the host now '
+                    f'allocates, so it must sit under `#ifndef {name}` and the '
+                    f'caller must pass it')
+                takes.add(name)
+            if takes:
+                out[f.stem] = takes
+        return out
+
+    def test_every_template_that_takes_a_block_is_guarded(self):
+        takes = self.guarded()
+        self.assertIn('putfile', takes, 'the scan found no guarded template')
+
+    def test_every_assemble_passes_the_block_it_promised(self):
+        takes = self.guarded()
+        calls = 0
+        for f in sorted(ROOT.rglob('*.py')):
+            if '/release/' in str(f) or '/history/' in str(f):
+                continue
+            text = f.read_text()
+            for m in re.finditer(
+                    r"assemble\(\s*[^)]*?'(\w+)\.S'\s*(?:,\s*(.*?))?\)",
+                    text, re.S):
+                stem, args = m.group(1), (m.group(2) or '')
+                if stem not in takes:
+                    continue
+                calls += 1
+                for name in sorted(takes[stem]):
+                    self.assertRegex(
+                        args, rf"{name}=",
+                        f'{f.name}: assemble({stem}.S) does not pass {name}, '
+                        f'which that template takes from its caller -- the '
+                        f'template would use its standalone default and the '
+                        f'host would use the allocated block')
+        self.assertGreater(calls, 0, 'the scan found no call to check')
+
+class ArenaTests(unittest.TestCase):
+    """Nothing names an address inside the arena.
+
+    The arena is 0xC072E064..0xC072EFB4, handed out at boot by the camera and
+    over USB by fp_usb_shell/cave.py.  A constant naming an address in it is a
+    claim nobody else can see: the allocator will hand the same bytes to
+    somebody, and the two find out by freezing.  mpool_probe's argument words
+    sat at 0xC072E0F0 and the first host claim covered them; thirteen probes in
+    raw/ still default their slot to 0xC072E080, which is the gyro's fourth
+    hook veneer.
+
+    A `#ifndef`-guarded default in a .S is not a claim -- it is what the file
+    assembles to on its own, and the caller passes the real address -- so those
+    are allowed, and CaveTemplateTests is what proves the caller passes it.
+
+    Python is read with ast rather than a regex: the regex version reported
+    tools/rmequ.py, where the address is an example inside the docstring.
+    """
+
+    LO, HI = 0xC072E064, 0xC072EFB4
+
+    # Each of these owns arena addresses for a reason, and the reason is that
+    # it is not sharing the arena with anybody.  Named one at a time, because a
+    # spelling rule would quietly exempt the next one that really is a claim.
+    EXEMPT = {
+        'cave.py':
+            'declares the arena',
+        'imu_stream_deploy.py':
+            'CAVE_LO/CAVE_HI are the bounds its placement check uses',
+        'build_base_card.py':
+            'ENTRY_AT is the floor it checks a section against',
+        'build_card.py':
+            'the pre-blob logger card: its payload OWNS the window, and a card '
+            'built by it has no stage2 and so no arena',
+        'build_autorun.py':
+            'WORKER_AT is the fallback card\'s worker -- that card has no '
+            'stage2 either, and cave.py refuses to allocate on one',
+        'test_safety.py':
+            'this file declares the bounds, and the logger-card layout tests '
+            'name the same window build_card.py does',
+    }
+    SKIP_DIRS = ('/release/', '/history/', '/.git/', '/node_modules/')
+
+    def offenders(self):
+        import ast
+        out = []
+        for f in sorted(ROOT.rglob('*.py')):
+            if any(d in str(f) for d in self.SKIP_DIRS):
+                continue
+            if f.name in self.EXEMPT:
+                continue
+            try:
+                tree = ast.parse(f.read_text())
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    continue
+                vals = ([node.value] if not isinstance(node.value, ast.Tuple)
+                        else list(node.value.elts))
+                for v in vals:
+                    if (isinstance(v, ast.Constant) and isinstance(v.value, int)
+                            and self.LO <= v.value < self.HI):
+                        out.append(f'{f.name}:{node.lineno}: 0x{v.value:08X}')
+        for f in sorted(ROOT.rglob('*.S')):
+            if any(d in str(f) for d in self.SKIP_DIRS):
+                continue
+            if f.name in self.EXEMPT:
+                continue
+            text = f.read_text()
+            for m in re.finditer(
+                    r'^\.equ\s+([A-Z][A-Z_0-9]*),\s*(0xC072E[0-9A-Fa-f]{3})',
+                    text, re.M):
+                at = int(m.group(2), 16)
+                if not self.LO <= at < self.HI:
+                    continue
+                before = text[:m.start()][-140:]
+                if re.search(rf'#ifndef\s+{m.group(1)}\s*\n\s*$', before):
+                    continue        # a standalone default; the caller passes it
+                out.append(f'{f.name}: .equ {m.group(1)}, 0x{at:08X}')
+        return out
+
+    def test_nothing_claims_an_address_in_the_arena(self):
+        bad = self.offenders()
+        self.assertEqual(
+            bad, [],
+            'these name an address the allocator hands out:\n  '
+            + '\n  '.join(bad))
+
+    def test_the_exemptions_are_still_needed(self):
+        """An exemption that has stopped being true is a hole nobody sees."""
+        import ast
+        for name in self.EXEMPT:
+            hits = [f for f in ROOT.rglob(name)
+                    if not any(d in str(f) for d in self.SKIP_DIRS)]
+            self.assertTrue(hits, f'{name} is exempted but does not exist')
+            found = False
+            for f in hits:
+                for node in ast.walk(ast.parse(f.read_text())):
+                    if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                        vals = ([node.value] if not isinstance(node.value, ast.Tuple)
+                                else list(node.value.elts))
+                        found = found or any(
+                            isinstance(v, ast.Constant)
+                            and isinstance(v.value, int)
+                            and self.LO <= v.value < self.HI for v in vals)
+            self.assertTrue(
+                found,
+                f'{name} no longer names an arena address -- drop its exemption')
+
 if __name__ == "__main__":
     unittest.main()

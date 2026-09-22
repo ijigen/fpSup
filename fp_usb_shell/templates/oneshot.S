@@ -31,7 +31,12 @@
 .equ HOOK_SITE,   0xC00D0794
 .equ HOOK_ORIG,   0xFA046FD7      /* the BLX this site normally holds          */
 .equ HOOK_TARGET, 0xC01EC6F9      /* what that BLX calls (thumb)               */
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef SCRATCH
 .equ SCRATCH,     0xC072F700      /* +00 'DONE' when finished, +04 result      */
+#endif
 
 .macro LDA reg, value
     movw    \reg, #:lower16:\value

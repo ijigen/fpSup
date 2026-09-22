@@ -52,8 +52,6 @@ JOB_COUNT = 32
 BUF_N, BUF_BYTES = 8, 0x4000
 JOB_SIZE = 24
 
-STREAM_POSTED = 0xC072E1AC
-STREAM_INDEX, STREAM_TAIL = 0xC072E1F8, 0xC072E1A4
 W_VT_SLOT = 0x0C
 
 
@@ -329,7 +327,6 @@ def place_code():
     _setw(shared('T_FINGER'), fingerprint(code), 'the blob fingerprint')
     pool = pool_base()
     _setw(shared('T_FOBJ'), pool + FOBJ_POOL_OFF, 'the file object')
-    _setw(STREAM_POSTED, 0, 'the posted mark')
     for a in (shared('T_JSEQ'), shared('T_JOBSLOT')):
         _setw(a, 0, 'a job word')
     # Build the free list before anything can take a descriptor from it.
@@ -618,13 +615,19 @@ def main():
             print(f'  F_WRITE returned {P.mem_get(T_BYTES)[0]}')
         state()
     elif a.open:
-        # The same way a recording asks: latch where the take starts, then say
-        # it wants a file.  The writer opens it on its next wake, so this
-        # exercises the path the record hook uses rather than a second one.
-        head = P.mem_get(STREAM_INDEX)[0]
-        _setw(STREAM_POSTED, head, 'the posted mark')
+        # Say the file is wanted, the way the record hook does; the writer
+        # opens it on its next wake.
+        #
+        # This used to latch a "posted mark" first and print where the take
+        # started.  STREAM_POSTED and STREAM_INDEX were read and written HERE
+        # AND NOWHERE ELSE -- no camera code has touched either since the drain
+        # started keeping its own cursor -- so the record number it printed was
+        # a word nobody writes, and it read zero every time and looked like an
+        # answer.  The ring head at record start is g_r0_head, and the record
+        # hook is what sets it; a host --open does not run the hook, so it does
+        # not have one to show.
         _setw(shared('T_WANT'), 1, 'the wanted state')
-        print(f'asked for a file, take starts at record {head}')
+        print('asked for a file; the writer opens it on its next wake')
         time.sleep(1.0)
         state()
     elif a.free_blocks:

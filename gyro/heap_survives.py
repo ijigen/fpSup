@@ -35,7 +35,8 @@ KEEP = HERE / '.heap_probe_addr'
 
 
 def allocate() -> int:
-    P.put(P.CODE, assemble(SHELL / 'templates' / 'heapalloc.S'), 'heap  ')
+    P.put(P.CODE, assemble(SHELL / 'templates' / 'heapalloc.S',
+                           [f'P=0x{P.P:08X}']), 'heap  ')
     orig = P.mem_get(P.ECHO_SLOT)
     if not orig or orig[0] not in (P.ECHO_ORIG, P.CODE):
         raise SystemExit(f'echo handler is {orig}, not free to borrow')

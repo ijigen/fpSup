@@ -43,7 +43,12 @@
  * somebody looks.
  * ========================================================================== */
 
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef P
 .equ P,        0xC072F700
+#endif
 .equ P_STATUS, 0x08
 .equ P_OPENR,  0x0C
 .equ P_WRITER, 0x10

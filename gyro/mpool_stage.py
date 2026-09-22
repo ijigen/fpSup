@@ -20,8 +20,16 @@ sys.path.insert(0, str(HERE.parent / 'fp_usb_shell'))
 import putfile as P                                            # noqa: E402
 from armasm import assemble                                    # noqa: E402
 
-CODE_AT, CAVE_HI = 0xC072ECF0, 0xC072EFA0
-ARG_POOL, ARG_RESULT = 0xC072E0F0, 0xC072E0F4
+# Asked for, not chosen.  These were three hand-picked cave addresses; the
+# arena now starts at 0xC072E064 and the host allocator hands out exactly
+# the stretch 0xC072E0F0 used to sit in, so a probe run would have landed
+# on putfile's parameter block.
+def _at():
+    sys.path.insert(0, str(HERE.parent / 'fp_usb_shell'))
+    import cave
+    code = cave.claim('mpool.code', 0x200)
+    args = cave.claim('mpool.args', 8)
+    return code, code + 0x200, args, args + 4
 POOL_PTR = 0xC3757A7C
 MARKS = {1: 0xAAAA1111, 2: 0xAAAA2222, 3: 0xAAAA3333, 4: 0xAAAA4444}
 
@@ -35,8 +43,10 @@ def setw(addr, value, what):
 
 
 def main():
+    CODE_AT, CAVE_HI, ARG_POOL, ARG_RESULT = _at()
     stage = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    code = assemble(HERE / 'mpool_stage.S', (f'STAGE={stage}',))
+    code = assemble(HERE / 'mpool_stage.S',
+                    (f'STAGE={stage}', f'MP_ARG_POOL=0x{ARG_POOL:08X}'))
     end = CODE_AT + len(code)
     if end > CAVE_HI:
         raise SystemExit(f'0x{CODE_AT:08X}..0x{end:08X} runs into the park stub')

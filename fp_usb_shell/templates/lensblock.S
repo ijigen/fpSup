@@ -33,7 +33,12 @@
  * the camera wants it back for its own polling.
  * ========================================================================== */
 
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef P
 .equ P,        0xC072F700
+#endif
 .equ TABLE,    0xC0B94364     /* {addr, len, flag} per id, stride 0x0C        */
 .equ F_CTX,    0xC03554A0     /* () -> the lens comms context                 */
 .equ F_READ,   0xC0355DE0     /* (ctx, id, dst) -> ok; takes the bus mutex    */

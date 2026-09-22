@@ -26,7 +26,12 @@
  *      +0x08  scratch for the text     host fills, needs 2*count + 1 bytes
  * ========================================================================== */
 
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef P
 .equ P,        0xC072F700
+#endif
 .equ P_SRC,    0x00
 .equ P_LEN,    0x04
 .equ P_TEXT,   0x08

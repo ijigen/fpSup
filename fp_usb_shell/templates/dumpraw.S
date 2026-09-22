@@ -39,7 +39,12 @@
  * 0xC072F700 (+0x00 source, +0x04 count) and advances the source itself.
  * ========================================================================== */
 
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef P
 .equ P,        0xC072F700
+#endif
 /* The WORKER's pool, not the card's.  0xC3757A7C was the one pool the AutoRun
  * asked for and everything shared; nothing publishes it on a card built after
  * the worker started asking the allocator for its own, so reading it there

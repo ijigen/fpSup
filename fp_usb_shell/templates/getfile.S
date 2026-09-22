@@ -43,7 +43,12 @@
  * is why write() can answer a bare flag: it has nowhere to report a partial.
  * ========================================================================== */
 
+/* The host says where this block is: it asks the cave allocator and passes
+ * the address in.  The value below is only so the file still assembles on
+ * its own -- nothing reaches it through a build. */
+#ifndef P
 .equ P,        0xC072F700
+#endif
 .equ P_ACTUAL, 0x04
 .equ P_STATUS, 0x08
 .equ P_OPENR,  0x0C

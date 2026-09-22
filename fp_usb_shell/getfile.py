@@ -88,7 +88,7 @@ def main():
     for i, w in enumerate(struct.unpack(f'<{len(pw)//4}I', pw)):
         mem_set(P + P_PATH + i * 4, w)
 
-    code = assemble(HERE / 'templates' / 'getfile.S')
+    code = assemble(HERE / 'templates' / 'getfile.S', [f'P=0x{P:08X}'])
     if CODE + len(code) > CODE_END:
         raise SystemExit('template does not fit')
     put(CODE, code, 'code  ')

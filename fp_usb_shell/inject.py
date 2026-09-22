@@ -34,11 +34,22 @@ def main() -> int:
     ap.add_argument('--dry-run', action='store_true')
     a = ap.parse_args()
 
-    code = assemble(HERE / a.source if not pathlib.Path(a.source).exists() else a.source)
+    src = HERE / a.source if not pathlib.Path(a.source).exists() else pathlib.Path(a.source)
+    # A template that takes its block from the caller has to be told, or it uses
+    # the standalone default while the host uses the allocated one -- which is
+    # how getfile.S hung the shell on 2026-09-22.  test_safety.CaveTemplateTests
+    # proves every LITERAL assemble() passes it; this one takes a path, so it
+    # asks the file what it needs.
+    text = src.read_text()
+    defines = [f'{n}=0x{SCRATCH:08X}' for n in ('P', 'SCRATCH', 'SLOT')
+               if re.search(rf'#ifndef\s+{n}\b', text)]
+    code = assemble(src, defines)
     w = words(code)
     end = a.addr + len(code)
     if end > 0xC0730000:
         raise SystemExit(f'routine overruns the injection area: 0x{end:08X}')
+    if defines:
+        print('  block: ' + ', '.join(defines))
     print(f'{a.source}: {len(code)} bytes at 0x{a.addr:08X}..0x{end:08X}')
 
     branch = 0xEB000000 | (((a.addr - (HOOK_SITE + 8)) >> 2) & 0xFFFFFF)

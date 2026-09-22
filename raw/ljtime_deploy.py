@@ -52,8 +52,16 @@ sys.path.insert(0, str(SHELL))
 
 SITE = 0xC037E7AC          # the still path's `bl 0xC05A6920`
 STOCK = 0xEB08A05B         # what that word holds
-DEFAULT_SLOT = 0xC072E080  # ljtime.S's default -- inside the gyro logger's range
-DEFAULT_ADDR = 0xC072F800  # the templates' routine area
+# Asked for, not chosen.  The old defaults were 0xC072E080 for the slot -- which
+# is inside the arena, on top of the gyro's fourth hook veneer -- and 0xC072F800
+# for the code, which putfile's template used to own.  Both are resolved against
+# the camera's own bump allocator now, so a run of this cannot land on anybody.
+def _defaults():
+    import sys, pathlib
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
+                           / 'fp_usb_shell'))
+    import cave
+    return cave.claim('ljtime.code', 0x200), cave.claim('ljtime.slot', 0x80)
 
 
 def probe_words(addr, slot):
@@ -180,8 +188,8 @@ def fit(path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--addr', type=lambda s: int(s, 0), default=DEFAULT_ADDR)
-    ap.add_argument('--slot', type=lambda s: int(s, 0), default=DEFAULT_SLOT)
+    ap.add_argument('--addr', type=lambda s: int(s, 0), default=None)
+    ap.add_argument('--slot', type=lambda s: int(s, 0), default=None)
     ap.add_argument('--csv', metavar='CSV', help='--read appends a row here')
     ap.add_argument('--go', action='store_true')
     ap.add_argument('--read', action='store_true')
@@ -189,8 +197,13 @@ def main():
     ap.add_argument('--fit', metavar='CSV')
     a = ap.parse_args()
     if a.fit:
-        fit(a.fit)
-    elif a.read:
+        fit(a.fit)                          # offline: no camera, no blocks
+        return
+    if a.addr is None or a.slot is None:
+        code, slot = _defaults()
+        a.addr = a.addr if a.addr is not None else code
+        a.slot = a.slot if a.slot is not None else slot
+    if a.read:
         read(a.slot, a.csv)
     elif a.restore:
         restore()
