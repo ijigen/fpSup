@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What the RWZM resizer does &mdash; fpSup</title>
+<meta name="description" content="Every fp video mode except OG3K and OG2K passes through a resizing circuit called RWZM. It shrinks without smoothing first, and it uses sixteen slightly different recipes in rotation. That is where FHD's softness, its aliasing and its horizontal banding all come from - and a ratio whose denominator is small avoids the banding entirely.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/rwzm-resampler.html">
+<meta property="og:title" content="What the SIGMA fp&rsquo;s RWZM resizer does">
+<meta property="og:description" content="It shrinks without smoothing first, and rotates through sixteen recipes. That is where FHD goes wrong, and picking a ratio with a small denominator avoids it.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+
+td .m{font-family:var(--mono); font-size:.72rem; color:var(--dim)}
+
+#verdict td:first-child{white-space:nowrap}
+tbody tr.bad td{background:#1b1517}
+tbody tr.bad td:first-child{box-shadow:inset 2px 0 0 #b4443a}
+tbody tr.ref td{color:#6f7780; font-style:italic}
+tbody tr.ref td:first-child{font-style:italic; box-shadow:inset 2px 0 0 #3a4450}
+
+/* ---- language switch ---------------------------------------------------- */
+.topbar{display:flex; align-items:center; justify-content:space-between;
+  gap:16px; margin-bottom:22px}
+.topbar .back{margin-bottom:0}
+.lang{display:inline-flex; border:1px solid var(--line); border-radius:3px;
+  overflow:hidden; flex:none}
+.lang button{font-family:var(--mono); font-size:.72rem; letter-spacing:.04em;
+  padding:5px 11px; border:0; background:var(--panel); color:var(--dim);
+  cursor:pointer; transition:background .12s, color .12s}
+.lang button + button{border-left:1px solid var(--line)}
+.lang button:hover{color:var(--ink)}
+.lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
+  font-weight:600}
+.lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+[data-lang="zh"] body, [data-lang="cn"] body{line-height:1.75}
+[data-lang="zh"] .lede, [data-lang="cn"] .lede{max-width:40em}
+
+/* ---- diagrams ----------------------------------------------------------- */
+figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:16px 14px 12px}
+figure.dia svg{display:block; width:100%; height:auto}
+figure.dia img, figure.dia video{display:block; width:100%; height:auto;
+  border-radius:2px; background:var(--paper)}
+.srcs{font-family:var(--mono); font-size:.78rem}
+figure.dia figcaption{font-size:.84rem; color:var(--dim); margin-top:11px;
+  padding-top:10px; border-top:1px solid var(--line)}
+figure.dia figcaption b{color:var(--ink); font-weight:600}
+.dia text{font-family:var(--mono); fill:var(--ink); font-size:12px}
+.dia .t-dim{fill:var(--dim)}
+.dia .t-sig{fill:var(--sig); font-weight:600}
+.dia .t-sm{font-size:10.5px}
+.dia .bx{fill:var(--paper); stroke:var(--line); stroke-width:1}
+.dia .bx-on{fill:var(--sig-soft); stroke:var(--sig); stroke-width:1.5}
+.dia .ln{stroke:var(--line); stroke-width:1.5; fill:none}
+.dia .ln-on{stroke:var(--sig); stroke-width:2; fill:none}
+.dia .ln-dot{stroke:var(--dim); stroke-width:1; fill:none; stroke-dasharray:2 3}
+.dia .ax{stroke:var(--dim); stroke-width:1; fill:none}
+
+/* the kernel plot */
+.dia .plot-meas{stroke:var(--sig); stroke-width:2.2; fill:none;
+  stroke-linejoin:round}
+.dia .plot-ref{stroke:var(--dim); stroke-width:1.3; fill:none;
+  stroke-dasharray:4 3}
+
+/* verdict pills in tables */
+.v{font-family:var(--mono); font-size:.68rem; letter-spacing:.03em;
+  border:1px solid var(--line); border-radius:3px; padding:2px 7px;
+  background:var(--paper); color:var(--dim); white-space:nowrap;
+  display:inline-block}
+.v.yes{border-color:var(--sig); color:var(--sig); background:var(--sig-soft);
+  font-weight:600}
+
+/* numeric tables read better right-aligned and monospaced */
+table td.n, table th.n{text-align:right; font-family:var(--mono);
+  font-variant-numeric:tabular-nums; white-space:nowrap}
+table tr.hl td{background:var(--sig-soft)}
+table tr.hl td:first-child{font-weight:600}
+code.k{font-family:var(--mono); white-space:nowrap}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="../research.html"><span class="en">&larr; Firmware research</span><span class="zh">&larr; 韌體研究</span></a>
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1><span class="en">What the RWZM resizer does</span><span class="zh">RWZM 縮圖電路做了什麼</span></h1>
+<p class="lede"><span class="en">After the sensor there is a second machine that shrinks the picture the rest of the way. Every mode except OG3K and OG2K goes through it. It turns out to matter more than the binning does &mdash; because it shrinks without smoothing first, and because it does not treat every row the same way.</span><span class="zh">感光元件後面還有第二台機器,負責把畫面縮到剩下的尺寸。除了 OG3K 和 OG2K 以外,所有模式都會經過它。它的影響其實比像素合併還大 —— 因為它縮圖之前不先做平滑,而且它不是每一列都用同樣的方式處理。</span></p>
+
+
+    <ul class="chips">
+      <li><b>16</b> <span class="en">recipes, in rotation</span><span class="zh">套做法,輪流用</span></li>
+      <li><b>0</b> <span class="en">smoothing before it shrinks</span><span class="zh">縮圖前的平滑</span></li>
+      <li><b>FHD</b> <span class="en">is the worst case</span><span class="zh">是最糟的情況</span></li>
+    </ul>
+  </div>
+</header>
+
+<h2 id="where"><span class="en">Where this stage sits</span><span class="zh">這一關在哪裡</span></h2>
+
+<p><span class="en">The sensor cannot produce the final frame size on its own. Whatever it hands over, a separate circuit &mdash; the firmware calls it <b>RWZM</b> &mdash; shrinks the rest of the way.</span><span class="zh">感光元件自己做不出最終的畫面尺寸。不管它交出什麼,都有一個獨立的電路 —— 韌體裡叫 <b>RWZM</b> —— 把剩下的尺寸縮完。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">mode</span><span class="zh">模式</span></th><th><span class="en">sensor stage</span><span class="zh">感光元件那一關</span></th><th><span class="en">then RWZM</span><span class="zh">然後 RWZM</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>OG3K</b></span><span class="zh"><b>OG3K</b></span></td><td><span class="en">&divide;2</span><span class="zh">&divide;2</span></td><td><span class="en"><b>none</b> &mdash; straight to the card</span><span class="zh"><b>沒有</b> —— 直接寫卡</span></td></tr>
+    <tr class="hl"><td><span class="en"><b>OG2K</b></span><span class="zh"><b>OG2K</b></span></td><td><span class="en">&divide;3</span><span class="zh">&divide;3</span></td><td><span class="en"><b>none</b></span><span class="zh"><b>沒有</b></span></td></tr>
+    <tr><td><span class="en">UHD</span><span class="zh">UHD</span></td><td><span class="en">none</span><span class="zh">沒有</span></td><td><span class="en">shrinks by 25/16</span><span class="zh">縮 25/16</span></td></tr>
+    <tr class="bad"><td><span class="en"><b>FHD</b></span><span class="zh"><b>FHD</b></span></td><td><span class="en">&divide;2</span><span class="zh">&divide;2</span></td><td><span class="en"><b>then shrinks by 25/16 again</b></span><span class="zh"><b>再縮 25/16</b></span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><span class="en">So FHD goes through both stages, UHD goes through this one alone, and the two open gate modes never touch it. <b>That is the split that decides most of the picture quality on this camera.</b></span><span class="zh">所以 FHD 兩關都走,UHD 只走這一關,而兩個 open gate 模式完全不碰它。<b>這台相機大部分的畫質差異,就是這條界線決定的。</b></span></p>
+
+<h2 id="nofilter"><span class="en">Problem one: it shrinks without smoothing first</span><span class="zh">問題一:它縮圖之前不先平滑</span></h2>
+
+<p><span class="en">When you make a picture smaller you are throwing away sample points. Anything finer than the new spacing cannot be recorded &mdash; but it does not politely disappear. It comes back as a <em>different, coarser</em> pattern that was never in front of the lens: a fabric weave turns into wide stripes, a brick wall into wavy bands, a fine grid grows colour fringes.</span><span class="zh">把一張圖縮小,等於在丟掉取樣點。比新間距還細的東西是記錄不下來的 —— 但它不會乖乖消失。它會變成一個<em>完全不同、比較粗的</em>圖案回到畫面上,而那個圖案根本不在鏡頭前:布料的織紋變成寬條紋、磚牆變成波浪、細格子長出彩色的邊。</span></p>
+
+<p><span class="en">The standard cure is to blur the picture slightly <em>before</em> shrinking, so the too-fine detail is gone before it can misbehave. <b>This circuit does not do that.</b> Every one of its sixteen recipes is a narrow two-point mix, and the width never changes no matter how much you are shrinking by.</span><span class="zh">標準的解法是在縮之前<em>先</em>把畫面稍微模糊一點,讓太細的細節在搗亂之前就先消失。<b>這個電路沒有做這件事。</b>它十六套做法每一套都只是很窄的兩點混合,而且不管你要縮多少,寬度都不變。</span></p>
+
+<p class="note"><span class="en"><b>The consequence is one sentence:</b> whatever protection a mode has against false patterns, it gets entirely from the sensor stage. A mode that skips the sensor stage gets none.</span><span class="zh"><b>結論只有一句:</b>一個模式對假花紋的抵抗力,全部來自感光元件那一關。跳過那一關的模式,一點都沒有。</span></p>
+
+<h2 id="phases"><span class="en">Problem two: it does not treat every row the same</span><span class="zh">問題二:它不是每一列都一樣處理</span></h2>
+
+<p><span class="en">To land on sample positions that fall between the input pixels, the circuit keeps <b>sixteen slightly different recipes</b> and rotates through them. Row 1, row 2 and row 3 each get handled a little differently, and the cycle comes back around every sixteenth row.</span><span class="zh">為了取到落在輸入像素之間的位置,這個電路準備了<b>十六套略有不同的做法</b>,輪流使用。第 1 列、第 2 列、第 3 列各自被處理得有一點點不一樣,而這個循環每十六列回來一次。</span></p>
+
+<p><span class="en">On most subjects nobody would notice. On fine detail the recipes disagree enough that the sixteen-row cycle prints itself onto the picture &mdash; and because every pixel in a row shares a recipe, it prints as <b>horizontal banding</b>. That is the &ldquo;digital look&rdquo; people report in FHD.</span><span class="zh">一般題材根本不會有人發現。但在細緻的細節上,這十六套的差異大到會把那個十六列的循環印在畫面上 —— 而且因為同一列裡每個像素共用同一套做法,印出來就是<b>橫向的條帶</b>。那就是大家說 FHD「有數位感」的東西。</span></p>
+
+<h3><span class="en">The rule worth remembering</span><span class="zh">值得記住的那條規則</span></h3>
+
+<p><span class="en">How many of the sixteen a mode actually uses depends on the <b>shrink ratio</b> &mdash; specifically, on the bottom number when you write it as a fraction. FHD shrinks by 25/16, and 16 on the bottom means all sixteen recipes are in play. Shrink by 3/2 and only two are ever used. Shrink by a whole number and only one is.</span><span class="zh">一個模式實際會用到幾套,取決於<b>縮圖比例</b> —— 更精確地說,取決於把它寫成分數時下面那個數字。FHD 縮的是 25/16,分母 16 代表十六套全開。縮 3/2 的話只會用到兩套;縮整數倍的話只會用到一套。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">shrink by</span><span class="zh">縮圖比例</span></th><th class="n"><span class="en">recipes used</span><span class="zh">用到幾套</span></th><th class="n"><span class="en">repeats every</span><span class="zh">重複週期</span></th><th><span class="en">banding?</span><span class="zh">會不會起條帶</span></th></tr></thead>
+  <tbody>
+    <tr class="bad"><td><span class="en"><b>25/16</b> &mdash; FHD, UHD</span><span class="zh"><b>25/16</b> —— FHD、UHD</span></td><td class="n"><b>16</b></td><td><span class="en">16 rows</span><span class="zh">16 列</span></td><td><span class="en"><b>yes</b></span><span class="zh"><b>會</b></span></td></tr>
+    <tr><td><span class="en">8/5</span><span class="zh">8/5</span></td><td class="n">5</td><td><span class="en">5 rows</span><span class="zh">5 列</span></td><td><span class="en">barely</span><span class="zh">幾乎不會</span></td></tr>
+    <tr class="hl"><td><span class="en"><b>3/2</b></span><span class="zh"><b>3/2</b></span></td><td class="n"><b>2</b></td><td><span class="en">2 rows</span><span class="zh">2 列</span></td><td><span class="en"><b>no</b> &mdash; reads as grain</span><span class="zh"><b>不會</b> —— 看起來像顆粒</span></td></tr>
+    <tr class="hl"><td><span class="en"><b>2, 3</b> &mdash; whole numbers</span><span class="zh"><b>2、3</b> —— 整數</span></td><td class="n"><b>1</b></td><td><span class="en">&mdash;</span><span class="zh">&mdash;</span></td><td><span class="en"><b>no</b></span><span class="zh"><b>不會</b></span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><span class="en">Two recipes carry almost as much error as sixteen do &mdash; 17% against 21% of picture contrast. The difference is that with two, the error flips sign on alternating rows, so it lands at the finest scale the picture has and reads as grain. With sixteen it repeats slowly enough to be seen as bands. <b>The problem was never how much error. It was what shape the error came in.</b></span><span class="zh">兩套做法帶的誤差幾乎和十六套一樣多 —— 佔畫面對比的 17% 對 21%。差別在於兩套的時候,誤差在相鄰列之間正負交替,落在畫面最細的尺度上,看起來是顆粒;十六套的時候,它重複得夠慢,看起來就是條帶。<b>問題從來不是誤差有多少,是誤差排成什麼形狀。</b></span></p>
+
+<h2 id="ranking"><span class="en">How bad, in numbers</span><span class="zh">到底有多糟,用數字講</span></h2>
+
+<p><span class="en">Same reference frames, five different materials, every route the camera can take or could be made to take. Lower is better: the number is how much of the picture came out as something that was not there. Italic rows are not real routes &mdash; they are what a mathematically perfect shrink would score.</span><span class="zh">同一組參考畫面、五種不同材質、相機做得到或可能做得到的每一條路線。數字越小越好:它代表畫面裡有多少東西變成了原本不存在的樣子。斜體列不是真的路線,是數學上完美的縮圖會拿到的分數。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">route</span><span class="zh">路線</span></th><th class="n"><span class="en">dense weave</span><span class="zh">密織布料</span></th><th class="n"><span class="en">everyday material</span><span class="zh">一般素材</span></th><th class="n"><span class="en">noise</span><span class="zh">雜訊</span></th><th class="n"><span class="en">recipes</span><span class="zh">用幾套</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>OG3K</b> &mdash; sensor only</span><span class="zh"><b>OG3K</b> —— 只走感光元件</span></td><td class="n"><b>3.9%</b></td><td class="n"><b>0.7%</b></td><td class="n">&times;0.55</td><td class="n">&mdash;</td></tr>
+    <tr class="ref"><td><span class="en"><i>a perfect 2&times;2</i></span><span class="zh"><i>完美的 2&times;2</i></span></td><td class="n"><i>3.0%</i></td><td class="n"><i>0.5%</i></td><td class="n"><i>&times;0.50</i></td><td class="n"><i>&mdash;</i></td></tr>
+    <tr class="hl"><td><span class="en"><b>OG2K</b> &mdash; sensor only</span><span class="zh"><b>OG2K</b> —— 只走感光元件</span></td><td class="n">22.7%</td><td class="n"><b>2.7%</b></td><td class="n">&times;0.43</td><td class="n">&mdash;</td></tr>
+    <tr><td><span class="en">OG4K &mdash; full read, shrink 3/2</span><span class="zh">OG4K —— 讀滿再縮 3/2</span></td><td class="n">4.9%</td><td class="n">5.1%</td><td class="n">&times;0.57</td><td class="n">2</td></tr>
+    <tr><td><span class="en">UHD &mdash; full read, shrink 25/16</span><span class="zh">UHD —— 讀滿再縮 25/16</span></td><td class="n">7.1%</td><td class="n">4.8%</td><td class="n">&times;0.56</td><td class="n"><b>16</b></td></tr>
+    <tr class="bad"><td><span class="en"><b>FHD</b> &mdash; &divide;2, then 25/16</span><span class="zh"><b>FHD</b> —— &divide;2 再縮 25/16</span></td><td class="n">13.8%</td><td class="n"><b>6.2%</b></td><td class="n">&times;0.31</td><td class="n"><b>16</b></td></tr>
+    <tr class="bad"><td><span class="en">2K &mdash; full read, shrink 3</span><span class="zh">2K —— 讀滿再縮 3 倍</span></td><td class="n"><b>34.1%</b></td><td class="n">4.7%</td><td class="n">&times;0.61</td><td class="n">1</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><span class="en"><b>The everyday column splits the table in two, and not where the output size does.</b> The two routes that never touch the resizer score 0.7% and 2.7%. Every route that touches it pays between 2.2% and 7.3%, whatever ratio it uses. A sensor merge applies the same recipe everywhere, so its mistakes are uniform and a little sharpening takes them back. The resizer uses a different recipe at every position, so its mistakes change from pixel to pixel &mdash; and that part is gone for good.</span><span class="zh"><b>「一般素材」那一欄把表切成兩半,而切的地方不是輸出尺寸。</b>完全不碰縮圖電路的兩條是 0.7% 和 2.7%;碰到它的每一條都要付 2.2% 到 7.3%,不管用什麼比例。感光元件的合併在每個位置用同一套做法,所以它犯的錯是均勻的,稍微銳化就能拿回來。縮圖電路在每個位置用不同的做法,所以它犯的錯逐像素改變 —— 那一部分救不回來。</span></p>
+
+<figure class="dia">
+  <video src="assets/reduction/cloth-ab.mp4" controls muted loop playsinline preload="none" aria-label="Six seconds of an A/B comparison on white shirt fabric, three seconds of FHD then three of OG2K."></video>
+  <figcaption>
+<span class="en"><b>Six seconds, cut on the switch.</b> Three of FHD, then three of OG2K, cropped to the white shirt so you can see the weave; the labels were burned in by the person who shot it. Under OG2K the weave is a fine, even crosshatch, which is what the cloth is. Under FHD it goes coarse and blotchy, and the pattern that appears is not the one in front of the lens.</span><span class="zh"><b>六秒,正好切在切換點上。</b>前三秒 FHD、後三秒 OG2K,裁到白襯衫,讓你看得到織紋;標籤是拍攝的人自己燒進畫面的。OG2K 之下織紋是細而均勻的交叉紋,那就是這塊布本來的樣子;FHD 之下它變粗、變花,而且出現的圖案並不是鏡頭前那一個。</span>
+  </figcaption>
+</figure>
+
+<h2 id="banding"><span class="en">Grading the banding</span><span class="zh">把橫向條帶打分</span></h2>
+
+<p><span class="en">The banding can be graded on its own. Take a real frame, shrink it with the recipes a route actually uses, shrink it again with the average of those same recipes, and subtract. What is left is the banding by itself.</span><span class="zh">橫向條帶可以單獨打分。拿一張真實畫面,用某條路線實際會用到的做法縮一次,再用那些做法自己的平均縮一次,兩者相減。剩下的就是條帶本身。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">route</span><span class="zh">路線</span></th><th class="n"><span class="en">recipes</span><span class="zh">用幾套</span></th><th class="n"><span class="en">size of it</span><span class="zh">有多大</span></th><th class="n"><span class="en">worst row vs best</span><span class="zh">最重列比最輕列</span></th><th class="n"><span class="en">grade</span><span class="zh">評分</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>OG3K, OG2K</b> &mdash; no resizer</span><span class="zh"><b>OG3K、OG2K</b> —— 不經過</span></td><td class="n">&mdash;</td><td class="n"><b>0.00%</b></td><td class="n"><b>1.0&times;</b></td><td class="n"><b>A</b></td></tr>
+    <tr class="hl"><td><span class="en">shrink by a whole number</span><span class="zh">縮整數倍</span></td><td class="n">1</td><td class="n"><b>0.00%</b></td><td class="n">1.0&times;</td><td class="n"><b>A</b></td></tr>
+    <tr><td><span class="en">OG4K &mdash; shrink 3/2</span><span class="zh">OG4K —— 縮 3/2</span></td><td class="n">2</td><td class="n">16.9%</td><td class="n">1.0&times;</td><td class="n">B</td></tr>
+    <tr class="bad"><td><span class="en">UHD</span><span class="zh">UHD</span></td><td class="n"><b>16</b></td><td class="n">19.9%</td><td class="n">8.9&times;</td><td class="n"><b>D</b></td></tr>
+    <tr class="bad"><td><span class="en"><b>FHD</b></span><span class="zh"><b>FHD</b></span></td><td class="n"><b>16</b></td><td class="n"><b>21.0%</b></td><td class="n"><b>13&ndash;22&times;</b></td><td class="n"><b>F</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><span class="en">A control makes this readable: feed the same test a picture of pure random noise and both directions come out identical, 3.2 against 3.4. Feed it a real scene and rows vary by 13&times; while columns vary by under 3&times;. <b>The lopsidedness comes from the subject, not the circuit</b> &mdash; a real frame carries more fine detail across than down, so it is the row recipes that get provoked, and their mistakes arrive as full-width bands. On hard edges and lettering it reaches 36&times;.</span><span class="zh">有個對照組讓這張表讀得懂:同一個測試餵純隨機雜訊進去,兩個方向的結果一模一樣,3.2 對 3.4。餵真實畫面進去,列之間差 13 倍,行之間不到 3 倍。<b>這個不對稱來自題材,不是來自電路</b> —— 真實畫面橫向的細節比縱向多,所以被激發的是「列」那一組做法,而它的錯誤是整列寬的。在硬邊和文字上,這個比值到 36 倍。</span></p>
+
+<h2 id="lowlight"><span class="en">Is FHD better in the dark?</span><span class="zh">FHD 暗部比較好嗎?</span></h2>
+
+<p><span class="en">It looks like it. FHD averages about twice as many sensor cells per output pixel as OG2K, which is half a stop, and in real footage it does measure quieter. But averaging more cells is also what makes a picture soft, and a soft picture looks less noisy whether or not it collected more light. So: blur the sharper mode until its texture matches FHD&rsquo;s, then compare.</span><span class="zh">看起來是。FHD 每個輸出像素平均到的格子數大約是 OG2K 的兩倍,也就是半級,而在實拍上它確實量起來比較安靜。但「平均更多格子」同時也是讓畫面變軟的原因,而軟的畫面看起來就是比較不吵,不管它有沒有真的多收到光。所以:把比較銳的那個模式模糊到紋理跟 FHD 一樣,再比。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en"></span><span class="zh"></span></th><th class="n"><span class="en">texture</span><span class="zh">紋理</span></th><th class="n"><span class="en">noise</span><span class="zh">雜訊</span></th><th class="n"><span class="en">vs FHD</span><span class="zh">相對 FHD</span></th></tr></thead>
+  <tbody>
+    <tr><td><span class="en">OG2K, untouched</span><span class="zh">OG2K,原樣</span></td><td class="n"><b>16.7%</b></td><td class="n">7.14</td><td class="n">&times;1.25</td></tr>
+    <tr class="hl"><td><span class="en"><b>OG2K, blurred to match FHD</b></span><span class="zh"><b>OG2K,模糊到跟 FHD 一樣</b></span></td><td class="n">14.0%</td><td class="n"><b>5.77</b></td><td class="n"><b>&times;1.01</b></td></tr>
+    <tr class="ref"><td><span class="en"><i>FHD, as shot</i></span><span class="zh"><i>FHD,原樣</i></span></td><td class="n"><i>14.3%</i></td><td class="n"><i>5.71</i></td><td class="n"><i>&mdash;</i></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><span class="en"><b>Matched for sharpness they are level.</b> A second scene, shot at ISO&nbsp;800, says it harder: take the OG3K frame, shrink it properly to FHD&rsquo;s size with a filter that <em>does</em> smooth first, and you get the same noise with more than twice the texture &mdash; no blurring needed at all. <b>FHD&rsquo;s half stop is the blur, not the light.</b> You can have the same trade from a sharper mode whenever you want it, and stop before it costs you the detail.</span><span class="zh"><b>銳利度對齊之後兩者持平。</b>另一個 ISO&nbsp;800 的場景講得更重:拿 OG3K 的畫面,用一個<em>會</em>先平滑的濾波器正確縮到 FHD 的尺寸,得到的是一樣的雜訊、兩倍以上的紋理 —— 連模糊都不用。<b>FHD 那半級是模糊,不是光。</b>同樣的交換你隨時可以自己做,而且可以在還沒賠掉細節之前停手。</span></p>
+
+<h2 id="pick"><span class="en">So what should you shoot?</span><span class="zh">所以該拍哪個</span></h2>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">you are shooting</span><span class="zh">你在拍的是</span></th><th><span class="en">take</span><span class="zh">選</span></th><th><span class="en">why</span><span class="zh">理由</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>anything, if the size suits you</b></span><span class="zh"><b>任何東西,只要尺寸合用</b></span></td><td><span class="en"><b>OG3K</b></span><span class="zh"><b>OG3K</b></span></td><td><span class="en">never touches the resizer; the cleanest route measured</span><span class="zh">完全不碰縮圖電路,量過最乾淨的一條</span></td></tr>
+    <tr class="hl"><td><span class="en"><b>2K &mdash; fabric, skin, foliage</b></span><span class="zh"><b>2K —— 布料、皮膚、植物</b></span></td><td><span class="en"><b>OG2K</b></span><span class="zh"><b>OG2K</b></span></td><td><span class="en">2.3&times; cleaner than FHD on everyday material, and no banding</span><span class="zh">一般素材上比 FHD 乾淨 2.3 倍,而且沒有條帶</span></td></tr>
+    <tr><td><span class="en">2K &mdash; fine repeating texture</span><span class="zh">2K —— 細密的重複花紋</span></td><td><span class="en">FHD</span><span class="zh">FHD</span></td><td><span class="en">its &divide;2 stage is exactly the right filter for once</span><span class="zh">它的 &divide;2 那一關剛好是對的濾波器</span></td></tr>
+    <tr><td><span class="en">4K</span><span class="zh">4K</span></td><td><span class="en">full read, shrink <b>3/2</b></span><span class="zh">讀滿,縮 <b>3/2</b></span></td><td><span class="en">beats UHD on false patterns, and only two recipes</span><span class="zh">假花紋贏現行 UHD,而且只用兩套做法</span></td></tr>
+    <tr class="bad"><td><span class="en">2K &mdash; in the dark</span><span class="zh">2K —— 暗部</span></td><td><span class="en"><b>still OG2K</b></span><span class="zh"><b>還是 OG2K</b></span></td><td><span class="en">FHD&rsquo;s advantage is blur; soften it yourself instead</span><span class="zh">FHD 的優勢是模糊,不如自己去軟化</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note"><span class="en"><b>And for anyone building a new recording mode:</b> pick a shrink ratio whose bottom number is five or less &mdash; 3/2, 5/2, 8/5, 12/5, or a whole number. It costs nothing, and the banding never appears. That is the one thing on this page that can be applied without measuring anything else.</span><span class="zh"><b>如果你在做新的錄製模式:</b>挑一個分母小於等於 5 的縮圖比例 —— 3/2、5/2、8/5、12/5,或整數。這不花任何代價,而條帶就不會出現。這是這一頁唯一一條不用再量任何東西就能直接用的規則。</span></p>
+
+<h2 id="sources"><span class="en">Where this comes from</span><span class="zh">這些是怎麼來的</span></h2>
+
+<p><span class="en">The sixteen recipes were solved from <b>seven stills shot and released by Jose</b> &mdash; one frame per mode of the same scene, on one body and one firmware. Nothing else went into them.</span><span class="zh">那十六套做法,是從 <b>Jose 拍攝並公開的七張靜態照片</b>解出來的 —— 一個模式一張,同場景,同一台機身、同一版韌體。裡面沒有放進別的東西。</span></p>
+
+<p><span class="en"><b>The footage used to check the results is separate, and is not Jose&rsquo;s.</b> The sailor-uniform clip above, the clothing pair, the star chart and the night test were all shot by this project. They are used only to confirm or contradict what the seven stills predict. Twice they contradicted it, and the page was changed.</span><span class="zh"><b>用來檢查結果的實拍素材是另一回事,而且不是 Jose 的。</b>上面那段水手服、衣物那一對、星圖和夜景測試,全部是本專案自己拍的。它們只用來確認或推翻那七張照片的預測。有兩次它們推翻了,頁面就改了。</span></p>
+
+<p class="note"><span class="en"><b>Still open:</b> the sixteen recipes were only ever solved at one shrink ratio, 25/16. Everything here about 3/2 and the whole numbers assumes the same sixteen are used at every ratio. 3/2 needs only two of them and both were measured directly, so that is the least risky assumption on the page &mdash; but it is still an assumption. One clip recorded through 3/2 would settle it.</span><span class="zh"><b>還沒解:</b>那十六套做法只在一個縮圖比例上解過,就是 25/16。這裡所有關於 3/2 和整數倍的說法,都假設每個比例用的是同一組十六套。3/2 只需要其中兩套,而那兩套都是直接量到的,所以這是全頁風險最小的假設 —— 但它仍然是假設。錄一段走 3/2 的片子就能定案。</span></p>
+
+<p><span class="en">The stage <em>before</em> this one &mdash; what the sensor itself does &mdash; is a separate page: <a href="imx410-binning.html">What the IMX410&rsquo;s binning actually does</a>. The full technical version of both, with every table, is <a href="reduction-kernels.html">here</a>.</span><span class="zh">這一關<em>之前</em>那一關 —— 感光元件自己做了什麼 —— 在另一頁:<a href="imx410-binning.html">IMX410 的像素合併到底做了什麼</a>。兩者的完整技術版、所有表格,在<a href="reduction-kernels.html">這裡</a>。</span></p>
+
+
+<footer>
+  <p><a href="../">fpSup</a> &middot;
+  <a href="../research.html"><span class="en">Firmware research</span><span class="zh">韌體研究</span></a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://www.youtube.com/@fp-sup">YouTube</a> &middot;
+  <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
+</footer>
+
+<script src="../assets/lang.js?v=d3a03fae" defer></script>
+
+</body>
+</html>

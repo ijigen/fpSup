@@ -157,12 +157,11 @@
 
   var saved = null;
   try { saved = localStorage.getItem(KEY); } catch (e) {}
-  if (saved !== 'en' && saved !== 'cn' && saved !== 'zh') {
-    var nav = (navigator.language || '') + ' ' + ((navigator.languages || []).join(' '));
-    saved = /\bzh\b|\bzh-/i.test(nav)
-      ? (/hant|TW|HK|MO/i.test(nav) ? 'zh' : 'cn')
-      : 'en';
-  }
+  /* English is the default. A first-time visitor always lands on it, whatever
+   * the browser reports -- the site is written in English first and the Chinese
+   * is the translation, so guessing from navigator.language sent people to the
+   * secondary text. The choice is remembered once it is made. */
+  if (saved !== 'en' && saved !== 'cn' && saved !== 'zh') saved = 'en';
   btns.forEach(function (b) {
     b.addEventListener('click', function () { apply(b.getAttribute('data-set'), true); });
   });

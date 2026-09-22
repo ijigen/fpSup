@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What the IMX410&rsquo;s binning actually does &mdash; fpSup</title>
+<meta name="description" content="The SIGMA fp's OG3K and OG2K modes go through the sensor and nothing else, so they show what the IMX410 really does when it is asked to bin. Vertically it combines two rows. Horizontally it combines nothing. The 3x mode throws one row in three away, and none of it buys you light.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/imx410-binning.html">
+<meta property="og:title" content="What the IMX410's pixel binning actually does">
+<meta property="og:description" content="Measured from frames. Vertically the IMX410 combines two rows; horizontally it interpolates; the 3x mode discards one row in three; and it averages rather than sums.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+
+td .m{font-family:var(--mono); font-size:.72rem; color:var(--dim)}
+
+#verdict td:first-child{white-space:nowrap}
+tbody tr.bad td{background:#1b1517}
+tbody tr.bad td:first-child{box-shadow:inset 2px 0 0 #b4443a}
+tbody tr.ref td{color:#6f7780; font-style:italic}
+tbody tr.ref td:first-child{font-style:italic; box-shadow:inset 2px 0 0 #3a4450}
+
+/* ---- language switch ---------------------------------------------------- */
+.topbar{display:flex; align-items:center; justify-content:space-between;
+  gap:16px; margin-bottom:22px}
+.topbar .back{margin-bottom:0}
+.lang{display:inline-flex; border:1px solid var(--line); border-radius:3px;
+  overflow:hidden; flex:none}
+.lang button{font-family:var(--mono); font-size:.72rem; letter-spacing:.04em;
+  padding:5px 11px; border:0; background:var(--panel); color:var(--dim);
+  cursor:pointer; transition:background .12s, color .12s}
+.lang button + button{border-left:1px solid var(--line)}
+.lang button:hover{color:var(--ink)}
+.lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
+  font-weight:600}
+.lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+[data-lang="zh"] body, [data-lang="cn"] body{line-height:1.75}
+[data-lang="zh"] .lede, [data-lang="cn"] .lede{max-width:40em}
+
+/* ---- diagrams ----------------------------------------------------------- */
+figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:16px 14px 12px}
+figure.dia svg{display:block; width:100%; height:auto}
+figure.dia img, figure.dia video{display:block; width:100%; height:auto;
+  border-radius:2px; background:var(--paper)}
+.srcs{font-family:var(--mono); font-size:.78rem}
+figure.dia figcaption{font-size:.84rem; color:var(--dim); margin-top:11px;
+  padding-top:10px; border-top:1px solid var(--line)}
+figure.dia figcaption b{color:var(--ink); font-weight:600}
+.dia text{font-family:var(--mono); fill:var(--ink); font-size:12px}
+.dia .t-dim{fill:var(--dim)}
+.dia .t-sig{fill:var(--sig); font-weight:600}
+.dia .t-sm{font-size:10.5px}
+.dia .bx{fill:var(--paper); stroke:var(--line); stroke-width:1}
+.dia .bx-on{fill:var(--sig-soft); stroke:var(--sig); stroke-width:1.5}
+.dia .ln{stroke:var(--line); stroke-width:1.5; fill:none}
+.dia .ln-on{stroke:var(--sig); stroke-width:2; fill:none}
+.dia .ln-dot{stroke:var(--dim); stroke-width:1; fill:none; stroke-dasharray:2 3}
+.dia .ax{stroke:var(--dim); stroke-width:1; fill:none}
+
+/* the kernel plot */
+.dia .plot-meas{stroke:var(--sig); stroke-width:2.2; fill:none;
+  stroke-linejoin:round}
+.dia .plot-ref{stroke:var(--dim); stroke-width:1.3; fill:none;
+  stroke-dasharray:4 3}
+
+/* verdict pills in tables */
+.v{font-family:var(--mono); font-size:.68rem; letter-spacing:.03em;
+  border:1px solid var(--line); border-radius:3px; padding:2px 7px;
+  background:var(--paper); color:var(--dim); white-space:nowrap;
+  display:inline-block}
+.v.yes{border-color:var(--sig); color:var(--sig); background:var(--sig-soft);
+  font-weight:600}
+
+/* numeric tables read better right-aligned and monospaced */
+table td.n, table th.n{text-align:right; font-family:var(--mono);
+  font-variant-numeric:tabular-nums; white-space:nowrap}
+table tr.hl td{background:var(--sig-soft)}
+table tr.hl td:first-child{font-weight:600}
+code.k{font-family:var(--mono); white-space:nowrap}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="../research.html"><span class="en">&larr; Firmware research</span><span class="zh">&larr; 韌體研究</span></a>
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="hero-text">
+    <h1><span class="en">What the IMX410&rsquo;s binning actually does</span><span class="zh">IMX410 的像素合併到底做了什麼</span></h1>
+<p class="lede"><span class="en">The menu calls the fp&rsquo;s two video modes 2&times;2 and 3&times;3. Seven photographs of one scene say that is not what happens. Up and down, the sensor really does combine rows. Left and right, it combines nothing at all. And the &divide;3 mode throws one row in three away.</span><span class="zh">選單把 fp 的兩個錄影模式寫成 2&times;2 和 3&times;3。同一個場景的七張照片說,實際不是這樣。上下方向,感光元件確實在合併列;左右方向,它根本沒有合併任何東西。而 &divide;3 模式每三列會丟掉一列。</span></p>
+
+
+    <ul class="chips">
+      <li><b>M98</b> <span class="en">&divide;2 &mdash; OG3K</span><span class="zh">&divide;2 &mdash; OG3K</span></li>
+      <li><b>M139</b> <span class="en">&divide;3 &mdash; OG2K</span><span class="zh">&divide;3 &mdash; OG2K</span></li>
+      <li><b>2&times;2 = 3.2</b> <span class="en">cells, not 4</span><span class="zh">個格子,不是 4</span></li>
+    </ul>
+  </div>
+</header>
+
+<h2 id="why"><span class="en">Why these two modes</span><span class="zh">為什麼是這兩個模式</span></h2>
+
+<p><span class="en">The sensor has about 24 million light-collecting cells. A video frame needs two to eight million, so cells have to be turned into fewer numbers before anything reaches the card. Most modes do part of that on the sensor and part in a resizing circuit afterwards. <b>OG3K and OG2K are the only two that go through the sensor and nothing else</b> &mdash; which makes them the only clean look at what the IMX410 itself does.</span><span class="zh">感光元件上大約有 2400 萬個收光的小格子。一張影片畫面只需要兩百到八百萬個,所以在寫進卡之前,一定要把很多格子變成比較少的數字。大部分模式是感光元件做一半、後面的縮圖電路做一半。<b>OG3K 和 OG2K 是唯二只經過感光元件、後面什麼都沒有的模式</b> —— 所以它們是唯一能乾淨看到 IMX410 本身在做什麼的窗口。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">mode</span><span class="zh">模式</span></th><th><span class="en">what it is</span><span class="zh">是什麼</span></th><th class="n"><span class="en">output</span><span class="zh">輸出</span></th><th class="n"><span class="en">rolling shutter</span><span class="zh">捲簾</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>M98</b> &mdash; OG3K</span><span class="zh"><b>M98</b> &mdash; OG3K</span></td><td><span class="en">sensor &divide;2</span><span class="zh">感光元件 &divide;2</span></td><td class="n">3024&times;2010</td><td class="n">12.44 ms</td></tr>
+    <tr class="hl"><td><span class="en"><b>M139</b> &mdash; OG2K</span><span class="zh"><b>M139</b> &mdash; OG2K</span></td><td><span class="en">sensor &divide;3</span><span class="zh">感光元件 &divide;3</span></td><td class="n">2016&times;1344</td><td class="n">8.31 ms</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="vertical"><span class="en">Up and down: it really does combine rows</span><span class="zh">上下:它真的在合併列</span></h2>
+
+<p><span class="en">In the &divide;2 mode two rows of the same colour are combined into one, half and half, exactly as you would hope. Nothing is weighted more than the other, and nothing is skipped.</span><span class="zh">在 &divide;2 模式下,兩條同色列被合成一條,各佔一半,和你期望的完全一樣。沒有哪一條權重比較高,也沒有跳過任何一條。</span></p>
+
+<p><span class="en"><b>The proof is in the spacing.</b> If rows are genuinely merged in pairs, the rows that come out are not evenly spaced &mdash; each output row sits at the middle of its own pair, so the gaps go long, short, long, short. That is measurable inside a single frame, without any reference image: the two green channels of the Bayer pattern should sit exactly half a pixel apart, and in OG3K they sit a quarter apart instead. <b>No resizing circuit produces that.</b> It is what row merging looks like from the outside.</span><span class="zh"><b>證據在間距上。</b>如果列真的是成對合併的,出來的列間距就不會均勻 —— 每一條輸出列落在自己那一對的中間,所以間隔會長、短、長、短。這件事在一張畫面裡就量得出來,不需要參考圖:拜耳圖案的兩個綠色通道本來應該正好差半個像素,而 OG3K 裡它們只差四分之一。<b>任何縮圖電路都做不出這個。</b>這就是列合併從外面看起來的樣子。</span></p>
+
+<h2 id="div3"><span class="en">The &divide;3 mode only combines two rows, and bins the third</span><span class="zh">&divide;3 模式只合併兩列,第三列丟掉</span></h2>
+
+<p><span class="en">The menu calls M139 a 3&times;3. It is not. Vertically it still combines only <b>two</b> rows of every three, and the third is simply not used. A third of the light that landed on the sensor never reaches the file, and the detail that was on that row is gone.</span><span class="zh">選單把 M139 寫成 3&times;3。它不是。垂直方向它還是只合併每三列裡的<b>兩列</b>,第三列根本沒有用到。打在感光元件上的光有三分之一沒有進到檔案裡,那一列上的細節也就沒了。</span></p>
+
+<p><span class="en"><b>This is not guesswork from the pixels.</b> The firmware carries a four-number tag for every mode, and for the eight &divide;3 modes it reads <code class="k">(3,2,3,3)</code>. The first two numbers are the tap counts per axis, and that lone <b>2</b> is the vertical one. The pixels and the camera&rsquo;s own ROM table say the same thing.</span><span class="zh"><b>這不是從像素上猜的。</b>韌體為每個模式帶了一組四個數字的標籤,八個 &divide;3 模式上寫的是 <code class="k">(3,2,3,3)</code>。前兩個數字是每個方向的抽頭數,那個孤零零的 <b>2</b> 就是垂直方向。像素和相機自己的 ROM 表說的是同一件事。</span></p>
+
+<h2 id="horizontal"><span class="en">Left and right: nothing is combined &mdash; it is calculated</span><span class="zh">左右:根本沒有合併 —— 是算出來的</span></h2>
+
+<p><span class="en">Sideways, no cells are merged. The camera picks a position <em>between</em> two neighbouring cells and works out how bright it would probably be, by mixing the two in some proportion &mdash; like mixing two paints to get a shade in between. Nothing is collected twice. A new number is invented from the numbers next door.</span><span class="zh">橫的方向,沒有任何格子被合併。相機挑一個落在<em>兩個相鄰格子中間</em>的位置,再按比例把那兩格混起來,算出它「大概應該多亮」—— 就像把兩種顏料調出中間色。沒有東西被多收一次,只是從旁邊的數字生出一個新數字。</span></p>
+
+<p><span class="en">The giveaway is that the mixing proportions are <b>unequal, and they flip</b> between even and odd output columns &mdash; roughly 27:73, then 73:27. Combining charge cannot do that. Resampling onto an evenly spaced grid does exactly that.</span><span class="zh">看出來的地方在於混合的比例是<b>不相等的,而且在偶數行和奇數行之間對調</b> —— 大約 27:73,然後 73:27。電荷合併做不出這件事,而「重新取樣到一個均勻的網格上」正好就會這樣。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en"></span><span class="zh"></span></th><th><span class="en">up and down</span><span class="zh">上下</span></th><th><span class="en">left and right</span><span class="zh">左右</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>OG3K</b> &divide;2</span><span class="zh"><b>OG3K</b> &divide;2</span></td><td><span class="en"><b>really combines</b> 2 rows, 50/50</span><span class="zh"><b>真的合併</b> 2 列,各一半</span></td><td><span class="en">2-tap mix, 27:73</span><span class="zh">2 點混合,27:73</span></td></tr>
+    <tr class="hl"><td><span class="en"><b>OG2K</b> &divide;3</span><span class="zh"><b>OG2K</b> &divide;3</span></td><td><span class="en">combines 2 rows, <b>discards the 3rd</b></span><span class="zh">合併 2 列,<b>第三列丟掉</b></span></td><td><span class="en">3-tap mix, 25:50:25</span><span class="zh">3 點混合,25:50:25</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="average"><span class="en">It averages, it does not sum &mdash; so you get no free stop</span><span class="zh">它是平均,不是相加 —— 所以沒有白送的一級</span></h2>
+
+<p><span class="en">People expect binning to gather light: merge four cells and the one you keep has four cells&rsquo; worth. That is not what comes out. Whatever gets combined is divided back down afterwards.</span><span class="zh">一般人期望合併會收光:四格併成一格,留下的那格就有四格份的光。出來的結果不是這樣。不管合併了什麼,後面都會除回去。</span></p>
+
+<p><span class="en"><b>How you can tell:</b> &divide;3 is not brighter than &divide;2. At the same ISO and shutter the two sit at the same level &mdash; 127.1 against 124.8. If charge were really being added up, &divide;3 would be more than twice as bright. Every video mode also sits <b>1.32&nbsp;EV below</b> the 6K still at identical settings, and the DNG files say so themselves in their exposure tag.</span><span class="zh"><b>怎麼看出來的:</b>&divide;3 並沒有比 &divide;2 亮。同樣的 ISO 和快門下,兩者亮度一樣 —— 127.1 對 124.8。如果電荷真的被加起來,&divide;3 應該要亮兩倍以上。而且在完全相同的設定下,每個影片模式都比 6K 靜態<b>暗 1.32&nbsp;EV</b>,DNG 檔自己的曝光標籤也是這麼寫的。</span></p>
+
+<p class="note"><span class="en"><b>What this test cannot tell you</b> is whether the dividing happens before or after the read. &ldquo;Add the charge, then halve it&rdquo; and &ldquo;read both rows, then average&rdquo; give the same brightness and the same noise in daylight, and differ only in the dark. That one is still open.</span><span class="zh"><b>但這個測試分不出來的是</b>除法發生在讀出之前還是之後。「電荷相加再除以二」和「兩列都讀出來再平均」在白天會給出一樣的亮度和一樣的雜訊,只在暗部才不同。這一點還沒解。</span></p>
+
+<h2 id="cost"><span class="en">What it costs</span><span class="zh">代價是什麼</span></h2>
+
+<p><span class="en">Because the mixing weights are uneven, an output pixel does not average as many cells as the name suggests. Count them properly and a &ldquo;2&times;2&rdquo; averages <b>3.2</b> cells, not 4. A &ldquo;3&times;3&rdquo; averages <b>5.33</b>, not 9 &mdash; that is the discarded row showing up as a number.</span><span class="zh">因為混合的權重不均勻,一個輸出像素平均到的格子數並沒有名字說的那麼多。認真數的話,「2&times;2」平均了 <b>3.2</b> 個格子,不是 4;「3&times;3」平均了 <b>5.33</b> 個,不是 9 —— 被丟掉的那一列就體現在這個數字上。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">mode</span><span class="zh">模式</span></th><th class="n"><span class="en">on the label</span><span class="zh">名義上</span></th><th class="n"><span class="en">actually</span><span class="zh">實際</span></th><th class="n"><span class="en">noise benefit</span><span class="zh">降噪</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>OG3K</b> &divide;2</span><span class="zh"><b>OG3K</b> &divide;2</span></td><td class="n">4</td><td class="n"><b>3.2</b></td><td class="n">&minus;0.85 EV</td></tr>
+    <tr class="hl"><td><span class="en"><b>OG2K</b> &divide;3</span><span class="zh"><b>OG2K</b> &divide;3</span></td><td class="n">9</td><td class="n"><b>5.33</b></td><td class="n">&minus;1.21 EV</td></tr>
+    <tr class="ref"><td><span class="en"><i>a perfect 3&times;3</i></span><span class="zh"><i>完美的 3&times;3</i></span></td><td class="n"><i>9</i></td><td class="n"><i>9</i></td><td class="n"><i>&minus;1.58 EV</i></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><span class="en">The noise side is the good news and it is small. The real cost is elsewhere: a reduction that skips rows cannot represent fine repeating detail, and what it cannot represent does not vanish politely &mdash; it comes back as a coarser pattern that was never in front of the lens. On a dense fabric weave, <b>&divide;3 goes wrong about six times as often as &divide;2</b>.</span><span class="zh">雜訊這一側是好消息,而且差距不大。真正的代價在別處:一個會跳列的縮減方式沒辦法表現細密的重複花紋,而它表現不了的東西不會乖乖消失 —— 會變成一個鏡頭前根本沒有的、比較粗的圖案回到畫面上。在密織的布料上,<b>&divide;3 出錯的程度大約是 &divide;2 的六倍</b>。</span></p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en"></span><span class="zh"></span></th><th class="n"><span class="en">dense weave</span><span class="zh">密織布料</span></th><th class="n"><span class="en">everyday material</span><span class="zh">一般素材</span></th><th class="n"><span class="en">vs a perfect box</span><span class="zh">對完美盒平均</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>OG3K</b> &divide;2</span><span class="zh"><b>OG3K</b> &divide;2</span></td><td class="n"><b>3.9%</b></td><td class="n"><b>0.7%</b></td><td><span class="en">nearly there &mdash; 3.0% / 0.5%</span><span class="zh">已經很接近 —— 3.0% / 0.5%</span></td></tr>
+    <tr class="bad"><td><span class="en"><b>OG2K</b> &divide;3</span><span class="zh"><b>OG2K</b> &divide;3</span></td><td class="n"><b>22.7%</b></td><td class="n">2.7%</td><td><span class="en"><b>3.6&times; worse</b> &mdash; 6.2% / 0.6%</span><span class="zh"><b>差 3.6 倍</b> —— 6.2% / 0.6%</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><span class="en">Lower is better; the numbers are how much of the picture came out as something that was not there. <b>&divide;2 is close to the best a two-row merge could possibly do. &divide;3 is nowhere near</b>, and the gap is the thrown-away row.</span><span class="zh">數字越小越好,它代表畫面裡有多少東西變成了原本不存在的樣子。<b>&divide;2 已經接近「兩列合併」能做到的極限;&divide;3 差得遠</b>,差的那一段就是被丟掉的那一列。</span></p>
+
+<h2 id="use"><span class="en">Which mode to actually use</span><span class="zh">實際該用哪個模式</span></h2>
+
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">you want</span><span class="zh">你要的是</span></th><th><span class="en">take</span><span class="zh">選</span></th><th class="n"><span class="en">rolling shutter</span><span class="zh">捲簾</span></th><th><span class="en">why</span><span class="zh">理由</span></th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><span class="en"><b>3K, best picture</b></span><span class="zh"><b>3K,畫質優先</b></span></td><td class="n"><b>M98</b></td><td class="n">12.44 ms</td><td><span class="en">the cleanest thing this camera makes</span><span class="zh">這台相機做得出來最乾淨的</span></td></tr>
+    <tr><td><span class="en">3K, less rolling shutter</span><span class="zh">3K,捲簾要小</span></td><td class="n">M117</td><td class="n">9.22 ms</td><td><span class="en">same picture, but <b>1.33&times; noisier</b></span><span class="zh">畫面一樣,但<b>吵 1.33 倍</b></span></td></tr>
+    <tr class="hl"><td><span class="en"><b>2K, default</b></span><span class="zh"><b>2K,預設</b></span></td><td class="n"><b>M139</b></td><td class="n">8.31 ms</td><td><span class="en">fine on ordinary subjects, best rolling shutter</span><span class="zh">一般題材沒問題,捲簾全場最好</span></td></tr>
+    <tr><td><span class="en">2K, high speed</span><span class="zh">2K,高速</span></td><td class="n">M56</td><td class="n"><b>6.16 ms</b></td><td><span class="en">up to 119 fps</span><span class="zh">最高 119 fps</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note"><span class="en"><b>M117 is not the quiet one.</b> It used to be written up that way here, from two folders whose names had been swapped. Measured properly it reads 1.205 against M98&rsquo;s 0.904 &mdash; it buys 26% off the rolling shutter and nothing else. When a measurement contradicts the person who was there, check the labels before trusting the measurement.</span><span class="zh"><b>M117 不是比較安靜的那個。</b>這裡以前是那樣寫的,來源是兩個名字被對調的資料夾。正確量出來是 1.205 對 M98 的 0.904 —— 它換到的只有 26% 的捲簾改善,沒有別的。當量測和在場的人矛盾時,先檢查標籤,再相信量測。</span></p>
+
+<h2 id="demosaic"><span class="en">If you are developing the RAW</span><span class="zh">如果你要自己解 RAW</span></h2>
+
+<p><span class="en"><b>OG3K&rsquo;s rows are not evenly spaced</b>, for the reason in the second section. Most demosaic code assumes they are, and on a diagonal edge that shows up as a faint stair-step. Resampling the frame to an even row grid first, before demosaicing, removes it.</span><span class="zh"><b>OG3K 的列間距不是均勻的</b>,原因在第二節。大部分去馬賽克的程式都假設它是均勻的,結果在斜邊上會出現淡淡的階梯。先把畫面重新取樣到均勻的列間距,再去馬賽克,就不會有。</span></p>
+
+<p><span class="en"><b>On OG2K, a chroma median pass helps more than changing algorithm.</b> Its false colour comes from the discarded row, not from the demosaic, so a better demosaic cannot fix it &mdash; but cleaning up the colour after the fact can.</span><span class="zh"><b>OG2K 上,色度中值濾波比換演算法有用。</b>它的偽色來自被丟掉的那一列,不是來自去馬賽克,所以換更好的演算法救不了 —— 但事後把顏色清一清可以。</span></p>
+
+<h2 id="sources"><span class="en">Where this comes from</span><span class="zh">這些是怎麼來的</span></h2>
+
+<p><span class="en">Every number on this page is fitted from <b>seven stills shot and released by Jose</b>: one frame per mode of the same scene, ISO&nbsp;400, 1/25&nbsp;s, f/3.5, 25p, Ver.5.02 with fpSup, camera serial zeroed and the image data left byte-identical. Nothing else went into the kernels.</span><span class="zh">這一頁上每一個數字,都是從 <b>Jose 拍攝並公開的七張靜態照片</b>擬合出來的:一個模式一張,同場景,ISO&nbsp;400、1/25&nbsp;秒、f/3.5、25p,Ver.5.02 搭 fpSup,相機序號歸零、影像資料保持逐位元相同。核裡沒有放進別的東西。</span></p>
+
+<p><span class="en">Three separate methods had to agree before anything here was written down: fitting the weights directly, checking them against how noise grows with brightness, and measuring the row spacing inside a single frame. Where they disagreed, the page says so.</span><span class="zh">這裡每寫下一件事之前,三種獨立的量法都必須對上:直接擬合權重、用「雜訊如何隨亮度增長」交叉檢查、以及在單張畫面裡量列間距。有對不上的地方,頁面上都寫了。</span></p>
+
+<p class="note"><span class="en"><b>Still open:</b> whether the dividing happens before or after the read, and whether a true three-row merge is configurable at all &mdash; nothing in the decoded register set separates two rows from three, so it may simply not be.</span><span class="zh"><b>還沒解:</b>除法發生在讀出之前還是之後,以及真正的三列合併到底能不能設定 —— 已解碼的暫存器裡沒有任何一個把兩列和三列分開,所以有可能它根本不可設定。</span></p>
+
+<p><span class="en">The stage that comes <em>after</em> the sensor &mdash; the resizing circuit every other mode goes through &mdash; is a separate page: <a href="rwzm-resampler.html">What the RWZM resizer does</a>. The full technical version of both, with every table, is <a href="reduction-kernels.html">here</a>.</span><span class="zh">感光元件<em>後面</em>那一關 —— 其他模式都會經過的縮圖電路 —— 在另一頁:<a href="rwzm-resampler.html">RWZM 縮圖電路做了什麼</a>。兩者的完整技術版、所有表格,在<a href="reduction-kernels.html">這裡</a>。</span></p>
+
+
+<footer>
+  <p><a href="../">fpSup</a> &middot;
+  <a href="../research.html"><span class="en">Firmware research</span><span class="zh">韌體研究</span></a> &middot;
+  <a href="https://discord.gg/XeFK5zNZpT">Discord</a> &middot;
+  <a href="https://www.youtube.com/@fp-sup">YouTube</a> &middot;
+  <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
+</footer>
+
+<script src="../assets/lang.js?v=d3a03fae" defer></script>
+
+</body>
+</html>

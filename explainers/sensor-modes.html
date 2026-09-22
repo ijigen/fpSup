@@ -1398,9 +1398,9 @@ someone else's conclusion.</p>
   }
   var saved = null;
   try{ saved = localStorage.getItem(KEY); }catch(e){}
-  if(saved !== 'zh' && saved !== 'en'){
-    saved = /^zh\b/i.test(navigator.language || '') ? 'zh' : 'en';
-  }
+  /* English is the default: a first-time visitor always lands on it, whatever
+   * the browser reports. The choice is remembered once it is made. */
+  if(saved !== 'zh' && saved !== 'en'){ saved = 'en'; }
   lbtn.forEach(function(b){
     b.addEventListener('click', function(){ applyLang(b.getAttribute('data-set'), true); });
   });

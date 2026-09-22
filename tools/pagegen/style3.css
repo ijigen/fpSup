@@ -1,0 +1,67 @@
+
+td .m{font-family:var(--mono); font-size:.72rem; color:var(--dim)}
+
+#verdict td:first-child{white-space:nowrap}
+tbody tr.bad td{background:#1b1517}
+tbody tr.bad td:first-child{box-shadow:inset 2px 0 0 #b4443a}
+tbody tr.ref td{color:#6f7780; font-style:italic}
+tbody tr.ref td:first-child{font-style:italic; box-shadow:inset 2px 0 0 #3a4450}
+
+/* ---- language switch ---------------------------------------------------- */
+.topbar{display:flex; align-items:center; justify-content:space-between;
+  gap:16px; margin-bottom:22px}
+.topbar .back{margin-bottom:0}
+.lang{display:inline-flex; border:1px solid var(--line); border-radius:3px;
+  overflow:hidden; flex:none}
+.lang button{font-family:var(--mono); font-size:.72rem; letter-spacing:.04em;
+  padding:5px 11px; border:0; background:var(--panel); color:var(--dim);
+  cursor:pointer; transition:background .12s, color .12s}
+.lang button + button{border-left:1px solid var(--line)}
+.lang button:hover{color:var(--ink)}
+.lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
+  font-weight:600}
+.lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
+[data-lang="zh"] body, [data-lang="cn"] body{line-height:1.75}
+[data-lang="zh"] .lede, [data-lang="cn"] .lede{max-width:40em}
+
+/* ---- diagrams ----------------------------------------------------------- */
+figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
+  background:var(--panel); padding:16px 14px 12px}
+figure.dia svg{display:block; width:100%; height:auto}
+figure.dia img, figure.dia video{display:block; width:100%; height:auto;
+  border-radius:2px; background:var(--paper)}
+.srcs{font-family:var(--mono); font-size:.78rem}
+figure.dia figcaption{font-size:.84rem; color:var(--dim); margin-top:11px;
+  padding-top:10px; border-top:1px solid var(--line)}
+figure.dia figcaption b{color:var(--ink); font-weight:600}
+.dia text{font-family:var(--mono); fill:var(--ink); font-size:12px}
+.dia .t-dim{fill:var(--dim)}
+.dia .t-sig{fill:var(--sig); font-weight:600}
+.dia .t-sm{font-size:10.5px}
+.dia .bx{fill:var(--paper); stroke:var(--line); stroke-width:1}
+.dia .bx-on{fill:var(--sig-soft); stroke:var(--sig); stroke-width:1.5}
+.dia .ln{stroke:var(--line); stroke-width:1.5; fill:none}
+.dia .ln-on{stroke:var(--sig); stroke-width:2; fill:none}
+.dia .ln-dot{stroke:var(--dim); stroke-width:1; fill:none; stroke-dasharray:2 3}
+.dia .ax{stroke:var(--dim); stroke-width:1; fill:none}
+
+/* the kernel plot */
+.dia .plot-meas{stroke:var(--sig); stroke-width:2.2; fill:none;
+  stroke-linejoin:round}
+.dia .plot-ref{stroke:var(--dim); stroke-width:1.3; fill:none;
+  stroke-dasharray:4 3}
+
+/* verdict pills in tables */
+.v{font-family:var(--mono); font-size:.68rem; letter-spacing:.03em;
+  border:1px solid var(--line); border-radius:3px; padding:2px 7px;
+  background:var(--paper); color:var(--dim); white-space:nowrap;
+  display:inline-block}
+.v.yes{border-color:var(--sig); color:var(--sig); background:var(--sig-soft);
+  font-weight:600}
+
+/* numeric tables read better right-aligned and monospaced */
+table td.n, table th.n{text-align:right; font-family:var(--mono);
+  font-variant-numeric:tabular-nums; white-space:nowrap}
+table tr.hl td{background:var(--sig-soft)}
+table tr.hl td:first-child{font-weight:600}
+code.k{font-family:var(--mono); white-space:nowrap}
