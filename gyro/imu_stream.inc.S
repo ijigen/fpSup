@@ -65,35 +65,7 @@
 /* Provisional home: the logger's own injection cave, with no logger loaded.
  * When the two producers are assembled into the real thing, these move to the
  * buffer declared out of the pool the way the audio writer declares its own. */
-.equ STREAM_R1_GC,   0xC072E1D0     /* u32, STREAM_GCOUNT when recording ended */
-.equ STREAM_R1_N,    0xC072E1D4     /* u32, times that has happened            */
                                     /* gsup_boot from the routine table        */
-.equ STREAM_R0_HEAD, 0xC072E1E0     /* u32, ring head offset at record start   */
-.equ STREAM_R0_GC,   0xC072E1E8     /* u32, STREAM_GCOUNT when the audio file
-                                     * writer was constructed.  Beside F0_GC
-                                     * this is the whole experiment: the gap
-                                     * between them is how far our start point
-                                     * sits from the take's first exposure,
-                                     * measured in gyro samples of 400 us --
-                                     * a number, where the 470-570 ms has only
-                                     * ever been an inference from Gyroflow's
-                                     * auto-sync.
-                                     *
-                                     * MEASURED 2026-09-06, two takes: the gap
-                                     * between R0 and R1 tracked the take -- an
-                                     * 11 s take gave 11.38 s, a 3 s take gave
-                                     * 4.40 s -- and 0xC01FBA28 fired first
-                                     * both times.  So that one is the start
-                                     * and 0xC01FB880 is the end, which is the
-                                     * opposite of what the call sites read
-                                     * like.  movRec tears the running monitor
-                                     * audio down when recording begins; the
-                                     * state machine's case 1 builds it back up
-                                     * when recording ends.                   */
-.equ STREAM_R0_N,    0xC072E1EC     /* u32, times that has happened            */
-.equ STREAM_GHEAD,   0xC072E1F0     /* u32, gyro ring head we have consumed    */
-.equ STREAM_PADBAD,  0xC072E1F4     /* u32, gyro samples whose pad was not 0   */
-.equ STREAM_GCOUNT,  0xC072E1FC     /* u32, gyro records only -- the rate ruler */
 .equ STREAM_SIGFN,   0xC072E1A8     /* u32, writer_signal's address, or 0     */
 
 /* The real ring, out of the pool.  16384 records is 128 KiB and 6.5 seconds at
@@ -212,7 +184,6 @@
     moveq   \reg, #0
 .endm
 
-.equ STREAM_STATE,   0xC072E1C0
 .equ O_R0_HEAD,      0x20
 .equ O_GCOUNT,       0x3C
 

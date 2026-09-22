@@ -41,16 +41,14 @@ gyro_drain:
     beq     9f
     ldr     r5, [r8]                @ where the firmware is writing now
 
-    movw    r9, #:lower16:STREAM_GHEAD
-    movt    r9, #:upper16:STREAM_GHEAD
-    ldr     r6, [r9]                @ where we left off
+    ldr     r6, g_ghead             @ where we left off -- one pc-relative load
     cmn     r6, #1                  @ HEAD_UNARMED: first visit, take the head
-    streq   r5, [r9]                @ and let the pre-record history go
+    streq   r5, g_ghead             @ and let the pre-record history go
     beq     9f
 
     cmp     r5, r6
     beq     9f                      @ nothing new
-    str     r5, [r9]                @ consumed, whatever the copy manages
+    str     r5, g_ghead             @ consumed, whatever the copy manages
     bhi     1f
     movw    r3, #GYRO_SPAN          @ wrapped: to the end and round again
     add     r3, r3, r5
@@ -63,11 +61,9 @@ gyro_drain:
     /* Gyro records only, so this is a ruler for the sensor's own rate: the
      * shared index counts both sensors and cannot be one.  Only this task
      * writes it, so it needs no exclusive. */
-    movw    r2, #:lower16:STREAM_GCOUNT
-    movt    r2, #:upper16:STREAM_GCOUNT
-    ldr     r1, [r2]
+    ldr     r1, g_gcount
     add     r1, r1, r4
-    str     r1, [r2]
+    str     r1, g_gcount
 
     add     r6, r6, #GYRO_DATA_OFF      @ source cursor
     add     r5, r8, #GYRO_DATA_OFF      @ first record of the firmware ring
@@ -126,9 +122,7 @@ gyro_drain:
 
 /* Out of line: it never runs unless the pad assumption is wrong, and only this
  * routine writes the counter, so it needs no exclusive. */
-5:  movw    r3, #:lower16:STREAM_PADBAD
-    movt    r3, #:upper16:STREAM_PADBAD
-    ldr     ip, [r3]
+5:  ldr     ip, g_padbad
     add     ip, ip, #1
-    str     ip, [r3]
+    str     ip, g_padbad
     b       6b

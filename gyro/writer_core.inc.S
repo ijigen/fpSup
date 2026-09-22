@@ -1309,6 +1309,35 @@ s_hook:
  * They still assemble on their own -- imu_stream_deploy places neither now,
  * but the files are what the USB deploy and the card share, and the guard in
  * imu_stream.inc.S is what lets them be both. */
+/* The stream's cursors, in the blob beside the code that moves them.
+ *
+ * They were nine words in the cave at fixed build-time addresses, and the only
+ * things that touch them are our own hooks -- which are sections of this blob
+ * now.  So they live here, and `ldr r0, g_ghead` is one pc-relative
+ * instruction: no movw/movt pair, no register to spare, and nothing named in
+ * the cave.  Three instructions became one.
+ *
+ * Two things fall out of the move for free.  They are re-read from the card on
+ * every boot, so a soft power cycle cannot leave last session's values behind
+ * -- which is the class of bug that had the logger writing into buffers the
+ * recorder already owned.  And two cards each get their own, by construction.
+ *
+ * BESIDE THE HOOKS, not at the top of the blob.  A pc-relative load reaches
+ * +/-4095 and the first attempt put this next to the routine table, 4,276
+ * bytes from gyro_drain -- the assembler refused, which is the right way to
+ * find out.  What decides where a block of state goes is the reach of the code
+ * that uses it, so each group sits with its own users. */
+    .align  2
+g_state:    .word   0       /* the stream's own state word                    */
+g_r1_gc:    .word   0       /* GCOUNT when recording ended                    */
+g_r1_n:     .word   0       /* times that has happened                        */
+g_r0_head:  .word   0       /* ring head offset at record start               */
+g_r0_gc:    .word   0       /* GCOUNT when the audio file opened              */
+g_r0_n:     .word   0       /* times that has happened                        */
+g_ghead:    .word   0       /* gyro ring head we have consumed                */
+g_padbad:   .word   0       /* records whose pad was not what we assume       */
+g_gcount:   .word   0       /* gyro records seen -- the rate ruler            */
+
 #include "stream_space.S"
 #include "gyro_drain.S"
 

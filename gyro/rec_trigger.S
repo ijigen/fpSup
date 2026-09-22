@@ -69,13 +69,13 @@
 #ifdef REC_STOP
 .equ SITE,        0xC038C484
 .equ SITE_ORIG,   0xE3500000          /* cmp r0, #0 */
-.equ COUNT_WORD,  STREAM_R1_N
-.equ LATCH_WORD,  STREAM_R1_GC
+#define COUNT_WORD  g_r1_n
+#define LATCH_WORD  g_r1_gc
 #else
 .equ SITE,        0xC03790B8
 .equ SITE_ORIG,   0xE5DB25CE          /* ldrb r2, [r11, #0x5ce] */
-.equ COUNT_WORD,  STREAM_R0_N
-.equ LATCH_WORD,  STREAM_R0_GC
+#define COUNT_WORD  g_r0_n
+#define LATCH_WORD  g_r0_gc
 #endif
 
 /* One symbol per variant, because both now live in the same blob: the record
@@ -91,23 +91,17 @@ rec_start:
 #endif
     push    {r0, r1, r2, r3, ip, lr}
 
-    movw    ip, #:lower16:COUNT_WORD
-    movt    ip, #:upper16:COUNT_WORD
-    ldr     r2, [ip]
+    ldr     r2, COUNT_WORD
     add     r3, r2, #1
-    str     r3, [ip]                    @ only this hook writes it
+    str     r3, COUNT_WORD              @ only this hook writes it
 
     /* The first one since arming latches the gyro count beside it.  Later ones
      * do not overwrite it: a take is bounded by the first start and the first
      * stop, and a second take should not quietly redefine the first. */
     cmp     r2, #0
     bne     2f
-    movw    r0, #:lower16:STREAM_GCOUNT
-    movt    r0, #:upper16:STREAM_GCOUNT
-    ldr     r0, [r0]
-    movw    r1, #:lower16:LATCH_WORD
-    movt    r1, #:upper16:LATCH_WORD
-    str     r0, [r1]
+    ldr     r0, g_gcount
+    str     r0, LATCH_WORD
 2:
 
 #ifdef REC_STOP
@@ -139,9 +133,7 @@ rec_start:
 
     /* Where the coprocessor's ring is, to 400 us. */
     gyro_head r0, r1
-    movw    r1, #:lower16:STREAM_R0_HEAD
-    movt    r1, #:upper16:STREAM_R0_HEAD
-    str     r0, [r1]
+    str     r0, g_r0_head
 
     /* Anchor the gyro cursor to THIS instant.  The producers do not drain
      * while the camera is idle, so the cursor is stale by however long it has
@@ -159,9 +151,7 @@ rec_start:
     cmp     r0, #0
     beq     3f
     ldr     r0, [r0]
-    movw    r1, #:lower16:STREAM_GHEAD
-    movt    r1, #:upper16:STREAM_GHEAD
-    str     r0, [r1]
+    str     r0, g_ghead
 3:
 #endif
 

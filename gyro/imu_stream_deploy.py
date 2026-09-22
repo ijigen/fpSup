@@ -139,17 +139,7 @@ def branch_word(site, target, thumb):
     return hw1 | (hw2 << 16)
 
 # Must agree with imu_stream.inc.S; _check_header() proves they do.
-STATE_AT      = 0xC072E1B0
-STATE_WORDS   = 20
-STREAM_R0_HEAD = 0xC072E1E0
 GYRO_RING_SPAN = 0x12C0
-STREAM_R1_GC  = 0xC072E1D0
-STREAM_R1_N   = 0xC072E1D4
-STREAM_R0_GC  = 0xC072E1E8
-STREAM_R0_N   = 0xC072E1EC
-STREAM_GHEAD  = 0xC072E1F0
-STREAM_PADBAD = 0xC072E1F4
-STREAM_GCOUNT = 0xC072E1FC
 STREAM_SIGFN  = 0xC072E1A8
 T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 T_BUILD = 0xC072EC54
@@ -159,8 +149,6 @@ B_CUR, B_FILL, B_DONE = 0xC072EBE0, 0xC072EBE4, 0xC072EBE8
 B_DROPS, B_HANDED = 0xC072EBF0, 0xC072EBF4
 POOL_PTR      = 0xC3757A7C
 
-# GHEAD unarmed, everything else zero.
-STATE_INIT = struct.pack('<20I', *([0] * 16 + [0xFFFFFFFF, 0, 0, 0]))
 
 
 GYRO_PERIOD_US = 400.0
@@ -171,9 +159,6 @@ def _check_header():
     src = (HERE / 'imu_stream.inc.S').read_text()
     want = {
         'GYRO_RING_SPAN': GYRO_RING_SPAN,
-        'STREAM_R1_GC': STREAM_R1_GC, 'STREAM_R1_N': STREAM_R1_N,
-        'STREAM_R0_GC': STREAM_R0_GC, 'STREAM_R0_N': STREAM_R0_N,
-        'STREAM_GHEAD': STREAM_GHEAD, 'STREAM_PADBAD': STREAM_PADBAD, 'STREAM_GCOUNT': STREAM_GCOUNT,
         'STREAM_SIGFN': STREAM_SIGFN,
         'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
     }
@@ -220,7 +205,7 @@ def _place():
     because no hook has code here.
     """
     code_spans = []               # words may sit in data, never in code
-    spans = [('state words', STATE_AT, STATE_WORDS * 4),
+    spans = [
               # ring_task_deploy owns these, but only this script knows
               # where the hooks land -- so the overlap check lives here.
               ('writer counters', 0xC072E8E0, 5 * 4),
@@ -354,7 +339,6 @@ def arm(only=None):
         where = cave_alloc(8, f'{name} veneer')
         P.put_slow(where, veneer(at[sym]), f'{name} veneer')
         VEN[name] = where
-    P.put_slow(STATE_AT, STATE_INIT, 'state words')
 
     # The real ring lives in the pool, whose address is only known now.  Memory
     # from the firmware's allocator freezes the camera when held across a
@@ -408,7 +392,6 @@ def reset():
     again on its next first event, and the gyro producer re-anchors on the
     firmware's current head.
     """
-    P.put_slow(STATE_AT, STATE_INIT, 'state words')
     # The block bookkeeping too, so a stage that never builds a take still
     # reads cleanly.  B_CUR must be -1, not 0: zero means "block zero is mine",
     # and on a fresh boot block zero has no allocation behind it.
