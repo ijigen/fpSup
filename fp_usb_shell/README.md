@@ -81,6 +81,14 @@ build_autorun.py     assembles worker.S and emits the card script
 inject.py            writes a one-shot routine, arms it, waits for it
 load.py              writes a resident routine, verifies it, arms its hook
 putfile.py           writes a local file onto the card -- including AutoRun.txt
+deploy.py            writes a card's two files and refuses to believe putfile:
+                     a write is not a write until it reads back identical
+runprobe.py          runs a candidate routine ONCE on a live camera through the
+                     echo handler.  A loader change goes through this before it
+                     goes anywhere near a card -- a loader that hangs leaves no
+                     shell to replace it with, and the card comes out of the slot
+bootmeasure.py       reboots and waits for the shell; the number worth quoting is
+                     the camera's own stamp at 0xC072F6F4, not this one
 host/fpshd.c         daemon, listens on /tmp/fpshd.sock
 host/fpsh            client
 host/lsdesc.c        prints the descriptor the host actually received
@@ -311,6 +319,13 @@ build_autorun.py     組譯 worker.S 並產生卡片腳本
 inject.py            寫入一次性常式、武裝、等它回報
 load.py              寫入常駐常式、逐字驗證、掛上 hook
 putfile.py           把本機檔案寫進卡裡 —— 包含 AutoRun.txt 本身
+deploy.py            寫一張卡的兩個檔,而且不相信 putfile 的回報:
+                     逐位元組回讀相同才算寫進去
+runprobe.py          借 echo 在活著的相機上把候選常式跑一次。loader 的改動
+                     要先過這一關才准靠近卡 —— loader 一掛就沒有 shell 能救,
+                     卡只能從卡槽拔出來
+bootmeasure.py       重開並等 shell 回話;真正該引用的數字是相機自己在
+                     0xC072F6F4 寫下的戳記,不是這支印的
 host/fpshd.c         daemon,監聽 /tmp/fpshd.sock
 host/fpsh            客戶端
 host/lsdesc.c        印出主機實際列舉到的描述元
