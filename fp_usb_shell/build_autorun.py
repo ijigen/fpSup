@@ -146,7 +146,13 @@ def _equ(path, name):
     import re
     m = re.search(rf'^\.equ\s+{name},\s*(0x[0-9A-Fa-f]+)', path.read_text(), re.M)
     return int(m.group(1), 16) if m else None
-STORE_FROM    = 0xC072F6F8   # store_boot -> loader handshake, boot-only
+LOAD_DONE_US  = 0xC072F6F8   # when the load finished, in the camera's own
+                             # microseconds (TICK_US).  Was STORE_FROM, the
+                             # store_boot -> loader handshake, which the magic
+                             # replaced -- so the word was reserved and dead.
+                             # Read it with `mem get 0xC072F6F8,,4` after a boot:
+                             # that is power-on to load-complete, with no host,
+                             # no USB enumeration and no polling in the number.
 STORE_BOOT_AT = 0xC072F700   # cave scratch: above the payload and above
                              # the shell's worker.  NOT CAVE_LOW -- the
                              # bootstrap copies the loader there and would
@@ -734,7 +740,8 @@ if args.loader:
     # stage2 publishes the loader into the settings block and arms the stop, so
     # it needs to know where both live and what the loader's bytes hash to.
     _sd = [f'ABORT_AT=0x{ABORT_AT:08X}', f'ECHO_SLOT=0x{ECHO_SLOT:08X}',
-           f'STORE=0x{STORE:08X}', f'LOADER_BASE=0x{CAVE_LOW:08X}']
+           f'STORE=0x{STORE:08X}', f'LOADER_BASE=0x{CAVE_LOW:08X}',
+           f'LOAD_DONE_US=0x{LOAD_DONE_US:08X}']
     if args.store_boot:
         _sd += ['STORE_PROVISION=1', f'STORE_MAGIC=0x{smagic:08X}',
                 f'STORE_LEN=0x{slen:X}']

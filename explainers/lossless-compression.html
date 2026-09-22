@@ -467,7 +467,12 @@ not a tuning knob &mdash; and it is what OG3K would need.</figcaption>
 the list is the camera's <b>13 sensor rasters</b> (from the mode table at
 <code>0xC0B59DC0</code>) rather than all 70 modes &mdash; the mode id never changes a
 number here. Pick a raster and a frame rate independently, say how much is reduced
-before the codec sees it, and the tile geometry is searched rather than guessed.</p>
+before the codec sees it, and the tile geometry is searched rather than guessed.
+<b>&ldquo;Custom size&rdquo;</b> at the bottom of the list takes any width and height,
+so you can cost a frame the camera does not currently have &mdash; it is checked
+against the engine's real limits (width 8&hellip;16384 in steps of 8, height
+2&hellip;16384 even, at most 326 tiles) and told to you when it falls outside
+them.</p>
 
 <p class="note">Two things about those numbers. <b>Frame rate is yours to choose</b>,
 not tied to the raster: every rate the mode table carries is in the list, including
@@ -489,6 +494,14 @@ the total &mdash; that is correct, not a fault.</p>
     <div>
       <label for="fmt">sensor raster</label>
       <select id="fmt"></select>
+    </div>
+    <div id="cwWrap" hidden>
+      <label for="cw">width &mdash; multiple of 8</label>
+      <input type="number" id="cw" value="4096" min="8" max="16384" step="8">
+    </div>
+    <div id="chWrap" hidden>
+      <label for="ch">height &mdash; even</label>
+      <input type="number" id="ch" value="2160" min="2" max="16384" step="2">
     </div>
     <div>
       <label for="fps">frame rate</label>
@@ -753,6 +766,12 @@ repository.</p>
                     (g.merge > 1 ? '  \u00b7  ' + g.merge + '\u00d7 merge' : '');
     fmt.appendChild(o);
   });
+  (function(){
+    var o = document.createElement('option');
+    o.value = 'custom';
+    o.textContent = 'custom size \u2026';
+    fmt.appendChild(o);
+  })();
   RATES.forEach(function(r){
     var o = document.createElement('option');
     o.value = r; o.textContent = r.toFixed(3).replace(/\.?0+$/,'') + ' fps';
@@ -766,13 +785,22 @@ repository.</p>
   // Which rates stock actually offers at a size is stated in the detail line.
   fmt.value = String(MODES.findIndex(function(g){ return g.w === 3032 && g.h === 1708; }));
   fps.value = 30;                 // the FHD source: 3032x1708 at 30p
-  fmt.addEventListener('change', render);
+  function syncCustom(){
+    var on = fmt.value === 'custom';
+    $('cwWrap').hidden = !on;
+    $('chWrap').hidden = !on;
+  }
+  fmt.addEventListener('change', function(){ syncCustom(); render(); });
+  syncCustom();
 
   // Engine guard: width 8..0x4000 and a multiple of 8, height 2..0x4000 and
   // even, tileW 0x20..0x200 in steps of 32, tileH 2..0x200 and even. TIFF
   // additionally wants TileLength a multiple of 16, which is why 512x368 beats
   // the 512x364 a free search would pick.
   var tileCache = {};
+  // 326 tiles of at most 512x512 is 85.5 Mpix; ask for more than that and no
+  // legal tiling exists. Return the largest tile instead of null so the caller
+  // can report "over the tile limit" rather than throwing.
   function bestTile(W, H){
     var key = W + 'x' + H;
     if(tileCache[key]) return tileCache[key];
@@ -788,6 +816,7 @@ repository.</p>
       }
     }
     if(b === null) b = {t:0, tw:256, th:256, n:Math.ceil(W/256)*Math.ceil(H/256)};
+    if(!b) b = {tw:512, th:512};      // nothing legal: caller flags the tile count
     tileCache[key] = b;
     return b;
   }
@@ -796,7 +825,12 @@ repository.</p>
   function n2(x){ return x.toFixed(2); }
 
   function calc(){
-    var g = MODES[+fmt.value];
+    var isCustom = fmt.value === 'custom';
+    var g = isCustom
+      ? {w: Math.max(0, parseInt($('cw').value, 10) || 0),
+         h: Math.max(0, parseInt($('ch').value, 10) || 0),
+         ar: 'custom', merge: 1, rates: null}
+      : MODES[+fmt.value];
     var R = parseFloat(fps.value);
 
     // whichever reduction branch ran upstream of the codec, as a plain divisor
@@ -825,7 +859,11 @@ repository.</p>
     // configuration the hardware can be given, so treat it like a rejected depth.
     var tilesOK = tiles <= 326;
     var bitsOK = ENGINE_BITS.indexOf(bits) !== -1;
-    var engineOK = bitsOK && tilesOK;
+    // The engine takes width 8..0x4000 in steps of 8 and height 2..0x4000 even.
+    // Test what was actually asked for: alignment clamps to the minimum, so
+    // checking W/H here would silently accept 0, a negative, or 7.
+    var geomOK = g.w >= 8 && g.w <= 16384 && g.h >= 2 && g.h <= 16384;
+    var engineOK = bitsOK && tilesOK && geomOK;
 
     var encUs = CALL_US + US_PER_MPIX * alignedMpix + US_PER_TILE * tiles;
     if(contention) encUs *= CONTENTION;
@@ -879,7 +917,7 @@ repository.</p>
             peak:peak, uncompressedAll:uncompressedAll, engineMBs:engineMBs,
             writeMs:writeMs, serialMs:serialMs, partial:partial, doSkip:doSkip,
             contention:contention, engineOK:engineOK, bitsOK:bitsOK, tilesOK:tilesOK,
-            compress:compress};
+            compress:compress, geomOK:geomOK, isCustom:isCustom};
   }
 
   function render(){
@@ -904,7 +942,9 @@ repository.</p>
       : r.engineOK
         ? n1(r.engineMBs) + '<small>MB/s</small>'
         : '<span style="font-size:.8rem;color:var(--warn)">' +
-          (r.bitsOK ? r.tiles + ' tiles &gt; 326' : 'rejects 8-bit') + '</span>';
+          (!r.bitsOK ? 'rejects 8-bit'
+            : !r.geomOK ? 'size outside 8&hellip;16384'
+            : r.tiles + ' tiles &gt; 326') + '</span>';
     $('rCmp').innerHTML = n1(r.payC) + '<small>MB/s</small>';
     $('rUnc').innerHTML = n1(r.payU) + '<small>MB/s</small>';
     // The reference rate, so "what did compression actually save" is on screen.
@@ -966,14 +1006,19 @@ repository.</p>
                    : ', inside the ' + r.store + ' MB/s destination.')
           : '.');
     } else if(!r.engineOK){
-      // 8-bit is its own bandwidth strategy, so judge it on storage alone
+      // The engine can be out for three different reasons; say which one.
+      var noEngine = !r.bitsOK
+        ? 'The engine will not take 8-bit'
+        : !r.geomOK
+          ? 'That frame size is outside the engine\u2019s limits'
+          : r.tiles + ' tiles is past the engine\u2019s limit of 326';
       v.classList.add(over8 ? 'no' : 'ok');
       mk.textContent = over8 ? 'does not fit' : 'fits uncompressed';
       why.textContent = over8
-        ? 'The engine will not take 8-bit, and ' + n1(r.total) +
-          ' MB/s is over the card by ' + Math.round((r.total / r.store - 1) * 100) + '%.'
-        : 'The engine will not take 8-bit \u2014 but at ' + n1(r.total) +
-          ' MB/s it does not need to. That is what 8-bit is for.';
+        ? noEngine + ', and ' + n1(r.total) + ' MB/s is over the card by ' +
+          Math.round((r.total / r.store - 1) * 100) + '%.'
+        : noEngine + ' \u2014 but at ' + n1(r.total) + ' MB/s it does not need to.' +
+          (r.bitsOK ? '' : ' That is what 8-bit is for.');
     } else if(reasons.length === 0){
       v.classList.add('ok'); mk.textContent = 'fits';
       why.textContent = (r.duty > 1 && r.doSkip
@@ -989,10 +1034,20 @@ repository.</p>
 
     // detail line
     var d = [];
-    d.push('sensor reads <b>' + r.srcW + '&times;' + r.srcH + '</b> (' + r.ar +
-           (r.merge > 1 ? ', ' + r.merge + '&times; merge' : '') + ')' +
-           (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : '') +
-           ' &mdash; stock runs this size at ' + r.rates.join(' / ') + ' fps');
+    if(r.isCustom){
+      d.push('custom size <b>' + r.srcW + '&times;' + r.srcH + '</b>' +
+             (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : '') +
+             ' &mdash; ' + n2(r.srcW * r.srcH / 1e6) + ' Mpix, not a raster the camera has');
+    } else {
+      d.push('sensor reads <b>' + r.srcW + '&times;' + r.srcH + '</b> (' + r.ar +
+             (r.merge > 1 ? ', ' + r.merge + '&times; merge' : '') + ')' +
+             (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : '') +
+             ' &mdash; stock runs this size at ' + r.rates.join(' / ') + ' fps');
+    }
+    if(r.compress && !r.geomOK)
+      d.push('<b>outside the engine\u2019s geometry limits</b> \u2014 it takes width ' +
+             '8&hellip;16384 in steps of 8 and height 2&hellip;16384 even. ' +
+             'Everything below is the uncompressed rate.');
     d.push('codec sees <b>' + r.W + '&times;' + r.H + '</b> at ' + r.bits + '-bit, ' +
            r.tw + '&times;' + r.th + ' tiles (' + r.tiles + '), aligned ' +
            n2(r.alignedMpix) + ' Mpix' +
@@ -1001,7 +1056,7 @@ repository.</p>
       d.push('<b>compression off</b> \u2014 every number below is the raw rate. ' +
              'Turn it back on to compare.');
     }
-    if(r.compress && !r.engineOK){
+    if(r.compress && !r.bitsOK){
       d.push('<b>8-bit</b> \u2014 the codec\u2019s bitdepth field only encodes ' +
              '10 / 12 / 14 / 16, and anything else is rejected outright. ' +
              'Everything below is the uncompressed rate.');
@@ -1037,7 +1092,7 @@ repository.</p>
     $('detail').innerHTML = d.join('<br>');
   }
 
-  ['fps','bits','tile','dest','ratio','comp','cont','skip','part','red'].forEach(function(id){
+  ['fps','bits','tile','dest','ratio','comp','cont','skip','part','red','cw','ch'].forEach(function(id){
     var el = $(id);
     if(!el) return;
     el.addEventListener('input', render);

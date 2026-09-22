@@ -13,6 +13,7 @@
 .equ FRAMEBUF, 0xC3757A7C
 .equ F_DCACHE,  0xC000E91C           /* D-cache clean/invalidate + barriers */
 .equ F_ICACHE,  0xC000EABC           /* whole I-cache invalidate + barriers */
+.equ F_TICK_US, 0xC002B6E0           /* () -> microseconds since power-on   */
 
 /* The second half of the loader, carried in \fpSup.BIN instead of spelled out.
  *
@@ -157,6 +158,44 @@ stage2:
     movt    r1, #:upper16:ECHO_SLOT
     str     r0, [r1]
 #endif
+
+    /* When the load finished, in the camera's own microseconds.
+     *
+     * Every section is placed, the entry has been and returned, the store is
+     * provisioned and the stop is armed -- there is nothing left of the load
+     * after this line, so this is the moment worth stamping.
+     *
+     * It is here rather than in the host's stopwatch because the host cannot
+     * see power-on: the best it can do is poll for the worker to answer, which
+     * carries USB enumeration and the polling interval with it (measured
+     * 165-627 ms of spread).  TICK_US is the camera's own counter and it
+     * restarts at power-on (measured: 12,722,392 ms before a reboot, 304,362
+     * after), so this word is the load time with nothing else in it.
+     *
+     * Free: this code travels in the file.  The word is LOAD_DONE_US, which was
+     * the store handshake until the magic replaced it -- reserved and dead
+     * since.  Read it with `mem get 0xC072F6F8,,4`.
+     *
+     * SP is 8-aligned here (the loader pushed eight registers, this pushed
+     * six), but recprobe.S aligns before the same call and a leaf that is wrong
+     * about this is the freeze our own notes warn about, so it is aligned
+     * anyway -- three instructions, in the file, free.
+     *
+     * Called through r4, not ip, on purpose: verify_stage2_cache_publish
+     * decodes every `movw ip / movt ip / blx ip` in the emitted machine code
+     * and requires the list to be exactly the two cache routines.  That check
+     * is the reason a renamed constant cannot make a build look safe, so this
+     * routine stays out of its way instead of being accommodated by it.  r4 and
+     * r5 are ours -- both are in the push above and about to be popped. */
+    mov     r5, sp
+    bic     sp, sp, #7
+    movw    r4, #:lower16:F_TICK_US
+    movt    r4, #:upper16:F_TICK_US
+    blx     r4
+    mov     sp, r5
+    movw    r1, #:lower16:LOAD_DONE_US
+    movt    r1, #:upper16:LOAD_DONE_US
+    str     r0, [r1]
 
     mov     r0, #0
     pop     {r4, r5, r6, r7, r8, pc}
