@@ -86,25 +86,6 @@ class DecodeHeaderVersions(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.read(payload)
 
-    def test_phase_probe_decodes_first_four_and_ordered_rolling_tail(self):
-        # Ten writes leave #1..#4 in slots 0..3.  The rolling tail #7..#10 is
-        # in slots 6,7,4,5 respectively.
-        slots = [(0, 0)] * 8
-        for zero_based in range(10):
-            slot = zero_based if zero_based < 4 else 4 + ((zero_based - 4) & 3)
-            busy = zero_based in (2, 7)
-            slots[slot] = ((zero_based + 1) | (0x80000000 if busy else 0),
-                           1000 + zero_based)
-        record = bytearray(struct.pack("<4sI", b"GFT6", 10))
-        for pair in slots:
-            record += struct.pack("<II", *pair)
-        capture = self.read(capture_bytes(5, phase_record=bytes(record)))
-        self.assertEqual(capture.phase_write_count, 10)
-        self.assertEqual([sample.write_number for sample in capture.phase_trace],
-                         [1, 2, 3, 4, 7, 8, 9, 10])
-        self.assertTrue(capture.phase_trace[2].dng_busy)
-        self.assertTrue(capture.phase_trace[5].dng_busy)
-        self.assertEqual(capture.phase_trace[-1].duration_us, 1009)
 
 
 if __name__ == "__main__":

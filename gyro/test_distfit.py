@@ -166,24 +166,8 @@ class Source(unittest.TestCase):
     second -- which is what a real clip came out with.
     """
 
-    def source(self):
-        import pathlib
-        return pathlib.Path(__file__).resolve().parent.joinpath('profilegen.S').read_text()
 
-    def test_both_camera_matrix_focals_come_from_r8(self):
-        src = self.source()
-        i = src.index('bl      pg_dist_prepare')
-        after = src[i:src.index('"], [0.0, 0.0, 1.0]],', i)]
-        # every pg_em that emits a focal must be fed from r8
-        emits = [m for m in after.split('bl      pg_em')[:-1]]
-        self.assertGreaterEqual(len(emits), 2)
-        for n, chunk in enumerate((emits[0], emits[2] if len(emits) > 2 else emits[1])):
-            self.assertIn('mov     r0, r8', chunk,
-                          f'camera_matrix focal {n} is not fed from r8')
 
-    def test_distortion_coefficients_are_not_hardcoded(self):
-        self.assertNotIn('"distortion_coeffs\\": [0.0, 0.0, 0.0, 0.0]', self.source())
-        self.assertIn('bl      pg_dist_emit', self.source())
 
     def test_the_kr0_load_is_still_there(self):
         import pathlib

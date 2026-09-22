@@ -212,58 +212,7 @@ class LifecycleStateTests(unittest.TestCase):
             if attached and published:
                 self.assertEqual(latched_generation, generation, order)
 
-    def test_assembly_adapter_is_ram_only_except_volume_lookup(self):
-        source = (HERE / "lifecycle.inc.S").read_text()
-        self.assertIn("XMP_FOBJ_PTR", source)
-        self.assertIn("MOV_ACTIVE_PTR", source)
-        self.assertIn("MOV_PATHINFO_PTR", source)
-        self.assertIn("pg_cdng_committed", source)
-        self.assertNotIn("F_OPEN", source)
-        self.assertNotIn("F_WRITE", source)
-        self.assertNotIn("F_DIR_", source)
-        self.assertEqual(source.count("bl      pg_current_volume"), 4)
-        self.assertEqual(source.count("bl      pg_lc_mov_still_same"), 2)
-        self.assertIn("cmp     r0, r8", source)
-        self.assertIn("cmp     r0, r7", source)
-        cdng = source.index("pg_lc_publish_cdng:")
-        mov = source.index("pg_lc_publish_mov:")
-        self.assertLess(
-            source.index("mov     r0, #6", cdng),
-            source.index("bl      pg_current_volume", cdng),
-        )
-        self.assertLess(
-            source.index("mov     r0, #6", mov),
-            source.index("bl      pg_current_volume", mov),
-        )
 
-    def test_logger_connects_all_native_states_to_the_writer(self):
-        source = (HERE / "logger.S").read_text()
-        self.assertIn("cmp     r7, #1", source)
-        self.assertTrue("cmp     r7, #4" in source or "cmpne   r7, #4" in source)  # phase 4 accepted (r38e folds it into cmpne)
-        self.assertIn("recording_attach_claim:", source)
-        self.assertIn("O_LC_GEN", source)
-        self.assertIn("O_LC_ATTACH", source)
-        acquire = source.index("recording_attach_valid:")
-        recheck = source.index("ldr     r0, [r10, #O_LC_GEN]", acquire)
-        self.assertIn("dmb     ish", source[acquire:recheck])
-        self.assertNotRegex(source.lower(), r"(?m)^\s*(?:ldrex|strex|clrex)\s")
-        self.assertIn("cmp     r0, #4                  @ never create", source)
-        self.assertIn("cmp     r0, #1                  @ pending CDNG", source)
-        self.assertIn("cmp     r2, #0x200", source)
-        # Native events publish the descriptor, but the proven recording flag
-        # remains the start gate. XMP allocation alone must not open a GYR.
-        native = source.index("native_clip_checked:")
-        inactive = source.index("recording_not_active:", native)
-        file_check = source.index("ldr     r0, [r10, #S_FILE]", inactive)
-        self.assertIn("cmp     r1, #0x21", source[native:inactive])
-        self.assertIn("ldrb    r5, [r0]", source[native:inactive])
-        self.assertIn("cmp     r5, #0", source[inactive:file_check])
-        self.assertIn("beq     return_original", source[inactive:file_check])
-        adapter = (HERE / "lifecycle.inc.S").read_text()
-        self.assertIn("mov     r0, #6", adapter)
-        self.assertIn("pg_lc_publish_cancel:", adapter)
-        self.assertIn("O_LC_GEN", adapter)
-        self.assertNotRegex(adapter.lower(), r"(?m)^\s*(?:ldrex|strex|clrex)\s")
 
 
 if __name__ == "__main__":

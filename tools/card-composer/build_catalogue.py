@@ -428,7 +428,7 @@ def discover():
 #     contiguously at 0xC0000000..0xC2F30800.  The NAND itself is not in the
 #     address space, so a payload record (a blob plus a destination) has no way to
 #     reach it.  Checking the destinations is what proves a card is RAM-only.
-#   gyro/logger.S POOL_BYTES -- the pool a pool-offset section is an offset
+#   gyro/gsup_launch.S POOL_BYTES -- the pool a pool-offset section is an offset
 #     INTO.  The AutoRun used to ask for this with `memmgr bufmem get` and leave
 #     the address in a word; it does not any more, and the payload's own entry
 #     asks for it and publishes it instead.  Same megabyte, different owner, and
@@ -440,7 +440,7 @@ DRAM_IMAGE = (0xC0000000, 0xC2F30800)
 
 def pool_size():
     import re
-    src = (ROOT / 'fpSup' / 'gyro' / 'logger.S').read_text()
+    src = (ROOT / 'fpSup' / 'gyro' / 'gsup_launch.S').read_text()
     eq = dict(re.findall(r'\.equ\s+(\w+)\s*,\s*(0x[0-9A-Fa-f]+|\d+)', src))
     return int(eq['POOL_BYTES'], 0)
 

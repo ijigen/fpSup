@@ -1597,7 +1597,7 @@ pg_dthou: .double 1000.0
 pg_d1e9:  .double 1000000000.0
 
 /* The lens's own distortion, and the arithmetic to turn it into Gyroflow's. */
-#include "distfit.inc.S"
+#include "../../gyro/distfit.inc.S"
 
 /* Idle lens cache + early JSON: helpers used by pg_build in every build. */
 #include "lenscache.inc.S"
