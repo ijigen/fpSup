@@ -97,12 +97,23 @@ g_t_writes: .word   0       /* times it has written                           */
 g_t_wrc:    .word   0       /* what the last write returned                   */
 g_t_lost:   .word   0       /* records dropped                                */
 g_t_wraps:  .word   0       /* ring wraps                                     */
+g_t_stage:  .word   0       /* how far the close got                          */
 
 .equ O_T_BYTES,  g_t_bytes  - gsup_offsets
 .equ O_T_WRITES, g_t_writes - gsup_offsets
 .equ O_T_WRC,    g_t_wrc    - gsup_offsets
 .equ O_T_LOST,   g_t_lost   - gsup_offsets
 .equ O_T_WRAPS,  g_t_wraps  - gsup_offsets
+.equ O_T_STAGE,  g_t_stage  - gsup_offsets
+
+/* The job pool is not a word either: it is a fixed offset from the same pool
+ * the blob sits in, so it can be worked out instead of stored -- which leaves
+ * nothing to initialise and nothing to go stale.  JPOOL_POOL_OFF is one page
+ * below CODE_POOL_OFF. */
+.macro JPOOLAT reg
+    BLOBBASE \reg
+    sub     \reg, \reg, #(CODE_POOL_OFF - JPOOL_POOL_OFF)
+.endm
 
 .macro BLOBBASE reg
     movw    \reg, #:lower16:FRAMEBUF
@@ -224,9 +235,7 @@ writer_body:
     .global mpool_init_jobs
 mpool_init_jobs:
     push    {r4, lr}
-    movw    r0, #:lower16:STREAM_JPOOL
-    movt    r0, #:upper16:STREAM_JPOOL
-    ldr     r0, [r0]
+    JPOOLAT r0
     cmp     r0, #0
     beq     9f
     mov     r1, #J_SIZE
@@ -283,9 +292,7 @@ writer_make_job:
     mov     r6, r2
     mov     r7, r3                      @ where in the file it belongs
 
-    movw    r0, #:lower16:STREAM_JPOOL
-    movt    r0, #:upper16:STREAM_JPOOL
-    ldr     r0, [r0]
+    JPOOLAT r0
     bl      mpool_alloc
     cmp     r0, #0
     beq     8f                          @ pool empty: the caller retries later
@@ -348,9 +355,7 @@ writer_release:
     mov     r3, #0
     str     r3, [r2, r1, lsl #2]
 
-1:  movw    r0, #:lower16:STREAM_JPOOL
-    movt    r0, #:upper16:STREAM_JPOOL
-    ldr     r0, [r0]
+1:  JPOOLAT r0
     movw    r1, #:lower16:T_JOBSLOT
     movt    r1, #:upper16:T_JOBSLOT
     ldr     r1, [r1]
@@ -1083,12 +1088,6 @@ gsup_boot:
     movt    r1, #:upper16:T_CLOSEFN
     str     r0, [r1]
 
-    ldr     r0, [r5, #12]               @ writer_post
-    add     r0, r0, r6
-    movw    r1, #:lower16:STREAM_SIGFN
-    movt    r1, #:upper16:STREAM_SIGFN
-    str     r0, [r1]
-
     /* The four call-through words are gone.
      *
      * They existed because a hook in the cave could not name a body the build
@@ -1099,10 +1098,6 @@ gsup_boot:
     add     r0, r4, #FOBJ_POOL_OFF
     movw    r1, #:lower16:T_FOBJ
     movt    r1, #:upper16:T_FOBJ
-    str     r0, [r1]
-    add     r0, r4, #JPOOL_POOL_OFF
-    movw    r1, #:lower16:STREAM_JPOOL
-    movt    r1, #:upper16:STREAM_JPOOL
     str     r0, [r1]
 
     /* Every word the deploy scripts clear, cleared here.  A soft power cycle
@@ -1146,9 +1141,8 @@ gsup_boot:
     movw    r1, #:lower16:T_WANT
     movt    r1, #:upper16:T_WANT
     str     r0, [r1]
-    movw    r1, #:lower16:T_STAGE
-    movt    r1, #:upper16:T_STAGE
-    str     r0, [r1]
+    BLOBBASE r1
+    str     r0, [r1, #O_T_STAGE]
     movw    r1, #:lower16:T_POS
     movt    r1, #:upper16:T_POS
     str     r0, [r1]

@@ -66,7 +66,6 @@
  * When the two producers are assembled into the real thing, these move to the
  * buffer declared out of the pool the way the audio writer declares its own. */
                                     /* gsup_boot from the routine table        */
-.equ STREAM_SIGFN,   0xC072E1A8     /* u32, writer_signal's address, or 0     */
 
 /* The real ring, out of the pool.  16384 records is 128 KiB and 6.5 seconds at
  * 2500 Hz -- nine times the worst card stall this project has measured (692 ms)
@@ -199,7 +198,6 @@
  * STREAM_RING is zero the bench ring in the cave is used instead, so the hooks
  * work before the pool buffer exists. */
 
-.equ STREAM_JPOOL,   0xC072E19C     /* u32, our MPoolFixed of job descriptors */
 
 /* A job, 24 bytes -- the same payload size the firmware's own
  * MPoolFixed<24,32> hands out to the audio path.

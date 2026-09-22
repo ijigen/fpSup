@@ -140,7 +140,6 @@ def branch_word(site, target, thumb):
 
 # Must agree with imu_stream.inc.S; _check_header() proves they do.
 GYRO_RING_SPAN = 0x12C0
-STREAM_SIGFN  = 0xC072E1A8
 T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 T_BUILD = 0xC072EC54
 T_TEARDOWN = 0xC072EC58
@@ -159,7 +158,6 @@ def _check_header():
     src = (HERE / 'imu_stream.inc.S').read_text()
     want = {
         'GYRO_RING_SPAN': GYRO_RING_SPAN,
-        'STREAM_SIGFN': STREAM_SIGFN,
         'TAG_GYRO': S.TAG_GYRO, 'TAG_ACCEL': S.TAG_ACCEL,
     }
     for name, value in want.items():
@@ -444,7 +442,6 @@ def stage(n):
         STREAM_COMMITFN: None              if n >= 3 else 0,
         STREAM_FLUSHFN:  None              if n >= 3 else 0,
         STREAM_DRAINFN:  None              if n >= 4 else 0,
-        STREAM_SIGFN:    at['writer_post'] if n >= 5 else 0,
     }
     real = {STREAM_CLAIMFN: at['stream_claim'],
             STREAM_COMMITFN: at['stream_commit'],
@@ -453,7 +450,7 @@ def stage(n):
     names = {T_OPENFN: 'take_open', T_CLOSEFN: 'take_close',
              STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
              STREAM_FLUSHFN: 'stream_flush',
-             STREAM_DRAINFN: 'gyro_drain', STREAM_SIGFN: 'writer_post'}
+             STREAM_DRAINFN: 'gyro_drain'}
     # A stage sets pointers; it does not install hooks.  After a reboot the
     # cave is empty, and a stage on its own then looks exactly like a working
     # deploy right up until the take produces nothing -- which has now cost two

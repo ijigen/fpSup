@@ -177,11 +177,7 @@ stream_commit:
      * before calling out.  Posting takes a descriptor and sends a message, and
      * neither belongs inside a critical section. */
     st_unlock r7
-    movw    ip, #:lower16:STREAM_SIGFN
-    movt    ip, #:upper16:STREAM_SIGFN
-    ldr     ip, [ip]
-    cmp     ip, #0
-    blxne   ip                          @ writer_post(ptr, len, offset, block)
+    bl      writer_post                 @ (ptr, len, offset, block) -- same blob
     pop     {r1, r2, r3, r4, r5, r6, r7, lr}
     bx      lr
 
@@ -257,11 +253,7 @@ stream_flush:
     /* Busy is set and B_CUR is cleared, so the block is nobody else's: let
      * interrupts back in before calling out, exactly as stream_commit does. */
     st_unlock r6
-    movw    ip, #:lower16:STREAM_SIGFN
-    movt    ip, #:upper16:STREAM_SIGFN
-    ldr     ip, [ip]
-    cmp     ip, #0
-    blxne   ip                          @ writer_post(ptr, len, offset, block)
+    bl      writer_post                 @ (ptr, len, offset, block) -- same blob
     pop     {r4, r5, r6, lr}
     bx      lr
 

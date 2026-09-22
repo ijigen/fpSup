@@ -59,17 +59,14 @@ T_DESC, T_PKT, T_MBX = 0xC072E080, 0xC072E0A0, 0xC072E0C4
 T_DRAINED, T_MAXSPAN = 0xC072E0C8, 0xC072E0CC
 T_FOBJ, T_FOPEN = 0xC072E0F8, 0xC072E0FC
 T_WANT = 0xC072EC50
-T_STAGE = 0xC072E198
 T_JSEQ = 0xC072EC48
 T_JOBSLOT = 0xC072EC4C
-STREAM_JPOOL = 0xC072E19C
 STREAM_POSTED = 0xC072E1AC
 STREAM_INDEX, STREAM_TAIL = 0xC072E1F8, 0xC072E1A4
 T_OPENFN, T_CLOSEFN = 0xC072EC30, 0xC072EC34
 W_THREAD, W_BODYOBJ, W_JOINRC = 0xC072EC00, 0xC072EC04, 0xC072EC08
 W_VT, W_VT_SLOT = 0xC072EC20, 0x0C
 W_OPENS, W_CLOSES, W_STAGE = 0xC072EC0C, 0xC072EC10, 0xC072EC14
-STREAM_SIGFN = 0xC072E1A8
 
 
 def symbols(src, defines=()):
@@ -104,7 +101,7 @@ def _check():
             'T_RECV_RC': T_RECV_RC, 'T_MBX_RC': T_MBX_RC, 'T_DESC': T_DESC,
             'T_PKT': T_PKT, 'T_MBX': T_MBX,
             'T_DRAINED': T_DRAINED, 'T_MAXSPAN': T_MAXSPAN,
-            'T_FOBJ': T_FOBJ, 'T_FOPEN': T_FOPEN, 'T_WANT': T_WANT, 'T_STAGE': T_STAGE,
+            'T_FOBJ': T_FOBJ, 'T_FOPEN': T_FOPEN, 'T_WANT': T_WANT,
             'T_OPENFN': T_OPENFN, 'T_CLOSEFN': T_CLOSEFN,
             'W_THREAD': W_THREAD, 'W_BODYOBJ': W_BODYOBJ, 'W_VT': W_VT,
             'W_OPENS': W_OPENS, 'W_CLOSES': W_CLOSES,
@@ -228,6 +225,21 @@ def place():
     return code, {n: CODE_AT + o for n, o in syms.items()}
 
 
+def shared(name):
+    """Where a word of the blob's shared block is, this boot.
+
+    The counters and the close stage are labels in the blob now, not cave
+    addresses, so a diagnostic has to ask the same two questions the camera
+    does: where is the pool, and where is the symbol inside the blob.  The
+    symbol table is the single source of truth for the second.
+    """
+    syms = symbols(HERE / SOURCE, EDITION)
+    key = 'g_' + name.lower()
+    if key not in syms:
+        raise SystemExit(f'the blob has no {key}')
+    return pool_base() + CODE_POOL_OFF + syms[key]
+
+
 def _setw(addr, value, what):
     for _ in range(8):
         P.mem_set(addr, value)
@@ -301,10 +313,8 @@ def place_code():
     print(f'  blocks: {BUF_N} x {BUF_BYTES // 1024} KiB, '
           f'0x{got[0]:08X}..0x{got[-1] + BUF_BYTES:08X}')
     _setw(T_FINGER, fingerprint(code), 'the blob fingerprint')
-    _setw(STREAM_SIGFN, at['writer_post'], 'what the producer calls')
     pool = pool_base()
     _setw(T_FOBJ, pool + FOBJ_POOL_OFF, 'the file object')
-    _setw(STREAM_JPOOL, pool + JPOOL_POOL_OFF, 'the job pool')
     _setw(STREAM_POSTED, 0, 'the posted mark')
     for a in (T_JSEQ, T_JOBSLOT):
         _setw(a, 0, 'a job word')
@@ -316,7 +326,6 @@ def place_code():
         raise SystemExit(f'the job pool says {free} free, not {JOB_COUNT}')
     _setw(T_FOPEN, 0, 'the open flag')
     _setw(T_WANT, 0, 'the wanted state')
-    _setw(T_STAGE, 0, 'the close stage')
     # The write counters are words in the blob now, re-read from the card on
     # every boot, so there is nothing here to clear.
     # No name is patched in any more.  take_path builds it at every take_open
@@ -473,10 +482,11 @@ def state():
     drained, maxspan = P.mem_get(T_DRAINED)[0], P.mem_get(T_MAXSPAN)[0]
     fopen, wr, by = (P.mem_get(T_FOPEN)[0], P.mem_get(T_WRITES)[0],
                      P.mem_get(T_BYTES)[0])
-    lost, wraps, wrc = (P.mem_get(T_LOST)[0], P.mem_get(T_WRAPS)[0],
-                        P.mem_get(T_WRC)[0])
+    lost, wraps, wrc = (P.mem_get(shared('T_LOST'))[0],
+                        P.mem_get(shared('T_WRAPS'))[0],
+                        P.mem_get(shared('T_WRC'))[0])
     want = P.mem_get(T_WANT)[0]
-    st = P.mem_get(T_STAGE)[0]
+    st = P.mem_get(shared('T_STAGE'))[0]
     where = {0x21: 'entered close', 0x22: 'about to drain', 0x23: 'drained, about to close',
              0x24: 'closed, about to destroy', 0x25: 'destroyed, all the way'}.get(st)
     print(f'  T_MBX      {mbx}   wanted {want}   file open {fopen}')
@@ -576,7 +586,7 @@ def main():
         _verify_placed(_code, at)
         echo_into(at['writer_closefile'], 'writer_closefile')
         print(f'file open: {P.mem_get(T_FOPEN)[0]}   stage '
-              f'0x{(P.mem_get(T_STAGE)[0] or 0):X}')
+              f'0x{(P.mem_get(shared("T_STAGE"))[0] or 0):X}')
     elif a.selftest:
         # place(), not place_code(): the action modes must NOT reset the state
         # words.  place_code() zeroes T_FOPEN, and a close that sees a zero

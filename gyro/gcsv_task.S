@@ -701,10 +701,9 @@ writer_put:
     .global writer_closefile
 writer_closefile:
     push    {r4, r5, r6, lr}
-    movw    r6, #:lower16:T_STAGE
-    movt    r6, #:upper16:T_STAGE
+    BLOBBASE r6                         @ r6 carries the base through the close
     mov     r0, #0x21
-    str     r0, [r6]
+    str     r0, [r6, #O_T_STAGE]
 
 
     movw    r4, #:lower16:T_FOPEN
@@ -716,7 +715,7 @@ writer_closefile:
     mov     r0, #0
     str     r0, [r4]
     mov     r0, #0x25
-    str     r0, [r6]
+    str     r0, [r6, #O_T_STAGE]
     pop     {r4, r5, r6, lr}
     bx      lr
 #endif
@@ -776,7 +775,7 @@ writer_closefile:
 
 #endif
 3:  mov     r0, #0x24
-    str     r0, [r6]
+    str     r0, [r6, #O_T_STAGE]
     movw    r5, #:lower16:T_FOBJ
     movt    r5, #:upper16:T_FOBJ
     ldr     r5, [r5]
@@ -786,7 +785,7 @@ writer_closefile:
     movt    ip, #:upper16:F_DTOR
     blx     ip
     mov     r0, #0x25
-    str     r0, [r6]
+    str     r0, [r6, #O_T_STAGE]
     mov     r0, #0
     str     r0, [r4]
 

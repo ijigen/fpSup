@@ -133,7 +133,7 @@
                                      * knows where the pool landed.          */
 .equ W_VT_SLOT,      0x0C
 
-/* Placed by the deployer, the way STREAM_SIGFN is: the record hooks live in the
+/* Placed by the deployer: the record hooks live in the
  * cave and these live in the pool, so the address is only known at deploy. */
 .equ T_OPENFN,       0xC072EC30     /* -> take_open                           */
 .equ T_CLOSEFN,      0xC072EC34     /* -> take_close                          */
@@ -485,10 +485,6 @@
 
 .equ T_JSEQ,         0xC072EC48     /* jobs posted, so a dump can see order   */
 .equ T_JOBSLOT,      0xC072EC4C     /* where MBX_RECV leaves the descriptor   */
-.equ T_STAGE,        0xC072E198     /* how far the close got.  A wedge that
-                                     * leaves a number behind is a bisect; one
-                                     * that leaves nothing is another reboot
-                                     * spent guessing. */
 .equ T_WANT,         0xC072EC50     /* 1 = a take wants the file, 0 = it does
                                      * not.  The recording hooks set this and
                                      * nothing else: opening a file is far too

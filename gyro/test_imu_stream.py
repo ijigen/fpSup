@@ -131,7 +131,7 @@ class RecordShape(unittest.TestCase):
         section -- and by then the block is marked busy and B_CUR is cleared, so
         the state is already consistent."""
         commit = SPACE[SPACE.index('stream_commit:'):]
-        post = commit.index('STREAM_SIGFN')
+        post = commit.index('bl      writer_post')   # called directly: same blob
         # the release that precedes the call, not the one on the early exit
         self.assertLess(commit.index('B_BUSY'), commit.rindex('st_unlock', 0, post))
         self.assertLess(commit.rindex('st_unlock', 0, post), post)
@@ -153,7 +153,7 @@ class RecordShape(unittest.TestCase):
         self.assertIn('BUF_RECORDS', commit)
         self.assertIn('blo     9f', commit, 'the test is not against capacity')
         self.assertIn('B_BUSY', commit, 'the block is not marked as gone')
-        self.assertIn('STREAM_SIGFN', commit)
+        self.assertIn('bl      writer_post', commit)
 
     def test_the_markers_append_nothing_to_the_stream(self):
         """A marker appended from outside the gyro producer lands where the last
