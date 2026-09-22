@@ -56,7 +56,7 @@
     sensor modes, the 306 profiles, the reduction stages, the canvas and the DNG
     writer &mdash; each one expandable, with what OG3K, OG2K and HSW each change and
     an honest mark on which parts are solved, partial or still dark.</small>
-    <span class="m">the map &middot; read this before the two below</span>
+    <span class="m">the map &middot; read this before the reduction pages</span>
   </a>
   <a class="row" href="explainers/sensor-modes.html">
     <b>Every setting on the sensor</b>
@@ -67,40 +67,39 @@
     combine into.</small>
     <span class="m">reference &middot; sortable, filterable, read from Ver.5.02</span>
   </a>
-  <a class="row" href="explainers/frame-reduction.html">
-    <b>Hbin, Vbin, Hbin2 and RWZM</b>
-    <small>The fp has two unrelated ways to shrink a frame and six names for where
-    to tap the result &mdash; and only two of those six are ever switched on. The
-    decision that picks between them, recovered from the firmware and run over all
-    306 recording profiles. Interactive.</small>
-    <span class="m">new &middot; corrects three claims in the older notes</span>
-  </a>
   <a class="row" href="explainers/imx410-binning.html">
     <b>What the IMX410&rsquo;s binning actually does</b>
     <small>The menu calls the two open-gate modes 2&times;2 and 3&times;3. Seven frames
-    say otherwise. Up and down the sensor really does combine rows &mdash; and leaves
-    unevenly spaced output rows that prove it. Left and right it combines nothing: it
-    interpolates. The &divide;3 mode throws one row in three away, which is exactly what
-    the firmware&rsquo;s own merge tuple has been saying. And it averages rather than
-    sums, so none of it buys you light.</small>
-    <span class="m">M98 and M139 only &middot; measured on a camera &middot; EN / 简 / 繁</span>
+    say otherwise: up and down the sensor really does combine rows, left and right it
+    combines nothing at all, the &divide;3 mode throws one row in three away, and the
+    whole thing averages rather than sums &mdash; so none of it buys you light. Written
+    for someone holding a camera, not a textbook.</small>
+    <span class="m">plain language &middot; M98 and M139 only &middot; EN / 中 / 繁</span>
   </a>
   <a class="row" href="explainers/rwzm-resampler.html">
     <b>What the RWZM resizer does</b>
-    <small>Every mode except OG3K and OG2K passes through a second circuit that shrinks
-    the picture the rest of the way &mdash; and it matters more than the binning does. It
-    shrinks without smoothing first, so false patterns are its own fault, and it rotates
-    through sixteen slightly different recipes, which is where FHD&rsquo;s horizontal
-    banding comes from. Every route ranked on five materials, the banding graded, and one
-    rule for picking a ratio that will not stripe the picture.</small>
-    <span class="m">why FHD looks the way it does &middot; EN / 简 / 繁</span>
+    <small>The second machine, the one every mode except OG3K and OG2K goes through
+    &mdash; and it matters more than the binning. It shrinks without smoothing first, and
+    it rotates through sixteen slightly different recipes, which is where FHD&rsquo;s
+    horizontal banding comes from. Every route ranked, the banding graded, and one rule
+    for picking a ratio that will not stripe the picture.</small>
+    <span class="m">plain language &middot; why FHD looks the way it does &middot; EN / 中 / 繁</span>
+  </a>
+  <a class="row" href="explainers/frame-reduction.html">
+    <b>Hbin, Vbin, Hbin2 and RWZM</b>
+    <small>The same two stages as the pair above, but read out of the firmware instead of
+    measured from frames: six names for where to tap the result, only two of them ever
+    switched on, and the decision that picks between them run over all 306 recording
+    profiles. Interactive.</small>
+    <span class="m">from disassembly &middot; corrects three claims in the older notes</span>
   </a>
   <a class="row" href="explainers/reduction-kernels.html">
     <b>Reduction kernels &mdash; the full working version</b>
-    <small>The two pages above, unabridged: every per-channel table, the sixteen-phase
-    fit, the merge-tuple cross-check, the photon-transfer verification, the traps, and the
-    corrections in the order they happened. Longer and more technical than either.</small>
-    <span class="m">reference &middot; EN / 中文</span>
+    <small>The two plain-language pages above, unabridged and unsimplified: every
+    per-channel table, the sixteen-phase fit, the merge-tuple cross-check, the
+    photon-transfer verification, the two traps, and the corrections in the order they
+    happened. Go here when you want to check the working.</small>
+    <span class="m">reference &middot; long and technical &middot; EN / 中文</span>
   </a>
   <a class="row" href="explainers/lossless-compression.html">
     <b>In-camera lossless compression</b>
