@@ -70,6 +70,24 @@ PRODUCERS = {
 }
 
 
+VENEER_LDR = 0xE51FF004      # ldr pc, [pc, #-4] -- the word after it is the target
+
+
+def veneer(target):
+    """The eight bytes that sit at a hook's cave address.
+
+    The firmware's `bl` carries 32 MB and the hook bodies live in the pool, two
+    gigabytes away, so the landing point stays in the cave and hops.  Nothing
+    else about the hook changes: the site, the displaced instruction and the
+    branch word are what they always were, because the address the firmware
+    branches to has not moved.
+
+    Target zero is a veneer that is not filled in yet -- placed for the span
+    checks, never armed.
+    """
+    return struct.pack('<II', VENEER_LDR, target)
+
+
 def branch_word(site, target, thumb):
     """The word to write over the hook site.
 
@@ -181,13 +199,11 @@ def _place(measure_accel=False):
         a = PRODUCERS['accel']
         PRODUCERS = dict(PRODUCERS, accel=(ACC_CODE_AT,) + a[1:])
 
-    def defines(name, d):
-        # Off by default, and deliberately so: it is the only difference
-        # between this build and the one the layered bisection is walking,
-        # and a bisect with two variables in it is not a bisect.
-        return d + ('ACC_MEASURE',) if (name == 'accel' and measure_accel) else d
-    code = {n: assemble(HERE / src, defines(n, d))
-            for n, (_a, src, d, _s, _o, _t) in PRODUCERS.items()}
+    # Eight bytes each, not the stub: the bodies are sections of the writer's
+    # blob and live in the pool.  arm() fills the target in once the pool is
+    # known; here they are placeholders, which is enough for the span checks
+    # and is what gets printed.
+    code = {n: veneer(0) for n in PRODUCERS}
     spans = [(n, PRODUCERS[n][0], len(c)) for n, c in code.items()]
     code_spans = list(spans)      # words may sit in data, never in code
     spans += [('state words', STATE_AT, STATE_WORDS * 4),
@@ -309,10 +325,21 @@ def arm(only=None, measure_accel=False):
                              f"firmware's 0x{orig:08X} -- something is already "
                              f'hooked there, refusing')
 
-    for name, blob in code.items():
+    # The bodies are in the blob; resolve them before anything is placed, so a
+    # veneer is never written with a target of zero.
+    import ring_task_deploy as R
+    _code, at = R.place()               # assembles and resolves; writes nothing
+    BODY = {'accel': 'accel_hook', 'start': 'rec_start',
+            'stop': 'rec_stop', 'mode': 'mode_hook'}
+    for name in code:
         if only and name not in only:
             continue
-        P.put_slow(PRODUCERS[name][0], blob, name)
+        sym = BODY[name]
+        if sym not in at:
+            raise SystemExit(f'the blob has no {sym}: the pool build and this '
+                             f'deployer disagree about which hooks moved out '
+                             f'of the cave')
+        P.put_slow(PRODUCERS[name][0], veneer(at[sym]), f'{name} veneer')
     P.put_slow(STATE_AT, STATE_INIT, 'state words')
     if measure_accel:
         P.put_slow(ACC_STATE, ACC_INIT, 'accel interval counters')
@@ -335,8 +362,6 @@ def arm(only=None, measure_accel=False):
     # guards on zero, which is safe and invisible.  Resolving from the blob
     # rather than from a cave address is also what makes this agree with the
     # card, where gsup_boot reads the same four table entries.
-    import ring_task_deploy as R
-    _code, at = R.place()               # assembles and resolves; writes nothing
     for word, name in ((STREAM_CLAIMFN, 'stream_claim'),
                        (STREAM_COMMITFN, 'stream_commit'),
                        (STREAM_FLUSHFN, 'stream_flush'),

@@ -63,6 +63,12 @@ gsup_offsets:
     .word   0       @ +0x34  stream_claim
     .word   0       @ +0x38  stream_commit
     .word   0       @ +0x3C  stream_flush
+    /* The hook bodies.  The cave keeps an eight-byte veneer at each of the four
+     * addresses the firmware branches to; these say what it jumps on to. */
+    .word   0       @ +0x40  accel_hook
+    .word   0       @ +0x44  rec_start
+    .word   0       @ +0x48  rec_stop
+    .word   0       @ +0x4C  mode_hook (that edition only)
 
 /* blob_at -- r0 = a byte offset into gsup_offsets.  Returns that entry as an
  * address in this blob.
@@ -1184,6 +1190,40 @@ gsup_boot:
     cmp     r0, #0
     beq     9f                          @ refused: arm nothing
 
+    /* The veneers, before the branches that will run them.
+     *
+     * The firmware reaches a hook with `bl`, which carries 32 MB of range, and
+     * the blob is two gigabytes away in the pool -- so what sits at ACCEL_AT
+     * and friends is `ldr pc,[pc,#-4]` and the body's address, eight bytes,
+     * and the body itself is in here.  The cave keeps the landing point
+     * because the landing point is the part that has to be reachable.
+     *
+     * Written after blocks_open said yes and before anything is armed: a
+     * veneer nobody branches to is inert, and a branch to a veneer nobody
+     * wrote is not.  The F_CACHE below publishes these as well as the arming
+     * words -- they are instructions the firmware is about to fetch.
+     *
+     * An edition without a hook has a zero in its slot and s_veneer leaves the
+     * cave alone, the same way a missing buffer entry is read as "not here". */
+    ldr     r0, [r5, #64]               @ accel_hook
+    movw    r1, #:lower16:ACCEL_AT
+    movt    r1, #:upper16:ACCEL_AT
+    bl      s_veneer
+    ldr     r0, [r5, #68]               @ rec_start
+    movw    r1, #:lower16:START_AT
+    movt    r1, #:upper16:START_AT
+    bl      s_veneer
+    ldr     r0, [r5, #72]               @ rec_stop
+    movw    r1, #:lower16:STOP_AT
+    movt    r1, #:upper16:STOP_AT
+    bl      s_veneer
+#ifdef WANT_MODE_HOOK
+    ldr     r0, [r5, #76]               @ mode_hook
+    movw    r1, #:lower16:MODE_AT
+    movt    r1, #:upper16:MODE_AT
+    bl      s_veneer
+#endif
+
     /* Only now.  The arming words, then the cache, so the firmware fetches
      * the branches and not what was there before them. */
     movw    r0, #:lower16:ACCEL_SITE
@@ -1260,6 +1300,30 @@ gsup_boot:
 9:  pop     {r4, r5, r6, r7, r8, lr}
     bx      lr
 
+/* s_veneer -- write one eight-byte hop into the cave.
+ *
+ *   r0 = the body's offset in this blob, or zero if this edition has none
+ *   r1 = the cave address the firmware's `bl` lands on
+ *   r6 = the blob's base, as everywhere else in gsup_boot
+ *
+ * `ldr pc,[pc,#-4]` and the word after it.  pc reads as the instruction plus
+ * eight, so [pc,#-4] is exactly the next word -- the classic absolute jump, and
+ * the only one that costs nothing: it touches no register and it does not touch
+ * lr, so the body still returns straight to the firmware with `bx lr` and the
+ * caller cannot tell there was a hop at all.  `ldr ip, =addr; bx ip` would
+ * clobber ip, and the displaced firmware instruction may be using it. */
+.equ VENEER_LDR, 0xE51FF004
+
+s_veneer:
+    cmp     r0, #0
+    bxeq    lr
+    add     r0, r0, r6
+    movw    r2, #:lower16:VENEER_LDR
+    movt    r2, #:upper16:VENEER_LDR
+    str     r2, [r1]
+    str     r0, [r1, #4]
+    bx      lr
+
 #include "mpool.S"
 
 /* The space provider and the gyro drain, in the blob rather than in the cave.
@@ -1281,3 +1345,25 @@ gsup_boot:
  * imu_stream.inc.S is what lets them be both. */
 #include "stream_space.S"
 #include "gyro_drain.S"
+
+/* The hook stubs, in the blob rather than in the cave.
+ *
+ * The firmware branches to these with `bl`, which reaches 32 MB -- and the pool
+ * is two gigabytes away, so the LANDING POINT has to stay in the cave.  Only
+ * the landing point: gsup_boot writes an eight-byte veneer at each of the four
+ * cave addresses and the body lives here.  536 bytes of cave become 32.
+ *
+ * Nothing in these three files is position-dependent -- no `adr`, no literal
+ * pool, no pc-relative load, every address a movw/movt pair -- so they run
+ * wherever the allocator put the blob.  Checked, not assumed.
+ *
+ * rec_trigger.S is included twice because the record start and stop hooks are
+ * one source with one `#ifdef`; each include defines its own symbol. */
+#include "accel_hook.S"
+#include "rec_trigger.S"
+#define REC_STOP 1
+#include "rec_trigger.S"
+#undef REC_STOP
+#ifdef WANT_MODE_HOOK
+#include "mode_hook.S"
+#endif

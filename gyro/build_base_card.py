@@ -165,15 +165,20 @@ def sections(edition='base'):
     of the logger.
     """
     out = []
-    for name, (at, src, defines, _site, _orig, _thumb) in S.PRODUCERS.items():
-        # The mode hook belongs to the editions that write their own log: it
-        # is what makes a take's frames landscape upright, and Base's readers
-        # get the orientation out of the .GYR header instead.  Placing it
-        # unarmed would only be sixty bytes of cave nobody branches to.
-        if name == 'mode' and edition == 'base':
-            continue
-        blob = assemble(HERE / src, defines)
-        out.append((at, blob, name))
+    # The hook stubs are NOT sections any more either.
+    #
+    # They were 536 bytes of cave -- 152, 196, 124 and 64 -- and every one of
+    # them was there for the same reason: the firmware reaches a hook with `bl`,
+    # which carries 32 MB, and a body in the pool is two gigabytes away.  But
+    # that argument only covers the LANDING POINT.  The bodies are sections of
+    # the writer's blob now and gsup_boot writes an eight-byte veneer at each of
+    # the four cave addresses, so the same four addresses still receive the
+    # firmware's branch and the cave keeps 32 bytes instead of 536.
+    #
+    # Which leaves this card placing nothing in the cave at all.  Everything it
+    # needs there -- veneers, call-through words, state -- is written at boot by
+    # its own entry, after the allocator has said yes.  A card that cannot get
+    # its memory now leaves the cave exactly as it found it.
 
     # The four call-through words are NOT sections any more.
     #

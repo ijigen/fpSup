@@ -161,7 +161,11 @@ class RecordShape(unittest.TestCase):
         position.  They may append again when the drain moves into the producers
         and the position becomes true by construction, not before."""
         for name, src in MARKERS:
-            body = src[src.index('rec_trigger:'):]
+            # The label is per-variant since the hooks moved into the blob;
+            # slice from whichever one this source defines.
+            mark = next(m for m in ('rec_start:', 'rec_stop:', 'rec_trigger:')
+                        if m in src)
+            body = src[src.index(mark):]
             self.assertNotIn('ring_slot', body, name)
             self.assertNotIn('ldrex', body, f'{name} still claims a stream slot')
             # \b, because strhi and strlo are conditional word stores and the
@@ -480,7 +484,7 @@ class Editions(unittest.TestCase):
         """gsup_boot reads them by fixed offset, so the order of GSUP_ROUTINES
         is part of the ABI: appending is free, inserting is a branch into the
         wrong routine."""
-        self.assertEqual(self.R.GSUP_ROUTINES[12:],
+        self.assertEqual(self.R.GSUP_ROUTINES[12:16],
                          ('gyro_drain', 'stream_claim', 'stream_commit',
                           'stream_flush'))
         code = self.R.patch_offsets(
@@ -488,6 +492,46 @@ class Editions(unittest.TestCase):
         got = struct.unpack_from('<4I', code, 12 * 4)
         for name, off in zip(self.R.GSUP_ROUTINES[12:], got):
             self.assertEqual(off, self.gcsv[name], name)
+
+    def test_the_card_places_nothing_in_the_cave(self):
+        """The hook stubs were the last thing a gyro card put there.
+
+        536 bytes for four bodies the firmware could have reached through eight
+        -- the `bl` needs a landing point within 32 MB, not a whole stub.  The
+        bodies are sections of this blob now and gsup_boot writes the veneers,
+        so a build that starts emitting cave sections again has undone it."""
+        import build_base_card as B
+        for edition in ('base', 'gcsv'):
+            self.assertEqual(B.sections(edition), [], edition)
+
+    def test_the_veneer_is_the_instruction_we_think_it_is(self):
+        """`ldr pc, [pc, #-4]`.  pc reads as the instruction plus eight, so
+        [pc,#-4] is the word straight after -- and nothing else is touched, not
+        even lr, which is why the body still returns to the firmware."""
+        import imu_stream_deploy as D
+        self.assertEqual(D.VENEER_LDR, 0xE51FF004)
+        self.assertEqual(D.veneer(0x45123456),
+                         struct.pack('<II', 0xE51FF004, 0x45123456))
+        self.assertEqual(len(D.veneer(0)), 8)
+
+    def test_every_veneer_is_written_before_any_hook_is_armed(self):
+        """A hook armed over a cave address nobody filled in branches into
+        whatever is there.  Unlike a zero call-through word, which every caller
+        guards against, this one is not survivable -- so the order is checked
+        on the emitted source the same way the block clearing is."""
+        core = (HERE / 'writer_core.inc.S').read_text()
+        boot = core[core.index('\ngsup_boot:'):]
+        boot = boot[:boot.index('\n9:')]
+        code = re.sub(r'/\*.*?\*/', '', boot, flags=re.S)
+        code = re.sub(r'@.*', '', code)
+        first_arm = min(code.index(s) for s in
+                        ('ACCEL_SITE', 'START_SITE', 'STOP_SITE'))
+        for at in ('ACCEL_AT', 'START_AT', 'STOP_AT', 'MODE_AT'):
+            self.assertIn(at, code, f'gsup_boot never writes a veneer at {at}')
+            self.assertLess(code.index(at), first_arm,
+                            f'the veneer at {at} is written after a hook is armed')
+        # ...and through the helper, not by hand four times.
+        self.assertEqual(code.count('bl      s_veneer'), 4)
 
     def test_the_call_throughs_are_written_before_any_hook_is_armed(self):
         """The ordering that makes the move safe.
@@ -1124,10 +1168,14 @@ class ModeHook(unittest.TestCase):
         """Base is the stream and nothing else.  Placing without arming would
         be dead cave; arming without placing would branch into whatever is
         there -- which is how the orientation stub once froze a take."""
-        import build_base_card as B
-        for edition, want in (('base', False), ('gcsv', True)):
-            names = [w for _a, _b, w in B.sections(edition)]
-            self.assertEqual('mode' in names, want, edition)
+        # The hook stubs are in the blob now -- the cave keeps an eight-byte
+        # veneer gsup_boot writes -- so "placed" is a symbol in the edition's
+        # blob, not a section a build emitted.  The question is the same one.
+        import ring_task_deploy as R
+        base = R.symbols(HERE / 'gcsv_task.S', ('FPGYRO_EDITION_BASE=1',))
+        gcsv = R.symbols(HERE / 'gcsv_task.S', ())
+        self.assertNotIn('mode_hook', base, 'Base carries the mode hook')
+        self.assertIn('mode_hook', gcsv, 'the gcsv edition lost the mode hook')
         core = (HERE / 'writer_core.inc.S').read_text()
         self.assertIn('#ifdef WANT_MODE_HOOK', core)
         self.assertIn('ARM_MODE', core)

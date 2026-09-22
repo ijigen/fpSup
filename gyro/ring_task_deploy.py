@@ -169,7 +169,11 @@ GSUP_ROUTINES = ('writer_body', 'take_open', 'take_close', 'writer_post',
                  # this blob (2026-09-22), so the four cave words that name
                  # them are resolved at boot like everything else here.
                  # APPEND ONLY: gsup_boot reads these by fixed offset.
-                 'gyro_drain', 'stream_claim', 'stream_commit', 'stream_flush')
+                 'gyro_drain', 'stream_claim', 'stream_commit', 'stream_flush',
+                 # The four hook bodies.  Only an eight-byte veneer stays at the
+                 # cave address the firmware branches to; gsup_boot fills it in
+                 # from these.  APPEND ONLY.
+                 'accel_hook', 'rec_start', 'rec_stop', 'mode_hook')
 
 
 def patch_offsets(code, syms):

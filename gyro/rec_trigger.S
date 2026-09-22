@@ -78,8 +78,17 @@
 .equ LATCH_WORD,  STREAM_R0_GC
 #endif
 
-    .global rec_trigger
-rec_trigger:
+/* One symbol per variant, because both now live in the same blob: the record
+ * hooks moved out of the cave and only an eight-byte veneer stays behind, so
+ * this file is included twice -- once plain, once with REC_STOP -- and two
+ * copies of one label would not assemble. */
+#ifdef REC_STOP
+    .global rec_stop
+rec_stop:
+#else
+    .global rec_start
+rec_start:
+#endif
     push    {r0, r1, r2, r3, ip, lr}
 
     movw    ip, #:lower16:COUNT_WORD

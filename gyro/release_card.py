@@ -24,11 +24,12 @@ FILES = ('AutoRun.txt', 'fpSup.BIN', 'README.txt')
 
 # Every section the card must carry, and what it is.  A build that drops one
 # still produces a perfectly valid AutoRun and a camera that does nothing.
-SHARED = {
-    0xC072E200: 'the accelerometer hook',
-    0xC072E4E0: 'the record start hook',
-    0xC072E620: 'the record stop hook',
-}
+# Nothing is left.  The hook stubs were the last cave sections a gyro card
+# carried, and they moved into the blob on 2026-09-22: the firmware still
+# branches to the same four addresses, but what waits there is an eight-byte
+# veneer gsup_boot writes at boot, not a section a build placed.  A card that
+# dropped a hook now fails the routine-table check below instead.
+SHARED = {}
 # The gyro drain, the space provider and the four words that point at them used
 # to be listed here as cave sections.  They are in the writer's blob now
 # (2026-09-22), so a card that dropped them would still pass a destination
@@ -36,16 +37,15 @@ SHARED = {
 # there is exactly the "built but dropped" failure this list exists to catch,
 # and it is checked for every routine the blob must carry, not just these.
 BLOB_ROUTINES = ('gyro_drain', 'stream_claim', 'stream_commit', 'stream_flush',
+                 'accel_hook', 'rec_start', 'rec_stop',
                  'writer_body', 'take_open', 'take_close', 'writer_post',
                  'mpool_init_jobs', 'blocks_open', 'gsup_boot')
-EXPECT = {
-    'base': SHARED,
-    # The mode hook is what makes a take land the right way up, and it is the
-    # kind of thing that goes missing quietly: without it the card still boots,
-    # still logs, still writes both sidecars, and a portrait take comes out
-    # rotated.  Named here so a build that drops it cannot be released.
-    'gcsv': {**SHARED, 0xC072E6A0: 'the mode hook'},
-}
+EXPECT = {'base': SHARED, 'gcsv': SHARED}
+# Per edition, because the mode hook belongs to the one that writes its own log
+# -- it is what makes a take land the right way up, and it goes missing quietly:
+# without it the card still boots, still logs, still writes both sidecars, and a
+# portrait take comes out rotated.
+EDITION_ROUTINES = {'base': (), 'gcsv': ('mode_hook',)}
 # What the archive is called.  Base is an edition of fpGyroSup, not a separate
 # product, so it is named like the rest of the family.
 STEM = {'base': 'fp-gyro-sup-base', 'gcsv': 'fp-gyro-sup'}
@@ -122,13 +122,14 @@ def check_sections(path, edition):
     blob_off = symbols(HERE / 'gsup_launch.S', ['BLOB_LEN=0x0'])['blob']
     table = d[lo + blob_off: lo + blob_off + len(R.GSUP_ROUTINES) * 4]
     got = dict(zip(R.GSUP_ROUTINES, struct.unpack(f'<{len(table)//4}I', table)))
-    missing = [r for r in BLOB_ROUTINES if not got.get(r)]
+    want_routines = BLOB_ROUTINES + EDITION_ROUTINES[edition]
+    missing = [r for r in want_routines if not got.get(r)]
     if missing:
         raise SystemExit(f'{path}: the blob\'s routine table has no '
                          + ', '.join(missing))
     print(f'  sections: {n}, entry 0x{entry:08X} in the {ln}-byte launcher, '
           f'all {len(want)} accounted for')
-    print(f'  blob: {len(BLOB_ROUTINES)} routines resolved, '
+    print(f'  blob: {len(want_routines)} routines resolved, '
           f'gyro_drain at +0x{got["gyro_drain"]:X}, '
           f'stream_claim at +0x{got["stream_claim"]:X}')
 
