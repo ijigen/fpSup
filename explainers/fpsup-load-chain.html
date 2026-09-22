@@ -22,8 +22,7 @@
 <link rel="stylesheet" href="../assets/site.css">
 <style>
 /* ---- language switch ---------------------------------------------------- */
-[data-lang="en"] .zh{display:none !important}
-[data-lang="zh"] .en{display:none !important}
+/* the three-language rules live in assets/site.css */
 .topbar{display:flex; align-items:center; justify-content:space-between;
   gap:16px; margin-bottom:22px}
 .topbar .back{margin-bottom:0}
@@ -37,8 +36,8 @@
 .lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
   font-weight:600}
 .lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
-[data-lang="zh"] body{line-height:1.75}
-[data-lang="zh"] .lede{max-width:40em}
+[data-lang="zh"] body, [data-lang="cn"] body{line-height:1.75}
+[data-lang="zh"] .lede, [data-lang="cn"] .lede{max-width:40em}
 
 /* ---- diagrams ----------------------------------------------------------- */
 figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
@@ -90,9 +89,10 @@ ul.todo small{display:block; color:var(--dim); font-size:.82rem; margin-top:2px}
 
 <div class="topbar">
   <a class="back" href="../research.html"><span class="en">&larr; Firmware research</span><span class="zh">&larr; 韌體研究</span></a>
-  <div class="lang" role="group" aria-label="Language / 語言">
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
     <button type="button" data-set="en" aria-pressed="true">EN</button>
-    <button type="button" data-set="zh" aria-pressed="false">中文</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
   </div>
 </div>
 
@@ -787,34 +787,7 @@ that violates one is wrong even if the camera boots.</p>
   快載入在那裡是一個勾選框。</p>
 </div>
 
-<script>
-(function(){
-  var KEY = 'fpsup-lang';
-  var root = document.documentElement;
-  var btns = [].slice.call(document.querySelectorAll('.lang button[data-set]'));
-  if(!btns.length) return;
-
-  function apply(lang, remember){
-    root.setAttribute('data-lang', lang);
-    root.setAttribute('lang', lang === 'zh' ? 'zh-Hant' : 'en');
-    btns.forEach(function(b){
-      b.setAttribute('aria-pressed', String(b.getAttribute('data-set') === lang));
-    });
-    if(remember){ try{ localStorage.setItem(KEY, lang); }catch(e){} }
-  }
-
-  var saved = null;
-  try{ saved = localStorage.getItem(KEY); }catch(e){}
-  /* English is the default: a first-time visitor always lands on it, whatever
-   * the browser reports. The choice is remembered once it is made. */
-  if(saved !== 'zh' && saved !== 'en'){ saved = 'en'; }
-  apply(saved, false);
-
-  btns.forEach(function(b){
-    b.addEventListener('click', function(){ apply(b.getAttribute('data-set'), true); });
-  });
-})();
-</script>
+<script src="../assets/lang.js?v=b0c870a0" defer></script>
 
 </body>
 </html>

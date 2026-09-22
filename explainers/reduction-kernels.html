@@ -30,8 +30,7 @@ tbody tr.ref td{color:#6f7780; font-style:italic}
 tbody tr.ref td:first-child{font-style:italic; box-shadow:inset 2px 0 0 #3a4450}
 
 /* ---- language switch ---------------------------------------------------- */
-[data-lang="en"] .zh{display:none !important}
-[data-lang="zh"] .en{display:none !important}
+/* the three-language rules live in assets/site.css */
 .topbar{display:flex; align-items:center; justify-content:space-between;
   gap:16px; margin-bottom:22px}
 .topbar .back{margin-bottom:0}
@@ -45,8 +44,8 @@ tbody tr.ref td:first-child{font-style:italic; box-shadow:inset 2px 0 0 #3a4450}
 .lang button[aria-pressed="true"]{background:var(--sig-soft); color:var(--sig);
   font-weight:600}
 .lang button:focus-visible{outline:2px solid var(--sig); outline-offset:-2px}
-[data-lang="zh"] body{line-height:1.75}
-[data-lang="zh"] .lede{max-width:40em}
+[data-lang="zh"] body, [data-lang="cn"] body{line-height:1.75}
+[data-lang="zh"] .lede, [data-lang="cn"] .lede{max-width:40em}
 
 /* ---- diagrams ----------------------------------------------------------- */
 figure.dia{margin:18px 0 0; border:1px solid var(--line); border-radius:3px;
@@ -95,9 +94,10 @@ code.k{font-family:var(--mono); white-space:nowrap}
 
 <div class="topbar">
   <a class="back" href="../research.html"><span class="en">&larr; Firmware research</span><span class="zh">&larr; 韌體研究</span></a>
-  <div class="lang" role="group" aria-label="Language / 語言">
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
     <button type="button" data-set="en" aria-pressed="true">EN</button>
-    <button type="button" data-set="zh" aria-pressed="false">中文</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
   </div>
 </div>
 
@@ -1949,7 +1949,7 @@ An ISO&nbsp;800 fabric close-up gave an N<sub>eff</sub> ratio of 3.16, but its
 photon-transfer fit returns a negative read-noise intercept and the frame-to-frame
 differences sit at exactly one and two DN &mdash; the measurement is against the
 quantisation floor, not the noise. Neither is reported as evidence.</p>
-<p class="zh">有兩批素材看過之後擱置。天橋上的夜景片段裡有車流,那裡的時間域雜訊
+<p class="note zh">有兩批素材看過之後擱置。天橋上的夜景片段裡有車流,那裡的時間域雜訊
 量到的是車子不是感測器。ISO&nbsp;800 的衣物近拍給出 3.16 的 N<sub>eff</sub> 比,
 但它的光子轉移擬合回傳負的讀噪截距,而且逐幀差恰好落在 1 和 2 DN ——
 那是在量量化地板,不是雜訊。兩者都不列為證據。</p>
@@ -2841,34 +2841,7 @@ Chinese, which carries the full per-channel tables and the reproduction recipe.<
   <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
 </footer>
 
-<script>
-(function(){
-  var KEY = 'fpsup-lang';
-  var root = document.documentElement;
-  var btns = [].slice.call(document.querySelectorAll('.lang button[data-set]'));
-  if(!btns.length) return;
-
-  function apply(lang, remember){
-    root.setAttribute('data-lang', lang);
-    root.setAttribute('lang', lang === 'zh' ? 'zh-Hant' : 'en');
-    btns.forEach(function(b){
-      b.setAttribute('aria-pressed', String(b.getAttribute('data-set') === lang));
-    });
-    if(remember){ try{ localStorage.setItem(KEY, lang); }catch(e){} }
-  }
-
-  var saved = null;
-  try{ saved = localStorage.getItem(KEY); }catch(e){}
-  /* English is the default: a first-time visitor always lands on it, whatever
-   * the browser reports. The choice is remembered once it is made. */
-  if(saved !== 'zh' && saved !== 'en'){ saved = 'en'; }
-  apply(saved, false);
-
-  btns.forEach(function(b){
-    b.addEventListener('click', function(){ apply(b.getAttribute('data-set'), true); });
-  });
-})();
-</script>
+<script src="../assets/lang.js?v=b0c870a0" defer></script>
 
 </body>
 </html>
