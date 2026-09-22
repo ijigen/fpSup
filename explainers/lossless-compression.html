@@ -73,6 +73,9 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
   background:var(--paper); cursor:pointer; user-select:none}
 .tg:hover{border-color:var(--sig)}
 .tg input{margin:0; accent-color:var(--sig)}
+.tg.master{font-weight:600}
+.tg input:disabled + *, .tg.off{opacity:.45}
+.tg:has(input:disabled){opacity:.45; cursor:not-allowed}
 .tg.on{border-color:var(--sig); background:var(--sig-soft); color:var(--sig);
   font-weight:600}
 
@@ -193,24 +196,23 @@ plan: compression happens <em>last</em>.</p>
     <rect class="bx" x="0" y="16" width="150" height="38" rx="3"/>
     <text x="75" y="40" text-anchor="middle">sensor readout</text>
 
-    <rect class="bx" x="186" y="16" width="200" height="38" rx="3"/>
-    <text x="286" y="34" text-anchor="middle">CRCT chain</text>
-    <text x="286" y="48" text-anchor="middle" font-size="9.5" class="t-dim">Vbin &middot; Hbin &middot; Hbin2</text>
-
-    <rect class="bx" x="422" y="16" width="150" height="38" rx="3"/>
-    <text x="497" y="34" text-anchor="middle">RWZM</text>
-    <text x="497" y="48" text-anchor="middle" font-size="9.5" class="t-dim">resampler</text>
+    <rect class="bx" x="186" y="6" width="386" height="58" rx="3"/>
+    <text x="379" y="20" text-anchor="middle" font-size="9.5" class="t-dim">reduction &mdash; ONE branch of an 8-way selector, not both in series</text>
+    <rect class="bx" x="196" y="26" width="178" height="30" rx="3"/>
+    <text x="285" y="45" text-anchor="middle" font-size="10">Hbin2 &nbsp;<tspan class="t-dim">36 profiles</tspan></text>
+    <rect class="bx" x="384" y="26" width="178" height="30" rx="3"/>
+    <text x="473" y="45" text-anchor="middle" font-size="10">RWZM &nbsp;<tspan class="t-dim">53 profiles</tspan></text>
 
     <rect class="bx" x="608" y="16" width="212" height="38" rx="3"/>
     <text x="714" y="34" text-anchor="middle">DRAM strip</text>
     <text x="714" y="48" text-anchor="middle" font-size="9.5" class="t-dim">packed 12-bit CinemaDNG</text>
   </g>
   <g class="ln">
-    <path d="M150 35 h36"/><path d="M386 35 h36"/><path d="M572 35 h36"/>
+    <path d="M150 35 h36"/><path d="M572 35 h36"/>
   </g>
   <!-- geometry bracket -->
-  <path class="ln" d="M186 62 v10 H572 v-10"/>
-  <text x="379" y="88" text-anchor="middle" font-size="10" class="t-dim">every reduction happens here &mdash; geometry is final at the strip</text>
+  <path class="ln" d="M186 70 v6 H572 v-6"/>
+  <text x="379" y="90" text-anchor="middle" font-size="10" class="t-dim">all reduction happens here &mdash; 253 of 306 profiles reduce nothing at all</text>
 
   <!-- down to engine -->
   <path class="ln-on" d="M714 54 v46"/>
@@ -239,9 +241,11 @@ hbin, vbin or RWZM it.</b></figcaption>
 </figure>
 
 <div class="warn"><b>Decide geometry first, then talk about compression.</b> Three
-reasons, any one of which is enough. <b>Hardware order:</b> the binning stages and
-the resampler are stages of the CRCT pipeline, physically before the write to DRAM;
-the engine is after it. <b>Data type:</b> the engine's output is a Huffman
+reasons, any one of which is enough. <b>Hardware order:</b> binning and resampling are
+branches of the CRCT pipeline &mdash; a profile takes one of them, not both in series
+&mdash; and all of them sit physically before the write to DRAM; the engine is after
+it. (<a href="sensor-to-cinemadng.html#crct">The branch census</a>: 253 profiles
+reduce nothing, 36 take Hbin2, 17 take RWZM together with hbin.) <b>Data type:</b> the engine's output is a Huffman
 bit-stream, not pixels &mdash; any reduction would need a full decode first, and the
 camera's video path has no such decode. <b>Sizing:</b> compression changes bytes,
 never geometry. Work out the frame size in
@@ -459,24 +463,31 @@ not a tuning knob &mdash; and it is what OG3K would need.</figcaption>
 
 <h2 id="sim">Budget simulator</h2>
 
-<p>Everything above, wired together. The mode list is the camera's own &mdash; all
-<b>70 readout modes</b> from the table at <code>0xC0B59DC0</code>, grouped by raster,
-with the frame rate each one carries. Pick a mode, say how much the CRCT chain
-reduces it before the codec sees it, and the tile geometry is searched rather than
-guessed.</p>
+<p>Everything above, wired together. The cost function only reads the frame size, so
+the list is the camera's <b>13 sensor rasters</b> (from the mode table at
+<code>0xC0B59DC0</code>) rather than all 70 modes &mdash; the mode id never changes a
+number here. Pick a raster and a frame rate independently, say how much is reduced
+before the codec sees it, and the tile geometry is searched rather than guessed.</p>
 
-<p class="note">Two things about those numbers. The frame rate in the mode table is
-<b>nominal</b> &mdash; mode 3 says 30 and runs at 29.97, mode 98 says 78 and runs at
-77.27 &mdash; so the exact variants are in the list too and you can override it. And
-the reduction is applied as plain arithmetic on the raster; the real path also crops,
-which is why mode 106 at 1.5625&times; lands on 1936&times;1092 here against the
-1936&times;1090 the camera actually writes.</p>
+<p class="note">Two things about those numbers. <b>Frame rate is yours to choose</b>,
+not tied to the raster: every rate the mode table carries is in the list, including
+the exact NTSC variants (a mode that advertises 30 runs at 29.97, one that advertises
+78 runs at 77.27), and the detail line tells you which rates stock firmware actually
+offers at the raster you picked. And the reduction is plain arithmetic on the raster
+&mdash; the real path also crops, which is why 3032&times;1708 at 1.5625&times; lands
+on 1936&times;1092 here against the 1936&times;1090 the camera writes.</p>
+
+<p class="note"><b>Start with the <span style="color:var(--sig)">compression</span>
+switch.</b> Turn it off and every number becomes the raw rate, so what compression
+buys is the difference between the two. The other three toggles only shape <i>how</i>
+it compresses, and at a setting where the engine has time to spare none of them move
+the total &mdash; that is correct, not a fault.</p>
 
 <div class="sim">
   <h4>Frame</h4>
   <div class="ctl">
     <div>
-      <label for="fmt">sensor mode &mdash; all 70</label>
+      <label for="fmt">sensor raster</label>
       <select id="fmt"></select>
     </div>
     <div>
@@ -535,6 +546,7 @@ which is why mode 106 at 1.5625&times; lands on 1936&times;1092 here against the
     </div>
     <div class="rng">
       <div class="toggles">
+        <label class="tg master on" id="tgComp"><input type="checkbox" id="comp" checked> compression</label>
         <label class="tg" id="tgCont"><input type="checkbox" id="cont"> contention +17%</label>
         <label class="tg on" id="tgSkip"><input type="checkbox" id="skip" checked> dynamic frame-skip</label>
         <label class="tg" id="tgPart"><input type="checkbox" id="part"> partial-frame mode</label>
@@ -787,7 +799,7 @@ repository.</p>
     var g = MODES[+fmt.value];
     var R = parseFloat(fps.value);
 
-    // everything upstream of the codec: the CRCT chain and the resampler
+    // whichever reduction branch ran upstream of the codec, as a plain divisor
     var red = parseFloat($('red').value);
     var W = Math.max(8, Math.floor(g.w / red / 8) * 8);
     var H = Math.max(2, Math.floor(g.h / red / 2) * 2);
@@ -795,6 +807,7 @@ repository.</p>
     var ratio = parseFloat($('ratio').value);
     var store = parseFloat($('dest').value);
     var contention = $('cont').checked;
+    var compress = $('comp').checked;
     var doSkip = $('skip').checked;
     var partial = $('part').checked;
 
@@ -823,7 +836,9 @@ repository.</p>
 
     // fraction of the pixel stream the engine can actually get through
     var frac;
-    if(!engineOK){
+    if(!compress){
+      frac = 0;                                    // asked for the uncompressed case
+    } else if(!engineOK){
       frac = 0;                                    // engine rejects this depth
     } else {
       var capacity = budgetMs / encMs;             // frames it can do per frame slot
@@ -863,22 +878,33 @@ repository.</p>
             frac:frac, payC:payC, payU:payU, hdrRate:hdrRate, total:total,
             peak:peak, uncompressedAll:uncompressedAll, engineMBs:engineMBs,
             writeMs:writeMs, serialMs:serialMs, partial:partial, doSkip:doSkip,
-            contention:contention, engineOK:engineOK, bitsOK:bitsOK, tilesOK:tilesOK};
+            contention:contention, engineOK:engineOK, bitsOK:bitsOK, tilesOK:tilesOK,
+            compress:compress};
   }
 
   function render(){
     var r = calc();
 
     $('ratioOut').textContent = n2(r.ratio) + ' : 1';
-    ['cont','skip','part'].forEach(function(id){
+    ['comp','cont','skip','part'].forEach(function(id){
       var box = $(id), wrap = $('tg' + id.charAt(0).toUpperCase() + id.slice(1));
       if(wrap) wrap.classList.toggle('on', box.checked);
     });
+    // With compression off, the codec controls describe nothing, so disable them
+    // rather than leave knobs that visibly do not move the numbers.
+    ['cont','skip','part','ratio','tile'].forEach(function(id){
+      var el = $(id); if(el) el.disabled = !r.compress;
+    });
+    ['tgCont','tgSkip','tgPart'].forEach(function(id){
+      var w = $(id); if(w) w.classList.toggle('off', !r.compress);
+    });
 
-    $('rEng').innerHTML = r.engineOK
-      ? n1(r.engineMBs) + '<small>MB/s</small>'
-      : '<span style="font-size:.8rem;color:var(--warn)">' +
-        (r.bitsOK ? r.tiles + ' tiles &gt; 326' : 'rejects 8-bit') + '</span>';
+    $('rEng').innerHTML = !r.compress
+      ? '<span style="font-size:.8rem;color:var(--dim)">not used</span>'
+      : r.engineOK
+        ? n1(r.engineMBs) + '<small>MB/s</small>'
+        : '<span style="font-size:.8rem;color:var(--warn)">' +
+          (r.bitsOK ? r.tiles + ' tiles &gt; 326' : 'rejects 8-bit') + '</span>';
     $('rCmp').innerHTML = n1(r.payC) + '<small>MB/s</small>';
     $('rUnc').innerHTML = n1(r.payU) + '<small>MB/s</small>';
     // The reference rate, so "what did compression actually save" is on screen.
@@ -929,7 +955,16 @@ repository.</p>
       reasons.push('serial encode+write is ' + n2(r.serialMs) + ' ms against ' + n2(r.budgetMs));
     v.classList.remove('ok','no');
     var over8 = r.store > 0 && r.total > r.store;
-    if(!r.engineOK){
+    if(!r.compress){
+      v.classList.add(over8 ? 'no' : 'ok');
+      mk.textContent = over8 ? 'does not fit' : 'fits';
+      why.textContent = 'Compression off \u2014 ' + n1(r.total) + ' MB/s' +
+        (r.store > 0
+          ? (over8 ? ', over the ' + r.store + ' MB/s destination by ' +
+                     Math.round((r.total / r.store - 1) * 100) + '%.'
+                   : ', inside the ' + r.store + ' MB/s destination.')
+          : '.');
+    } else if(!r.engineOK){
       // 8-bit is its own bandwidth strategy, so judge it on storage alone
       v.classList.add(over8 ? 'no' : 'ok');
       mk.textContent = over8 ? 'does not fit' : 'fits uncompressed';
@@ -961,17 +996,21 @@ repository.</p>
            r.tw + '&times;' + r.th + ' tiles (' + r.tiles + '), aligned ' +
            n2(r.alignedMpix) + ' Mpix' +
            ($('tile').value === 'best' ? ' \u2014 tile searched' : ''));
-    if(!r.engineOK){
+    if(!r.compress){
+      d.push('<b>compression off</b> \u2014 every number below is the raw rate. ' +
+             'Turn it back on to compare.');
+    }
+    if(r.compress && !r.engineOK){
       d.push('<b>8-bit</b> \u2014 the codec\u2019s bitdepth field only encodes ' +
              '10 / 12 / 14 / 16, and anything else is rejected outright. ' +
              'Everything below is the uncompressed rate.');
     }
-    if(r.engineOK) d.push('encode <b>' + n2(r.encMs) + ' ms</b> = ' +
+    if(r.compress && r.engineOK) d.push('encode <b>' + n2(r.encMs) + ' ms</b> = ' +
            n2(2179 / 1000 * (r.contention ? 1.17 : 1)) + ' call + ' +
            n2(4954.40 * r.alignedMpix / 1000 * (r.contention ? 1.17 : 1)) + ' pixels + ' +
            n2(40.926 * r.tiles / 1000 * (r.contention ? 1.17 : 1)) + ' tiles' +
            (r.contention ? ' (incl. +17% contention)' : ''));
-    if(r.engineOK) d.push('compressed fraction <b>' + Math.round(r.frac * 100) + '%</b>' +
+    if(r.compress && r.engineOK) d.push('compressed fraction <b>' + Math.round(r.frac * 100) + '%</b>' +
            (r.partial ? ' of every frame' : ' of the frames') +
            (r.doSkip ? '' : ' — frame-skip off, so it is all or nothing'));
     d.push('uncompressed reference <b>' + n1(r.uncompressedAll) + ' MB/s</b> · ' +
@@ -988,7 +1027,7 @@ repository.</p>
     $('detail').innerHTML = d.join('<br>');
   }
 
-  ['fps','bits','tile','dest','ratio','cont','skip','part','red'].forEach(function(id){
+  ['fps','bits','tile','dest','ratio','comp','cont','skip','part','red'].forEach(function(id){
     var el = $(id);
     if(!el) return;
     el.addEventListener('input', render);
