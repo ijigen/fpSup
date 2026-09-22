@@ -50,9 +50,17 @@ PRODUCERS = {
     # it drains the coprocessor's ring and then appends its own record, which is
     # what puts that record in the right place.
     'accel': (0xC072E200, 'accel_hook.S',       (),            0xC050D4C8, 0xE3A02000, 0),
-    # Not hooks.  Called.
-    'drain': (0xC072E300, 'gyro_drain.S',       (),            None,       None,       0),
-    'space': (0xC072EC60, 'stream_space.S',     (),            None,       None,       0),
+    # gyro_drain.S and stream_space.S used to be here, at 0xC072E300 and
+    # 0xC072EC60 -- 1,108 bytes of the 3,920-byte payload window, for code
+    # NOTHING BRANCHES TO.  The firmware reaches every hook below by a branch
+    # to a fixed address, so those have to be here; the drain and the space
+    # provider are reached through four words in the cave
+    # (STREAM_CLAIMFN/COMMITFN/FLUSHFN/DRAINFN), and a word can name anywhere.
+    #
+    # So they are sections of the writer's blob now, in the pool, and the four
+    # words are filled in from the blob's routine table -- by gsup_boot on a
+    # card, by place_code() over USB.  Same two files, same symbols, one
+    # layout; what changed is where they land.  (2026-09-22)
     'start': (0xC072E4E0, 'rec_trigger.S',      (),            0xC03790B8, 0xE5DB25CE, 0),
     'stop':  (0xC072E620, 'rec_trigger.S',      ('REC_STOP',), 0xC038C484, 0xE3500000, 0),
     # The STILL/CINE mode being set.  Not part of the stream at all: it decides
@@ -60,32 +68,6 @@ PRODUCERS = {
     # before the take.  Base does not arm it -- see mode_hook.S.
     'mode':  (0xC072E6A0, 'mode_hook.S',         (),            0xC0058310, 0xE1A05001, 0),
 }
-
-
-def _symbols(src):
-    """Offsets of the global symbols in a blob, so the callers can be pointed
-    at them: the space provider lives in the cave but the hooks that call it are
-    separate blobs, so a branch cannot reach it by assembly alone."""
-    from armasm import _compile, _parse
-    elf, _sections, by_name = _parse(_compile(src))
-    _, symtab = by_name['.symtab']
-    _, strtab = by_name['.strtab']
-    out = {}
-    for off in range(symtab[4], symtab[4] + symtab[5], 16):
-        name_off, value, _size, _info, _other, _shndx = struct.unpack_from(
-            '<IIIBBH', elf, off)
-        end = elf.index(b'\0', strtab[4] + name_off)
-        name = elf[strtab[4] + name_off:end].decode()
-        # Every real symbol, not a hand-kept list: a whitelist silently
-        # drops the next routine somebody adds, and stream_flush cost a
-        # deploy proving it.  `$a`/`$d` are the mapping symbols.
-        # SHN_UNDEF and SHN_ABS are undefined names and .equ constants; what
-        # is left is code, at an offset into the blob.
-        if name and not name.startswith('$') and _shndx not in (0, 0xFFF1):
-            out[name] = value
-    if not out:
-        raise SystemExit(f'{src.name} exports nothing we can call')
-    return out
 
 
 def branch_word(site, target, thumb):
@@ -346,14 +328,23 @@ def arm(only=None, measure_accel=False):
     print(f'buffers: {BUF_N} x {BUF_BYTES // 1024} KiB from the allocator at '
           f'record start = {BUF_N * BUF_BYTES / 8 / 2500:.1f} s')
 
-    # The producers call these; only the deployer knows where they landed.
-    syms = _symbols(HERE / 'stream_space.S')
-    base = PRODUCERS['space'][0]
-    _setw(STREAM_CLAIMFN, base + syms['stream_claim'], 'stream_claim')
-    _setw(STREAM_COMMITFN, base + syms['stream_commit'], 'stream_commit')
-    _setw(STREAM_FLUSHFN, base + syms['stream_flush'], 'stream_flush')
-    syms = _symbols(HERE / 'gyro_drain.S')
-    _setw(STREAM_DRAINFN, PRODUCERS['drain'][0] + syms['gyro_drain'], 'gyro_drain')
+    # The producers call these, and what they call is in the pool now.  Set
+    # here as well as in place_code(): arm() is run on its own often enough
+    # (`--only`, a re-arm after a restore) and a hook armed over a word that
+    # nobody filled in is a producer that silently does nothing -- every caller
+    # guards on zero, which is safe and invisible.  Resolving from the blob
+    # rather than from a cave address is also what makes this agree with the
+    # card, where gsup_boot reads the same four table entries.
+    import ring_task_deploy as R
+    _code, at = R.place()               # assembles and resolves; writes nothing
+    for word, name in ((STREAM_CLAIMFN, 'stream_claim'),
+                       (STREAM_COMMITFN, 'stream_commit'),
+                       (STREAM_FLUSHFN, 'stream_flush'),
+                       (STREAM_DRAINFN, 'gyro_drain')):
+        if name not in at:
+            raise SystemExit(f'the blob has no {name}: the pool build and this '
+                             f'deployer disagree about what moved out of the cave')
+        _setw(word, at[name], name)
 
     for name, (at, _src, _d, site, _orig, thumb) in PRODUCERS.items():
         if site is None:
@@ -450,13 +441,10 @@ def stage(n):
         STREAM_DRAINFN:  None              if n >= 4 else 0,
         STREAM_SIGFN:    at['writer_post'] if n >= 5 else 0,
     }
-    syms = _symbols(HERE / 'stream_space.S')
-    base = PRODUCERS['space'][0]
-    real = {STREAM_CLAIMFN: base + syms['stream_claim'],
-            STREAM_COMMITFN: base + syms['stream_commit'],
-            STREAM_FLUSHFN: base + syms['stream_flush'],
-            STREAM_DRAINFN: PRODUCERS['drain'][0]
-                            + _symbols(HERE / 'gyro_drain.S')['gyro_drain']}
+    real = {STREAM_CLAIMFN: at['stream_claim'],
+            STREAM_COMMITFN: at['stream_commit'],
+            STREAM_FLUSHFN: at['stream_flush'],
+            STREAM_DRAINFN: at['gyro_drain']}
     names = {T_OPENFN: 'take_open', T_CLOSEFN: 'take_close',
              STREAM_CLAIMFN: 'stream_claim', STREAM_COMMITFN: 'stream_commit',
              STREAM_FLUSHFN: 'stream_flush',

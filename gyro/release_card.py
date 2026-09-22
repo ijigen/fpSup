@@ -26,15 +26,18 @@ FILES = ('AutoRun.txt', 'fpSup.BIN', 'README.txt')
 # still produces a perfectly valid AutoRun and a camera that does nothing.
 SHARED = {
     0xC072E200: 'the accelerometer hook',
-    0xC072E300: 'the gyro drain',
     0xC072E4E0: 'the record start hook',
     0xC072E620: 'the record stop hook',
-    0xC072EC60: 'the space provider',
-    0xC072EC38: '-> stream_claim',
-    0xC072EC3C: '-> stream_commit',
-    0xC072EC40: '-> gyro_drain',
-    0xC072EC44: '-> stream_flush',
 }
+# The gyro drain, the space provider and the four words that point at them used
+# to be listed here as cave sections.  They are in the writer's blob now
+# (2026-09-22), so a card that dropped them would still pass a destination
+# check -- what proves they are aboard is the routine table, below: a zero
+# there is exactly the "built but dropped" failure this list exists to catch,
+# and it is checked for every routine the blob must carry, not just these.
+BLOB_ROUTINES = ('gyro_drain', 'stream_claim', 'stream_commit', 'stream_flush',
+                 'writer_body', 'take_open', 'take_close', 'writer_post',
+                 'mpool_init_jobs', 'blocks_open', 'gsup_boot')
 EXPECT = {
     'base': SHARED,
     # The mode hook is what makes a take land the right way up, and it is the
@@ -104,8 +107,30 @@ def check_sections(path, edition):
     if not lo <= entry < lo + ln:
         raise SystemExit(f'{path} names entry 0x{entry:08X}, which is not '
                          f'inside the launcher at 0x{lo:X}..0x{lo + ln:X}')
+    # What the launcher is carrying.  The cave list above can only see the
+    # hooks now; everything else the card needs is inside this one section, and
+    # the routine table at the top of the blob is what says so -- a zero there
+    # means the builder did not find the symbol, which is what "shipped without
+    # its sections" looks like since they moved into the pool.
+    import sys as _sys
+    _sys.path.insert(0, str(HERE))
+    _sys.path.insert(0, str(HERE.parent / 'fp_usb_shell'))
+    from armasm import symbols                                   # noqa: E402
+    import ring_task_deploy as R                                 # noqa: E402
+    # `blob` is the launcher's tail and BLOB_LEN is an immediate, so the offset
+    # does not depend on what was appended -- the label is where it is.
+    blob_off = symbols(HERE / 'gsup_launch.S', ['BLOB_LEN=0x0'])['blob']
+    table = d[lo + blob_off: lo + blob_off + len(R.GSUP_ROUTINES) * 4]
+    got = dict(zip(R.GSUP_ROUTINES, struct.unpack(f'<{len(table)//4}I', table)))
+    missing = [r for r in BLOB_ROUTINES if not got.get(r)]
+    if missing:
+        raise SystemExit(f'{path}: the blob\'s routine table has no '
+                         + ', '.join(missing))
     print(f'  sections: {n}, entry 0x{entry:08X} in the {ln}-byte launcher, '
           f'all {len(want)} accounted for')
+    print(f'  blob: {len(BLOB_ROUTINES)} routines resolved, '
+          f'gyro_drain at +0x{got["gyro_drain"]:X}, '
+          f'stream_claim at +0x{got["stream_claim"]:X}')
 
 
 def main():

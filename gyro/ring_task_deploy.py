@@ -164,7 +164,12 @@ DRY_RUN = False   # set by --dry-run: everything except the card
 GSUP_ROUTINES = ('writer_body', 'take_open', 'take_close', 'writer_post',
                  'mpool_init_jobs', 'blocks_open', 'gsup_boot',
                  'writer_path', 'writer_header', 'gcsv_head1', 'gcsv_head2',
-                 'writer_clip')
+                 'writer_clip',
+                 # The space provider and the drain moved out of the cave into
+                 # this blob (2026-09-22), so the four cave words that name
+                 # them are resolved at boot like everything else here.
+                 # APPEND ONLY: gsup_boot reads these by fixed offset.
+                 'gyro_drain', 'stream_claim', 'stream_commit', 'stream_flush')
 
 
 def patch_offsets(code, syms):

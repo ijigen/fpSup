@@ -453,6 +453,63 @@ class Editions(unittest.TestCase):
         # and nothing patches the recording path to do it
         self.assertNotIn('orient_stub', (HERE / 'build_base_card.py').read_text())
 
+    def test_the_drain_and_the_space_provider_live_in_the_blob(self):
+        """They were cave sections until 2026-09-22, and the cave is the one
+        place on this camera that cannot grow: 3,920 bytes of payload window,
+        largest free run 1,368.  Nothing in the firmware branches to either of
+        them -- the hooks reach them through four words -- so the only thing
+        keeping them there was that a build knew the address.
+
+        Two halves to this, and both have to hold or the card boots and logs
+        nothing: the blob must carry them, and the deployer must not place
+        them in the cave any more."""
+        for name in ('gyro_drain', 'stream_claim', 'stream_commit',
+                     'stream_flush'):
+            self.assertIn(name, self.gcsv, f'the blob has no {name}')
+            self.assertIn(name, self.base, f'Base\'s blob has no {name}')
+        import imu_stream_deploy as D
+        self.assertNotIn('drain', D.PRODUCERS)
+        self.assertNotIn('space', D.PRODUCERS)
+        # Every producer that is left is a real hook: something the firmware
+        # branches to, which is the only reason to hold a cave address.
+        for name, spec in D.PRODUCERS.items():
+            self.assertIsNotNone(spec[3], f'{name} is in the cave with no hook '
+                                          f'site -- it belongs in the blob')
+
+    def test_the_table_carries_the_four_call_throughs(self):
+        """gsup_boot reads them by fixed offset, so the order of GSUP_ROUTINES
+        is part of the ABI: appending is free, inserting is a branch into the
+        wrong routine."""
+        self.assertEqual(self.R.GSUP_ROUTINES[12:],
+                         ('gyro_drain', 'stream_claim', 'stream_commit',
+                          'stream_flush'))
+        code = self.R.patch_offsets(
+            assemble(HERE / 'gcsv_task.S', ()), self.gcsv)
+        got = struct.unpack_from('<4I', code, 12 * 4)
+        for name, off in zip(self.R.GSUP_ROUTINES[12:], got):
+            self.assertEqual(off, self.gcsv[name], name)
+
+    def test_the_call_throughs_are_written_before_any_hook_is_armed(self):
+        """The ordering that makes the move safe.
+
+        A hook armed over a word nobody filled in is not a crash: every caller
+        guards on zero, so the producer silently does nothing and the take
+        comes out empty.  That is the failure this move could have introduced,
+        and it is invisible in a build -- so it is checked here, on the source,
+        the same way the block clearing above is."""
+        core = (HERE / 'writer_core.inc.S').read_text()
+        boot = core[core.index('\ngsup_boot:'):]
+        boot = boot[:boot.index('\n9:')]
+        code = re.sub(r'/\*.*?\*/', '', boot, flags=re.S)
+        code = re.sub(r'@.*', '', code)
+        first_arm = min(code.index(s) for s in
+                        ('ACCEL_SITE', 'START_SITE', 'STOP_SITE'))
+        for word in ('STREAM_DRAINFN', 'STREAM_CLAIMFN', 'STREAM_COMMITFN',
+                     'STREAM_FLUSHFN'):
+            self.assertIn(word, code, f'gsup_boot never writes {word}')
+            self.assertLess(code.index(word), first_arm,
+                            f'{word} is written after a hook is armed')
+
     def test_boot_forgets_the_last_power_ons_blocks(self):
         """blocks_open returns early when B_PTR already holds something, which
         is right within a boot and wrong across one: the power switch does not

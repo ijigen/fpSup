@@ -56,6 +56,13 @@ gsup_offsets:
     .word   0       @ +0x24  the first half of the gcsv header (that edition)
     .word   0       @ +0x28  the second half (that edition)
     .word   0       @ +0x2C  writer_clip
+    /* The four the cave used to answer for itself.  stream_space.S and
+     * gyro_drain.S are sections of this blob now, so where they are is not
+     * known until the pool is -- exactly like take_open above. */
+    .word   0       @ +0x30  gyro_drain
+    .word   0       @ +0x34  stream_claim
+    .word   0       @ +0x38  stream_commit
+    .word   0       @ +0x3C  stream_flush
 
 /* blob_at -- r0 = a byte offset into gsup_offsets.  Returns that entry as an
  * address in this blob.
@@ -1042,6 +1049,39 @@ gsup_boot:
     movt    r1, #:upper16:STREAM_SIGFN
     str     r0, [r1]
 
+    /* The four call-throughs the producers reach the stream by.
+     *
+     * They were section values a build wrote, because the code they name sat
+     * at a fixed cave address.  It does not any more -- it is in this blob --
+     * so they are resolved here, from the same table and in the same shape as
+     * everything above.  Written well before the hooks are armed at the end of
+     * this routine, which is the ordering that matters: a hook that reads one
+     * of these words before it is written is a branch to zero, and every
+     * caller guards on zero for exactly that reason. */
+    ldr     r0, [r5, #48]               @ gyro_drain
+    add     r0, r0, r6
+    movw    r1, #:lower16:STREAM_DRAINFN
+    movt    r1, #:upper16:STREAM_DRAINFN
+    str     r0, [r1]
+
+    ldr     r0, [r5, #52]               @ stream_claim
+    add     r0, r0, r6
+    movw    r1, #:lower16:STREAM_CLAIMFN
+    movt    r1, #:upper16:STREAM_CLAIMFN
+    str     r0, [r1]
+
+    ldr     r0, [r5, #56]               @ stream_commit
+    add     r0, r0, r6
+    movw    r1, #:lower16:STREAM_COMMITFN
+    movt    r1, #:upper16:STREAM_COMMITFN
+    str     r0, [r1]
+
+    ldr     r0, [r5, #60]               @ stream_flush
+    add     r0, r0, r6
+    movw    r1, #:lower16:STREAM_FLUSHFN
+    movt    r1, #:upper16:STREAM_FLUSHFN
+    str     r0, [r1]
+
     add     r0, r4, #FOBJ_POOL_OFF
     movw    r1, #:lower16:T_FOBJ
     movt    r1, #:upper16:T_FOBJ
@@ -1221,3 +1261,23 @@ gsup_boot:
     bx      lr
 
 #include "mpool.S"
+
+/* The space provider and the gyro drain, in the blob rather than in the cave.
+ *
+ * Nothing in the firmware branches to either of them: the hooks reach them
+ * through STREAM_CLAIMFN/COMMITFN/FLUSHFN/DRAINFN, four words in the cave that
+ * somebody fills in.  So the only reason they were in the cave was that the
+ * build knew where they were, and 1,108 bytes of the payload window went on
+ * code nothing could jump to -- in a window that is 3,920 bytes with its
+ * largest free run at 1,368 (measured 2026-09-22).
+ *
+ * Here they cost the pool, which is a megabyte, and gsup_boot fills the four
+ * words in from the routine table the same way it fills in take_open and
+ * writer_post.  The hooks that read them are armed at the END of gsup_boot, so
+ * a word is never read before it is written.
+ *
+ * They still assemble on their own -- imu_stream_deploy places neither now,
+ * but the files are what the USB deploy and the card share, and the guard in
+ * imu_stream.inc.S is what lets them be both. */
+#include "stream_space.S"
+#include "gyro_drain.S"

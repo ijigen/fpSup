@@ -42,7 +42,6 @@ import argparse
 import pathlib
 import shutil
 import re
-import struct
 import subprocess
 import sys
 import tempfile
@@ -176,18 +175,13 @@ def sections(edition='base'):
         blob = assemble(HERE / src, defines)
         out.append((at, blob, name))
 
-    # The producers reach each other through words only a build can fill in:
-    # they are separate blobs and a branch cannot resolve across them.
-    space_syms = symbols(HERE / 'stream_space.S', ())
-    space_at = S.PRODUCERS['space'][0]
-    drain_at = S.PRODUCERS['drain'][0]
-    for word, addr, why in (
-            (S.STREAM_CLAIMFN, space_at + space_syms['stream_claim'], 'stream_claim'),
-            (S.STREAM_COMMITFN, space_at + space_syms['stream_commit'], 'stream_commit'),
-            (S.STREAM_FLUSHFN, space_at + space_syms['stream_flush'], 'stream_flush'),
-            (S.STREAM_DRAINFN,
-             drain_at + symbols(HERE / 'gyro_drain.S', ())['gyro_drain'], 'gyro_drain')):
-        out.append((word, struct.pack('<I', addr), f'-> {why}'))
+    # The four call-through words are NOT sections any more.
+    #
+    # They were, while the code they name sat at a fixed cave address a build
+    # could compute.  The space provider and the drain are in the writer's blob
+    # now -- 1,108 bytes out of a payload window that is 3,920 -- so where they
+    # land is not known until the pool is, and gsup_boot fills the words in from
+    # the routine table, before it arms a single hook.  See writer_core.inc.S.
 
     # The writer is NOT here any more.  It used to be a section whose
     # destination was a pool offset, which meant somebody had to have published

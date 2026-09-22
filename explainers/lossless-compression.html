@@ -176,7 +176,7 @@ table.verd td.n{color:var(--warn); font-weight:600}
     <dt>The blocking question</dt>
     <dd>Whether the camera can <em>play back</em> what it would write. The movie
     parser does not read the tile tags, so a compressed clip may be export-only
-    &mdash; see <a href="#skip">dynamic frame-skip</a>.</dd>
+    &mdash; see <a href="#skipsec">dynamic frame-skip</a>.</dd>
   </dl>
 </div>
 
@@ -581,7 +581,7 @@ which is why mode 106 at 1.5625&times; lands on 1936&times;1092 here against the
   <div class="detail" id="detail"></div>
 </div>
 
-<h2 id="skip">Dynamic frame-skip: legal, but not free</h2>
+<h2 id="skipsec">Dynamic frame-skip: legal, but not free</h2>
 
 <p>Compress the frames the engine can keep up with, write the rest uncompressed.
 The format allows it outright &mdash; CinemaDNG is one file per frame and
@@ -704,20 +704,23 @@ repository.</p>
   var HDR = 78848;            // bytes of DNG header per frame
   var CONTENTION = 1.17;
 
+  // One entry per sensor raster. The cost model only reads the frame size, so
+  // the individual mode ids do not change anything here -- `rates` is kept
+  // only to note which frame rates stock firmware offers at that size.
   var MODES = [
-    {w:6064, h:4042, ar:"3:2", merge:1, modes:[[97,40], [3,30], [121,25], [0,20], [141,18], [142,18]]},
-    {w:3032, h:2012, ar:"3:2", merge:2, modes:[[11,105], [117,100], [98,78], [143,18]]},
-    {w:4176, h:2174, ar:"1.92:1", merge:1, modes:[[6,30], [102,30], [122,25], [124,25], [100,24], [108,24], [152,24]]},
-    {w:5712, h:3216, ar:"16:9", merge:1, modes:[[95,24]]},
-    {w:6064, h:3412, ar:"16:9", merge:1, modes:[[7,30], [123,25], [101,24], [151,24]]},
-    {w:3032, h:1708, ar:"16:9", merge:2, modes:[[58,120], [89,100], [27,60], [104,60], [115,50], [135,48], [220,48], [106,30], [111,30], [125,25], [127,25], [109,24], [113,24], [218,24]]},
-    {w:2088, h:1174, ar:"16:9", merge:2, modes:[[103,120], [132,120], [118,100], [133,100], [88,60], [105,60], [116,50], [136,48], [221,48], [107,30], [112,30], [126,25], [128,25], [110,24], [114,24], [219,24]]},
-    {w:2016, h:1344, ar:"3:2", merge:3, modes:[[56,120], [147,100], [150,90], [149,80], [148,70], [139,60], [8,60]]},
-    {w:2016, h:672, ar:"3:1", merge:3, modes:[[12,240], [140,60], [9,60]]},
-    {w:3968, h:2640, ar:"3:2", merge:1, modes:[[130,40], [129,20], [144,18], [145,18]]},
-    {w:1984, h:1320, ar:"3:2", merge:2, modes:[[131,78], [146,18]]},
-    {w:2016, h:1136, ar:"16:9", merge:3, modes:[[134,120]]},
-    {w:6064, h:2022, ar:"3:1", merge:1, modes:[[10,60]]},
+    {w:6064, h:4042, ar:"3:2", merge:1, rates:[40, 30, 25, 20, 18]},
+    {w:3032, h:2012, ar:"3:2", merge:2, rates:[105, 100, 78, 18]},
+    {w:4176, h:2174, ar:"1.92:1", merge:1, rates:[30, 25, 24]},
+    {w:5712, h:3216, ar:"16:9", merge:1, rates:[24]},
+    {w:6064, h:3412, ar:"16:9", merge:1, rates:[30, 25, 24]},
+    {w:3032, h:1708, ar:"16:9", merge:2, rates:[120, 100, 60, 50, 48, 30, 25, 24]},
+    {w:2088, h:1174, ar:"16:9", merge:2, rates:[120, 100, 60, 50, 48, 30, 25, 24]},
+    {w:2016, h:1344, ar:"3:2", merge:3, rates:[120, 100, 90, 80, 70, 60]},
+    {w:2016, h:672, ar:"3:1", merge:3, rates:[240, 60]},
+    {w:3968, h:2640, ar:"3:2", merge:1, rates:[40, 20, 18]},
+    {w:1984, h:1320, ar:"3:2", merge:2, rates:[78, 18]},
+    {w:2016, h:1136, ar:"16:9", merge:3, rates:[120]},
+    {w:6064, h:2022, ar:"3:1", merge:1, rates:[60]},
   ];
 
   // every frame rate the mode table carries, plus the exact NTSC variants
@@ -728,17 +731,13 @@ repository.</p>
   var fmt = $('fmt'), fps = $('fps');
   if(!fmt) return;
 
-  MODES.forEach(function(g, gi){
-    var og = document.createElement('optgroup');
-    og.label = g.w + ' \u00d7 ' + g.h + '  \u00b7  ' + g.ar +
-               (g.merge > 1 ? '  \u00b7  ' + g.merge + '\u00d7 merge' : '  \u00b7  full readout');
-    g.modes.forEach(function(m){
-      var o = document.createElement('option');
-      o.value = gi + ':' + m[0];
-      o.textContent = 'mode ' + m[0] + '  \u2014  ' + m[1] + 'p';
-      og.appendChild(o);
-    });
-    fmt.appendChild(og);
+  MODES.slice().sort(function(a, b){ return b.w * b.h - a.w * a.h; })
+       .forEach(function(g){
+    var o = document.createElement('option');
+    o.value = MODES.indexOf(g);
+    o.textContent = g.w + ' \u00d7 ' + g.h + '  \u00b7  ' + g.ar +
+                    (g.merge > 1 ? '  \u00b7  ' + g.merge + '\u00d7 merge' : '');
+    fmt.appendChild(o);
   });
   RATES.forEach(function(r){
     var o = document.createElement('option');
@@ -746,19 +745,21 @@ repository.</p>
     fps.appendChild(o);
   });
 
-  // pick the frame rate closest to the mode's nominal one
+  // Keep the chosen rate if stock offers it at this size, otherwise land on the
+  // nearest rate to the fastest one it does offer.
   function syncRate(){
-    var sel = fmt.value.split(':');
-    var g = MODES[+sel[0]];
-    var m = g.modes.filter(function(x){ return x[0] === +sel[1]; })[0];
-    if(!m) return;
-    var want = m[1], best = RATES[0];
+    var g = MODES[+fmt.value];
+    if(!g) return;
+    var cur = parseFloat(fps.value);
+    if(g.rates.some(function(r){ return Math.abs(r - cur) < 0.5; })) return;
+    var want = g.rates[0], best = RATES[0];
     RATES.forEach(function(r){
       if(Math.abs(r - want) < Math.abs(best - want)) best = r;
     });
     fps.value = best;
   }
-  fmt.value = '5:106';            // mode 106, 3032x1708 at 30p -- the FHD source
+  fmt.value = String(MODES.findIndex(function(g){ return g.w === 3032 && g.h === 1708; }));
+  fps.value = 30;                 // the FHD source: 3032x1708 at 30p
   syncRate();
   fmt.addEventListener('change', function(){ syncRate(); render(); });
 
@@ -790,9 +791,7 @@ repository.</p>
   function n2(x){ return x.toFixed(2); }
 
   function calc(){
-    var sel = fmt.value.split(':');
-    var g = MODES[+sel[0]];
-    var mid = +sel[1];
+    var g = MODES[+fmt.value];
     var R = parseFloat(fps.value);
 
     // everything upstream of the codec: the CRCT chain and the resampler
@@ -815,7 +814,12 @@ repository.</p>
     var tiles = cols * rows;
     var alignedMpix = (cols * tw) * (rows * th) / 1e6;
 
-    var engineOK = ENGINE_BITS.indexOf(bits) !== -1;
+    // The tile search already honours the 326-tile limit, but a hand-picked
+    // tiling can blow past it -- 256x256 on 6064x4042 needs 384. That is not a
+    // configuration the hardware can be given, so treat it like a rejected depth.
+    var tilesOK = tiles <= 326;
+    var bitsOK = ENGINE_BITS.indexOf(bits) !== -1;
+    var engineOK = bitsOK && tilesOK;
 
     var encUs = CALL_US + US_PER_MPIX * alignedMpix + US_PER_TILE * tiles;
     if(contention) encUs *= CONTENTION;
@@ -861,12 +865,12 @@ repository.</p>
     var serialMs = encMs + writeMs;
 
     return {W:W,H:H,R:R,bits:bits,ratio:ratio,store:store,tiles:tiles,tw:tw,th:th,
-            mid:mid, srcW:g.w, srcH:g.h, red:red, merge:g.merge, ar:g.ar,
+            rates:g.rates, srcW:g.w, srcH:g.h, red:red, merge:g.merge, ar:g.ar,
             alignedMpix:alignedMpix, encMs:encMs, budgetMs:budgetMs, duty:duty,
             frac:frac, payC:payC, payU:payU, hdrRate:hdrRate, total:total,
             peak:peak, uncompressedAll:uncompressedAll, engineMBs:engineMBs,
             writeMs:writeMs, serialMs:serialMs, partial:partial, doSkip:doSkip,
-            contention:contention, engineOK:engineOK};
+            contention:contention, engineOK:engineOK, bitsOK:bitsOK, tilesOK:tilesOK};
   }
 
   function render(){
@@ -880,7 +884,8 @@ repository.</p>
 
     $('rEng').innerHTML = r.engineOK
       ? n1(r.engineMBs) + '<small>MB/s</small>'
-      : '<span style="font-size:.8rem;color:var(--warn)">rejects 8-bit</span>';
+      : '<span style="font-size:.8rem;color:var(--warn)">' +
+        (r.bitsOK ? r.tiles + ' tiles &gt; 326' : 'rejects 8-bit') + '</span>';
     $('rCmp').innerHTML = n1(r.payC) + '<small>MB/s</small>';
     $('rUnc').innerHTML = n1(r.payU) + '<small>MB/s</small>';
     $('rTot').innerHTML = n1(r.total) + '<small>MB/s</small>';
@@ -917,11 +922,14 @@ repository.</p>
     // verdict
     var v = $('verdict'), mk = $('vmk'), why = $('vwhy');
     var reasons = [];
-    if(r.duty > 1) reasons.push('engine needs ' + Math.round(r.duty * 100) + '% of the frame');
+    // With frame-skip on, the engine running past one frame slot is exactly what
+    // skip absorbs -- it is already priced into frac, and into the rate below.
+    // Judging it again here made skip look useless whenever it was doing its job.
+    if(r.duty > 1 && !r.doSkip) reasons.push('engine needs ' + Math.round(r.duty * 100) + '% of the frame');
     if(r.store > 0 && r.total > r.store) reasons.push('card is over by ' +
         Math.round((r.total / r.store - 1) * 100) + '%');
-    if(r.store > 0 && r.serialMs > r.budgetMs) reasons.push('serial encode+write is ' +
-        n2(r.serialMs) + ' ms against ' + n2(r.budgetMs));
+    if(r.store > 0 && r.serialMs > r.budgetMs && !r.doSkip)
+      reasons.push('serial encode+write is ' + n2(r.serialMs) + ' ms against ' + n2(r.budgetMs));
     v.classList.remove('ok','no');
     var over8 = r.store > 0 && r.total > r.store;
     if(!r.engineOK){
@@ -935,7 +943,10 @@ repository.</p>
           ' MB/s it does not need to. That is what 8-bit is for.';
     } else if(reasons.length === 0){
       v.classList.add('ok'); mk.textContent = 'fits';
-      why.textContent = 'engine at ' + Math.round(r.duty * 100) + '% duty, ' +
+      why.textContent = (r.duty > 1 && r.doSkip
+          ? 'engine saturated at ' + Math.round(r.duty * 100) + '% and skipping to ' +
+            Math.round(r.frac * 100) + '% of frames, '
+          : 'engine at ' + Math.round(r.duty * 100) + '% duty, ') +
         n1(r.total) + ' MB/s to a ' + (r.store > 0 ? r.store + ' MB/s' : 'n/a') +
         ' destination.';
     } else {
@@ -945,9 +956,10 @@ repository.</p>
 
     // detail line
     var d = [];
-    d.push('sensor <b>mode ' + r.mid + '</b> reads ' + r.srcW + '&times;' + r.srcH +
-           ' (' + r.ar + (r.merge > 1 ? ', ' + r.merge + '&times; merge' : '') + ')' +
-           (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : ''));
+    d.push('sensor reads <b>' + r.srcW + '&times;' + r.srcH + '</b> (' + r.ar +
+           (r.merge > 1 ? ', ' + r.merge + '&times; merge' : '') + ')' +
+           (r.red > 1 ? ', reduced ' + n2(r.red) + '&times; before the codec' : '') +
+           ' &mdash; stock runs this size at ' + r.rates.join(' / ') + ' fps');
     d.push('codec sees <b>' + r.W + '&times;' + r.H + '</b> at ' + r.bits + '-bit, ' +
            r.tw + '&times;' + r.th + ' tiles (' + r.tiles + '), aligned ' +
            n2(r.alignedMpix) + ' Mpix' +
@@ -957,7 +969,8 @@ repository.</p>
              '10 / 12 / 14 / 16, and anything else is rejected outright. ' +
              'Everything below is the uncompressed rate.');
     }
-    if(r.engineOK) d.push('encode <b>' + n2(r.encMs) + ' ms</b> = 2.18 call + ' +
+    if(r.engineOK) d.push('encode <b>' + n2(r.encMs) + ' ms</b> = ' +
+           n2(2179 / 1000 * (r.contention ? 1.17 : 1)) + ' call + ' +
            n2(4954.40 * r.alignedMpix / 1000 * (r.contention ? 1.17 : 1)) + ' pixels + ' +
            n2(40.926 * r.tiles / 1000 * (r.contention ? 1.17 : 1)) + ' tiles' +
            (r.contention ? ' (incl. +17% contention)' : ''));
@@ -970,7 +983,8 @@ repository.</p>
              ? ' — unchanged, because the skipped frames still arrive full size'
              : ''));
     if(r.store > 0){
-      var mins = function(gb){ return (gb * 1024 * 0.93) / r.total / 60; };
+      // r.total is decimal MB/s, so the card's advertised GB are decimal too
+      var mins = function(gb){ return (gb * 1000 * 0.93) / r.total / 60; };
       d.push('recording time <b>' + n1(mins(128)) + ' min</b> per 128 GB · ' +
              n1(mins(512)) + ' min per 512 GB');
     }
