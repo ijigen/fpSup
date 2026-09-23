@@ -997,6 +997,10 @@ html&gt;body{padding:0}&lt;/style&gt;
     #imx410-explainer .iso-scale span{position:absolute;transform:translateX(-50%)}
     #imx410-explainer .iso-scale span:first-child{transform:none}
     #imx410-explainer .iso-scale span:last-child{transform:translateX(-100%)}
+    #imx410-explainer label.follow{display:inline-flex;gap:6px;align-items:center;font-weight:500;margin:0 0 4px}
+    #imx410-explainer .lv-table{border-collapse:collapse;font-variant-numeric:tabular-nums;margin-top:6px}
+    #imx410-explainer .lv-table td,#imx410-explainer .lv-table th{padding:2px 10px 2px 0;text-align:right}
+    #imx410-explainer .lv-table th{font-weight:600}
   &lt;/style&gt;
 
   &lt;div class=&quot;hero&quot;&gt;
@@ -1015,7 +1019,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;div&gt;&lt;label for=&quot;imx-mode&quot;&gt;拍攝路徑&lt;/label&gt;&lt;select id=&quot;imx-mode&quot;&gt;&lt;option value=&quot;movie&quot;&gt;靜態／一般影片／RAW 8·10-bit&lt;/option&gt;&lt;option value=&quot;raw12&quot;&gt;CinemaDNG RAW12&lt;/option&gt;&lt;option value=&quot;live&quot;&gt;Live View&lt;/option&gt;&lt;option value=&quot;generic&quot;&gt;Generic movie RAW&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
     &lt;div&gt;&lt;label for=&quot;estimate-fps&quot;&gt;資料率估算幀率：&lt;span class=&quot;readout&quot; id=&quot;estimate-fps-value&quot;&gt;29.970030p&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;estimate-fps&quot; type=&quot;number&quot; min=&quot;0.001&quot; max=&quot;1000&quot; step=&quot;0.001&quot; value=&quot;29.970030&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;可用 VMAX 另設&lt;/span&gt;&lt;span id=&quot;table-fps&quot;&gt;表內 VMAX：29.970030p&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
     &lt;div&gt;&lt;label for=&quot;imx-iso&quot;&gt;ISO：&lt;span class=&quot;readout&quot; id=&quot;imx-iso-value&quot;&gt;640&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;imx-iso&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;14&quot; step=&quot;1&quot; value=&quot;5&quot;&gt;&lt;div class=&quot;scale iso-scale&quot;&gt;&lt;span style=&quot;left:0&quot;&gt;100&lt;/span&gt;&lt;span style=&quot;left:35.714%&quot;&gt;640&lt;/span&gt;&lt;span style=&quot;left:85.714%&quot;&gt;3200&lt;/span&gt;&lt;span style=&quot;left:100%&quot;&gt;12800&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
-    &lt;div&gt;&lt;label for=&quot;imx-code&quot;&gt;手動模擬 Analog code：&lt;span class=&quot;readout&quot; id=&quot;imx-code-value&quot;&gt;3000&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;imx-code&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;4094&quot; step=&quot;1&quot; value=&quot;3000&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;0 · 1×&lt;/span&gt;&lt;span&gt;0xDFD · AR 門檻&lt;/span&gt;&lt;span&gt;4094&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;注意：&lt;/strong&gt;這是研究用假設值，不是由 ISO 自動算出的實機值。真正 code 還依賴 LCG/HCG offset、sensor OTP、analog cap 與 gain-state；請勿把畫面組合視為該 ISO 的實際 register 狀態。&lt;/div&gt;&lt;/div&gt;
+    &lt;div&gt;&lt;label for=&quot;imx-code&quot;&gt;Analog code：&lt;span class=&quot;readout&quot; id=&quot;imx-code-value&quot;&gt;3000&lt;/span&gt;&lt;/label&gt;&lt;label class=&quot;follow&quot;&gt;&lt;input id=&quot;code-follow&quot; type=&quot;checkbox&quot; checked&gt; &lt;span&gt;跟隨 ISO&lt;/span&gt;&lt;/label&gt;&lt;input id=&quot;imx-code&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;4094&quot; step=&quot;1&quot; value=&quot;3000&quot;&gt;&lt;div class=&quot;scale&quot;&gt;&lt;span&gt;0 · 1×&lt;/span&gt;&lt;span&gt;0xDFD · AR 門檻&lt;/span&gt;&lt;span&gt;4094&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;注意：&lt;/strong&gt;勾「跟隨 ISO」時：Live View 用本機待機（idle）實測值（整級 ISO；1/3 級在相鄰實測點間內插）；其他路徑是推算 —— CG 照各路徑的規則（不是待機量到的 CG），analog 借用待機的校正（ISO 100 = 1.31×、HCG 偏移約 5.22×、analog 上限約 30 dB）套上各路徑的 HCG 切換點，並假設錄影路徑沒有待機那個 2× 數位微調。錄影中無法從主機讀值，所以這部分尚未實測。拖動滑桿即切回手動。&lt;/div&gt;&lt;/div&gt;
   &lt;/div&gt;
 
   &lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;完整模式表：&lt;/strong&gt;選單列出 V5.02 韌體的全部 70 個 logical modes；其中只有 24 組不同的 sensor register payload。full／crop 是韌體 metadata，不代表該模式已能錄影，也不能單獨證明是完整感光面的 Open Gate。選項末尾的 C16–C23 是 metadata +0x60，對應讀出／類比指紋：16 = RAW14、17/18/20/22 = 安靜組、19/21/23 = 快速組；兩組的暗部讀出噪聲實測差很多（M98 0.551 DN、M117 0.965 DN），名稱仍是推測。「倍率」是幾何間距（+0x4C/+0x50），括號裡的「抽頭」是每軸實際取的樣本數（+0x44/+0x48），÷3 家族兩者不同。「①」的對照直接解自韌體 picker 表（MOV、CinemaDNG 三種位元深度、照片單張／連拍），✓ 實測 = 錄完讀回模式確認，探針 = 在機上問 picker 得到。&lt;br&gt;&lt;strong&gt;幀率不是 mode 的固有屬性：&lt;/strong&gt;選單顯示的是韌體 timing table 的 VMAX 預設值，不是固定格式或硬性上限。實機已驗證 Mode 117 把 VMAX 2184 改為 7280，可由 99.900100p 改成 29.970030p；HMAX 不變，因此 9.221 ms 捲簾讀出不變。OG3K 就是這樣把 M98／M117 改到八種格率錄影。上方可另填幀率估算資料率；下方的資料率是感光元件輸出（raster × 位元深度），不是卡上檔案大小。&lt;/div&gt;
@@ -1044,8 +1048,9 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;div class=&quot;cell l&quot;&gt;100–500&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip lcg&quot;&gt;&lt;/i&gt;LCG&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip lcg&quot;&gt;&lt;/i&gt;LCG&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip lcg&quot;&gt;&lt;/i&gt;LCG&lt;/div&gt;
     &lt;div class=&quot;cell l&quot;&gt;640–2500&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip hcg&quot;&gt;&lt;/i&gt;HCG&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip hcg&quot;&gt;&lt;/i&gt;HCG&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip lcg&quot;&gt;&lt;/i&gt;LCG&lt;/div&gt;
     &lt;div class=&quot;cell l&quot;&gt;3200+&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip hcg&quot;&gt;&lt;/i&gt;HCG&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip hcg&quot;&gt;&lt;/i&gt;HCG&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip hcg&quot;&gt;&lt;/i&gt;HCG&lt;/div&gt;
-    &lt;div class=&quot;cell l&quot;&gt;每個 ISO 的 AR&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;看最終 code（≥0xDFD = High）&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;看最終 code（≥0xDFD = High）&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;看最終 code（≥0xDFD = High）&lt;/div&gt;
+    &lt;div class=&quot;cell l&quot;&gt;High AR（推算）&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;約 ISO 3200 起，在門檻邊緣&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;約 ISO 3200 起，在門檻邊緣&lt;/div&gt;&lt;div class=&quot;cell&quot;&gt;&lt;i class=&quot;chip unknown&quot;&gt;&lt;/i&gt;ISO 640 起&lt;/div&gt;
   &lt;/div&gt;
+  &lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;待機（idle）Live View 實測（2026-09-24，CINE 待機，gain_state through）：&lt;/strong&gt;每個整級 ISO 都讀回 0xC343B5A0 的增益物件。ISO 1600 起切 High AR；ISO 400 起多一個固定 2× 的數位微調（所以 400 的 analog 跟 200 一樣）；ISO 6400 碰到約 30 dB 的 analog 上限，多出來的由溢位數位增益承接；ISO 12800 切 HCG 後 analog 降回 16×。1/3 級 ISO 沒有量。這裡的 CG 是待機時的決定（本機 OTP 門檻約 ISO 10940）；錄影時 gain_state 換成 movie／movie_raw，CG 改照 640／3200 的規則切，不是這組數據。&lt;table class=&quot;lv-table&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;ISO&lt;/th&gt;&lt;th&gt;code&lt;/th&gt;&lt;th&gt;analog&lt;/th&gt;&lt;th&gt;AR&lt;/th&gt;&lt;th&gt;CG&lt;/th&gt;&lt;th&gt;微調&lt;/th&gt;&lt;th&gt;溢位&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;100&lt;/td&gt;&lt;td&gt;985&lt;/td&gt;&lt;td&gt;1.31×&lt;/td&gt;&lt;td&gt;Normal&lt;/td&gt;&lt;td&gt;LCG&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;200&lt;/td&gt;&lt;td&gt;2540&lt;/td&gt;&lt;td&gt;2.63×&lt;/td&gt;&lt;td&gt;Normal&lt;/td&gt;&lt;td&gt;LCG&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;400&lt;/td&gt;&lt;td&gt;2540&lt;/td&gt;&lt;td&gt;2.63×&lt;/td&gt;&lt;td&gt;Normal&lt;/td&gt;&lt;td&gt;LCG&lt;/td&gt;&lt;td&gt;2.00×&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;800&lt;/td&gt;&lt;td&gt;3317&lt;/td&gt;&lt;td&gt;5.26×&lt;/td&gt;&lt;td&gt;Normal&lt;/td&gt;&lt;td&gt;LCG&lt;/td&gt;&lt;td&gt;2.00×&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;1600&lt;/td&gt;&lt;td&gt;3706&lt;/td&gt;&lt;td&gt;10.53×&lt;/td&gt;&lt;td&gt;High&lt;/td&gt;&lt;td&gt;LCG&lt;/td&gt;&lt;td&gt;2.00×&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;3200&lt;/td&gt;&lt;td&gt;3900&lt;/td&gt;&lt;td&gt;21.07×&lt;/td&gt;&lt;td&gt;High&lt;/td&gt;&lt;td&gt;LCG&lt;/td&gt;&lt;td&gt;2.00×&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;6400&lt;/td&gt;&lt;td&gt;3965&lt;/td&gt;&lt;td&gt;31.62×&lt;/td&gt;&lt;td&gt;High&lt;/td&gt;&lt;td&gt;LCG&lt;/td&gt;&lt;td&gt;2.00×&lt;/td&gt;&lt;td&gt;1.33×&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;12800&lt;/td&gt;&lt;td&gt;3840&lt;/td&gt;&lt;td&gt;16.06×&lt;/td&gt;&lt;td&gt;High&lt;/td&gt;&lt;td&gt;HCG&lt;/td&gt;&lt;td&gt;2.00×&lt;/td&gt;&lt;td&gt;1.00×&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;
   &lt;div class=&quot;evidence-note&quot;&gt;RAW 8／10-bit 對應 gain_state 5／6 是推定；只有 12-bit → 7 在實錄中量過。HCG 還要求 OTP S+0x78 ≠ 0 且 high_gain_off = 0。&lt;/div&gt;
   &lt;div class=&quot;evidence-note&quot;&gt;&lt;strong&gt;Expanded ISO：&lt;/strong&gt;ISO 6／12／25／50 在 V5.02 全部 clamp 成 ISO 100 sensor gain；ISO 51200／102400 超過 analog cap 的部分由 ISP digital gain 完成。兩者都不增加 sensor full-well 或捕捉到的光資訊。&lt;/div&gt;
   &lt;details&gt;&lt;summary&gt;Register tuples 與控制鏈（V5.02 韌體確認）&lt;/summary&gt;
@@ -1105,6 +1110,14 @@ html&gt;body{padding:0}&lt;/style&gt;
       const $=id=&gt;root.querySelector(&#x27;#&#x27;+id);
       let lang=&#x27;en&#x27;;try{const saved=localStorage.getItem(&#x27;imx410-lang&#x27;);if(saved===&#x27;en&#x27;||saved===&#x27;zh-Hant&#x27;)lang=saved}catch(_error){}
       const translations={
+        &#x27;跟隨 ISO&#x27;:&#x27;Follow ISO&#x27;,
+        &#x27;High AR（推算）&#x27;:&#x27;High AR (estimated)&#x27;,
+        &#x27;約 ISO 3200 起，在門檻邊緣&#x27;:&#x27;from about ISO 3200, right at the threshold&#x27;,
+        &#x27;ISO 640 起&#x27;:&#x27;from ISO 640&#x27;,
+        &#x27;待機（idle）Live View 實測（2026-09-24，CINE 待機，gain_state through）：&#x27;:&#x27;Idle Live View, measured (2026-09-24, CINE standby, gain_state through): &#x27;,
+        &#x27;每個整級 ISO 都讀回 0xC343B5A0 的增益物件。ISO 1600 起切 High AR；ISO 400 起多一個固定 2× 的數位微調（所以 400 的 analog 跟 200 一樣）；ISO 6400 碰到約 30 dB 的 analog 上限，多出來的由溢位數位增益承接；ISO 12800 切 HCG 後 analog 降回 16×。1/3 級 ISO 沒有量。這裡的 CG 是待機時的決定（本機 OTP 門檻約 ISO 10940）；錄影時 gain_state 換成 movie／movie_raw，CG 改照 640／3200 的規則切，不是這組數據。&#x27;:&#x27;The gain object at 0xC343B5A0 was read back at every full-stop ISO. High AR starts at ISO 1600. From ISO 400 there is a fixed 2× digital trim, so 400 has the same analog gain as 200. ISO 6400 hits the analog cap of about 30 dB and the overflow digital gain takes the rest; at ISO 12800 the sensor switches to HCG and analog drops back to 16×. 1/3-stop ISOs were not measured. The CG here is the idle decision (this unit’s OTP threshold, about ISO 10940); during recording the gain_state becomes movie / movie_raw and CG follows the 640 / 3200 rules instead, which this data does not show.&#x27;,
+        &#x27;微調&#x27;:&#x27;trim&#x27;,
+        &#x27;溢位&#x27;:&#x27;overflow&#x27;,
         &#x27;cap 以上：承接 analog 放不上去的餘量&#x27;:&#x27;Above the cap: takes the remainder analog cannot reach&#x27;,
         &#x27;12-bit analog code：003D = 低 8 位元、003E = 高 4 位元（bits 11:8）；003F/0040 為第二組相同 code。正常原廠路徑在 code ≥ 0x0DFD 時切 High AR。實機讀值：ISO 100 → code 985（1.31×，Normal；不是 0，因為有 ×1.17 校正錨點）、ISO 12800 → 0xF00（High），切換點約在 ISO 10939–10949 之間。AR 的 Sony 官方電路名稱與獨立 ADC input-range register 尚未確認。&#x27;:&#x27;12-bit analog code: 003D = low 8 bits, 003E = high nibble (bits 11:8); 003F/0040 carry a second copy of the same code. The normal stock path switches to High AR at code ≥ 0x0DFD. Live readings: ISO 100 → code 985 (1.31×, Normal; not 0, because of the ×1.17 calibration anchor), ISO 12800 → 0xF00 (High); the switch lies between about ISO 10939 and 10949. Sony’s official name for the AR circuit and any separate ADC input-range register are unconfirmed.&#x27;,
         &#x27;RAW 8·10-bit（推定）&#x27;:&#x27;RAW 8·10-bit (inferred)&#x27;,
@@ -1119,8 +1132,8 @@ html&gt;body{padding:0}&lt;/style&gt;
         &#x27;SIGMA fp Ver.5.02 · Sony IMX410 · ROM 規則與 sensor OTP 分層&#x27;:&#x27;SIGMA fp Ver.5.02 · Sony IMX410 · ROM rules and sensor OTP layers&#x27;,
         &#x27;韌體已確認&#x27;:&#x27;Firmware-confirmed&#x27;,&#x27;OTP／實機值&#x27;:&#x27;OTP / measured value&#x27;,
         &#x27;① fp 相機設定&#x27;:&#x27;① fp camera setting&#x27;,&#x27;② 實際 Sensor mode（70 個 logical modes）&#x27;:&#x27;② Actual sensor mode (70 logical modes)&#x27;,
-        &#x27;拍攝路徑&#x27;:&#x27;Capture path&#x27;,&#x27;資料率估算幀率：&#x27;:&#x27;Frame rate for data estimate: &#x27;,&#x27;可用 VMAX 另設&#x27;:&#x27;Can be set separately with VMAX&#x27;,&#x27;表內 VMAX：29.970030p&#x27;:&#x27;Table VMAX: 29.970030p&#x27;,&#x27;手動模擬 Analog code：&#x27;:&#x27;Manual simulated analog code: &#x27;,
-        &#x27;注意：&#x27;:&#x27;Important: &#x27;,&#x27;這是研究用假設值，不是由 ISO 自動算出的實機值。真正 code 還依賴 LCG/HCG offset、sensor OTP、analog cap 與 gain-state；請勿把畫面組合視為該 ISO 的實際 register 狀態。&#x27;:&#x27;This is a research hypothesis, not a camera value calculated from ISO. The real code also depends on the LCG/HCG offset, sensor OTP, analog cap and gain state; do not treat the displayed combination as the camera’s actual register state at that ISO.&#x27;,
+        &#x27;拍攝路徑&#x27;:&#x27;Capture path&#x27;,&#x27;資料率估算幀率：&#x27;:&#x27;Frame rate for data estimate: &#x27;,&#x27;可用 VMAX 另設&#x27;:&#x27;Can be set separately with VMAX&#x27;,&#x27;表內 VMAX：29.970030p&#x27;:&#x27;Table VMAX: 29.970030p&#x27;,&#x27;Analog code：&#x27;:&#x27;Analog code: &#x27;,
+        &#x27;注意：&#x27;:&#x27;Important: &#x27;,&#x27;勾「跟隨 ISO」時：Live View 用本機待機（idle）實測值（整級 ISO；1/3 級在相鄰實測點間內插）；其他路徑是推算 —— CG 照各路徑的規則（不是待機量到的 CG），analog 借用待機的校正（ISO 100 = 1.31×、HCG 偏移約 5.22×、analog 上限約 30 dB）套上各路徑的 HCG 切換點，並假設錄影路徑沒有待機那個 2× 數位微調。錄影中無法從主機讀值，所以這部分尚未實測。拖動滑桿即切回手動。&#x27;:&#x27;With “Follow ISO” on: Live View uses idle values measured on this camera (full-stop ISOs; 1/3 stops are interpolated between neighbouring measurements). Other paths are estimated: CG follows each path’s own rule (not the idle CG measured here), and analog borrows the idle calibration (ISO 100 = 1.31×, HCG offset about 5.22×, analog cap about 30 dB) with each path’s HCG switch point, assuming the capture paths lack the idle 2× digital trim. The host cannot read values during recording, so these are not measured yet. Dragging the slider switches to manual.&#x27;,
         &#x27;ISO：&#x27;:&#x27;ISO: &#x27;,&#x27;0xDFD · AR 門檻&#x27;:&#x27;0xDFD · AR threshold&#x27;,
         &#x27;照片&#x27;:&#x27;Photo&#x27;,&#x27;一般影片&#x27;:&#x27;Standard video&#x27;,&#x27;一般影片 · 4K 已確認；FHD 需 runtime Mode ID&#x27;:&#x27;Standard video · 4K confirmed; FHD needs runtime Mode ID&#x27;,&#x27;CinemaDNG · 已驗證 sensor mapping&#x27;:&#x27;CinemaDNG · verified sensor mapping&#x27;,&#x27;原廠可選 · sensor mapping 待確認&#x27;:&#x27;Stock settings · sensor mapping pending&#x27;,&#x27;CinemaDNG RAW8／10／12 · 其他解析度與幀率組合&#x27;:&#x27;CinemaDNG RAW8 / 10 / 12 · other resolution and frame-rate combinations&#x27;,&#x27;照片 readout&#x27;:&#x27;Photo readout&#x27;,
         &#x27;3:2 · full（韌體旗標）· 21 modes&#x27;:&#x27;3:2 · full (firmware flag) · 21 modes&#x27;,&#x27;3:2 · crop（韌體旗標）· 6 modes&#x27;:&#x27;3:2 · crop (firmware flag) · 6 modes&#x27;,
@@ -1298,14 +1311,41 @@ html&gt;body{padding:0}&lt;/style&gt;
       const initial=cameraMap[camera.value];preset.value=String(initial.p);mode.value=initial.m;syncEstimateFps();
       const adc=$(&#x27;adc&#x27;);
       for(let i=0;i&lt;8;i++){const b=document.createElement(&#x27;i&#x27;);b.style.height=(22+i*7)+&#x27;%&#x27;;adc.appendChild(b)}
+      // Live View, measured 2026-09-24 on CINE standby (gain_state through), read from 0xC343B5A0:
+      // ISO -&gt; [applied analog code, inter-node digital trim]. 6400 also hit the ~30 dB analog cap
+      // (overflow digital 1.33x); 12800 is HCG.
+      const LV={100:[985,1],200:[2540,1],400:[2540,2],800:[3317,2],1600:[3706,2],3200:[3900,2],6400:[3965,2],12800:[3840,2]};
+      const LV_ISOS=Object.keys(LV).map(Number);
+      const LV_HCG=10944;              // this unit&#x27;s OTP switch, bracketed at ISO 10939-10949
+      const toCode=r=&gt;r&lt;=1?0:Math.min(4094,Math.round(4095*(1-1/r)));
+      const toRatio=c=&gt;4095/(4095-c);
+      function codeFor(m,iv,hcg){
+        if(m===&#x27;live&#x27;){
+          if(LV[iv])return{code:LV[iv][0],src:&#x27;measured&#x27;};
+          let lo=LV_ISOS.filter(x=&gt;x&lt;iv).pop(),hi=LV_ISOS.find(x=&gt;x&gt;iv);
+          const t=Math.log(iv/lo)/Math.log(hi/lo),a=Math.log(toRatio(LV[lo][0])),b=Math.log(toRatio(LV[hi][0]));
+          return{code:toCode(Math.exp(a+(b-a)*t)),src:&#x27;interp&#x27;};
+        }
+        // capture paths: Live View calibration, no 2x trim, path-specific CG switch, ~30 dB cap
+        const r=Math.min(31.62,toRatio(985)*iv/100/(hcg?5.22:1));   // ISO 100 anchor = measured code 985
+        return{code:toCode(r),src:&#x27;estimate&#x27;};
+      }
+      // position of an ISO on the slider, interpolating between its stops in log space
+      function isoPos(v){
+        if(v&lt;=isos[0])return 0;if(v&gt;=isos[isos.length-1])return 100;
+        const i=isos.findIndex(x=&gt;x&gt;=v);if(isos[i]===v)return i/(isos.length-1)*100;
+        const t=Math.log(v/isos[i-1])/Math.log(isos[i]/isos[i-1]);return (i-1+t)/(isos.length-1)*100;
+      }
       function update(){
-        const iv=isos[+iso.value],cv=+code.value,m=mode.value,p=presets[+preset.value];
+        const iv=isos[+iso.value],m=mode.value,p=presets[+preset.value];
         const requestedFps=Number(estimateFps.value),rateFps=Number.isFinite(requestedFps)&amp;&amp;requestedFps&gt;0?requestedFps:p.f;
         let hcg=false,known=true,threshold=640;
         if(m===&#x27;raw12&#x27;){threshold=3200;hcg=iv&gt;=threshold}
         else if(m===&#x27;movie&#x27;){threshold=640;hcg=iv&gt;=threshold}
-        else if(m===&#x27;live&#x27;){known=false;hcg=false}
+        else if(m===&#x27;live&#x27;){threshold=LV_HCG;hcg=iv&gt;=threshold}
         else {known=true;threshold=Infinity;hcg=false}
+        let cv=+code.value,codeSrc=&#x27;manual&#x27;;
+        if($(&#x27;code-follow&#x27;).checked){const r=codeFor(m,iv,hcg);cv=r.code;codeSrc=r.src;code.value=cv}
         const high=cv&gt;=0xDFD;
         const linear=4095/(4095-cv),db=20*Math.log10(linear);
         $(&#x27;imx-iso-value&#x27;).textContent=iv;
@@ -1353,16 +1393,19 @@ html&gt;body{padding:0}&lt;/style&gt;
         $(&#x27;iso-marker&#x27;).style.setProperty(&#x27;--pos&#x27;,(+iso.value/(isos.length-1)*100).toFixed(2)+&#x27;%&#x27;);
         if(!known) $(&#x27;cg-fact&#x27;).innerHTML=en?&#x27;&lt;strong&gt;Current: OTP required&lt;/strong&gt; · The Live View threshold is not fixed in ROM&#x27;:&#x27;&lt;strong&gt;目前：需讀 OTP&lt;/strong&gt; · Live View 門檻不是 ROM 固定值&#x27;;
         else if(threshold===Infinity) $(&#x27;cg-fact&#x27;).innerHTML=en?&#x27;&lt;strong&gt;Current: LCG&lt;/strong&gt; · Generic movie RAW does not switch to HCG automatically&#x27;:&#x27;&lt;strong&gt;目前：LCG&lt;/strong&gt; · Generic movie RAW 不自動切 HCG&#x27;;
+        else if(m===&#x27;live&#x27;) $(&#x27;cg-fact&#x27;).innerHTML=en?&#x27;&lt;strong&gt;Current: &#x27;+(hcg?&#x27;HCG&#x27;:&#x27;LCG&#x27;)+&#x27;&lt;/strong&gt; · idle Live View switches at about ISO 10940 on this camera (per-unit OTP; measured)&#x27;:&#x27;&lt;strong&gt;目前：&#x27;+(hcg?&#x27;HCG&#x27;:&#x27;LCG&#x27;)+&#x27;&lt;/strong&gt; · 本機待機 Live View 約在 ISO 10940 切換（每台 OTP 不同；實測）&#x27;;
         else $(&#x27;cg-fact&#x27;).innerHTML=en?&#x27;&lt;strong&gt;Current: &#x27;+(hcg?&#x27;HCG&#x27;:&#x27;LCG&#x27;)+&#x27;&lt;/strong&gt; · This path switches at ISO &#x27;+threshold:&#x27;&lt;strong&gt;目前：&#x27;+(hcg?&#x27;HCG&#x27;:&#x27;LCG&#x27;)+&#x27;&lt;/strong&gt; · 此路徑從 ISO &#x27;+threshold+&#x27; 切換&#x27;;
-        $(&#x27;ar-fact&#x27;).innerHTML=en?&#x27;&lt;strong&gt;Current: &#x27;+(high?&#x27;High&#x27;:&#x27;Normal&#x27;)+&#x27; AR&lt;/strong&gt; · analog code &#x27;+(high?&#x27;has reached&#x27;:&#x27;has not reached&#x27;)+&#x27; 0xDFD&#x27;:&#x27;&lt;strong&gt;目前：&#x27;+(high?&#x27;High&#x27;:&#x27;Normal&#x27;)+&#x27; AR&lt;/strong&gt; · analog code &#x27;+(high?&#x27;已達&#x27;:&#x27;尚未達&#x27;)+&#x27; 0xDFD&#x27;;
-        const pct=isFinite(threshold)?isos.indexOf(threshold)/(isos.length-1)*100:50;
+        const srcEn={measured:&#x27;measured on this camera&#x27;,interp:&#x27;interpolated between measured stops&#x27;,estimate:&#x27;estimate, not measured&#x27;,manual:&#x27;manual&#x27;}[codeSrc],srcZh={measured:&#x27;本機實測&#x27;,interp:&#x27;實測點間內插&#x27;,estimate:&#x27;推算，未實測&#x27;,manual:&#x27;手動&#x27;}[codeSrc];
+        $(&#x27;ar-fact&#x27;).innerHTML=en?&#x27;&lt;strong&gt;Current: &#x27;+(high?&#x27;High&#x27;:&#x27;Normal&#x27;)+&#x27; AR&lt;/strong&gt; · analog code &#x27;+(high?&#x27;has reached&#x27;:&#x27;has not reached&#x27;)+&#x27; 0xDFD · &#x27;+srcEn:&#x27;&lt;strong&gt;目前：&#x27;+(high?&#x27;High&#x27;:&#x27;Normal&#x27;)+&#x27; AR&lt;/strong&gt; · analog code &#x27;+(high?&#x27;已達&#x27;:&#x27;尚未達&#x27;)+&#x27; 0xDFD · &#x27;+srcZh;
+        const pct=isFinite(threshold)?isoPos(threshold):50;
         $(&#x27;cg-left&#x27;).style.width=pct+&#x27;%&#x27;;$(&#x27;cg-right&#x27;).style.width=(100-pct)+&#x27;%&#x27;;
         $(&#x27;cg-right&#x27;).textContent=threshold===Infinity?(en?&#x27;No auto switch&#x27;:&#x27;不自動切換&#x27;):&#x27;HCG&#x27;;
       }
       camera.addEventListener(&#x27;input&#x27;,()=&gt;{const x=cameraMap[camera.value];if(x){preset.value=String(x.p);mode.value=x.m;syncEstimateFps()}update()});
       preset.addEventListener(&#x27;input&#x27;,()=&gt;{camera.value=&#x27;custom&#x27;;syncEstimateFps();update()});
       mode.addEventListener(&#x27;input&#x27;,()=&gt;{camera.value=&#x27;custom&#x27;;update()});
-      [iso,code,estimateFps].forEach(el=&gt;el.addEventListener(&#x27;input&#x27;,update));
+      [iso,estimateFps,$(&#x27;code-follow&#x27;)].forEach(el=&gt;el.addEventListener(&#x27;input&#x27;,update));
+      code.addEventListener(&#x27;input&#x27;,()=&gt;{$(&#x27;code-follow&#x27;).checked=false;update()});
       $(&#x27;lang-toggle&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{lang=lang===&#x27;en&#x27;?&#x27;zh-Hant&#x27;:&#x27;en&#x27;;try{localStorage.setItem(&#x27;imx410-lang&#x27;,lang)}catch(_error){}applyLanguage();buildCameraSelect();update()});
       applyLanguage();buildCameraSelect();
       update();
