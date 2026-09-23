@@ -82,6 +82,15 @@ figure.dia figcaption b{color:var(--ink); font-weight:600}
 .v.yes{border-color:var(--sig); color:var(--sig); background:var(--sig-soft);
   font-weight:600}
 
+/* a verdict that is neither a flat no nor a clean yes */
+.v.part{border-color:var(--dim); color:var(--ink)}
+
+/* shell recipes: short, copyable, not part of the prose */
+pre.cmd{font-family:var(--mono); font-size:.72rem; line-height:1.55;
+  background:var(--paper); border:1px solid var(--line); border-radius:4px;
+  padding:.7rem .85rem; margin:.9rem 0; overflow-x:auto;
+  color:var(--ink); white-space:pre}
+
 /* numeric tables read better right-aligned and monospaced */
 table td.n, table th.n{text-align:right; font-family:var(--mono);
   font-variant-numeric:tabular-nums; white-space:nowrap}
@@ -1226,7 +1235,7 @@ which is a timing question, not an image one.</p>
       <td><span class="v yes"><span class="en">per-phase &mdash; only entries 0 and 8</span><span class="zh">逐相位 —— 只用到第 0、8 格</span></span></td></tr>
     <tr><td><b>S1b / S1c</b> &mdash; <span class="en">a deeper vertical bin</span><span class="zh">垂直併更多列</span></td>
       <td class="n">6.7% / 6.2%</td><td class="n">0.8% / 0.6%</td><td class="n">7.97 / 9.02</td>
-      <td><span class="v"><span class="en">no known mechanism</span><span class="zh">無已知機制</span></span></td></tr>
+      <td><span class="v part"><span class="en">the sensor <em>will</em> do it, at a cost &mdash; <a href="#verticaltest">tested</a></span><span class="zh">感測器<em>做得到</em>,但有代價 —— <a href="#verticaltest">已實測</a></span></span></td></tr>
   </tbody>
 </table>
 </div>
@@ -1954,7 +1963,164 @@ quantisation floor, not the noise. Neither is reported as evidence.</p>
 但它的光子轉移擬合回傳負的讀噪截距,而且逐幀差恰好落在 1 和 2 DN ——
 那是在量量化地板,不是雜訊。兩者都不列為證據。</p>
 
-<h3><span class="en">There is no known way to raise the vertical</span><span class="zh">垂直併數沒有已知的改法</span></h3>
+<h3 id="verticaltest"><span class="en">The vertical can be raised &mdash; and what it costs</span><span class="zh">垂直併數提得上去 —— 以及代價是什麼</span></h3>
+
+<p class="en"><b>This started as an inference from the register tables and is now a
+measurement.</b> The firmware has an override hook &mdash;
+<code class="k">imager mode_reg_add</code> queues a register write and
+<code class="k">imager mode_reg_test</code> arms it for one sensor mode &mdash; so the
+merge registers can be changed on a running camera and the result recorded. Three
+things had to be right before anything took effect, and each one cost an
+experiment: the address argument is parsed by <code>strtol</code> with base 0, so a
+bare <code>0722</code> is read as <em>octal</em>; the override has to be armed for the
+mode <b>recording</b> uses (enum 139) rather than the one live view sits in (enum 8);
+and the merge factor is not one register but three that must move together
+&mdash; <code class="k">0x717</code>, <code class="k">0x72C</code> and
+<code class="k">0x793</code>.</p>
+<p class="zh"><b>這件事原本是從暫存器表推論的,現在是量出來的。</b>韌體有一個覆寫掛勾 ——
+<code class="k">imager mode_reg_add</code> 排入一筆暫存器寫入、
+<code class="k">imager mode_reg_test</code> 對某個感測器模式啟用 ——
+所以可以在運作中的相機上改合併暫存器,再把結果錄下來。
+有三件事必須都對才會生效,而每一件都花掉一次實驗:位址參數是用
+<code>strtol</code> base 0 解析的,所以單純寫 <code>0722</code> 會被當成<em>八進位</em>;
+覆寫要 arm 到**錄影**用的模式(enum 139),不是實況檢視的 enum 8;
+而合併倍率不是一個暫存器,是三個必須一起動的 ——
+<code class="k">0x717</code>、<code class="k">0x72C</code>、<code class="k">0x793</code>。</p>
+
+<p class="en">With all three moved to the next factor up, the sensor does change what it
+does &mdash; it returns three quarters as many lines, so the picture arrives squashed
+into the top of the frame with a blank tail. Inside the part it did fill, everything
+is normal:</p>
+<p class="zh">三個一起推到上一級倍率之後,感測器確實改變了行為 ——
+它只回傳四分之三的列數,所以畫面被壓進影格上方,尾端留白。
+而在它有填的那一段裡,一切正常:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr>
+    <th><span class="en">measured inside the picture area</span><span class="zh">有效畫面區內量到的</span></th>
+    <th class="n"><span class="en">stock &divide;3</span><span class="zh">出廠 &divide;3</span></th>
+    <th class="n"><span class="en">pushed to &divide;4</span><span class="zh">推到 &divide;4</span></th>
+  </tr></thead>
+  <tbody>
+    <tr><td><span class="en">colour balance R/G, B/G</span><span class="zh">色彩平衡 R/G、B/G</span></td>
+      <td class="n">0.530 / 0.555</td><td class="n">0.530 / 0.555</td></tr>
+    <tr><td><span class="en">level</span><span class="zh">亮度</span></td>
+      <td class="n">695.3</td><td class="n">697.0</td></tr>
+    <tr><td><span class="en">horizontal detail</span><span class="zh">水平細節</span></td>
+      <td class="n">0.0212</td><td class="n">0.0210</td></tr>
+    <tr class="hl"><td><b><span class="en">noise</span><span class="zh">雜訊</span></b></td>
+      <td class="n"><b>15.71 DN</b></td><td class="n"><b>15.62 DN</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="en"><b>The noise row is the answer.</b> If the sensor had gone from averaging
+two rows to three, noise had to fall by &radic;(3/2) &mdash; to about 12.8&nbsp;DN. It
+did not move at all. Everything else fits the same reading: the line count dropped to
+three quarters, the level stayed put, the colour stayed put, and the picture is
+squashed rather than softened. <b>The factor register does not set how many rows are
+combined. It sets how far the sensor steps between one pair and the next.</b></p>
+<p class="zh"><b>雜訊那一列就是答案。</b>如果感測器真的從平均兩列變成三列,
+雜訊必須掉 &radic;(3/2) 倍,降到約 12.8&nbsp;DN。它完全沒動。
+其他每一項都指向同一個讀法:列數掉到四分之三、亮度沒變、顏色沒變,
+而畫面是被壓扁不是變軟。<b>倍率暫存器設定的不是「合併幾列」,
+是「感測器從這一對跨到下一對要跨多遠」。</b></p>
+
+<div class="scroll">
+<table>
+  <thead><tr>
+    <th><span class="en">setting</span><span class="zh">設定</span></th>
+    <th class="n"><span class="en">rows combined</span><span class="zh">併幾列</span></th>
+    <th class="n"><span class="en">rows stepped</span><span class="zh">跨幾列</span></th>
+    <th class="n"><span class="en">lines out</span><span class="zh">輸出列數</span></th>
+  </tr></thead>
+  <tbody>
+    <tr><td>&divide;2</td><td class="n"><b>2</b></td><td class="n">2</td><td class="n">1/2</td></tr>
+    <tr class="hl"><td>&divide;3 <span class="m">[shipped]</span></td><td class="n"><b>2</b></td><td class="n">3</td><td class="n">1/3</td></tr>
+    <tr><td>&divide;4 <span class="en">forced</span><span class="zh">強制寫入</span></td><td class="n"><b>2</b></td><td class="n">4</td><td class="n">1/4</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="en"><b>So the factor registers set the step, not the depth.</b> That much of
+the original reading holds. The conclusion drawn from it &mdash; that two rows is all the
+sensor will ever merge &mdash; did not: it came from moving the wrong registers, and from
+writing 3 into a field that wanted 4.</p>
+
+<p class="en"><b>The depth is a different pair of registers, and it does move.</b>
+<code class="k">0x0737</code> and <code class="k">0x0738</code> hold the vertical tap
+count, encoded as 2&times;(taps&minus;1), so a three-tap merge wants <b>4</b>, not 3. On
+its own that makes the kernel span rows of both colours and the frame turns magenta;
+<code class="k">0x0734</code> = 5 widens the row window enough for three <em>same-colour</em>
+rows and the colour comes back. Three registers, and OG2K merges three rows instead of two:</p>
+
+<pre class="cmd">imager mode_reg_add 0 0x0737 4
+imager mode_reg_add 1 0x0738 4
+imager mode_reg_add 2 0x0734 5
+imager mode_reg_test 1 139</pre>
+
+<p class="en">Measured against a stock frame of the same scene, seconds apart: noise falls
+<b>10&ndash;15%</b> on every colour plane, and the vertical prefilter widens, which is what
+reduces aliasing. It is volatile &mdash; a power cycle puts the camera back.</p>
+
+<p class="en"><b>The cost is a colour-plane offset that the camera cannot undo.</b> Widening
+the window moves the odd CFA rows down by a third of a plane row relative to the even ones,
+every time, and the only register that sets the window is the one that causes it: the value
+whose geometry is right (<code class="k">0x0734</code> = 3) is exactly the value whose window
+is too narrow, so the merge there crosses colours instead. Every other register in the block
+was swept; none compensates. The offset is a rigid shift, so it comes out cleanly in raw
+processing &mdash; shift the odd CFA rows back before demosaic &mdash; but not in camera.
+A second, smaller defect: the last output row is corrupt, because its third tap runs off the
+bottom of the sensor.</p>
+
+<p class="en"><b>Whether the trade is worth taking is not settled here.</b> Noise and aliasing
+improve; vertical resolution drops by roughly 9% in amplitude at the top of the band. That is
+a judgement about pictures, and the numbers on this page have been wrong about it more than
+once.</p>
+<p class="zh"><b>所以倍率暫存器設定的是「跨多遠」,不是「併幾列」。</b>
+原本的讀法這一半是對的。但從它推出的結論 —— 兩列就是這顆感測器的上限 —— 是錯的:
+那是因為動錯了暫存器,而且把該寫 4 的欄位寫成 3。</p>
+
+<p class="zh"><b>併數是另外一對暫存器,而且它會動。</b>
+<code class="k">0x0737</code> 和 <code class="k">0x0738</code> 存的是垂直抽頭數,
+編碼是 2&times;(抽頭數&minus;1),所以三抽頭要寫 <b>4</b> 不是 3。
+單獨這樣改,核心會跨到兩種顏色的列上,畫面變成洋紅;
+<code class="k">0x0734</code> = 5 把列視窗放寬到容得下三條<em>同色</em>列,顏色就回來了。
+三個暫存器,OG2K 就從併兩列變成併三列:</p>
+
+<pre class="cmd">imager mode_reg_add 0 0x0737 4
+imager mode_reg_add 1 0x0738 4
+imager mode_reg_add 2 0x0734 5
+imager mode_reg_test 1 139</pre>
+
+<p class="zh">跟同場景、相隔數秒的原廠畫格比:四個顏色平面的雜訊都降 <b>10&ndash;15%</b>,
+垂直前濾波變寬,疊紋因此減少。這是揮發性的 —— 拔電就回原廠。</p>
+
+<p class="zh"><b>代價是一個相機內無法消除的顏色平面偏移。</b>
+放寬視窗會讓奇數 CFA 列相對偶數列下移三分之一個平面列,每次都如此;
+而唯一能設定視窗的暫存器就是造成它的那一個:幾何正確的那個值
+(<code class="k">0x0734</code> = 3)恰好就是視窗太窄的那個值,在那裡合併會跨色。
+區塊裡其他暫存器全部掃過,沒有一個能補償。
+這個偏移是剛性位移,所以在 raw 處理裡可以乾淨地修掉 —— 解拜耳前把奇數 CFA 列移回去 ——
+但相機內不行。另有一個比較小的缺陷:最後一條輸出列是壞的,因為它的第三個抽頭超出了感測器底部。</p>
+
+<p class="zh"><b>這筆交易值不值得,這裡沒有定論。</b>雜訊和疊紋都改善;
+垂直解析度在頻帶頂端的振幅約降 9%。那是關於照片的判斷,
+而這一頁上的數字在這件事上已經錯過不只一次。</p>
+
+<p class="note en">Two things paid for this. The camera froze twice, both times from
+key pulses sent without checking state in between, and three separate measurements were
+called negative before someone looking at the screen pointed out that the picture was
+fine and merely squashed &mdash; statistics taken over the whole frame had been
+averaging in a blank, saturated tail. Look at the frame before trusting a number
+computed from it.</p>
+<p class="note zh">這個結論的代價有兩筆。相機凍結了兩次,兩次都是連續送出按鍵事件、
+中間沒有檢查狀態;而在有人看著螢幕指出「畫面是好的,只是被壓扁了」之前,
+有三次量測被判成陰性 —— 對整張影格做的統計,把尾端一段飽和的空白平均了進去。
+**先看影格,再相信從它算出來的數字。**</p>
+
+<h3><span class="en">What the register tables said before the test</span><span class="zh">實測之前,暫存器表說了什麼</span></h3>
 
 <p class="en">S1b and S1c both assume the vertical merge can be moved from two rows to
 three. That assumption came from one place: the tuple <code class="k">(3,3,3,6)</code>
@@ -2753,17 +2919,6 @@ ones. <b>OG2K does not need it</b>; its grid is uniform on both axes.</p>
       <span class="zh">錄一段走 RWZM&nbsp;1536(3/2)的片子,配一張同機位的 OG3K,
       再擬合全部十六個相位。3/2 只叫得動第 0 和第 8 格,所以要核對的就是那兩格;
       如果和 25/16 解出來的一致,這個假設就成立,排名的下半部一次全部坐實。</span></td></tr>
-    <tr><td><span class="en"><b>What sets the vertical tap count?</b> Nothing in
-      the decoded register set separates two rows from three, so S1b and S1c have no
-      route to a build.</span>
-      <span class="zh"><b>是什麼在設垂直抽頭數?</b>已解碼的暫存器裡沒有任何一個把
-      兩列和三列分開,所以 S1b 和 S1c 沒有實作路徑。</span></td>
-      <td><span class="en">The eleven undecoded registers are the place to look, but
-      the tuple gives no lever to pull on: the only family claiming three zeroes the
-      merge block instead of raising a factor. It may simply not be configurable.</span>
-      <span class="zh">要找就在那十一個未解碼的暫存器裡,但 tuple 沒有給出可以施力的
-      把手:唯一宣稱三列的那一家是把 merge 區塊歸零,而不是把倍率調高。
-      有可能它根本不可設定。</span></td></tr>
     <tr><td><span class="en"><b>hbin/vbin has never been shot.</b> Its whole row in
       the 2K table is a prediction from a ROM coefficient record.</span>
       <span class="zh"><b>hbin/vbin 從來沒有被實拍過。</b>它在 2K 表上的兩列完全是
@@ -2841,7 +2996,7 @@ Chinese, which carries the full per-channel tables and the reproduction recipe.<
   <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
 </footer>
 
-<script src="../assets/lang.js?v=0183bc5d" defer></script>
+<script src="../assets/lang.js?v=7c49866d" defer></script>
 
 </body>
 </html>

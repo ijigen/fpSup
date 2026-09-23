@@ -141,6 +141,20 @@ code.k{font-family:var(--mono); white-space:nowrap}
 
 <p><span class="en"><b>This is not guesswork from the pixels.</b> The firmware carries a four-number tag for every mode, and for the eight &divide;3 modes it reads <code class="k">(3,2,3,3)</code>. The first two numbers are the tap counts per axis, and that lone <b>2</b> is the vertical one. The pixels and the camera&rsquo;s own ROM table say the same thing.</span><span class="zh"><b>這不是從像素上猜的。</b>韌體為每個模式帶了一組四個數字的標籤,八個 &divide;3 模式上寫的是 <code class="k">(3,2,3,3)</code>。前兩個數字是每個方向的抽頭數,那個孤零零的 <b>2</b> 就是垂直方向。像素和相機自己的 ROM 表說的是同一件事。</span></p>
 
+<p><span class="en"><b>The third row is skipped by configuration, not by nature.</b> It was
+worth checking whether the sensor could be told to collect all three, and it can: two
+registers hold the vertical tap count and one widens the row window, and with those three
+changed OG2K merges three rows instead of two. Noise falls 10&ndash;15%. The catch is that
+widening the window also slides the odd colour rows a third of a row out of step with the
+even ones &mdash; a shift a raw converter can take out, but the camera cannot. Whether the
+softer vertical is a good trade for the cleaner noise is still an open question. The
+measurements are <a href="reduction-kernels.html#verticaltest">on the technical page</a>.</span><span class="zh"><b>第三列是被設定跳過的,不是天生如此。</b>
+值得試試看能不能叫感測器把三列都收進來,答案是可以:兩個暫存器存垂直抽頭數,
+另一個把列視窗放寬,改掉這三個之後 OG2K 就從併兩列變成併三列,雜訊降 10&ndash;15%。
+代價是放寬視窗會讓奇數顏色列相對偶數列錯開三分之一列 —— 這個位移 raw 轉檔可以修掉,
+相機自己不行。垂直變柔換到比較乾淨的雜訊,划不划算目前還沒有定論。
+量測在<a href="reduction-kernels.html#verticaltest">技術頁那一節</a>。</span></p>
+
 <h2 id="horizontal"><span class="en">Left and right: nothing is combined &mdash; it is calculated</span><span class="zh">左右:根本沒有合併 —— 是算出來的</span></h2>
 
 <p><span class="en">Sideways, no cells are merged. The camera picks a position <em>between</em> two neighbouring cells and works out how bright it would probably be, by mixing the two in some proportion &mdash; like mixing two paints to get a shade in between. Nothing is collected twice. A new number is invented from the numbers next door.</span><span class="zh">橫的方向,沒有任何格子被合併。相機挑一個落在<em>兩個相鄰格子中間</em>的位置,再按比例把那兩格混起來,算出它「大概應該多亮」—— 就像把兩種顏料調出中間色。沒有東西被多收一次,只是從旁邊的數字生出一個新數字。</span></p>
@@ -235,7 +249,7 @@ code.k{font-family:var(--mono); white-space:nowrap}
   <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
 </footer>
 
-<script src="../assets/lang.js?v=0183bc5d" defer></script>
+<script src="../assets/lang.js?v=7c49866d" defer></script>
 
 </body>
 </html>
