@@ -67,6 +67,13 @@ ABI = {
     'load_start_us': 0xC072F6F4,
     'load_done_us':  LOAD_DONE_US,
     'park_stub': 0xC072EFB4,
+    # Scratch inside the worker's block, in the gap above code_ptr (+0x58) and
+    # below abort (+0x80).  console/fpstate.py's peek routine reaches these as
+    # [r0, #0x64] and [r0, #0x68] with r0 = the state block, so they are
+    # offsets into a block the worker owns and cannot be allocated.  They are
+    # here so that "who owns this address" has an answer.
+    'peek_arg': 0xC072F064,
+    'peek_res': 0xC072F068,
 }
 
 REGISTER = pathlib.Path(

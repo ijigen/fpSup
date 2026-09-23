@@ -5,13 +5,30 @@ The last stretch the unit tests cannot reach: formatting a double as JSON.
 Loads the real generator, points it at a scratch state block so nothing the
 card is using is touched, and prints what would land inside distortion_coeffs.
 """
-import sys, struct, math
+import pathlib, sys, struct, math
 sys.path.insert(0, '../fp_usb_shell')
 from armasm import assemble, symbols
 import putfile as P
 
 POOL_PTR, O_STATE, F_CACHE, S_JSON_FN = 0xC3757A7C, 0x6000, 0xC000E91C, 0xF0
-PARM = 0xC072F740
+PARM = None      # resolved on the camera, once, by _parm()
+
+
+def _parm():
+    """Where this probe's parameter block is, asked for rather than chosen.
+
+    It was 0xC072F740, written into both probes and both of these scripts --
+    four places agreeing by hand about one address, which is what cave.claim
+    ends.  The probe takes it as a define now; see the `#ifndef PARM` in the
+    .S.
+    """
+    global PARM
+    if PARM is None:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
+                               / 'fp_usb_shell'))
+        import cave
+        PARM = cave.claim('distprobe.parm', 0x40)
+    return PARM
 # pg_build gets this from pg_dist_focal; this probe calls pg_dist_prepare
 # directly, so hand it the same measured value the block holds.
 W, H, FOCAL_MM = 1936, 1090, 39.4
@@ -38,6 +55,7 @@ def echo_into(addr, label):
 
 
 def setw(off, v):
+    _parm()
     v &= 0xFFFFFFFF
     for _ in range(8):
         P.mem_set(PARM + off, v)
@@ -47,12 +65,13 @@ def setw(off, v):
 
 
 def main():
+    _parm()
     if P.sh('version', retries=3).startswith('ERR'):
         raise SystemExit('the camera is not answering')
     defs = ('FPGYRO_NATIVE_LIFECYCLE', 'FPGYRO_GCSV_STREAM')
     gen = assemble('profilegen.S', defs)
     gsym = symbols('profilegen.S', defs)
-    trampoline = assemble('distemit_probe.S')
+    trampoline = assemble('distemit_probe.S', [f'PARM=0x{_parm():08X}'])
     tsym = symbols('distemit_probe.S')
 
     pool = (P.mem_get(POOL_PTR) or [0])[0]

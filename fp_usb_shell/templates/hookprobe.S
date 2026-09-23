@@ -20,7 +20,12 @@
  * ========================================================================== */
 
 .equ HOOK_TARGET, 0xC01EC6F9      /* what the displaced BLX called (thumb) */
+/* The caller says where this is: it asks the cave allocator and passes the
+ * address in.  The value below is only so the file still assembles on its
+ * own -- nothing reaches it through a run. */
+#ifndef COUNT
 .equ COUNT,       0xC072F5F0
+#endif
 
 .macro LDA reg, value
     movw    \reg, #:lower16:\value

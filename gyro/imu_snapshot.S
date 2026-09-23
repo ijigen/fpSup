@@ -42,7 +42,13 @@ _start:
     pop   {r4-r7}               @ restore callee-saved before return
     bx    lr
 .align 2
-.Lresult: .word 0xC072F300
+/* The caller says where the result goes: it asks the cave allocator and
+ * passes the address in.  The value below is only so the file still
+ * assembles on its own. */
+#ifndef RESULT
+.equ RESULT, 0xC072F300
+#endif
+.Lresult: .word RESULT
 .Laccel:  .word 0xC377790C
 .Lgmbox:  .word 0xC31E3FCC
 .Lmagic:  .word 0x494D5530

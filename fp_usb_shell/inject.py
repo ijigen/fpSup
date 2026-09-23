@@ -16,7 +16,12 @@ FPSH = HERE / 'host' / 'fpsh'
 
 HOOK_SITE = 0xC00D0794
 HOOK_ORIG = 0xFA046FD7
-SCRATCH   = 0xC072F700
+# Asked for, not chosen.  0xC072F700 is the fast-start bootstrap's word and
+# was also the state word of several probes; a tool that injects code should
+# not be one more owner of it.
+def _scratch():
+    import cave
+    return cave.claim('inject.scratch', 0x40)
 
 
 def sh(*cmd) -> str:
@@ -27,6 +32,7 @@ def sh(*cmd) -> str:
 
 
 def main() -> int:
+    SCRATCH = _scratch()
     ap = argparse.ArgumentParser()
     ap.add_argument('source', help='e.g. templates/oneshot.S')
     ap.add_argument('--addr', type=lambda s: int(s, 0), default=0xC072F800)

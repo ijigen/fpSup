@@ -21,14 +21,41 @@ A_ACCEL       = 0xC377790C   # MMA8452Q level cache: i16 X,Y,Z axis-remapped; g 
 # ---- IMU one-call snapshot blob (camera/imu_snapshot.S) injected into the worker cave ----
 # gathers accel XYZ + gyro-latest into RESULT in ONE `call`; host drains in ONE read (2 transactions).
 # gyro latest sample = *(rb) - 4 ; rb = *(*(0xC31E3FCC)+0x60) ; scale /131 (=*(P+0x68)) dps, /1024 g.
-SNAP_CODE, SNAP_RESULT = 0xC072F200, 0xC072F300
+# Asked for, not chosen.  0xC072F200 and 0xC072F300 were also the stage5-era
+# build_imu_snapshot.py's code and result -- the same pair of addresses for a
+# different pair of things.  SNAP_WORDS ends in a literal pool and one of its
+# words IS the result address, so it is substituted rather than left behind.
+def _snap_at():
+    import sys, pathlib as _p
+    sys.path.insert(0, str(_p.Path(__file__).resolve().parents[1]
+                           / 'fp_usb_shell'))
+    import cave
+    code = cave.claim('fpstate.snap_code', len(SNAP_WORDS) * 4)
+    result = cave.claim('fpstate.snap_result', 0x20)
+    if SNAP_WORDS[W_RESULT] != 0:
+        raise SystemExit('SNAP_WORDS[25] is the literal pool and must be zero '
+                         'for the allocator to fill it')
+    words = list(SNAP_WORDS)
+    words[W_RESULT] = result
+    return code, result, tuple(words)
+
+
+def _peek_at():
+    import sys, pathlib as _p
+    sys.path.insert(0, str(_p.Path(__file__).resolve().parents[1]
+                           / 'fp_usb_shell'))
+    import cave
+    return cave.claim('fpstate.peek_code', 0x20)
 SNAP_WORDS = (
     0xE92D00F0, 0xE59F2058, 0xE59F1058, 0xE1D130F0, 0xE1D140F2, 0xE1D150F4, 0xE1C230B0,
     0xE1C240B2, 0xE1C250B4, 0xE59F1040, 0xE5911000, 0xE5916060, 0xE5967000, 0xE5827008,
     0xE2473004, 0xE1D340F0, 0xE1D350F2, 0xE1D300F6, 0xE1C240BC, 0xE1C250BE, 0xE1C201B0,
-    0xE59F3014, 0xE5823014, 0xE8BD00F0, 0xE12FFF1E, 0xC072F300, 0xC377790C, 0xC31E3FCC,
+    0xE59F3014, 0xE5823014, 0xE8BD00F0, 0xE12FFF1E, 0, 0xC377790C, 0xC31E3FCC,
     0x494D5530,
 )
+# The result address is word 25 of the literal pool.  It is zero here and
+# filled in from the allocator, by index rather than by value.
+W_RESULT = 25
 A_GAIN_G      = 0xC343A6A0   # +0x0c gain_state, +0x18 ISO/rel, +0x2c analog gain, +0x34 HCG byte
 A_AF_DRIVE    = 0xC32065A0   # 4/8 = AF-C servo
 A_AF_AREA     = 0xC32046A4   # 0 single /1 MF /3 tracking /5 global
@@ -71,7 +98,11 @@ class Shell:
         return raw[i+8 : i+8+n]
     # ---- generic peek (deref ANY address via the deployed worker; no read-table entry needed) ----
     # inject-once routine @0xC072F100: ldr r1,[r0,#0x64]; ldr r2,[r1]; str r2,[r0,#0x68]; bx lr
-    PEEK_CODE = 0xC072F100
+    # PEEK_ARG and PEEK_RES are NOT claims and cannot be: the routine reaches
+    # them as [r0, #0x64] and [r0, #0x68] with r0 = the worker's state block,
+    # so they are offsets into a block the worker owns, in the gap above
+    # WCODE_PTR (+0x58) and below ABORT_AT (+0x80).  cave.ABI declares them.
+    # The code itself is ordinary injected code and is asked for.
     PEEK_ARG  = 0xC072F064   # STATE+0x64 (scratch): address to deref
     PEEK_RES  = 0xC072F068   # STATE+0x68 (scratch): 32-bit result
     PEEK_WORDS = (0xE5901064, 0xE5912000, 0xE5802068, 0xE12FFF1E)
@@ -81,6 +112,7 @@ class Shell:
         self._round(f"ECHO call 0x{addr:08X}\n")
     def _ensure_peek(self):
         if getattr(self, "_peek_ready", False): return
+        self.PEEK_CODE = _peek_at()
         for i, w in enumerate(self.PEEK_WORDS):
             self._set_mem(self.PEEK_CODE + 4*i, w)
         self._peek_ready = True
@@ -94,7 +126,9 @@ class Shell:
     # ---- one-call IMU snapshot: accel XYZ + gyro-latest in 2 transactions ----
     def _ensure_snap(self):
         if getattr(self, "_snap_ready", False): return
-        for i, w in enumerate(SNAP_WORDS):
+        SNAP_CODE, SNAP_RESULT, words = _snap_at()
+        self._snap_at = (SNAP_CODE, SNAP_RESULT)
+        for i, w in enumerate(words):
             self._set_mem(SNAP_CODE + 4*i, w)
         self._snap_ready = True
     def imu(self):
@@ -105,6 +139,7 @@ class Shell:
             return {"accel":{"x":ax/1024,"y":ay/1024,"z":az/1024},
                     "gyro":{"x":gx/131,"y":gy/131,"z":gz/131}, "cursor":0}
         self._ensure_snap()
+        SNAP_CODE, SNAP_RESULT = self._snap_at
         self._call(SNAP_CODE)
         raw = self.read_mem(SNAP_RESULT, 0x18)
         if struct.unpack_from('<I', raw, 0x14)[0] != 0x494D5530:

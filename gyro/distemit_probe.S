@@ -4,7 +4,12 @@
     movw    \reg, #:lower16:\value
     movt    \reg, #:upper16:\value
 .endm
+/* The caller says where this is: it asks the cave allocator and passes the
+ * address in.  The value below is only so the file still assembles on its
+ * own -- nothing reaches it through a run. */
+#ifndef PARM
 .equ PARM, 0xC072F740
+#endif
     .global _start
 _start:                                 /* runs as the echo handler */
     push    {r4, r5, r6, r7, r8, r9, r10, r11, ip, lr}

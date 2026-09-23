@@ -614,5 +614,69 @@ class ArenaTests(unittest.TestCase):
                 found,
                 f'{name} no longer names an arena address -- drop its exemption')
 
+class CaveCollisionTests(unittest.TestCase):
+    """No new address gets two owners, and the ones left are declared.
+
+    Above the arena a fixed address can be legitimate -- the worker's ABI is
+    one, the pre-stage2 bootstrap's word is another -- so the rule there is not
+    "never name one". It is the lossless roadmap's G1 wording: no UNDECLARED
+    fixed scratch or code ownership. Two tools naming one address is the
+    undeclared kind, and they find out by hanging.
+
+    tools/cave_audit.py --sources is the same scan, for reading. This is the
+    part that fails a build.
+    """
+
+    # What is left, why, and whose it is. An entry here is a declaration, not
+    # an excuse: it names the address, everybody holding it, and what has to
+    # happen for it to go.
+    KNOWN = {
+        0xC072F700:
+            'the fast-start bootstrap word (store_boot.S, build_autorun, the '
+            'composer) and the state word of the lossless exact_dng_writer '
+            'probes. The bootstrap cannot move -- it runs before stage2, so '
+            'there is no arena yet -- so the probes are what migrate, under '
+            'lossless-sup ROADMAP G1.',
+        0xC072F800:
+            'the lossless exact_dng_writer probe\'s code, and the placement '
+            'test that checks it. Both move together under G1.',
+    }
+
+    def collisions(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'cave_audit', ROOT / 'tools' / 'cave_audit.py')
+        audit = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(audit)
+        found = audit.sources(ROOT)
+        out = {}
+        for at, who in found.items():
+            if len(who) < 2:
+                continue
+            names = {n for ns in who.values() for n in ns}
+            if len(names) > 1 and not audit._landmark(at):
+                out[at] = who
+        return out
+
+    def test_no_undeclared_collision(self):
+        got = self.collisions()
+        new = sorted(set(got) - set(self.KNOWN))
+        self.assertEqual(
+            new, [],
+            'these addresses have two owners and nobody said so:\n  '
+            + '\n  '.join(
+                f'0x{at:08X}: ' + ', '.join(sorted(got[at])) for at in new)
+            + '\n  Ask cave.claim for a block instead, or declare it here '
+              'with the reason it cannot be asked for.')
+
+    def test_the_declarations_are_still_true(self):
+        """A declaration for an address nobody shares any more is a hole."""
+        got = self.collisions()
+        gone = sorted(set(self.KNOWN) - set(got))
+        self.assertEqual(
+            gone, [],
+            'these are declared as shared and are not any more -- drop them:\n  '
+            + '\n  '.join(f'0x{at:08X}' for at in gone))
+
 if __name__ == "__main__":
     unittest.main()

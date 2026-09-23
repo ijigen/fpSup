@@ -11,13 +11,30 @@ generator pointer falls anywhere inside what it is about to write.
 No callfn either: the cache maintenance routine takes no arguments, so the
 echo handler can point straight at it, and the results fit in `mem get`.
 """
-import sys, struct, math, time
+import pathlib, sys, struct, math, time
 sys.path.insert(0, '../fp_usb_shell')
 from armasm import assemble, symbols
 import putfile as P
 
 POOL_PTR, O_STATE, F_CACHE = 0xC3757A7C, 0x6000, 0xC000E91C
-PARM = 0xC072F740
+PARM = None      # resolved on the camera, once, by _parm()
+
+
+def _parm():
+    """Where this probe's parameter block is, asked for rather than chosen.
+
+    It was 0xC072F740, written into both probes and both of these scripts --
+    four places agreeing by hand about one address, which is what cave.claim
+    ends.  The probe takes it as a define now; see the `#ifndef PARM` in the
+    .S.
+    """
+    global PARM
+    if PARM is None:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
+                               / 'fp_usb_shell'))
+        import cave
+        PARM = cave.claim('distprobe.parm', 0x40)
+    return PARM
 W, H, FOCAL_MM = 1936, 1090, 40.0
 
 
@@ -43,6 +60,7 @@ def echo_into(addr, label):
 
 
 def setw(off, v):
+    _parm()
     v &= 0xFFFFFFFF
     for _ in range(8):
         P.mem_set(PARM + off, v)
@@ -52,9 +70,10 @@ def setw(off, v):
 
 
 def main():
+    _parm()
     if P.sh('version', retries=3).startswith('ERR'):
         raise SystemExit('the camera is not answering')
-    code = assemble('distfit_probe.S')
+    code = assemble('distfit_probe.S', [f'PARM=0x{_parm():08X}'])
     sym = symbols('distfit_probe.S')
     pool = (P.mem_get(POOL_PTR) or [0])[0]
     if not pool:
