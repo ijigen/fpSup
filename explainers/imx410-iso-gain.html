@@ -942,7 +942,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     #imx410-explainer .amp{height:76px;display:flex;align-items:center;justify-content:center}
     #imx410-explainer .triangle{width:0;height:0;border-top:34px solid transparent;border-bottom:34px solid transparent;border-left:66px solid var(--viz-series-3);filter:saturate(.8);position:relative}
     #imx410-explainer .amp-value{font-size:12px;font-weight:800;text-align:center;margin-top:7px}
-    #imx410-explainer .gear{width:76px;height:76px;border:9px dotted var(--viz-series-5);border-radius:50%;margin:0 auto;display:grid;place-items:center;font-weight:850;transition:transform .35s}
+    #imx410-explainer .gear{position:relative;width:84px;height:84px;margin:0 auto;display:grid;place-items:center;font-weight:850;font-size:1.15rem}#imx410-explainer .gear svg{position:absolute;inset:0;width:100%;height:100%;fill:var(--viz-series-5);transition:transform .35s}#imx410-explainer .gear span{position:relative}
     #imx410-explainer .adc{display:grid;grid-template-columns:repeat(8,1fr);align-items:end;gap:3px;height:76px;padding:5px}
     #imx410-explainer .adc i{display:block;background:var(--viz-series-2);border-radius:2px 2px 0 0;opacity:.82}
     #imx410-explainer .digital{height:76px;display:grid;place-items:center;font-size:30px;font-weight:850;color:var(--viz-series-6)}
@@ -1023,7 +1023,7 @@ html&gt;body{padding:0}&lt;/style&gt;
     &lt;div class=&quot;arrow&quot;&gt;→&lt;/div&gt;
     &lt;div class=&quot;stage&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;② 類比放大器 · Analog Gain&lt;/div&gt;&lt;div class=&quot;amp&quot;&gt;&lt;div class=&quot;triangle&quot;&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;amp-value&quot; id=&quot;amp-value&quot;&gt;3.74× · 11.5 dB&lt;/div&gt;&lt;/div&gt;
     &lt;div class=&quot;arrow&quot;&gt;→&lt;/div&gt;
-    &lt;div class=&quot;stage&quot; id=&quot;stage-ar&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;③ 變速箱 · Analog Readout&lt;/div&gt;&lt;div class=&quot;gear&quot; id=&quot;gear&quot;&gt;N&lt;/div&gt;&lt;div class=&quot;mini&quot; id=&quot;ar-caption&quot;&gt;Normal：低／中增益工作點&lt;/div&gt;&lt;/div&gt;
+    &lt;div class=&quot;stage&quot; id=&quot;stage-ar&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;③ 變速箱 · Analog Readout&lt;/div&gt;&lt;div class=&quot;gear&quot; id=&quot;gear&quot; aria-label=&quot;gear&quot;&gt;&lt;svg id=&quot;gear-svg&quot; viewBox=&quot;0 0 100 100&quot; aria-hidden=&quot;true&quot;&gt;&lt;path fill-rule=&quot;evenodd&quot; d=&quot;M88.0 50.0 L96.9 53.0 L96.1 59.3 L86.7 59.8 L82.9 69.0 L82.9 69.0 L89.1 76.0 L85.3 81.1 L76.9 76.9 L69.0 82.9 L69.0 82.9 L70.9 92.1 L65.0 94.5 L59.8 86.7 L50.0 88.0 L50.0 88.0 L47.0 96.9 L40.7 96.1 L40.2 86.7 L31.0 82.9 L31.0 82.9 L24.0 89.1 L18.9 85.3 L23.1 76.9 L17.1 69.0 L17.1 69.0 L7.9 70.9 L5.5 65.0 L13.3 59.8 L12.0 50.0 L12.0 50.0 L3.1 47.0 L3.9 40.7 L13.3 40.2 L17.1 31.0 L17.1 31.0 L10.9 24.0 L14.7 18.9 L23.1 23.1 L31.0 17.1 L31.0 17.1 L29.1 7.9 L35.0 5.5 L40.2 13.3 L50.0 12.0 L50.0 12.0 L53.0 3.1 L59.3 3.9 L59.8 13.3 L69.0 17.1 L69.0 17.1 L76.0 10.9 L81.1 14.7 L76.9 23.1 L82.9 31.0 L82.9 31.0 L92.1 29.1 L94.5 35.0 L86.7 40.2 L88.0 50.0 Z M74 50 A24 24 0 1 0 26 50 A24 24 0 1 0 74 50 Z&quot;/&gt;&lt;/svg&gt;&lt;span id=&quot;gear-label&quot;&gt;N&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;mini&quot; id=&quot;ar-caption&quot;&gt;Normal：低／中增益工作點&lt;/div&gt;&lt;/div&gt;
     &lt;div class=&quot;arrow&quot;&gt;→&lt;/div&gt;
     &lt;div class=&quot;stage&quot;&gt;&lt;div class=&quot;stage-title&quot;&gt;④ 量尺 · ADC／RAW mode&lt;/div&gt;&lt;div class=&quot;adc&quot; id=&quot;adc&quot;&gt;&lt;/div&gt;&lt;div class=&quot;mini&quot; id=&quot;adc-caption&quot;&gt;Sensor 規格：11／12／14-bit&lt;br&gt;fp V5.02 表內：RAW12／RAW14&lt;/div&gt;&lt;/div&gt;
     &lt;div class=&quot;arrow&quot;&gt;→&lt;/div&gt;
@@ -1281,8 +1281,8 @@ html&gt;body{padding:0}&lt;/style&gt;
         const en=lang===&#x27;en&#x27;;
         $(&#x27;cg-caption&#x27;).textContent=known?(hcg?(en?&#x27;HCG: smaller bucket, lower noise floor&#x27;:&#x27;HCG：小桶、低噪聲底&#x27;):(en?&#x27;LCG: larger bucket, preserves highlights&#x27;:&#x27;LCG：大桶、保留高光&#x27;)):(en?&#x27;Live View: switching point comes from this camera’s OTP&#x27;:&#x27;Live View：切換點由本機 OTP 決定&#x27;);
         $(&#x27;stage-cg&#x27;).classList.toggle(&#x27;active&#x27;,hcg);
-        $(&#x27;gear&#x27;).textContent=high?&#x27;H&#x27;:&#x27;N&#x27;;
-        $(&#x27;gear&#x27;).style.transform=high?&#x27;rotate(30deg)&#x27;:&#x27;rotate(0deg)&#x27;;
+        $(&#x27;gear-label&#x27;).textContent=high?&#x27;H&#x27;:&#x27;N&#x27;;
+        $(&#x27;gear-svg&#x27;).style.transform=high?&#x27;rotate(15deg)&#x27;:&#x27;rotate(0deg)&#x27;;
         $(&#x27;ar-caption&#x27;).textContent=high?(en?&#x27;High: companion mode for high analog gain&#x27;:&#x27;High：高 analog gain 配套&#x27;):(en?&#x27;Normal: low / medium gain operating point&#x27;:&#x27;Normal：低／中增益工作點&#x27;);
         $(&#x27;stage-ar&#x27;).classList.toggle(&#x27;active&#x27;,high);
         $(&#x27;adc-caption&#x27;).innerHTML=en?&#x27;Sensor specification: 11 / 12 / 14-bit&lt;br&gt;fp V5.02 table: RAW12 / RAW14&lt;br&gt;Current mode: RAW&#x27;+p.b:&#x27;Sensor 規格：11／12／14-bit&lt;br&gt;fp V5.02 表內：RAW12／RAW14&lt;br&gt;目前模式：RAW&#x27;+p.b;

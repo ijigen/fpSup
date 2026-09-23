@@ -58,7 +58,7 @@ FOOT = '''
   <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
 </footer>
 
-<script src="../assets/lang.js?v=0183bc5d" defer></script>
+<script src="../assets/lang.js?v=7c49866d" defer></script>
 
 </body>
 </html>

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>From sensor to CinemaDNG &mdash; fpSup</title>
-<meta name="description" content="The whole SIGMA fp recording chain: menu selection, the string-keyed picker, 70 sensor modes, 306 profiles, the CRCT reduction stages, the canvas record and the DNG writer. With what OG3K, OG2K and HSW each change, and what is still dark.">
+<meta name="description" content="The whole SIGMA fp recording chain: menu selection, the string-keyed picker, 70 sensor modes, 306 profiles, the CRCT reduction stages, the canvas record and the DNG writer. With what OG3K, OG2K and HSW each change, every pitfall they hit, the alignment rules of each stage, and what is still dark.">
 
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://ijigen.github.io/fpSup/explainers/sensor-to-cinemadng.html">
@@ -112,6 +112,57 @@ details[open].stage > summary::before{border-color:var(--sig); color:var(--sig)}
 table.proj td:first-child{white-space:nowrap; font-weight:600}
 table.proj .y{color:var(--sig)}
 table.proj .n{color:var(--dim)}
+
+/* ---- pitfalls / requirements ------------------------------------------- */
+.pit-toc{display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 0}
+.pit-toc a{font-size:.8rem; text-decoration:none; border:1px solid var(--line);
+  border-radius:3px; padding:3px 9px; background:var(--panel); color:var(--ink)}
+.pit-toc a:hover{border-color:var(--sig); color:var(--sig)}
+.pit-toc small{font-family:var(--mono); color:var(--dim); margin-left:3px}
+.pits{display:grid; gap:1px; background:var(--line); border:1px solid var(--line);
+  border-radius:3px; overflow:hidden; margin:10px 0 0}
+.pit{background:var(--panel); padding:12px 15px 11px}
+.pit h4{display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+  margin:0 0 7px; font-size:.95rem; font-weight:600; line-height:1.4}
+.pit h4 .st{flex:none}
+.pit dl{margin:0; display:grid; grid-template-columns:3.2rem minmax(0,1fr); gap:4px 12px;
+  font-size:.88rem}
+.pit dt{font-family:var(--mono); font-size:.66rem; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--dim); padding-top:3px}
+.pit dd{margin:0}
+.pit .where{margin:8px 0 0; font-family:var(--mono); font-size:.7rem; color:var(--dim)}
+@media (max-width:560px){ .pit dl{grid-template-columns:1fr; gap:1px} .pit dd{margin-bottom:6px} }
+.reqs{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));
+  gap:12px; margin:14px 0 0}
+.req{border:1px solid var(--line); border-radius:3px; background:var(--panel); padding:12px 15px}
+.req h4{margin:0 0 4px; font-size:.92rem; font-weight:600; color:var(--sig)}
+.req ul{margin:0; padding-left:18px; font-size:.86rem}
+.req li{margin:5px 0}
+.overturned, .verify{font-size:.9rem; padding-left:20px}
+.overturned li, .verify li{margin:6px 0}
+.overturned li{text-decoration:none; color:var(--dim)}
+.overturned li code{color:var(--ink)}
+
+/* ---- pitfalls marked on their stage ------------------------------------ */
+details.stage > summary{grid-template-columns:2rem 1fr auto auto}
+.mines{font-family:var(--mono); font-size:.66rem; color:var(--warn);
+  border:1px solid var(--warn); border-radius:3px; padding:1px 6px; white-space:nowrap;
+  align-self:center}
+.mines.none{visibility:hidden}
+.stage-pits{border-top:1px dashed var(--line); margin-top:16px; padding-top:4px}
+.stage-pits h4{color:var(--warn)}
+.stage-pits ul{list-style:none; padding:0}
+.stage-pits li{display:flex; gap:10px; align-items:baseline; margin:5px 0}
+.stage-pits li .st{flex:none}
+.stage-pits a{text-decoration:none; color:var(--ink); border-bottom:1px solid var(--line)}
+.stage-pits a:hover{color:var(--sig); border-bottom-color:var(--sig)}
+a.stg{display:inline-flex; gap:5px; align-items:baseline; text-decoration:none;
+  color:var(--warn); border:1px solid var(--warn); border-radius:3px; padding:0 6px;
+  margin-right:4px; background:var(--warn-soft)}
+a.stg b{font-weight:600}
+.dia a .t-mine{fill:var(--warn); font-weight:600}
+.dia a:hover .t-mine{text-decoration:underline}
+.pit:target{outline:2px solid var(--warn); outline-offset:-2px}
 </style>
 </head>
 <body>
@@ -131,13 +182,18 @@ table.proj .n{color:var(--dim)}
     <p class="lede en">Eleven stages between tapping a resolution in the menu and a
     file landing on the card. This is all of them, opened up &mdash; what each one
     reads, what it decides, where the three open-gate projects cut in, and which
-    parts are still dark.</p>
+    parts are still dark. The second half collects <a href="#pitfalls">every pitfall</a> the
+    three projects hit &mdash; garbled takes, wrong sizes, broken DNGs, dropped frames, live view,
+    playback &mdash; and <a href="#requirements">the alignment and divisibility rules</a> of each stage.</p>
     <p class="lede zh">從你在選單按下一個解析度,到卡上出現一個檔案,中間有十一關。這頁把每一關都拆開來講:它讀什麼、決定什麼、三個 open gate 專案各從哪裡切進去,
-    以及哪些地方其實我們還沒搞懂。</p>
+    以及哪些地方其實我們還沒搞懂。後半頁把三個專案踩過的<a href="#pitfalls">每一個坑</a>(花屏、尺寸錯、DNG 寫壞、掉格、live view、回放)
+    和<a href="#requirements">每一關的對齊與整除要求</a>整理在一起。</p>
     <ul class="chips">
       <li><b>11</b> <span class="en">stages</span><span class="zh">關</span></li>
       <li><b>3</b> <span class="en">projects compared</span><span class="zh">個專案對照</span></li>
       <li><b>9</b> <span class="en">open questions</span><span class="zh">個未解問題</span></li>
+      <li><b>44</b> <span class="en"><a href="#pitfalls">pitfalls</a></span><span class="zh"><a href="#pitfalls">個踩過的坑</a></span></li>
+      <li><b>11</b> <span class="en"><a href="#requirements">stage requirements</a></span><span class="zh"><a href="#requirements">關的硬性要求</a></span></li>
     </ul>
   </div>
 </header>
@@ -271,6 +327,16 @@ table.proj .n{color:var(--dim)}
     <text x="380" y="690" text-anchor="middle" class="zh">卡片 &mdash; 一幀一個檔</text>
     <text x="380" y="704" text-anchor="middle" font-size="9" class="t-dim">A001_xxxx.dng</text>
     <circle class="f-ok" cx="675" cy="693" r="5"/>
+    <a class="mine-dia" href="#stage-1"><text x="647" y="26" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 3</text></a>
+    <a class="mine-dia" href="#stage-2"><text x="647" y="92" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 3</text></a>
+    <a class="mine-dia" href="#stage-3"><text x="647" y="158" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 2</text></a>
+    <a class="mine-dia" href="#stage-4"><text x="362" y="226" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 1</text></a>
+    <a class="mine-dia" href="#stage-5"><text x="647" y="226" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 6</text></a>
+    <a class="mine-dia" href="#stage-6"><text x="362" y="292" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 1</text></a>
+    <a class="mine-dia" href="#stage-8"><text x="651" y="413" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 6</text></a>
+    <a class="mine-dia" href="#stage-9"><text x="647" y="492" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 8</text></a>
+    <a class="mine-dia" href="#stage-10"><text x="647" y="558" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 6</text></a>
+    <a class="mine-dia" href="#stage-11"><text x="647" y="624" text-anchor="end" font-size="9.5" class="t-mine">&#9888; 8</text></a>
   </g>
   <g class="ln">
     <path d="M380 50 v24"/><path d="M380 116 v24"/>
@@ -306,17 +372,19 @@ Open Gate 和原廠 FHD 都落在「這一關完全不縮減」的那 253 筆裡
   <span><span class="st ok">solved</span> <span class="en">verified on a camera or read from firmware</span><span class="zh">在相機上驗過,或直接從韌體讀出</span></span>
   <span><span class="st part">partial</span> <span class="en">shape known, a detail is not</span><span class="zh">形狀知道,細節還沒定</span></span>
   <span><span class="st dark">dark</span> <span class="en">guesswork</span><span class="zh">在猜</span></span>
+  <span><span class="mines">&#9888; n</span> <span class="en">pitfalls whose cause is in that stage &mdash; click to open</span><span class="zh">根因在這一關的雷數 &mdash; 點了會展開</span></span>
 </div>
 
 <h2><span class="en">Every stage, opened up</span><span class="zh">十一關,逐關拆開</span></h2>
 
 <div class="stages">
 
-<details class="stage">
+<details class="stage" id="stage-1">
   <summary>
     <span class="hd"><b><span class="en">Menu selection</span><span class="zh">選單選擇</span></b>
     <small class="en">What the user actually picks, and why bit depth matters more than it looks</small>
     <small class="zh">使用者到底選了什麼,以及位元深度為什麼比看起來重要</small></span>
+    <span class="mines" title="pitfalls">&#9888; 3</span>
     <span class="st ok">solved</span>
   </summary>
   <div class="body">
@@ -334,14 +402,16 @@ Open Gate 和原廠 FHD 都落在「這一關完全不縮減」的那 253 筆裡
     and OG2K. Whether that is a hard layout limit or just the current table has not
     been settled.</div>
     <div class="open-q zh"><b>還沒解:</b> 選單實際上只放得下三列,這就是為什麼 HSW 得做成獨立的卡,不能跟 OG3K、OG2K 擺在一起。這是排版的硬限制、還是只是目前這張表的關係,沒有定論。</div>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (3)</span><span class="zh">這一關踩過的雷(3)</span></h4><ul><li><span class="st ok">fixed</span><a href="#p12"><span class="en">Flag and picker disagree: HUD says OG3K but the take is UHD30, or it silently records FHD</span><span class="zh">旗標跟 picker 不一致:HUD 寫 OG3K 但錄成 UHD30,或安靜地錄成 FHD</span></a></li><li><span class="st ok">fixed</span><a href="#p35"><span class="en">OG selected + recording format MOV + record: hard freeze, even <code>mem_get</code> dies</span><span class="zh">選著 OG + 錄影格式切 MOV + 按錄影:硬凍結,連 <code>mem_get</code> 都死</span></a></li><li><span class="st ok">fixed</span><a href="#p41"><span class="en">OG2K playback: colour noise in the top-left corner</span><span class="zh">OG2K 回放左上角彩色雜訊</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-2">
   <summary>
     <span class="hd"><b><span class="en">The picker</span><span class="zh">picker(挑格式的那段)</span></b>
     <small class="en">A string-keyed lookup, not an index &mdash; and its fallback is a trap</small>
     <small class="zh">用字串查表,不是用索引 &mdash; 而且它的退路是個陷阱</small></span>
+    <span class="mines" title="pitfalls">&#9888; 3</span>
     <span class="st ok">solved</span>
   </summary>
   <div class="body">
@@ -378,14 +448,16 @@ if (!entry) { log_error(); entry = 0xC0BE5B50; }   <span class="t-warn">// table
         <tr><td>FHD60</td><td>27</td><td>133</td><td>153</td><td>173</td></tr>
       </tbody>
     </table></div>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (3)</span><span class="zh">這一關踩過的雷(3)</span></h4><ul><li><span class="st ok">fixed</span><a href="#p11"><span class="en">8-bit or 10-bit recorded UHD30, while the HUD said OG3K</span><span class="zh">選 8/10-bit 錄出 UHD30,HUD 卻顯示 OG3K</span></a></li><li><span class="st dark">open</span><a href="#p13"><span class="en">OG3K with Super35/crop on: pressing record makes no clip</span><span class="zh">OG3K 開著 Super35/裁切:按錄影不產生片段</span></a></li><li><span class="st ok">fixed</span><a href="#p28"><span class="en">25p under 50 Hz light showed rolling bands</span><span class="zh">25p 在 50 Hz 燈下出現橫紋</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-3">
   <summary>
     <span class="hd"><b><span class="en">The format entry</span><span class="zh">格式條目</span></b>
     <small class="en">Sixteen bytes that decide everything downstream</small>
     <small class="zh">十六個 byte,決定了後面所有的事</small></span>
+    <span class="mines" title="pitfalls">&#9888; 2</span>
     <span class="st ok">solved</span>
   </summary>
   <div class="body">
@@ -402,14 +474,16 @@ if (!entry) { log_error(); entry = 0xC0BE5B50; }   <span class="t-warn">// table
     <p class="en">For 12-bit CinemaDNG the resolution enums are UHD = 71, FHD = 73,
     UHDCROP = 391, FHDCROP = 393.</p>
     <p class="zh">12-bit CinemaDNG 那張的解析度編號是 UHD = 71、FHD = 73、UHDCROP = 391、FHDCROP = 393。</p>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (2)</span><span class="zh">這一關踩過的雷(2)</span></h4><ul><li><span class="st ok">rule</span><a href="#p36"><span class="en">Three freezes with one cause: something a hook reads was changed while the hook was live</span><span class="zh">三次凍結,同一條規則:hook 還在跑,就去改它讀的東西</span></a></li><li><span class="st ok">rule</span><a href="#p40"><span class="en">Black screens and freezes in playback</span><span class="zh">回放黑屏、凍結</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-4">
   <summary>
     <span class="hd"><b><span class="en">Sensor mode table</span><span class="zh">感光元件模式表</span></b>
     <small class="en">70 entries &mdash; and the frame rate in it is nominal</small>
     <small class="zh">70 筆 &mdash; 而且裡面那個格率是標稱值,不是真的</small></span>
+    <span class="mines" title="pitfalls">&#9888; 1</span>
     <span class="st ok">solved</span>
   </summary>
   <div class="body">
@@ -441,14 +515,16 @@ if (!entry) { log_error(); entry = 0xC0BE5B50; }   <span class="t-warn">// table
     charge binning from skipping, and the OG2K plan is careful not to claim
     otherwise.</div>
     <div class="open-q zh"><b>還沒解:</b> <code>+0x44</code> 跟 <code>+0x48</code> 是什麼。<code>+0x4C</code>/<code>+0x50</code> 已確認是有效的 X/Y 幾何倍率,但那只證明座標比例 —— <strong>不能分辨是電荷合併還是跳讀</strong>,而這個差別對畫質很重要。</div>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (1)</span><span class="zh">這一關踩過的雷(1)</span></h4><ul><li><span class="st ok">fixed</span><a href="#p9"><span class="en">Picker switched to a 3:2 mode; the framing did not change</span><span class="zh">picker 換成 3:2 模式,構圖卻完全沒變</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-5">
   <summary>
     <span class="hd"><b><span class="en">PARAM profile table</span><span class="zh">PARAM profile 表</span></b>
     <small class="en">306 rows, column-major, and the columns are not in field order</small>
     <small class="zh">306 列,column-major,而且欄的順序不照欄位順序</small></span>
+    <span class="mines" title="pitfalls">&#9888; 6</span>
     <span class="st part">partial</span>
   </summary>
   <div class="body">
@@ -482,18 +558,28 @@ RAW RWZM       0x3FF = unity</pre>
     only used for photographs. The movie side has no 3K anywhere &mdash; not in the
     picker's 78 entries, not in the playback name tables, not in the CINE menu.</p>
     <p class="zh">這解釋了為什麼一換上 p43,錄影立刻就乾淨了 —— 那不是我們硬湊出來的東西,而是<strong>相機自己的全高 3:2 擷取路徑</strong>,只是原本只服務照片。<br>錄影那邊則是<strong>完全沒有 3K</strong>:picker 的 78 筆沒有、回放名稱表沒有、CINE 選單也沒有。</p>
+    <p class="en"><b>OG3K ships on p83, not p43.</b> They differ only in <code>+0x030</code>, which
+    turned out to be the nominal frame rate (float): p43 holds &minus;1.0 (0xBF800000), p175
+    holds 30.0 (0x41F00000). The RAW buffer count is derived from it, and &minus;1.0 means
+    zero buffers &mdash; that was the garbled last frame. p43 is the stills <em>view</em>
+    profile; p83 is the capture profile and already allocates three.</p>
+    <p class="zh"><b>OG3K 最後用的是 p83,不是 p43。</b> 兩者只差 <code>+0x030</code>,
+    後來查明那是標稱格率(float):p43 是 &minus;1.0(0xBF800000)、p175 是 30.0(0x41F00000)。
+    RAW 緩衝張數由它導出,&minus;1.0 = 零張 —— 那就是「最後一幀花屏」的來源。p43 是照片<em>檢視</em>用,
+    p83 是拍攝用,原廠就配三張。</p>
     <div class="open-q en"><b>Open:</b> the 306-row table has around 65 columns and
-    only a dozen are understood. <code>+0x030</code> differs between p43
-    (3212836864) and p175 (1106247680) and nobody knows what it is.</div>
-    <div class="open-q zh"><b>還沒解:</b> 這張 306 列的表大概有 65 個欄位,我們只懂十來個。<code>+0x030</code> 在 p43(3212836864)跟 p175(1106247680)不一樣,沒人知道那是什麼。</div>
+    most are still not understood.</div>
+    <div class="open-q zh"><b>還沒解:</b> 這張 306 列的表大概有 65 個欄位,大部分仍然沒搞懂。</div>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (6)</span><span class="zh">這一關踩過的雷(6)</span></h4><ul><li><span class="st ok">fixed</span><a href="#p20"><span class="en">Half-pressing the shutter stretched the picture vertically</span><span class="zh">半按快門對焦,畫面突然被拉長</span></a></li><li><span class="st ok">fixed</span><a href="#p21"><span class="en">The last frame of a take was garbled (borrowing p43)</span><span class="zh">借 p43 時,錄影最後一幀花屏</span></a></li><li><span class="st ok">fixed</span><a href="#p22"><span class="en">Shooting an S-size 12-bit still with OG3K selected froze the camera</span><span class="zh">選著 OG3K 拍一張 S 尺寸 12-bit 照片,相機凍結</span></a></li><li><span class="st ok">fixed</span><a href="#p23"><span class="en">DNG with <code>DefaultCropSize (0,0)</code>: playback crashes, USB lost</span><span class="zh">DNG 寫出 <code>DefaultCropSize (0,0)</code>:回放當機、USB 消失</span></a></li><li><span class="st ok">fixed</span><a href="#p27"><span class="en">About 2.7 EV of highlights lost at ISO 640 and above</span><span class="zh">ISO 640 以上損失約 2.7 級高光</span></a></li><li><span class="st ok">fixed</span><a href="#p29"><span class="en">HSW froze above 60 fps</span><span class="zh">HSW 超過 60 fps 就凍結</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-6">
   <summary>
     <span class="hd"><b><span class="en">Sensor timing</span><span class="zh">感光元件時序</span></b>
     <small class="en">hmax and vmax set the real frame rate; the metadata does not</small>
     <small class="zh">真正決定格率的是 hmax 跟 vmax,不是 metadata</small></span>
+    <span class="mines" title="pitfalls">&#9888; 1</span>
     <span class="st ok">solved</span>
   </summary>
   <div class="body">
@@ -516,14 +602,16 @@ rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
     rate it wants, which is what makes the metadata frame rate go stale. HSW is the
     only one where the sensor is left completely untouched.</p>
     <p class="zh">其他每一個 open gate 目標,都得把借來的模式的時序改掉才能拿到想要的格率 —— 那正是上一關講的「metadata 格率變成謊話」的來源。<strong>HSW 是唯一一個感光元件一個位元都不用動的。</strong></p>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (1)</span><span class="zh">這一關踩過的雷(1)</span></h4><ul><li><span class="st ok">fixed</span><a href="#p26"><span class="en">Shutter angle underexposed by 1.38 EV</span><span class="zh">快門角度模式曝光少 1.38 EV</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-7">
   <summary>
     <span class="hd"><b><span class="en">CRCT chain</span><span class="zh">CRCT 校正鏈</span></b>
     <small class="en">A fork, not a sequence &mdash; and only two of six taps are live</small>
     <small class="zh">是岔路不是順序 &mdash; 六個抽頭只有兩個真的活著</small></span>
+    <span class="mines none" title="pitfalls">&#9888; 0</span>
     <span class="st ok">solved</span>
   </summary>
   <div class="body">
@@ -564,11 +652,12 @@ rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-8">
   <summary>
     <span class="hd"><b><span class="en">RWZM resampler</span><span class="zh">RWZM 重取樣器</span></b>
     <small class="en">The last place the frame can change size</small>
     <small class="zh">畫面尺寸最後能被改動的地方</small></span>
+    <span class="mines" title="pitfalls">&#9888; 6</span>
     <span class="st ok">solved</span>
   </summary>
   <div class="body">
@@ -588,14 +677,16 @@ rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
     the other seven were broken and nobody noticed because every test used
     29.97.</div>
     <div class="open-q zh"><b>用很貴的代價學到的坑:</b> 那四個欄位<strong>不能拆</strong>。只把 RAW 那一對改成 unity、預覽那一對留 1600 → 錄影花屏,然後相機凍結。<br>還有:八個格率用八個不同的 profile。早期版本只補了 29.97 那一個,另外七個全是壞的 —— 而沒人發現,因為<strong>每次測試都用 29.97</strong>。</div>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (6)</span><span class="zh">這一關踩過的雷(6)</span></h4><ul><li><span class="st ok">fixed</span><a href="#p1"><span class="en">Header says 3032&times;2012, but only the top-left ~1936&times;1090 holds picture</span><span class="zh">檔頭寫 3032&times;2012,但只有左上約 1936&times;1090 有畫面,其餘是雜訊</span></a></li><li><span class="st ok">rule</span><a href="#p2"><span class="en">Only the RAW pair set to unity: garbled, then a freeze</span><span class="zh">只把 RAW 那一對改 unity:花屏,接著凍結</span></a></li><li><span class="st ok">fixed</span><a href="#p3"><span class="en">Every frame rate except 29.97 recorded garbage</span><span class="zh">除了 29.97,其他格率錄出來全是壞的</span></a></li><li><span class="st ok">fixed</span><a href="#p4"><span class="en">After a cold boot every take was garbled, while menu, live view and DNG header all looked right</span><span class="zh">冷開機後每段都花屏,但選單、live view、DNG 檔頭看起來都正常</span></a></li><li><span class="st ok">rule</span><a href="#p6"><span class="en">1&times; readout + RWZM unity + 3032-wide canvas: instant freeze, USB gone</span><span class="zh">1&times; 讀出 + RWZM unity + 3032 寬畫布:立刻凍結、USB 消失</span></a></li><li><span class="st ok">rule</span><a href="#p7"><span class="en">Period-16 horizontal banding</span><span class="zh">週期 16 的橫紋</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-9">
   <summary>
     <span class="hd"><b><span class="en">The geometry record &mdash; the canvas</span><span class="zh">幾何記錄 &mdash; 畫布</span></b>
     <small class="en">Six rounds of patching the wrong copy</small>
     <small class="zh">連續六輪都在改錯的那一份複本</small></span>
+    <span class="mines" title="pitfalls">&#9888; 8</span>
     <span class="st part">partial</span>
   </summary>
   <div class="body">
@@ -624,14 +715,16 @@ rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
     downstream of this record. That is the general lesson: in this chain, find
     where a value is <em>constructed</em>, not where it is visible.</p>
     <p class="zh">前面六輪失敗,全部都是在改「從這份記錄推導出來的下游東西」。這條鏈的通則就是這句話:<strong>要找值被「組出來」的地方,不是找它「看得見」的地方。</strong></p>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (8)</span><span class="zh">這一關踩過的雷(8)</span></h4><ul><li><span class="st ok">fixed</span><a href="#p8"><span class="en">Settings block held 3032&times;2012 for a whole take; the DNG stayed 1936&times;1090</span><span class="zh">設定區塊整段錄影都是 3032&times;2012,DNG 還是 1936&times;1090</span></a></li><li><span class="st ok">fixed</span><a href="#p10"><span class="en">Header size and byte length disagree, or the header keeps the old size</span><span class="zh">檔頭尺寸和位元組長度對不上,或檔頭沿用舊尺寸</span></a></li><li><span class="st ok">fixed</span><a href="#p14"><span class="en">HSW: recording would not stop, SD light stayed on, reboot needed</span><span class="zh">HSW:錄影停不下來,SD 燈長亮,要重開機</span></a></li><li><span class="st ok">fixed</span><a href="#p30"><span class="en">External writes serialised to about 5 frames a second, then a freeze</span><span class="zh">外接寫入被串列化成每秒約 5 格,然後凍結</span></a></li><li><span class="st ok">rule</span><a href="#p37"><span class="en">Reading past a record: data abort, camera gone from USB</span><span class="zh">讀過界:data abort,相機從 USB 消失</span></a></li><li><span class="st ok">fixed</span><a href="#p39"><span class="en">OG3K clips played back with horizontal stripes</span><span class="zh">OG3K 片子回放出現水平條紋</span></a></li><li><span class="st ok">fixed</span><a href="#p43"><span class="en">JSON sidecar width = 0</span><span class="zh">JSON sidecar 寬度 = 0</span></a></li><li><span class="st part">workaround</span><a href="#p44"><span class="en">Under OG3K the lens profile said 3856&times;2170; focal length off by 27%</span><span class="zh">OG3K 下鏡頭 profile 寫成 3856&times;2170,焦距錯 27%</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-10">
   <summary>
     <span class="hd"><b><span class="en">Producer &rarr; DRAM strip</span><span class="zh">Producer &rarr; DRAM strip</span></b>
     <small class="en">Two size fields with different jobs, and they must agree</small>
     <small class="zh">兩對尺寸欄位,職責不同,而且必須一致</small></span>
+    <span class="mines" title="pitfalls">&#9888; 6</span>
     <span class="st part">partial</span>
   </summary>
   <div class="body">
@@ -653,14 +746,16 @@ rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
     producer fall back to reading <code>+0x0C/+0x10</code>. That destroyed dozens of
     takes before it was understood.</div>
     <div class="open-q zh"><b>坑:</b> 把 <code>+0xD8/+0xE0</code> 清成 0,producer 會<strong>改去讀 <code>+0x0C/+0x10</code></strong>。搞懂這件事之前,這個行為毀掉了數十段素材。</div>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (6)</span><span class="zh">這一關踩過的雷(6)</span></h4><ul><li><span class="st ok">fixed</span><a href="#p5"><span class="en">Zeroing canvas <code>+0xD8/+0xE0</code> destroyed dozens of takes</span><span class="zh">把畫布 <code>+0xD8/+0xE0</code> 清成 0,毀掉數十段素材</span></a></li><li><span class="st ok">fixed</span><a href="#p15"><span class="en">While recording, the screen split into three bands: red-grey noise, a stretched picture, magenta-cyan smear</span><span class="zh">錄影中畫面分三帶:紅灰雜訊 / 被拉開的影像 / 洋紅青塗抹</span></a></li><li><span class="st ok">rule</span><a href="#p16"><span class="en">A hand-computed preview raster gives three different failures</span><span class="zh">自己算預覽柵格,會出三種不同的壞法</span></a></li><li><span class="st ok">fixed</span><a href="#p17"><span class="en">16:9 is hard-coded twice in the preview path</span><span class="zh">預覽路徑有兩處把 16:9 寫死</span></a></li><li><span class="st ok">fixed</span><a href="#p18"><span class="en">OG2K: live view zoomed 1.05&times; while recording</span><span class="zh">OG2K:錄影中 live view 放大 1.05&times;</span></a></li><li><span class="st dark">open</span><a href="#p19"><span class="en">A thin gap on the right edge while recording</span><span class="zh">錄影時右邊一條細空隙</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
-<details class="stage">
+<details class="stage" id="stage-11">
   <summary>
     <span class="hd"><b><span class="en">DNG writer</span><span class="zh">DNG 寫檔器</span></b>
     <small class="en">78,848 bytes of header, and a compression flag nothing sets</small>
     <small class="zh">78,848 bytes 的表頭,和一個沒人去設的壓縮旗標</small></span>
+    <span class="mines" title="pitfalls">&#9888; 8</span>
     <span class="st part">partial</span>
   </summary>
   <div class="body">
@@ -672,6 +767,11 @@ rolling        330 x 672 / 72 MHz = 3.080 ms</pre>
 BitsPerSample   12        Compression      1        <span class="t-dim">// uncompressed, always</span>
 RowsPerStrip    2012      StripOffsets     78848
 StripByteCounts 9,150,584           <span class="t-dim">// 3032x2012x12/8 = 9,150,576, plus 8</span></pre>
+    <p class="en">(That block is the early 3032&times;2012 build. Shipping OG3K records
+    <b>3024&times;2010</b>, because 3032 is not 16-aligned and in-camera playback broke on it
+    &mdash; see <a href="#pit-pb">playback</a>.)</p>
+    <p class="zh">(上面那組是早期 3032&times;2012 的版本。正式的 OG3K 錄 <b>3024&times;2010</b>,
+    因為 3032 不是 16 的倍數,機內回放會壞 —— 見<a href="#pit-pb">回放</a>。)</p>
     <p class="en">The main image is in IFD0 with the dimensions inline and no SubIFD, which is
     why reading a frame's size on-camera only needs the first kilobyte.</p>
     <p class="zh">主影像在 IFD0、尺寸直接內嵌、沒有 SubIFD —— 所以想在相機上讀一幀的尺寸,只要讀前 1 KB 就夠了。</p>
@@ -682,6 +782,7 @@ StripByteCounts 9,150,584           <span class="t-dim">// 3032x2012x12/8 = 9,15
     size is not a safe bound. This is the blocker in front of in-camera
     compression.</div>
     <div class="open-q zh"><b>還沒解:</b> 寫檔器吃不吃<strong>變動長度的幀</strong>。回放那邊會從第一幀導出一個共用容量,後面任何一幀超過就 assert。所以要做壓縮影片,得在錄影前就保守地保留一個上界 —— <strong>拿第一幀的大小當上界是不安全的</strong>。這就是擋在機內壓縮前面的那道牆。</div>
+<div class="stage-pits"><h4><span class="en">Pitfalls rooted here (8)</span><span class="zh">這一關踩過的雷(8)</span></h4><ul><li><span class="st part">workaround</span><a href="#p24"><span class="en">8-bit DNG on SSD shifted as a block: truncated tail, colour flip at the bottom</span><span class="zh">SSD 上 8-bit DNG 整塊往後推:尾巴被截、底部變色</span></a></li><li><span class="st dark">open</span><a href="#p25"><span class="en">HSW: a dark rectangle on the right side of the frame</span><span class="zh">HSW:畫面右側一塊暗矩形</span></a></li><li><span class="st ok">rule</span><a href="#p31"><span class="en">Recording stops at <code>req_cnt=94</code>, or the clip has fewer real frames than its container rate</span><span class="zh">錄到 <code>req_cnt=94</code> 就停,或實際格數少於容器格率</span></a></li><li><span class="st dark">open</span><a href="#p32"><span class="en">Descriptors leak on every buffer-stop, until a cold boot</span><span class="zh">每次 vbuf 停止都漏描述子,只有冷開機會恢復</span></a></li><li><span class="st dark">open</span><a href="#p33"><span class="en">240 fps onto SSD freezes immediately</span><span class="zh">240 fps 寫 SSD 立刻凍結</span></a></li><li><span class="st ok">fixed</span><a href="#p34"><span class="en">Gyro sidecar lost samples during a take (the &ldquo;dropped needles&rdquo;)</span><span class="zh">陀螺儀 sidecar 漏樣本(漏針)</span></a></li><li><span class="st ok">rule</span><a href="#p38"><span class="en">Other freezes on record start</span><span class="zh">其他在錄影開始時凍結的</span></a></li><li><span class="st dark">open</span><a href="#p42"><span class="en">8-bit OG clips in playback</span><span class="zh">8-bit OG 片子的回放</span></a></li></ul></div><!--/stage-pits-->
   </div>
 </details>
 
@@ -698,28 +799,506 @@ StripByteCounts 9,150,584           <span class="t-dim">// 3032x2012x12/8 = 9,15
   <thead><tr><th></th><th>OG3K</th><th>OG2K</th><th>HSW</th></tr></thead>
   <tbody>
     <tr><td><span class="en">sensor raster</span><span class="zh">感測器光柵</span></td><td>3032&times;2012 (&divide;2)</td><td>2016&times;1344 (&divide;3)</td><td>2016&times;672 (3&times;6)</td></tr>
+    <tr><td><span class="en">recorded DNG</span><span class="zh">錄出的 DNG</span></td><td>3024&times;2010 &rarr; 3008&times;2000</td><td>2016&times;1344 &rarr; 2000&times;1334</td><td>2016&times;672 &rarr; 2000&times;662</td></tr>
     <tr><td><span class="en">sensor mode</span><span class="zh">感測器模式</span></td><td>98 / 143</td><td>139 / 8</td><td><b>12</b></td></tr>
     <tr><td><span class="en">frame rate</span><span class="zh">格率</span></td><td><span class="en">29.97 retimed</span><span class="zh">29.97,改過時序</span></td><td><span class="en">29.97 retimed</span><span class="zh">29.97,改過時序</span></td><td><b><span class="en">239.76 native</span><span class="zh">239.76 原生</span></b></td></tr>
     <tr><td><span class="en">rolling shutter</span><span class="zh">捲簾</span></td><td>12.44 ms</td><td>8.31 ms</td><td>3.08 ms</td></tr>
     <tr><td><span class="en">rate at 29.97</span><span class="zh">29.97 的資料率</span></td><td>273 MB/s</td><td>122 MB/s</td><td>&mdash;</td></tr>
-    <tr><td><span class="en">donor profile</span><span class="zh">借用的 profile</span></td><td><span class="en">p43 / p83 (stills)</span><span class="zh">p43 / p83(拍照用的)</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+    <tr><td><span class="en">donor profile</span><span class="zh">借用的 profile</span></td><td><span class="en">p83 (stills capture; p43 abandoned)</span><span class="zh">p83(拍照用;p43 已棄用)</span></td><td>p13</td><td><span class="en">p13 + 7 high-rate fields</span><span class="zh">p13 + 7 個高速欄位</span></td></tr>
     <tr><td><span class="en">retimes the sensor</span><span class="zh">要改感測器時序</span></td><td class="y"><span class="en">yes</span><span class="zh">要</span></td><td class="y"><span class="en">yes</span><span class="zh">要</span></td><td class="n"><span class="en">no</span><span class="zh">不用</span></td></tr>
-    <tr><td><span class="en">touches RWZM</span><span class="zh">要動 RWZM</span></td><td class="y"><span class="en">yes &mdash; to unity</span><span class="zh">要 &mdash; 改成 unity</span></td><td class="n"><span class="en">no</span><span class="zh">不用</span></td><td class="n"><span class="en">no</span><span class="zh">不用</span></td></tr>
+    <tr><td><span class="en">touches RWZM</span><span class="zh">要動 RWZM</span></td><td class="y"><span class="en">yes &mdash; to unity</span><span class="zh">要 &mdash; 改成 unity</span></td><td class="n"><span class="en">no</span><span class="zh">不用</span></td><td class="n"><span class="en">no (tried: no effect)</span><span class="zh">不用(試過,沒作用)</span></td></tr>
     <tr><td><span class="en">canvas hook</span><span class="zh">畫布 hook</span></td><td class="y"><span class="en">yes</span><span class="zh">要</span></td><td class="y"><span class="en">yes</span><span class="zh">要</span></td><td class="y"><span class="en">yes</span><span class="zh">要</span></td></tr>
-    <tr><td><span class="en">status</span><span class="zh">狀態</span></td><td>v0.2.3a alpha</td><td>v0.1.0 test</td><td><b><span class="en">not yet on a camera</span><span class="zh">還沒上過機</span></b></td></tr>
+    <tr><td><span class="en">status</span><span class="zh">狀態</span></td><td>v0.2.4a</td><td>v0.1.1a</td><td><b><span class="en">on camera, unreleased: 180 fps clean on SSD, 240 freezes</span><span class="zh">上過機、未發布:SSD 180 fps 乾淨,240 凍結</span></b></td></tr>
   </tbody>
 </table>
 </div>
 
-<p class="note en"><b>HSW is the cheapest of the three and the least proven.</b> Mode 12
-ships from the factory at exactly 239.760240 fps with a full-frame 3:2 raster, and
-no picker table references it &mdash; all 78 CinemaDNG entries were checked. Nothing
-about the sensor needs changing, which also means the metadata frame rate stays
-honest. It has not been run.</p>
-<p class="note zh"><b>HSW 是三個裡面最便宜、也最沒被驗證的一個。</b>
-mode 12 出廠就是 239.760240 fps,全片幅 3:2,而且<strong>沒有任何 picker 表引用它</strong>
-&mdash; 78 筆 CinemaDNG 條目全部掃過了。感光元件一個位元都不用改,
-連帶好處是它的 metadata 格率不會變成謊話。<strong>但它還沒上過機。</strong></p>
+<p class="note en"><b>HSW needs the fewest sensor changes and turned out the hardest to
+write.</b> Mode 12 ships at exactly 239.760240 fps and no picker table references it, so
+the sensor is untouched and the metadata rate stays honest. The work was all downstream:
+the window declared by donor p13 (the take could not stop), seven high-rate profile fields
+(freezes above 60 fps), a buffer-class write that serialised the card, and two still-open
+problems &mdash; 240 fps onto SSD freezes, and 8-bit frames on SSD are shifted by the writer.
+See <a href="#pit-drop">dropped frames</a>.</p>
+<p class="note zh"><b>HSW 感光元件動得最少,寫檔卻最難。</b>
+mode 12 出廠就是 239.760240 fps、沒有 picker 表引用它,所以感光元件不用動、metadata 格率也誠實。
+難的全在下游:donor p13 宣告的視窗(錄影停不下來)、七個高速 profile 欄位(超過 60 fps 凍結)、
+一個把寫卡串列化的緩衝類別寫入,以及兩個還沒解的 —— <strong>240 fps 寫 SSD 凍結</strong>、
+<strong>8-bit 在 SSD 上被寫入端整塊推位</strong>。見<a href="#pit-drop">掉格</a>。</p>
+
+<h2 id="pitfalls"><span class="en">Every pitfall, by symptom</span><span class="zh">所有踩過的坑,照症狀分</span></h2>
+<p class="en">What OG3K, OG2K and HSW ran into between the sensor and the file: 44 of them, each with the mechanism and what fixed it. The numbered tag on each one is the stage where its cause lives; the same pitfalls are listed inside each stage above and counted on the chain diagram. <span class="st ok">fixed</span> / <span class="st ok">rule</span> means verified on a camera; <span class="st part">workaround</span> means it is contained but the cause is still there; <span class="st dark">open</span> means unsolved.</p><p class="zh">OG3K、OG2K、HSW 在感光元件到檔案之間踩過的坑,共 44 個,每個都寫出機制與解法。每個坑上的編號標籤 = 它的<b>根因所在的那一關</b>;同樣的坑也列在上面每一關裡,並在流程圖上標出數量。<span class="st ok">fixed</span> / <span class="st ok">rule</span> = 已在相機上驗證;<span class="st part">workaround</span> = 擋住了但根因還在;<span class="st dark">open</span> = 未解。</p>
+<nav class="pit-toc"><a href="#pit-garbled"><span class="en">Garbled picture in the recording</span><span class="zh">錄影中花屏</span> <small>7</small></a> <a href="#pit-size"><span class="en">Wrong size in the recording</span><span class="zh">錄影中尺寸錯誤</span> <small>7</small></a> <a href="#pit-lv"><span class="en">Live view is the wrong size</span><span class="zh">Live view 尺寸錯誤</span> <small>5</small></a> <a href="#pit-focus"><span class="en">Size jumps when focusing</span><span class="zh">對焦中尺寸突然變化</span> <small>1</small></a> <a href="#pit-dng"><span class="en">Broken CinemaDNG</span><span class="zh">CinemaDNG 寫壞</span> <small>8</small></a> <a href="#pit-drop"><span class="en">Dropped frames, bad frames, stalls</span><span class="zh">抽格、壞幀、停錄</span> <small>6</small></a> <a href="#pit-freeze"><span class="en">Freezes caused by the patch itself</span><span class="zh">補丁自己造成的凍結</span> <small>4</small></a> <a href="#pit-pb"><span class="en">In-camera playback</span><span class="zh">機內回放</span> <small>4</small></a> <a href="#pit-side"><span class="en">Sidecar and lens profile</span><span class="zh">Sidecar 與鏡頭 profile</span> <small>2</small></a></nav>
+<h3 id="pit-garbled"><span class="en">Garbled picture in the recording</span><span class="zh">錄影中花屏</span></h3>
+<div class="pits">
+<div class="pit" id="p1">
+<h4><span class="en">Header says 3032&times;2012, but only the top-left ~1936&times;1090 holds picture</span><span class="zh">檔頭寫 3032&times;2012,但只有左上約 1936&times;1090 有畫面,其餘是雜訊</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The recording profile's RWZM was <code>0x640</code> (1.5625&times;). That caps the producer at <code>sl+0x64/+0x68</code> = 1936&times;1090 no matter what the canvas says.</dd><dd class="zh">錄影 profile 的 RWZM 是 <code>0x640</code>(1.5625&times;),它把 producer 的上限 <code>sl+0x64/+0x68</code> 釘在 1936&times;1090,畫布寫多大都沒用。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">All four RWZM fields (<code>+0x60/+0x64/+0xD0/+0xD4</code>) to unity <code>0x400</code>. A001_016: adjacent-row correlation 0.88&ndash;0.93 on all four edges.</dd><dd class="zh">RWZM 四個欄位(<code>+0x60/+0x64/+0xD0/+0xD4</code>)全改 unity <code>0x400</code>。A001_016 四邊相鄰列相關 0.88&ndash;0.93。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-8"><b>8</b><span class="en">RWZM</span><span class="zh">RWZM</span></a> OG3K &middot; CANVAS_MOVED_AT_C043A19C &sect;8&ndash;11</p>
+</div>
+<div class="pit" id="p2">
+<h4><span class="en">Only the RAW pair set to unity: garbled, then a freeze</span><span class="zh">只把 RAW 那一對改 unity:花屏,接著凍結</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Preview pair left at 1600 while the RAW pair was unity. The two pairs feed the same producer and must agree.</dd><dd class="zh">預覽那對留 1600、RAW 那對改 unity。兩對餵的是同一個 producer,必須一致。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Change all four together. This holds for OG3K; on HSW, changing all four to 2048 did nothing at all, because the canvas write downstream pins the geometry.</dd><dd class="zh">四個一起改。這條只在 OG3K 成立 —— HSW 四欄全改 2048 完全沒作用,因為下游畫布的寫入把幾何釘死了。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-8"><b>8</b><span class="en">RWZM</span><span class="zh">RWZM</span></a> OG3K / HSW &middot; OG3K_RWZM_AND_BUILD_PIPELINE &sect;6c, HSW &sect;67B</p>
+</div>
+<div class="pit" id="p3">
+<h4><span class="en">Every frame rate except 29.97 recorded garbage</span><span class="zh">除了 29.97,其他格率錄出來全是壞的</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">RWZM was patched only on p175. Each of the eight frame rates has its own profile (173/174/176/178/180/430/431 too). Every test used 29.97, so nobody saw it.</dd><dd class="zh">RWZM 只補了 p175。八個格率各有自己的 profile(還有 173/174/176/178/180/430/431),而每次測試都用 29.97,所以沒人發現。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Patch all eight. They are shared with stock FHD, so the 32 addresses are switched by the OG flag, never written permanently.</dd><dd class="zh">八個都補。它們跟原廠 FHD 共用,所以這 32 個位址要跟著 OG 旗標切換,不能寫死。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-8"><b>8</b><span class="en">RWZM</span><span class="zh">RWZM</span></a> OG3K &middot; OG3K_RWZM_AND_BUILD_PIPELINE &sect;1</p>
+</div>
+<div class="pit" id="p4">
+<h4><span class="en">After a cold boot every take was garbled, while menu, live view and DNG header all looked right</span><span class="zh">冷開機後每段都花屏,但選單、live view、DNG 檔頭看起來都正常</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The AutoRun on the card set RWZM; the USB loader did not. After a cold boot RWZM fell back to 1600.</dd><dd class="zh">卡上的 AutoRun 有設 RWZM,USB 載入器沒有。冷開機後 RWZM 回到 1600。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">One self-contained write plan (<code>og3k_plan</code>) used by every loader.</dd><dd class="zh">所有載入器共用同一份自給自足的寫入計畫 <code>og3k_plan</code>。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-8"><b>8</b><span class="en">RWZM</span><span class="zh">RWZM</span></a> OG3K &middot; OG3K_RWZM_AND_BUILD_PIPELINE &sect;3</p>
+</div>
+<div class="pit" id="p5">
+<h4><span class="en">Zeroing canvas <code>+0xD8/+0xE0</code> destroyed dozens of takes</span><span class="zh">把畫布 <code>+0xD8/+0xE0</code> 清成 0,毀掉數十段素材</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">An external handoff called it a &ldquo;preview override&rdquo;. It is the producer/consumer pair. Once it was zeroed, the producer fell back to <code>+0x0C/+0x10</code>, which held the preview raster 2024&times;1341. From A001_015 only the left 1936 columns had picture; from A001_047 the strip shrank to 3032&times;1341 (6,179,328 B instead of 9,229,824).</dd><dd class="zh">外部交接包說它是「預覽覆寫」,實際上是 producer/消費端那一對。清成 0 之後 producer 改讀 <code>+0x0C/+0x10</code>,而那裡放的是預覽柵格 2024&times;1341。A001_015 起只有左邊 1936 欄有畫面;A001_047 起 strip 縮成 3032&times;1341(每幀 6,179,328 B,應為 9,229,824)。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">The canvas carries only recording geometry, and <code>check()</code> locks the ten canvas writes. The footage could not be recovered.</dd><dd class="zh">畫布只放錄影幾何,<code>check()</code> 鎖死那十個 PUT。那批素材救不回來。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-10"><b>10</b><span class="en">Producer &rarr; strip</span><span class="zh">Producer &rarr; strip</span></a> OG3K &middot; RECORDING_REGRESSION_2026-09-12</p>
+</div>
+<div class="pit" id="p6">
+<h4><span class="en">1&times; readout + RWZM unity + 3032-wide canvas: instant freeze, USB gone</span><span class="zh">1&times; 讀出 + RWZM unity + 3032 寬畫布:立刻凍結、USB 消失</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">A 6064-wide unbinned row overflows a buffer sized for 3032.</dd><dd class="zh">6064 寬、沒合併的一列,塞進照 3032 配置的緩衝,每行都溢位。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Unity RWZM only on a mode that is already binned &ge;2&times; at the sensor. FP3K used 2048 and never hit this.</dd><dd class="zh">RWZM unity 只能配感光元件端已經 &ge;2&times; 合併的模式。FP3K 用 2048,所以沒踩到。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-8"><b>8</b><span class="en">RWZM</span><span class="zh">RWZM</span></a> SENSOR_READOUT_NOISE &sect;6</p>
+</div>
+<div class="pit" id="p7">
+<h4><span class="en">Period-16 horizontal banding</span><span class="zh">週期 16 的橫紋</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The resampler has 16 phases, <code>floor(16&times;frac(n&times;R))</code>. The stock 25/16 ratio uses all 16 phases, and that repeats every 16 rows.</dd><dd class="zh">重取樣器有 16 個相位,<code>floor(16&times;frac(n&times;R))</code>。原廠 25/16 會用滿 16 個相位,每 16 行重複一次。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Pick ratios whose denominator is &le;5, or unity.</dd><dd class="zh">選分母 &le;5 的比例,或直接 unity。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-8"><b>8</b><span class="en">RWZM</span><span class="zh">RWZM</span></a> REDUCTION_KERNEL_MEASURED &sect;0</p>
+</div>
+</div>
+<h3 id="pit-size"><span class="en">Wrong size in the recording</span><span class="zh">錄影中尺寸錯誤</span></h3>
+<div class="pits">
+<div class="pit" id="p8">
+<h4><span class="en">Settings block held 3032&times;2012 for a whole take; the DNG stayed 1936&times;1090</span><span class="zh">設定區塊整段錄影都是 3032&times;2012,DNG 還是 1936&times;1090</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The settings block (<code>*(0xC3075230)</code>, mirror <code>0xC3758B98</code>, CameraMgr <code>+0x40</code>) is an output. The field that &ldquo;gets reverted&rdquo; only marks the next table not yet patched. &ldquo;+16/+10&rdquo; happens to hold for the two stock sizes; it is not causal.</dd><dd class="zh">設定區塊(<code>*(0xC3075230)</code>、鏡像 <code>0xC3758B98</code>、CameraMgr <code>+0x40</code>)是輸出。「被刷回的欄位」只是標出下一張還沒補的表。「+16/+10」只是兩種原廠尺寸剛好成立,沒有因果關係。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Hook the canvas at <code>0xC043A19C</code>, after <code>FUN_c043a158</code> builds the record and before anything is derived from it.</dd><dd class="zh">在 <code>0xC043A19C</code> hook 畫布:<code>FUN_c043a158</code> 組好、還沒有人從它推導的那一刻。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-9"><b>9</b><span class="en">Canvas</span><span class="zh">畫布</span></a> OG3K &middot; CANVAS_IS_NOT_THE_SETTINGS_BLOCK</p>
+</div>
+<div class="pit" id="p9">
+<h4><span class="en">Picker switched to a 3:2 mode; the framing did not change</span><span class="zh">picker 換成 3:2 模式,構圖卻完全沒變</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The ISP crops to the canvas aspect. <code>FUN_c0437078</code> only ever answers with 16:9 modes.</dd><dd class="zh">ISP 會照畫布的長寬比裁切,<code>FUN_c0437078</code> 也只會回 16:9 的模式。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">The mode alone is not enough. The canvas has to change too.</dd><dd class="zh">只換模式不夠,畫布也要改。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-4"><b>4</b><span class="en">Sensor mode table</span><span class="zh">感光元件模式表</span></a> OPEN_GATE_EXPLORATION_ARCHIVE</p>
+</div>
+<div class="pit" id="p10">
+<h4><span class="en">Header size and byte length disagree, or the header keeps the old size</span><span class="zh">檔頭尺寸和位元組長度對不上,或檔頭沿用舊尺寸</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The canvas has four layers: base <code>+0x00/04</code> (sizes the RAW buffer), active <code>+0x24/2C</code> (DefaultCrop), override <code>+0xDC/E4</code> (header), input <code>+0xF4/F8</code>. Patching override alone breaks the byte count; patching base alone keeps the old header. Offsets derived from the decompiler's assignment order were all off by 4.</dd><dd class="zh">畫布有四層:base <code>+0x00/04</code>(配置 RAW 緩衝用)、active <code>+0x24/2C</code>(DefaultCrop)、override <code>+0xDC/E4</code>(檔頭)、input <code>+0xF4/F8</code>。只改 override,位元組數會錯;只改 base,檔頭沿用舊尺寸。照反編譯賦值順序推出來的偏移全部差 4。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Write all four, at offsets measured on the camera.</dd><dd class="zh">四層都寫,偏移用實機量。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-9"><b>9</b><span class="en">Canvas</span><span class="zh">畫布</span></a> CANVAS_MOVED_AT_C043A19C &sect;2</p>
+</div>
+<div class="pit" id="p11">
+<h4><span class="en">8-bit or 10-bit recorded UHD30, while the HUD said OG3K</span><span class="zh">選 8/10-bit 錄出 UHD30,HUD 卻顯示 OG3K</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The format was registered only in the 12-bit table, so the lookup missed and fell back to row 0 of table 3 = UHD30/p171. The probe caught it: 12,630,528 B per frame.</dd><dd class="zh">格式只註冊在 12-bit 表,查不到就退回表 3 第 0 筆 = UHD30/p171。探針量到每幀 12,630,528 B。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">v0.2.2a registers all three tables. <code>BitsPerSample</code> is written from eRawBitType but the data from profile <code>+0x084</code>, so <code>+0x080/+0x084</code> are set per depth: 8-bit 10/10, 10-bit 10/9, 12-bit 7/7. A mismatch gives a broken file. Afterwards all 21 cells (7 rates &times; 3 depths) were correct.</dd><dd class="zh">v0.2.2a 三張表都註冊。<code>BitsPerSample</code> 依 eRawBitType 寫,資料卻由 profile <code>+0x084</code> 決定,所以 <code>+0x080/+0x084</code> 依深度寫:8-bit 10/10、10-bit 10/9、12-bit 7/7。不一致檔案就壞。之後 21 格(7 格率 &times; 3 深度)全對。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-2"><b>2</b><span class="en">Picker</span><span class="zh">Picker</span></a> OG3K v0.2.1a &middot; OG3K_8BIT_10BIT_FALLS_BACK_TO_UHD</p>
+</div>
+<div class="pit" id="p12">
+<h4><span class="en">Flag and picker disagree: HUD says OG3K but the take is UHD30, or it silently records FHD</span><span class="zh">旗標跟 picker 不一致:HUD 寫 OG3K 但錄成 UHD30,或安靜地錄成 FHD</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Two sources of truth: the OG flag and the picker hit. The resolution setter is not called at boot, so on the first boot the flag is 0 and the take comes out FHD (3,244,544 B, req/fin 48/48). The fear that &ldquo;flag 0 with a picker hit freezes&rdquo; was wrong.</dd><dd class="zh">兩個真相來源:OG 旗標與 picker 命中。開機時不會呼叫解析度 setter,所以冷開機第一次旗標是 0,錄成 FHD(3,244,544 B,req/fin 48/48)。「旗標 0 而 picker 命中會凍結」的擔心是錯的。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Persist the choice in <code>OGSAVE 0xC30754CC</code> (CommonSaveData), and have <code>og3krestore</code> call the real setter at the end of AutoRun. A take recorded straight after boot comes out as OG.</dd><dd class="zh">選擇存進 <code>OGSAVE 0xC30754CC</code>(CommonSaveData),AutoRun 末端由 <code>og3krestore</code> 呼叫真正的 setter。開機不碰任何東西直接錄,就是 OG。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-1"><b>1</b><span class="en">Menu selection</span><span class="zh">選單選擇</span></a> FLAG_AND_PICKER_DISAGREE &sect;7&ndash;14, &sect;39</p>
+</div>
+<div class="pit" id="p13">
+<h4><span class="en">OG3K with Super35/crop on: pressing record makes no clip</span><span class="zh">OG3K 開著 Super35/裁切:按錄影不產生片段</span><span class="st dark">open</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The key becomes <code>OG3K25CROP</code>, which no table has. The private format table is 384 of 480 B full.</dd><dd class="zh">鍵變成 <code>OG3K25CROP</code>,哪張表都沒有。私有格式表 480 B 已用 384。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Not fixed. The README says to turn crop off.</dd><dd class="zh">沒修,README 要求關掉裁切。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-2"><b>2</b><span class="en">Picker</span><span class="zh">Picker</span></a> FLICKER_25P_INVESTIGATION &sect;8</p>
+</div>
+<div class="pit" id="p14">
+<h4><span class="en">HSW: recording would not stop, SD light stayed on, reboot needed</span><span class="zh">HSW:錄影停不下來,SD 燈長亮,要重開機</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Donor p13's sensor window <code>+0xF4/+0xF8</code> says 2016&times;1344, but mode 12 reads only 672 rows, so <code>fin_cnt &lt; req_cnt</code>.</dd><dd class="zh">donor p13 的感光元件視窗 <code>+0xF4/+0xF8</code> 宣告 2016&times;1344,mode 12 只讀 672 行,於是 <code>fin_cnt &lt; req_cnt</code>。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en"><code>TARGET_WRITE_WINDOW</code> writes the real window. A001_007 decodes as 2016&times;672, SBC 2,032,128, crop 2000&times;662 @ (8,5).</dd><dd class="zh"><code>TARGET_WRITE_WINDOW</code> 寫入真正的視窗。A001_007 解出 2016&times;672、SBC 2,032,128、裁切 2000&times;662 @ (8,5)。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-9"><b>9</b><span class="en">Canvas</span><span class="zh">畫布</span></a> HSW &middot; HSW_240FPS_MODE12 &sect;20&ndash;25</p>
+</div>
+</div>
+<h3 id="pit-lv"><span class="en">Live view is the wrong size</span><span class="zh">Live view 尺寸錯誤</span></h3>
+<div class="pits">
+<div class="pit" id="p15">
+<h4><span class="en">While recording, the screen split into three bands: red-grey noise, a stretched picture, magenta-cyan smear</span><span class="zh">錄影中畫面分三帶:紅灰雜訊 / 被拉開的影像 / 洋紅青塗抹</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The producer wrote 1090 rows and the consumer displayed 2012. A screenshot measured the image band at 0.5630; 1090/2012 = 0.5417.</dd><dd class="zh">producer 只寫 1090 行,消費端卻顯示 2012 行。截圖量到影像帶佔 0.5630,1090/2012 = 0.5417。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en"><code>+0x0C/+0x10</code> = 3032/2012 left a 1.560&times; magnification. Visible <code>+0x20/+0x28</code> = 3000/2000 brought it to 1.000&times; (correlation 0.9787).</dd><dd class="zh"><code>+0x0C/+0x10</code> 改 3032/2012 之後還有 1.560&times; 放大;可見區 <code>+0x20/+0x28</code> 改 3000/2000 &rarr; 1.000&times;(相關 0.9787)。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-10"><b>10</b><span class="en">Producer &rarr; strip</span><span class="zh">Producer &rarr; strip</span></a> OG3K &middot; OG3K_RWZM_AND_BUILD_PIPELINE &sect;6b&ndash;6d</p>
+</div>
+<div class="pit" id="p16">
+<h4><span class="en">A hand-computed preview raster gives three different failures</span><span class="zh">自己算預覽柵格,會出三種不同的壞法</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Raster 3032&times;2012: fully garbled. Ratio 2048 &rarr; 1516&times;1006: clean, but zoomed and pushed to the lower right. 2016&times;1344: stride off by 5 px, so ghosting and psychedelic colour. The rounding differs per mode (FHD 1940&times;1093&rarr;1936&times;1090, UHD 3890&times;2183&rarr;3888&times;2184).</dd><dd class="zh">柵格 3032&times;2012 &rarr; 整個花屏;比例 2048 &rarr; 1516&times;1006,乾淨但放大、往右下擠;手算 2016&times;1344 &rarr; 行距差 5 px,重影、顏色迷幻。進位規則每個模式不一樣(FHD 1940&times;1093&rarr;1936&times;1090、UHD 3890&times;2183&rarr;3888&times;2184)。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Copy the firmware's own value for the same window. A 3032&times;2012 window gives raster 2024&times;1341, visible 2000&times;1334, ratio 1536. Declared raster &ne; producer output misaligns the stride; declared &ne; standby raster latches a scale.</dd><dd class="zh">抄韌體對同一個視窗宣告的值:視窗 3032&times;2012 &rarr; 柵格 2024&times;1341、可見 2000&times;1334、比例 1536。宣告柵格 &ne; producer 產出 &rarr; 行距錯位;宣告 &ne; 待機柵格 &rarr; 縮放被 latch 住。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-10"><b>10</b><span class="en">Producer &rarr; strip</span><span class="zh">Producer &rarr; strip</span></a> LIVE_VIEW_DISPLAY_CHAIN &sect;5</p>
+</div>
+<div class="pit" id="p17">
+<h4><span class="en">16:9 is hard-coded twice in the preview path</span><span class="zh">預覽路徑有兩處把 16:9 寫死</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Aspect enum <code>0xC0306EA0</code> (also <code>0xC0306EEC</code>), and the output descriptor <code>0xC0437E98</code> at 1620&times;911.</dd><dd class="zh">長寬比 enum <code>0xC0306EA0</code>(另一處 <code>0xC0306EEC</code>),以及輸出描述子 <code>0xC0437E98</code> 的 1620&times;911。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">1620&times;911 &rarr; 1620&times;1080 (idx2 320&times;180 &rarr; 320&times;213), written to a private copy of the descriptor rather than the shared live buffer.</dd><dd class="zh">1620&times;911 &rarr; 1620&times;1080(idx2 320&times;180 &rarr; 320&times;213),寫在描述子的私有副本,不動共用的活緩衝。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-10"><b>10</b><span class="en">Producer &rarr; strip</span><span class="zh">Producer &rarr; strip</span></a> LIVE_VIEW_DISPLAY_CHAIN &sect;2</p>
+</div>
+<div class="pit" id="p18">
+<h4><span class="en">OG2K: live view zoomed 1.05&times; while recording</span><span class="zh">OG2K:錄影中 live view 放大 1.05&times;</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">p13's preview RWZM is 1023, so the producer emits 2016 wide, but raster <code>+0x0C</code> said 1920: 96 columns cropped, 2016/1920 = 1.050. The file itself was always right.</dd><dd class="zh">p13 的預覽 RWZM 是 1023,producer 出 2016 寬,但柵格 <code>+0x0C</code> 是 1920 &rarr; 裁掉 96 欄,2016/1920 = 1.050。檔案本身一直是對的。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en"><code>+0x0C/+0x10</code> = 2016&times;1344, <code>+0x20/+0x28</code> = 2000&times;1334, <code>+0xD8/+0xE0</code> = 2016&times;1344. Measured 1.001&times; (v0.1.1).</dd><dd class="zh"><code>+0x0C/+0x10</code> = 2016&times;1344、<code>+0x20/+0x28</code> = 2000&times;1334、<code>+0xD8/+0xE0</code> = 2016&times;1344。實測 1.001&times;(v0.1.1)。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-10"><b>10</b><span class="en">Producer &rarr; strip</span><span class="zh">Producer &rarr; strip</span></a> OG2K &middot; OG2K_PLAN &sect;AG&ndash;AI</p>
+</div>
+<div class="pit" id="p19">
+<h4><span class="en">A thin gap on the right edge while recording</span><span class="zh">錄影時右邊一條細空隙</span><span class="st dark">open</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">At the moment record is pressed the picture zooms from the centre and then locks smaller: the layout is latched.</dd><dd class="zh">按下錄影的瞬間畫面「從中心放大」再「鎖小」,版面被 latch 住。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Unsolved. When measuring a latched system, capture the <em>last</em> overwrite. Capturing the first one catches a briefly correct state.</dd><dd class="zh">未解。量有 latch 的系統要抓<em>最後一次</em>覆寫,抓第一次會抓到短暫正確的假象。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-10"><b>10</b><span class="en">Producer &rarr; strip</span><span class="zh">Producer &rarr; strip</span></a> LIVE_VIEW_DISPLAY_CHAIN &sect;7</p>
+</div>
+</div>
+<h3 id="pit-focus"><span class="en">Size jumps when focusing</span><span class="zh">對焦中尺寸突然變化</span></h3>
+<div class="pits">
+<div class="pit" id="p20">
+<h4><span class="en">Half-pressing the shutter stretched the picture vertically</span><span class="zh">半按快門對焦,畫面突然被拉長</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Standby uses preview profile 5. Half-press and record switch to five sibling profiles (210/227/257/258/259) with <code>+0x1C=1</code>, all with visible height 1125. Profile 5 is shared by every mode, so fixing only the standby profile leaves the jump.</dd><dd class="zh">待機用預覽 profile 5,半按與錄影會切到另外五個 <code>+0x1C=1</code> 的兄弟 profile(210/227/257/258/259),可見高都是 1125。profile 5 是所有模式共用的,只修待機那個,半按就會跳。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Switch <code>+0x28</code> on all six to 1334 by the OG flag. Magnify (<code>CMDDIAL3</code> &times;3) was tested separately and passes.</dd><dd class="zh">六個的 <code>+0x28</code> 都跟著 OG 旗標切成 1334。放大(<code>CMDDIAL3</code> &times;3)另外測過,通過。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-5"><b>5</b><span class="en">PARAM profile</span><span class="zh">PARAM profile</span></a> LIVE_VIEW_DISPLAY_CHAIN &sect;4, FLAG_AND_PICKER_DISAGREE</p>
+</div>
+</div>
+<h3 id="pit-dng"><span class="en">Broken CinemaDNG</span><span class="zh">CinemaDNG 寫壞</span></h3>
+<div class="pits">
+<div class="pit" id="p21">
+<h4><span class="en">The last frame of a take was garbled (borrowing p43)</span><span class="zh">借 p43 時,錄影最後一幀花屏</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">p43 has <code>+0x030 = &minus;1.0</code> (stills have no frame rate), so <code>FUN_c04357e0</code> allocated 0 RAW buffers.</dd><dd class="zh">p43 的 <code>+0x030 = &minus;1.0</code>(照片沒有格率),<code>FUN_c04357e0</code> 算出張數 0,不配置 RAW 緩衝。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Writing a frame-rate float into <code>+0x030</code> worked, but it broke stills (next item). Final fix: borrow p83, whose stock count is already 3 and which differs from p43 only in <code>+0x030</code>.</dd><dd class="zh">寫格率浮點進 <code>+0x030</code> 有效,但會害到拍照(下一條)。最終改借 p83:原廠張數就是 3,而且跟 p43 只差 <code>+0x030</code>。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-5"><b>5</b><span class="en">PARAM profile</span><span class="zh">PARAM profile</span></a> OG3K &middot; OG3K_PLAYBACK_PROFILE_CLASSES &sect;1, &sect;7</p>
+</div>
+<div class="pit" id="p22">
+<h4><span class="en">Shooting an S-size 12-bit still with OG3K selected froze the camera</span><span class="zh">選著 OG3K 拍一張 S 尺寸 12-bit 照片,相機凍結</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">p43 is the stills <em>view</em> profile. The frame-rate write made it ask for three extra 3032&times;2012 RAW buffers (+8.2 MB).</dd><dd class="zh">p43 是照片<em>檢視</em>用的 profile。寫入格率讓它多要三張 3032&times;2012 RAW 緩衝(+8.2 MB)。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Borrow p83 and write no stock fields at all.</dd><dd class="zh">改借 p83,不寫任何原廠欄位。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-5"><b>5</b><span class="en">PARAM profile</span><span class="zh">PARAM profile</span></a> OG3K &middot; OG3K_IS_THE_STILLS_PATH</p>
+</div>
+<div class="pit" id="p23">
+<h4><span class="en">DNG with <code>DefaultCropSize (0,0)</code>: playback crashes, USB lost</span><span class="zh">DNG 寫出 <code>DefaultCropSize (0,0)</code>:回放當機、USB 消失</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Donor p221 was declared &ldquo;unreferenced, same branch fields&rdquo; after comparing 12 columns. 9 of its 65 columns differ, active <code>+0x24/+0x2C</code> = 0 among them (A001_125). p221 is actually profile B of FHD24CROP/48CROP, found only through a second table shape <code>{profA, profB, key, class}</code>.</dd><dd class="zh">donor p221 只比了 12 欄就宣稱「沒人引用、分支欄位相同」。65 欄裡其實有 9 欄不同,active <code>+0x24/+0x2C</code> = 0(A001_125)。p221 是 FHD24CROP/48CROP 的 profile B,屬於當初沒掃到的第二種表型 <code>{profA, profB, key, class}</code>。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Compare all 65 columns before borrowing a donor, and say which table shape an &ldquo;unreferenced&rdquo; claim was scanned against. Only p13 and p14 are truly unreferenced.</dd><dd class="zh">借 donor 前全 65 欄比對;說「沒人引用」要講明用哪種表型掃的。真正沒人用的只有 p13、p14。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-5"><b>5</b><span class="en">PARAM profile</span><span class="zh">PARAM profile</span></a> OG2K &middot; OG2K_PLAN &sect;G, &sect;M&ndash;T</p>
+</div>
+<div class="pit" id="p24">
+<h4><span class="en">8-bit DNG on SSD shifted as a block: truncated tail, colour flip at the bottom</span><span class="zh">SSD 上 8-bit DNG 整塊往後推:尾巴被截、底部變色</span><span class="st part">workaround</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The payload moves by 7,168 B (= 0x15400 &minus; 0x13800) or 65,536 B, cutting 3.55 or 32.5 rows. Half a row flips the Bayer phase. Period 128 frames; 10/12-bit is clean. The per-frame writer takes a fast path when every segment is 512-aligned (<code>FUN_c069AD80</code>, open type 0x1806), and its write-cache mode 2 pads on its own; <code>desc+0x14C</code> never changes. Disabling the fast path freezes instantly.</dd><dd class="zh">位移 7,168 B(= 0x15400 &minus; 0x13800)或 65,536 B,截掉 3.55 或 32.5 行;半行讓 Bayer 相位翻轉。以 128 格為週期,10/12-bit 乾淨。每幀寫入器在「所有段都 512 對齊」時走快速路徑(<code>FUN_c069AD80</code>,開檔型別 0x1806),它的寫入快取模式 2 會自己補零;<code>desc+0x14C</code> 從頭到尾沒變。把快速路徑關掉會立刻凍結。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Host-side <code>cdng_fix.py</code> cuts the leading shift and pads the tail. The truncated rows are gone. Unsolved, and it is on HSW 240's critical path.</dd><dd class="zh">主機端 <code>cdng_fix.py</code> 切掉前導位移、尾端補零,被截的行救不回。未解,是 HSW 240 的關鍵路徑。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-11"><b>11</b><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></a> HSW &middot; HSW_240FPS_MODE12 &sect;67</p>
+</div>
+<div class="pit" id="p25">
+<h4><span class="en">HSW: a dark rectangle on the right side of the frame</span><span class="zh">HSW:畫面右側一塊暗矩形</span><span class="st dark">open</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">OpcodeList3's GainMap grid is computed for normal pixel aspect and applied to 2016&times;672, where each pixel is 2:1.</dd><dd class="zh">OpcodeList3 的 GainMap 網格照正常比例算,卻套在像素 2:1 的 2016&times;672 上。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Not fixed in camera.</dd><dd class="zh">機上未修。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-11"><b>11</b><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></a> HSW &middot; HSW_240FPS_MODE12 &sect;40</p>
+</div>
+<div class="pit" id="p26">
+<h4><span class="en">Shutter angle underexposed by 1.38 EV</span><span class="zh">快門角度模式曝光少 1.38 EV</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Mode 98's metadata <code>+0x40</code> says 78 fps, so 29.97 at 180&deg; became 1/156 (6,411 &micro;s instead of 16,663). There are four read sites; the last, <code>0xC03AA568</code>, overwrote the first one's fix. Stage 2 also cleaned only the D-cache (<code>0xC000E91C</code>) without invalidating the I-cache (<code>0xC000EABC</code>).</dd><dd class="zh">mode 98 的 metadata <code>+0x40</code> 標 78 fps &rarr; 29.97/180&deg; 算成 1/156(6,411 &micro;s,應為 16,663)。讀取點有四個,最後一個 <code>0xC03AA568</code> 會把第一個修好的值蓋回去。另外 stage2 只清了 D-cache(<code>0xC000E91C</code>),沒做 I-cache 無效化(<code>0xC000EABC</code>)。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">All four BLs go to one wrapper at <code>0xC0730A00</code>. 7 rates &times; 3 depths and 45/90/171/270/360&deg; are all within 0.05 EV (v0.2.1a).</dd><dd class="zh">四顆 BL 都導向同一個 wrapper <code>0xC0730A00</code>。7 格率 &times; 3 深度、45/90/171/270/360&deg; 全在 0.05 EV 內(v0.2.1a)。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-6"><b>6</b><span class="en">Sensor timing</span><span class="zh">感光元件時序</span></a> OG3K &middot; SHUTTER_ANGLE_EXPOSURE_2026-09-15</p>
+</div>
+<div class="pit" id="p27">
+<h4><span class="en">About 2.7 EV of highlights lost at ISO 640 and above</span><span class="zh">ISO 640 以上損失約 2.7 級高光</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">A stills profile switches to high-gain readout at ISO 640 (<code>gain_state</code> 3). Stock 12-bit CinemaDNG switches at 3200 (state 7), and playback adds a fixed +3 EV on top.</dd><dd class="zh">借照片 profile &rarr; ISO 640 就切高增益讀出(<code>gain_state</code> 3),原廠 12-bit CinemaDNG 是 3200(state 7),回放還固定補 +3 EV。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en"><code>og3kgs</code> hooks <code>FUN_c03a6dd8</code> only. Also driving the sensor-mode path made the preview flicker green. The preview plane <code>+0x080</code> must stay 7. Gain state at 8 and 10 bit is unverified.</dd><dd class="zh"><code>og3kgs</code> 只 hook <code>FUN_c03a6dd8</code>;連感光元件模式那條一起驅動 &rarr; 預覽閃綠。預覽平面 <code>+0x080</code> 必須是 7。8/10-bit 下的增益狀態未驗證。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-5"><b>5</b><span class="en">PARAM profile</span><span class="zh">PARAM profile</span></a> OG3K v0.1.1 &middot; opengate/README</p>
+</div>
+<div class="pit" id="p28">
+<h4><span class="en">25p under 50 Hz light showed rolling bands</span><span class="zh">25p 在 50 Hz 燈下出現橫紋</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">v0.2.2a used <code>r1</code> as scratch, but <code>r1</code> is the stock lookup's table pointer. Non-OG keys went back with <code>r1</code> = 0/3/4 and resolved to UHD30 mode 7 (nominal 30), so 25p/180&deg; came out 1/60.</dd><dd class="zh">v0.2.2a 拿 <code>r1</code> 當暫存,但 <code>r1</code> 是原廠查表的表指標。非 OG 的鍵帶著 <code>r1</code> = 0/3/4 回去 &rarr; UHD30 mode 7(標稱 30)&rarr; 25p/180&deg; 算成 1/60。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">v0.2.3a uses <code>r5</code>; 100 frames all 25.000 fps, 1/50. The notes disagree on whether this was the whole cause.</dd><dd class="zh">v0.2.3a 改用 <code>r5</code>,100 幀全部 25.000 fps、1/50。各筆記對「這是不是全部的原因」說法不一。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-2"><b>2</b><span class="en">Picker</span><span class="zh">Picker</span></a> OG3K v0.2.2a &middot; FLICKER_25P_INVESTIGATION, OG2K_PLAN &sect;Z&ndash;AA</p>
+</div>
+</div>
+<h3 id="pit-drop"><span class="en">Dropped frames, bad frames, stalls</span><span class="zh">抽格、壞幀、停錄</span></h3>
+<div class="pits">
+<div class="pit" id="p29">
+<h4><span class="en">HSW froze above 60 fps</span><span class="zh">HSW 超過 60 fps 就凍結</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Four hypotheses were ruled out: throughput, vblank, <code>+0x0B0</code>, hook contamination. Binding stock FHD120 to mode 12 did not freeze, which put the fault in donor p13.</dd><dd class="zh">排除了四個假設:吞吐、消隱、<code>+0x0B0</code>、hook 污染。把原廠 FHD120 那格綁到 mode 12 不會凍 &rarr; 問題在 donor p13。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Seven high-rate fields (<code>TARGET_WRITE_HIRATE</code>): <code>+0x90=1, +0xB0=1, +0xC0=0, +0xDC/+0xE4, +0xFC/+0x100=2.0f</code>. A001_120: 1,173 frames in 9 s. The minimal subset was not bisected.</dd><dd class="zh">補七個高速欄位(<code>TARGET_WRITE_HIRATE</code>):<code>+0x90=1、+0xB0=1、+0xC0=0、+0xDC/+0xE4、+0xFC/+0x100=2.0f</code>。A001_120 9 秒 1,173 幀。最小集合沒二分。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-5"><b>5</b><span class="en">PARAM profile</span><span class="zh">PARAM profile</span></a> HSW &middot; HSW_240FPS_MODE12 &sect;30&ndash;39</p>
+</div>
+<div class="pit" id="p30">
+<h4><span class="en">External writes serialised to about 5 frames a second, then a freeze</span><span class="zh">外接寫入被串列化成每秒約 5 格,然後凍結</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en"><code>OG_BUFCLASS=29</code> wrote canvas <code>+0xA4 = 0x29</code>, which is the buffer class code. It had been judged harmless.</dd><dd class="zh"><code>OG_BUFCLASS=29</code> 把畫布 <code>+0xA4</code> 寫成 0x29,而那是緩衝類別碼。當初被判成「沒幫助」,其實是病因。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Removed. A001_148: 180 fps for 23.5 s, zero dropped frames, 258 MB/s; A001_144&ndash;149 all req == fin.</dd><dd class="zh">拿掉。A001_148:180 fps、23.5 秒、零掉格、258 MB/s;A001_144..149 全部 req == fin。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-9"><b>9</b><span class="en">Canvas</span><span class="zh">畫布</span></a> HSW &middot; HSW_240FPS_MODE12 &sect;59&ndash;66</p>
+</div>
+<div class="pit" id="p31">
+<h4><span class="en">Recording stops at <code>req_cnt=94</code>, or the clip has fewer real frames than its container rate</span><span class="zh">錄到 <code>req_cnt=94</code> 就停,或實際格數少於容器格率</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The descriptor pool is <code>MPoolFixed&lt;4380,96&gt;</code> with a &ldquo;more than 1 left&rdquo; threshold, so at most 94 frames are in flight. When the medium cannot keep up, <code>vbuf</code> drains the pool and the take stops cleanly. The reason is written to <code>0xC359BE70</code> (vbuf/vmed/vidx/vcnt/cnt/data/mem). Media saturation means dropped frames and a normal end, not a freeze: A001_107's container says 119.88 but it really ran at 31 fps.</dd><dd class="zh">描述子池是 <code>MPoolFixed&lt;4380,96&gt;</code>,門檻「剩餘 &gt; 1」&rarr; 最多 94 格在途。媒體跟不上時 <code>vbuf</code> 抽乾池子,乾淨停止;原因字串寫在 <code>0xC359BE70</code>(vbuf/vmed/vidx/vcnt/cnt/data/mem)。媒體飽和 = 掉格 + 正常結束,不是凍結(A001_107 容器 119.88、實際 31 fps)。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Stay under the medium's sustained rate: SD writes 94 MB/s, but FHD 12-bit already needs 97.2. The old 276.6 MB/s open gate stops on SD within 4.1 s. On SSD, 258 MB/s ran with zero drops and 317 MB/s is the only measured saturation point.</dd><dd class="zh">碼率壓在媒體持續速率以下:SD 寫 94 MB/s,而 FHD 12-bit 就要 97.2;舊 276.6 MB/s 的 open gate 在 SD 上 &le;4.1 秒自停。SSD 258 MB/s 零掉格,317 MB/s 是唯一量到的飽和點。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-11"><b>11</b><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></a> HSW_240FPS_MODE12 &sect;30, &sect;53, &sect;66&ndash;68; STORAGE_SPEED</p>
+</div>
+<div class="pit" id="p32">
+<h4><span class="en">Descriptors leak on every buffer-stop, until a cold boot</span><span class="zh">每次 vbuf 停止都漏描述子,只有冷開機會恢復</span><span class="st dark">open</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en"><code>FUN_c0377118</code> &rarr; <code>FUN_c0381008</code> unhooks the in-flight requests but never returns them through <code>FUN_c0375030</code>. Each stop leaks about 44 slots and 63 MB of RAW. A clean stop (fin == req) leaks nothing.</dd><dd class="zh"><code>FUN_c0377118</code> &rarr; <code>FUN_c0381008</code> 只把在途請求摘下,沒經 <code>FUN_c0375030</code> 歸還;每次漏約 44 格 + 63 MB RAW。乾淨停止(fin == req)不漏。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Firmware bug, not ours. Cold-boot after an overflow stop.</dd><dd class="zh">原廠 bug。溢位停止之後冷開機。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-11"><b>11</b><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></a> HSW_240FPS_MODE12 &sect;69</p>
+</div>
+<div class="pit" id="p33">
+<h4><span class="en">240 fps onto SSD freezes immediately</span><span class="zh">240 fps 寫 SSD 立刻凍結</span><span class="st dark">open</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">It takes USB and the media subsystem down with it, so nothing can be read afterwards. On SD the same setting stops cleanly, but only because SD stops earlier. The one concrete SD/SSD difference found: <code>XC_MediaDriverHost::v16</code> is empty, leaving SSD parameters at constructor defaults. Unverified. Both SSD write modes freeze; the claim that &ldquo;Standard mode doesn't freeze&rdquo; rested on one frame.</dd><dd class="zh">凍結會把 USB/媒體子系統一起拖死,事後拿不到現場。SD 上同設定是乾淨停止,但那只是因為 SD 更早停。唯一具體的 SD/SSD 差異:<code>XC_MediaDriverHost::v16</code> 是空實作,SSD 參數停在建構子預設值 —— 未驗證。兩種寫入模式都凍,「關快速錄影就不凍」只有 1 格證據。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Unsolved.</dd><dd class="zh">未解。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-11"><b>11</b><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></a> HSW &middot; HSW_240FPS_MODE12 &sect;43&ndash;59, &sect;71</p>
+</div>
+<div class="pit" id="p34">
+<h4><span class="en">Gyro sidecar lost samples during a take (the &ldquo;dropped needles&rdquo;)</span><span class="zh">陀螺儀 sidecar 漏樣本(漏針)</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">One SD card lock (<code>XC_MediaDriverSdcard+0x3C</code>), non-preemptible. Our writer (priority 28) waited about 0.5 s per 64 KB write; three writes took longer than the 1.6 s it takes to fill a slot.</dd><dd class="zh">SD 卡鎖只有一把(<code>XC_MediaDriverSdcard+0x3C</code>),不可搶佔。我們的 writer(pri 28)每次 64 KB 寫入要等約 0.5 s,三次就超過一槽 1.6 s 的填滿時間。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">r36: 1250 Hz with sparse accel gives one write per slot. A/B dropped 3,402 &rarr; 0; a 15.4-minute take lost nothing. <code>OVERFLOW=0</code> alone does not prove no loss.</dd><dd class="zh">r36:1250 Hz + 稀疏加速度計 &rarr; 每槽只寫一次。A/B 3,402 &rarr; 0,15.4 分鐘長片零遺失。<code>OVERFLOW=0</code> 不代表沒掉。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-11"><b>11</b><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></a> gyro &middot; STREAM_DROP_INVESTIGATION</p>
+</div>
+</div>
+<h3 id="pit-freeze"><span class="en">Freezes caused by the patch itself</span><span class="zh">補丁自己造成的凍結</span></h3>
+<div class="pits">
+<div class="pit" id="p35">
+<h4><span class="en">OG selected + recording format MOV + record: hard freeze, even <code>mem_get</code> dies</span><span class="zh">選著 OG + 錄影格式切 MOV + 按錄影:硬凍結,連 <code>mem_get</code> 都死</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">MOV never goes through the CinemaDNG picker, but the hooks that check only the flag (<code>og3kout/aspect/fps/gs/name</code>) stayed armed, so H.264 got 3:2 descriptors. Flag 1 freezes, flag 0 does not.</dd><dd class="zh">MOV 不經 CinemaDNG picker,但只看旗標的那組 hook(<code>og3kout/aspect/fps/gs/name</code>)仍全開,H.264 拿到 3:2 描述子。旗標 1 凍、0 正常。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en"><code>og3kfmt</code> hooks the format setter <code>0xC005BE58</code> into <code>FMTLATCH 0xC0731C20</code>. The flag now means OG <em>and</em> CinemaDNG. Passed on OG2K and OG3K.</dd><dd class="zh"><code>og3kfmt</code> 掛格式 setter <code>0xC005BE58</code> &rarr; <code>FMTLATCH 0xC0731C20</code>。旗標改成「選了 OG <em>且</em>格式是 CinemaDNG」。OG2K、OG3K 都實機通過。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-1"><b>1</b><span class="en">Menu selection</span><span class="zh">選單選擇</span></a> FLAG_AND_PICKER_DISAGREE &sect;10&ndash;12, &sect;38&ndash;39</p>
+</div>
+<div class="pit" id="p36">
+<h4><span class="en">Three freezes with one cause: something a hook reads was changed while the hook was live</span><span class="zh">三次凍結,同一條規則:hook 還在跑,就去改它讀的東西</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">(1) A payload rewritten in place while it ran (rowpatch 232&rarr;252 B). (2) The function pointer <code>0xC0BE44DC</code> written before the payload it points to (write 7 vs 193). (3) The format table rewritten while the picker hook was armed. Separately, rowpatch placed at <code>0xC072F800</code>, the getfile/putfile scratch area.</dd><dd class="zh">(1) payload 邊執行邊原地覆寫(rowpatch 232&rarr;252 B);(2) 函式指標 <code>0xC0BE44DC</code> 比它指向的 payload 先寫(第 7 筆 vs 第 193 筆);(3) picker hook 武裝中改寫它讀的格式表。另外 rowpatch 放在 <code>0xC072F800</code> = getfile/putfile 暫存區。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Disarm first, then write. Enforced by <code>Plan.check()</code> and an <code>OWNED</code> table.</dd><dd class="zh">先解除 hook 再寫。已由 <code>Plan.check()</code> 與 <code>OWNED</code> 表強制。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-3"><b>3</b><span class="en">Format entry</span><span class="zh">格式條目</span></a> OG3K_WHAT_WAS_WRONG &sect;8&ndash;9</p>
+</div>
+<div class="pit" id="p37">
+<h4><span class="en">Reading past a record: data abort, camera gone from USB</span><span class="zh">讀過界:data abort,相機從 USB 消失</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The canvas dumper read <code>SPAN 0x140</code>; the record is 65 fields, 0x104 B. <code>0x5C+0x140</code> reached an unmapped page.</dd><dd class="zh">倒畫布用 <code>SPAN 0x140</code>,record 只有 65 欄 0x104 B;<code>0x5C+0x140</code> 碰到未映射頁。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Every read and write range has to come from something measured, never from &ldquo;big enough&rdquo;.</dd><dd class="zh">讀寫範圍要有依據,不能取「應該夠大」的數字。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-9"><b>9</b><span class="en">Canvas</span><span class="zh">畫布</span></a> CANVAS_MOVED_AT_C043A19C &sect;5</p>
+</div>
+<div class="pit" id="p38">
+<h4><span class="en">Other freezes on record start</span><span class="zh">其他在錄影開始時凍結的</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">A hook at <code>FUN_c03212e0</code> (fine for stills, freezes on record). Allocator memory held across record start (movRec's fixed class-10 allocation fails). Host USB traffic at the moment record is pressed (IRQ livelock). State words that sit inside hook code.</dd><dd class="zh">hook 掛在 <code>FUN_c03212e0</code>(拍照沒事、錄影就凍);握著配置器記憶體跨過錄影開始(movRec 從 class 10 定量配置失敗);按錄影那一刻主機下 USB 交易(IRQ livelock);狀態字坐在 hook 程式碼上。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Don't hook there. Keep resident buffers in the pool. Keep the host silent on record. Run the deployer's overlap check.</dd><dd class="zh">不掛那裡;常駐緩衝放池裡;錄影時主機靜默;部署器做重疊檢查。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-11"><b>11</b><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></a> OPEN_GATE_EXPLORATION_ARCHIVE; memory: allocator-not-across-recording, state-words-inside-code</p>
+</div>
+</div>
+<h3 id="pit-pb"><span class="en">In-camera playback</span><span class="zh">機內回放</span></h3>
+<div class="pits">
+<div class="pit" id="p39">
+<h4><span class="en">OG3K clips played back with horizontal stripes</span><span class="zh">OG3K 片子回放出現水平條紋</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Two causes. (1) Playback does not use the picker, and our own <code>og3kname</code> turned the lookup key into &ldquo;OG3K&rdquo;, which fell back to p51 (the UHD pipeline). (2) A playback profile's raster equals the clip's stride, and 3032 broke the +16/+10, 16-aligned convention. Three earlier explanations were retracted: pool overflow, a &ldquo;16-aligned stride&rdquo; decode bug, and PARAM geometry as the playback source.</dd><dd class="zh">兩個原因:(1) 回放不查 picker,而我們自己的 <code>og3kname</code> 把查表鍵改成「OG3K」&rarr; 退回 p51(UHD 管線);(2) 回放 profile 的柵格等於片子的列距,而 3032 不守 +16/+10、16 對齊的慣例。先前三個解釋全數收回:池爆掉、「16 對齊 stride 解錯」、PARAM 幾何是回放來源。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Pass through when <code>lr == 0xC043BCBC</code>. Record 3024&times;2010 with crop 3008&times;2000 @ (8,5). <code>og3kcanvas</code> has a playback case. A001_037 verified. The recorded files were always fine.</dd><dd class="zh"><code>lr == 0xC043BCBC</code> 時放行;錄影改 3024&times;2010、裁切 3008&times;2000 @ (8,5);<code>og3kcanvas</code> 加回放 case。A001_037 驗證。錄下的檔案本身一直是好的。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-9"><b>9</b><span class="en">Canvas</span><span class="zh">畫布</span></a> OG3K &middot; OG3K_PLAYBACK_PROFILE_CLASSES</p>
+</div>
+<div class="pit" id="p40">
+<h4><span class="en">Black screens and freezes in playback</span><span class="zh">回放黑屏、凍結</span><span class="st ok">rule</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Taking the name table's FHDCROP slot gives a black screen. The stills pipeline <code>+0x268</code> expects 256&times;256 lossless-JPEG tiles, so the result is pink-green spots. <code>+0x538</code> WithRaw freezes on a black screen. A non-zero <code>PBSEL_ENT</code> default freezes at boot. On OG2K, 3008/2000 were hard-coded as immediates, so <code>PBFLAG</code> never fired.</dd><dd class="zh">挪用名稱表 FHDCROP 槽 &rarr; 黑屏;照片管線 <code>+0x268</code> 預期 256&times;256 無損 JPEG tile &rarr; 粉綠斑點;<code>+0x538</code> WithRaw &rarr; 黑屏凍結;<code>PBSEL_ENT</code> 預設非 0 &rarr; 開機就凍。OG2K 把 3008/2000 寫死成立即數 &rarr; <code>PBFLAG</code> 永遠不成立。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Parameterised as <code>TARGET_AW/AH</code>. The checklist covers .equ, plan addresses, instruction immediates, firmware compare tables, .asciz strings and resource names built from numbers.</dd><dd class="zh">參數化成 <code>TARGET_AW/AH</code>;檢查清單涵蓋 .equ、計畫位址、指令立即數、韌體比對表、.asciz 字串、由數值組出的資源名。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-3"><b>3</b><span class="en">Format entry</span><span class="zh">格式條目</span></a> OG3K / OG2K &middot; OG3K_PLAYBACK_PROFILE_CLASSES &sect;6&ndash;13, OG2K_PLAN &sect;AL&ndash;AT</p>
+</div>
+<div class="pit" id="p41">
+<h4><span class="en">OG2K playback: colour noise in the top-left corner</span><span class="zh">OG2K 回放左上角彩色雜訊</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The firmware has no <code>font_S_imageSize_1334</code> resource (1334 is not among its 70), and a failed load reports nothing.</dd><dd class="zh">韌體沒有 <code>font_S_imageSize_1334</code>(70 個資源裡沒有 1334),載入失敗也不報錯。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Added automatically to a private resource bundle. The HUD font is ARGB4444, not L8A8.</dd><dd class="zh">自動補進私有資源包。HUD 字型是 ARGB4444,不是 L8A8。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-1"><b>1</b><span class="en">Menu selection</span><span class="zh">選單選擇</span></a> OG2K &middot; OG2K_PLAN &sect;AQ&ndash;AY</p>
+</div>
+<div class="pit" id="p42">
+<h4><span class="en">8-bit OG clips in playback</span><span class="zh">8-bit OG 片子的回放</span><span class="st dark">open</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en"><code>FUN_c05c1a58</code> only knows 12 &rarr; 0 and 10 &rarr; 3; anything else becomes RAW8 (4).</dd><dd class="zh"><code>FUN_c05c1a58</code> 只認 12&rarr;0、10&rarr;3,其他一律當 RAW8(4)。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Untested, and expected to break.</dd><dd class="zh">未驗證,預期會壞。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-11"><b>11</b><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></a> OG14_FEASIBILITY &sect;2</p>
+</div>
+</div>
+<h3 id="pit-side"><span class="en">Sidecar and lens profile</span><span class="zh">Sidecar 與鏡頭 profile</span></h3>
+<div class="pits">
+<div class="pit" id="p43">
+<h4><span class="en">JSON sidecar width = 0</span><span class="zh">JSON sidecar 寬度 = 0</span><span class="st ok">fixed</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">The size came from <code>0xC37CE210</code>, which is only filled at 1080p. It reads 0 in UHD and in stream mode.</dd><dd class="zh">尺寸取自 <code>0xC37CE210</code>,它只有 1080p 有值,UHD 與 stream 模式整段是 0。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en">Early write from CameraMgrSetting <code>+0x40</code> plus 16/10 (r39d). The mirror <code>0xC3758B98</code> is 0 on release cards. Unrelated to the dropped gyro samples.</dd><dd class="zh">改為提早寫入,取 CameraMgrSetting <code>+0x40</code> 加 16/10(r39d);鏡像 <code>0xC3758B98</code> 在發布卡上是 0。跟陀螺漏針是兩個獨立機制。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-9"><b>9</b><span class="en">Canvas</span><span class="zh">畫布</span></a> gyro &middot; memory: json-early-write-design</p>
+</div>
+<div class="pit" id="p44">
+<h4><span class="en">Under OG3K the lens profile said 3856&times;2170; focal length off by 27%</span><span class="zh">OG3K 下鏡頭 profile 寫成 3856&times;2170,焦距錯 27%</span><span class="st part">workaround</span></h4>
+<dl>
+<dt class="en">Why</dt><dt class="zh">原因</dt><dd class="en">Both paths fell back to the settings block, which OG does not update. <code>0xC38250E4</code> is the stills EXIF singleton, always {0,0} (retracted twice).</dd><dd class="zh">兩條路都退回設定值,而 OG 不更新設定。<code>0xC38250E4</code> 是照片 EXIF 的單例,恆為 {0,0}(收回兩次)。</dd>
+<dt class="en">Fix</dt><dt class="zh">解法</dt><dd class="en"><code>FUN_c0437140(&amp;out, 2, ctx, 3)</code> returns 3024&times;2010 even when not recording; release it with <code>FUN_c022EDB0</code>. A null ctx with kind 2 freezes. Verified on A001_957 (gyro v1.12.1). <code>ring_task.S</code> and <code>profilegen.S</code> have not been ported yet.</dd><dd class="zh"><code>FUN_c0437140(&amp;out, 2, ctx, 3)</code> 不錄影也能回 3024&times;2010,用完 <code>FUN_c022EDB0</code> 釋放;ctx 傳 null 搭 kind 2 會凍結。A001_957 驗證(gyro v1.12.1)。<code>ring_task.S</code>、<code>profilegen.S</code> 還沒移植。</dd>
+</dl>
+<p class="where"><a class="stg" href="#stage-9"><b>9</b><span class="en">Canvas</span><span class="zh">畫布</span></a> OG3K &middot; LENS_PROFILE_WRONG_SIZE_WITH_OG3K</p>
+</div>
+</div>
+<h2 id="requirements"><span class="en">What every stage requires</span><span class="zh">每一關的硬性要求、對齊與整除</span></h2>
+<p class="en">The constraints a new format has to satisfy, stage by stage, in chain order. Every number here was either read from Ver.5.02 or measured on a take.</p><p class="zh">新格式在每一關必須滿足的條件,照鏈的順序排。這裡每個數字不是從 Ver.5.02 讀出來的,就是從實拍量出來的。</p>
+<div class="reqs">
+<section class="req">
+<h4><span class="en">Menu / UI</span><span class="zh">選單 / UI</span></h4><ul>
+<li><span class="en">Register a format in all three bit-depth tables, or block the other two depths. A miss silently records UHD30.</span><span class="zh">格式要三張位元深度表都註冊,不然就把另外兩種深度擋掉;查不到會安靜地錄成 UHD30。</span></li>
+<li><span class="en">The menu fits three rows in practice, which is why OG3K, OG2K and HSW ship as separate cards.</span><span class="zh">選單實際只放得下三列 &rarr; OG3K、OG2K、HSW 各自一張卡。</span></li>
+<li><span class="en">Resolution CSV block: 92 B. The frame-rate CSV has 3 B spare. Columns are matched by header name, and the last row must not end in a newline.</span><span class="zh">解析度 CSV 區塊 92 B;格率 CSV 只剩 3 B。解析器用標頭名稱對欄,最後一列不能收尾換行。</span></li>
+<li><span class="en">The controller limit at <code>0xC1A709BC</code> is a big-endian float (1.0&rarr;2.0). Menu string records are 28 B. QS labels are fixed 4-byte slots.</span><span class="zh">控制器上限 <code>0xC1A709BC</code> 是大端 float(1.0&rarr;2.0);選單字串記錄 28 B;QS 標籤是固定 4 B 槽。</span></li>
+<li><span class="en">Both <code>font_S_imageSize_&lt;W&gt;</code> and <code>&lt;H&gt;</code> have to exist; a missing one fails with no error.</span><span class="zh"><code>font_S_imageSize_&lt;W&gt;</code> 與 <code>&lt;H&gt;</code> 兩個資源都必須存在,少了不會報錯。</span></li>
+<li><span class="en">The OG flag has to mean OG <em>and</em> CinemaDNG, persisted in CommonSaveData and restored through the real setter at boot.</span><span class="zh">OG 旗標 = 選了 OG <em>且</em>格式是 CinemaDNG;存進 CommonSaveData,開機經真正的 setter 還原。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">Picker / format entry</span><span class="zh">Picker / 格式條目</span></h4><ul>
+<li><span class="en">The key compares the first 15 characters. Crop appends <code>CROP</code>, so each crop key needs its own entry.</span><span class="zh">鍵只比前 15 字元;裁切會接 <code>CROP</code>,每個 CROP 鍵都要有自己的條目。</span></li>
+<li><span class="en">Tables are 26&times;16 B (0x1A0) with fixed ends and cannot be appended in place. The private table is 480 B (8 entries use 384).</span><span class="zh">表 26&times;16 B(0x1A0),表尾寫死,不能原地 append;私有表 480 B(8 筆用掉 384)。</span></li>
+<li><span class="en">Entry <code>{5, profile, mode, key_ptr}</code>. Across the three depths, profile numbers differ by exactly 20.</span><span class="zh">條目 <code>{5, profile, mode, key_ptr}</code>;三種深度的 profile 編號恰好差 20。</span></li>
+<li><span class="en">Plane format codes <code>+0x080/+0x084</code>: 12-bit 7, 10-bit 9, 8-bit 0xA, 16-bit 8/0xB. There is no 14-bit. BitsPerSample must agree with them.</span><span class="zh">平面格式碼 <code>+0x080/+0x084</code>:12-bit 7、10-bit 9、8-bit 0xA、16-bit 8/0xB,沒有 14-bit;必須與 BitsPerSample 一致。</span></li>
+<li><span class="en">Hooks must preserve <code>r1</code>, the stock table pointer. Use <code>r5</code> for scratch.</span><span class="zh">hook 不能動 <code>r1</code>(原廠表指標),暫存用 <code>r5</code>。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">Sensor mode &amp; timing</span><span class="zh">感光元件模式與時序</span></h4><ul>
+<li><span class="en"><code>frame_cycles = hmax&times;(vmax&minus;1) + tail</code> at 72 MHz. Rolling shutter = <code>hmax&times;height/72</code> &micro;s.</span><span class="zh"><code>frame_cycles = hmax&times;(vmax&minus;1) + tail</code> @ 72 MHz;捲簾 = <code>hmax&times;高/72</code> &micro;s。</span></li>
+<li><span class="en">vmax is an integer and has to be <b>rounded</b>, not truncated. OG2K truncated and was off by 47&ndash;605 ppm.</span><span class="zh">vmax 是整數,要<b>四捨五入</b>,不能截斷(OG2K 截斷過,誤差 47&ndash;605 ppm)。</span></li>
+<li><span class="en">Minimum hmax is 330 (the fast readout group, hmax &le;395). So 3032&times;2012 tops out at 108.4 fps and 2016&times;672 at 324.7 (about 302 after vblank 50). RAW14 needs hmax 911, which caps it at 19.55 fps.</span><span class="zh">hmax 下限 330(fast 組 &le;395)&rarr; 3032&times;2012 最高 108.4 fps、2016&times;672 最高 324.7(扣 vblank 50 約 302);RAW14 要 hmax 911 &rarr; 最高 19.55 fps。</span></li>
+<li><span class="en">vblank (metadata <code>+0x5C</code>; register <code>0x0016</code> holds half of it) is a minimum blanking: 98&rarr;40, 143&rarr;100, mode 12&rarr;50. OG2K at 119.88 would leave only about 5.7 lines, so it is not possible.</span><span class="zh">vblank(metadata <code>+0x5C</code>,暫存器 <code>0x0016</code> 存一半)是最小消隱:98&rarr;40、143&rarr;100、mode 12&rarr;50。OG2K 119.88 只剩約 5.7 行 &rarr; 不可行。</span></li>
+<li><span class="en">Timing table <code>0xC0B59500</code>, stride 0x20. <code>+0x0A</code> x_start is 4 for 2&times;2, 8 for 1&times;1 and 6 for the &divide;3 family, and must stay 6 there. x_end &minus; x_start = width, y_end &minus; y_start = height. Every stock window origin is even.</span><span class="zh">時序表 <code>0xC0B59500</code>、stride 0x20;<code>+0x0A</code> x_start:2&times;2=4、1&times;1=8、&divide;3 家族=6(必須保留 6);x_end&minus;x_start=寬、y_end&minus;y_start=高;原廠視窗起點全是偶數。</span></li>
+<li><span class="en">The format table writes the donor's timing on every hit. Without it the donor runs at its stock rate (mode 98 = 77.267 fps). Metadata <code>+0x40</code> stays nominal, and anything that reads it (shutter angle) has to be redirected.</span><span class="zh">donor 時序由格式表命中時寫入,否則跑原廠速率(mode 98 = 77.267 fps)。metadata <code>+0x40</code> 保持標稱值,讀它的東西(快門角度)要另外導向。</span></li>
+<li><span class="en">The sensor's merge levels are only 1&times;/2&times;/3&times;. The window the canvas declares (<code>+0xF4/+0xF8</code>) must equal the rows the mode actually reads, otherwise fin &lt; req and the take cannot stop.</span><span class="zh">感光元件合併只有 1&times;/2&times;/3&times;;畫布宣告的視窗(<code>+0xF4/+0xF8</code>)必須等於模式實際讀出行數,否則 fin &lt; req、停不下來。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">PARAM profile</span><span class="zh">PARAM profile</span></h4><ul>
+<li><span class="en">Compare all ~65 columns before borrowing a donor. Columns are laid out out of offset order (after <code>+0x60</code> comes <code>+0xD0</code>).</span><span class="zh">借 donor 必須全 ~65 欄比對;欄位在記憶體裡不照偏移排(<code>+0x60</code> 的下一欄是 <code>+0xD0</code>)。</span></li>
+<li><span class="en"><code>+0x030</code> is the nominal fps, and the buffer count comes from it. &minus;1.0 means 0 buffers, which garbles the last frame.</span><span class="zh"><code>+0x030</code> = 標稱 fps,緩衝張數由它導出;&minus;1.0 &rarr; 0 張 &rarr; 最後一幀花屏。</span></li>
+<li><span class="en">Buffer count (<code>FUN_c04357e0</code>): <code>+0xA4==1</code> gives 2; <code>+0xA4</code> 9/10 or <code>+0x30</code> = &minus;1 gives 0; otherwise 3. <code>+0xA4</code> is the buffer class. Don't write it: 0x29 serialised the writes.</span><span class="zh">張數(<code>FUN_c04357e0</code>):<code>+0xA4==1</code>&rarr;2;<code>+0xA4</code>&isin;{9,10} 或 <code>+0x30</code>=&minus;1&rarr;0;其他&rarr;3。<code>+0xA4</code> 是緩衝類別碼,別寫(0x29 會串列化寫入)。</span></li>
+<li><span class="en">Active crop <code>+0x24/+0x2C</code> must not be 0. If it is, the DNG gets DefaultCropSize (0,0) and playback crashes.</span><span class="zh">active 裁切 <code>+0x24/+0x2C</code> 不能是 0 &rarr; 否則 DNG 寫 DefaultCropSize (0,0),回放當機。</span></li>
+<li><span class="en">Above 60 fps the donor needs the high-rate fields <code>+0x90/+0xB0/+0xC0/+0xDC/+0xE4/+0xFC/+0x100</code>.</span><span class="zh">高於 60 fps 需要高速欄位 <code>+0x90/+0xB0/+0xC0/+0xDC/+0xE4/+0xFC/+0x100</code>。</span></li>
+<li><span class="en">Profiles are shared with stock modes. Switch the patched fields on the OG flag, never write them permanently, and patch all eight frame-rate profiles.</span><span class="zh">profile 與原廠共用 &rarr; 改動一律跟著 OG 旗標切換,不寫死;八個格率 profile 都要補。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">CRCT</span><span class="zh">CRCT</span></h4><ul>
+<li><span class="en">hbin enum 0/1/2 = 1/3/5 taps, vbin 0/1 = 1/3. Any other value asserts and locks the camera in <code>while(true)</code>. There is no &divide;2, and the only 3:2-preserving combination is hbin3 + vbin3.</span><span class="zh">hbin 列舉 0/1/2 = 1/3/5 抽頭、vbin 0/1 = 1/3;其他值 assert + <code>while(true)</code>,相機當場鎖死。沒有 &divide;2;維持 3:2 只有 hbin3+vbin3。</span></li>
+<li><span class="en">Size: <code>out = ((rwzm&gt;&gt;1) + ((in+(hbin&gt;&gt;1))/hbin)&times;0x400)/rwzm</code>. hbin divides first, then RWZM.</span><span class="zh">尺寸:<code>out = ((rwzm&gt;&gt;1) + ((in+(hbin&gt;&gt;1))/hbin)&times;0x400)/rwzm</code>,先除 hbin 再除 RWZM。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">RWZM</span><span class="zh">RWZM</span></h4><ul>
+<li><span class="en">The ratio is stored &times;1024, and anything &le;1024 is unity (so 1023 is too). It can only shrink, never enlarge. The measured maximum is 2.0.</span><span class="zh">比率 &times;1024 儲存,&le;1024 一律 unity(1023 也是);只能縮小、不能放大;實測上限 2.0。</span></li>
+<li><span class="en">H and V are independent registers (<code>0x300F0908/090C</code>). All 306 stock profiles are square.</span><span class="zh">H/V 是獨立暫存器(<code>0x300F0908/090C</code>),但原廠 306 筆全部等比。</span></li>
+<li><span class="en">Four fields per profile (preview/record &times; H/V) change together, at least on OG3K.</span><span class="zh">每個 profile 四欄(預覽/錄影 &times; H/V)一起改(至少在 OG3K)。</span></li>
+<li><span class="en">Unity is only safe on a mode that is already binned &ge;2&times;. A 1&times; readout overflows the buffer.</span><span class="zh">unity 只能配已 &ge;2&times; 合併的模式;1&times; 讀出會溢位。</span></li>
+<li><span class="en">The phase table has 16 entries. Ratio denominators &le;5 avoid period-16 banding.</span><span class="zh">相位表 16 格;比例分母 &le;5 可避免週期 16 的橫紋。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">Canvas &amp; recorded size</span><span class="zh">畫布與錄影尺寸</span></h4><ul>
+<li><span class="en">Recorded size = crop + 16 wide / + 10 high. The crop origin is <b>(8,5)</b>, as on stock FHD/UHD. y is odd, so <code>DefaultCropOrigin</code> has no even-only rule here.</span><span class="zh">錄影尺寸 = 裁切 +16 寬 / +10 高;裁切原點 <b>(8,5)</b>,原廠 FHD/UHD 也一樣 —— y 是奇數,所以 <code>DefaultCropOrigin</code> 沒有「必須偶數」的規則。</span></li>
+<li><span class="en"><b>The width has to be a multiple of 16</b> (1936, 3856, 3024, 2016, 4016). 3032 is only 8-aligned and broke playback, so it became 3024&times;2010.</span><span class="zh"><b>寬度要 16 的倍數</b>(1936、3856、3024、2016、4016)。3032 只有 8 對齊 &rarr; 回放壞 &rarr; 改成 3024&times;2010。</span></li>
+<li><span class="en">Targets: OG3K 3024&times;2010 &rarr; 3008&times;2000; OG2K 2016&times;1344 &rarr; 2000&times;1334; HSW 2016&times;672 &rarr; 2000&times;662; OG4K 4016&times;2676 &rarr; 4000&times;2666.</span><span class="zh">各目標:OG3K 3024&times;2010&rarr;3008&times;2000;OG2K 2016&times;1344&rarr;2000&times;1334;HSW 2016&times;672&rarr;2000&times;662;OG4K 4016&times;2676&rarr;4000&times;2666。</span></li>
+<li><span class="en">The ISP crop offset <code>(sensor &minus; bef) &gt;&gt; 2 &lt;&lt; 1</code> is always even, which keeps the Bayer phase.</span><span class="zh">ISP 端裁切偏移 <code>(sensor &minus; bef) &gt;&gt; 2 &lt;&lt; 1</code> 永遠偶數,保 Bayer 相位。</span></li>
+<li><span class="en">Write all four layers: base, active, override, input. Live-view raster, visible area and ratio are copied from the firmware's value for the same window, never computed.</span><span class="zh">base / active / override / input 四層都寫;live view 柵格、可見區、比例抄韌體同視窗的值,不自己算。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">Producer &rarr; strip</span><span class="zh">Producer &rarr; strip</span></h4><ul>
+<li><span class="en">12-bit packs at 1.5 B/px, 10-bit at 1.25, 8-bit at 1.0. Single strip, <code>RowsPerStrip = H</code>.</span><span class="zh">12-bit 1.5 B/px、10-bit 1.25、8-bit 1.0;單一 strip,<code>RowsPerStrip = H</code>。</span></li>
+<li><span class="en">The last row's width is rounded up to a multiple of 12 px and then to 4 bytes. When W mod 12 = 8 (3032, 4016) that adds 8 B to StripByteCounts (9,150,576 &rarr; 9,150,584; 16,120,224 &rarr; 16,120,232). 3024 divides by 12 and comes out exact. FHD's extra 252 B is unexplained.</span><span class="zh">最後一列寬度先進位到 12 px 的倍數、再對齊 4 B:W mod 12 = 8(3032、4016)時 StripByteCounts 多 8 B(9,150,576&rarr;9,150,584;16,120,224&rarr;16,120,232)。3024 可被 12 整除,剛好。FHD 多出的 252 B 未解釋。</span></li>
+<li><span class="en">The producer size pair and the consumer pair must describe the same frame. Zeroing <code>+0xD8/+0xE0</code> makes the producer read <code>+0x0C/+0x10</code>.</span><span class="zh">producer 對與消費端對必須描述同一幀;<code>+0xD8/+0xE0</code> 清 0 &rarr; producer 改讀 <code>+0x0C/+0x10</code>。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">DNG writer &amp; card</span><span class="zh">DNG 寫檔器與卡片</span></h4><ul>
+<li><span class="en">Header region <code>desc+0x14C</code> = 0x13800 (79,872), 512-aligned. <code>StripOffsets</code> = 78,848. The per-frame reserve is 0x15400 (87,040). 8-bit adds a LinearizationTable (59 tags instead of 58).</span><span class="zh">檔頭區 <code>desc+0x14C</code> = 0x13800(79,872),512 對齊;<code>StripOffsets</code> 78,848;每幀保留 0x15400(87,040)。8-bit 多一個 LinearizationTable(59 個 tag,12-bit 58 個)。</span></li>
+<li><span class="en">The fast path requires every segment to be 512-aligned (<code>&amp;0x1FF == 0</code>, open type 0x1806); otherwise the writer uses 0x806. Allocation requests are 1024-aligned (UHD 12,638,720; OG4K 16,207,360).</span><span class="zh">所有段 512 對齊(<code>&amp;0x1FF == 0</code>)才走快速路徑(開檔型別 0x1806),否則 0x806;配置請求 1024 對齊(UHD 12,638,720、OG4K 16,207,360)。</span></li>
+<li><span class="en"><code>per_frame = roundup(round512(frame) + 0x15400, cluster) + 128</code>. Clusters are 128 KB on SD and 512 KB on SSD.</span><span class="zh"><code>per_frame = roundup(round512(frame) + 0x15400, 叢集) + 128</code>;叢集 SD 128 KB、SSD 512 KB。</span></li>
+<li><span class="en">Clip directory preallocation = frame_cap &times; 128 B, with frame_cap = min(free/frame, 7200 s &times; container fps). Above 256 MB it fails. It is zero-filled synchronously at record start (26.5 MB at 29.97, 105 MB at 119.88).</span><span class="zh">clip 目錄預配置 = frame_cap &times; 128 B,frame_cap = min(剩餘/每幀, 7200 s &times; 容器 fps),超過 256 MB 失敗;錄影開始時同步寫零(29.97 約 26.5 MB、119.88 約 105 MB)。</span></li>
+<li><span class="en">At most 94 frames in flight (descriptor pool). Media: SD writes 94 MB/s; SSD 390 (USB3 bus-bound), 258 sustained with zero drops, 317 saturated.</span><span class="zh">最多 94 格在途(描述子池)。媒體:SD 寫 94 MB/s;SSD 390(卡在 USB3 匯流排),實測 258 持續零掉格、317 飽和。</span></li>
+<li><span class="en">Frame bitrate including header: FHD 12-bit 97.2 MB/s &middot; OG3K 29.97 ~274 / 24p ~221 &middot; OG2K up to 248 &middot; HSW 239.76 at 12/10/8-bit 476/397/317 &middot; UHD 12-bit 29.97 ~378.</span><span class="zh">含表頭碼率:FHD 12-bit 97.2 MB/s &middot; OG3K 29.97 約 274 / 24p 約 221 &middot; OG2K 最高 248 &middot; HSW 239.76 12/10/8-bit 476/397/317 &middot; UHD 12-bit 29.97 約 378。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">Playback</span><span class="zh">回放</span></h4><ul>
+<li><span class="en">Each clip's capacity is <code>(file + 0x1FFF) &amp; ~0xFFF</code>, derived from the <b>first</b> frame. A later frame that reaches it asserts, which is what blocks compressed video.</span><span class="zh">每片容量 <code>(file + 0x1FFF) &amp; ~0xFFF</code>,由<b>第一幀</b>導出;後面讀到等於容量就 assert(這是壓縮錄影的牆)。</span></li>
+<li><span class="en">Only 12- and 10-bit are recognised. The playback raster equals the clip's stride, so the recorded size has to follow the +16/+10, 16-aligned convention.</span><span class="zh">只認 12/10-bit;回放柵格 = 片子列距,所以錄影尺寸必須守 +16/+10、16 對齊。</span></li>
+</ul></section>
+<section class="req">
+<h4><span class="en">Lossless codec (not yet in the chain)</span><span class="zh">無損 codec(尚未進鏈)</span></h4><ul>
+<li><span class="en">It has to sit after hbin/vbin/RWZM and cannot reduce further. Width 8..16384 in multiples of 8; height even.</span><span class="zh">必須在 hbin/vbin/RWZM 之後,壓完不能再縮;寬 8..16384 且為 8 的倍數,高為偶數。</span></li>
+<li><span class="en">Tile width 32..512 in steps of 32. Tile height even, &le;512, and a multiple of 16 for TIFF. At most 326 tiles; a single whole-frame tile is rejected (FHD needs &ge;12). All five buffers must be 1 KB-aligned.</span><span class="zh">tileW 32..512 步進 32;tileH 偶數、&le;512、TIFF 要 16 的倍數;&le;326 tiles,整幀單 tile 被拒(FHD 至少 12);五個緩衝位址 1 KB 對齊。</span></li>
+</ul></section>
+</div>
+<h2 id="overturned"><span class="en">Claims that did not survive</span><span class="zh">已推翻、別再當事實引用的說法</span></h2>
+<p class="en">Each of these was written down as a finding at some point. They are listed so they don't come back.</p><p class="zh">這些都曾經被當成結論寫進筆記。列出來,是為了不讓它們再回來。</p>
+<ul class="overturned"><li><span class="en">&ldquo;The DNG size is settings <code>+0x00/+0x04</code> plus 16/10.&rdquo; It only correlates for the two stock sizes.</span><span class="zh">「DNG 尺寸 = 設定 <code>+0x00/+0x04</code> +16/+10」—— 只是兩種原廠尺寸剛好成立。</span></li><li><span class="en">&ldquo;<code>0xC37CE210</code> is the recording geometry.&rdquo; It is a cache, and reads 0 in UHD and in stream mode.</span><span class="zh">「<code>0xC37CE210</code> 就是錄影幾何」—— 快取,UHD 與 stream 模式是 0。</span></li><li><span class="en">&ldquo;<code>+0xD8/+0xE0</code> is a preview override; 0 means no override.&rdquo; It is the producer/consumer pair.</span><span class="zh">「<code>+0xD8/+0xE0</code> 是預覽覆寫,0 = 不覆寫」—— 是 producer/消費端那一對。</span></li><li><span class="en">&ldquo;The four RWZM fields can never be split,&rdquo; stated as general. It holds for OG3K only.</span><span class="zh">「RWZM 四欄不能拆」當成通則 —— 只限 OG3K。</span></li><li><span class="en">&ldquo;The top and bottom flicker is bandwidth contention&rdquo; and &ldquo;the raster has to match standby&rdquo;. Both were dead ends.</span><span class="zh">「上下閃爍是頻寬競爭」、「柵格要對齊待機」—— 死路。</span></li><li><span class="en"><code>+0x030</code>: &ldquo;invalid rate&rdquo;, then &ldquo;buffer switch&rdquo;, then finally &ldquo;nominal fps, with the buffer count derived from it&rdquo;.</span><span class="zh"><code>+0x030</code>:「無效格率」&rarr;「張數開關」&rarr; 定案「標稱 fps,張數由它導出」。</span></li><li><span class="en">&ldquo;p221 is unreferenced&rdquo;, &ldquo;the LV 3:2 profiles are unused&rdquo;, &ldquo;OG2K must write the producer pair&rdquo;.</span><span class="zh">「p221 沒人引用」、「LV 3:2 profile 沒人用」、「OG2K 要寫 producer 對」。</span></li><li><span class="en">Playback: &ldquo;pool overflow&rdquo;, &ldquo;a 16-aligned stride decode bug&rdquo;, &ldquo;PARAM geometry is the playback source&rdquo;.</span><span class="zh">回放:「池爆掉」、「16 對齊 stride 解錯」、「PARAM 是回放幾何來源」。</span></li><li><span class="en">HSW: freezes caused by throughput, by vblank, by <code>+0x0B0</code>, by hook contamination; &ldquo;BUFCLASS is harmless&rdquo;; &ldquo;req_cnt=94 is the ring size&rdquo;; &ldquo;turning off fast SSD recording avoids the freeze&rdquo;; &ldquo;angle mode proves 240&rdquo;; &ldquo;26 MB vs 105 MB directory = failure&rdquo;.</span><span class="zh">HSW:吞吐/消隱/<code>+0x0B0</code>/hook 污染導致凍結、「BUFCLASS 無害」、「req_cnt=94 是環大小」、「關快速錄影就不凍」、「角度模式證明 240」、「26M vs 105M 目錄 = 失敗」。</span></li><li><span class="en">&ldquo;OG2K timing is 0.000 ppm&rdquo; (it truncated vmax); &ldquo;M117 is quieter&rdquo; (two folders were swapped: M117 has 1.33&times; M98's noise).</span><span class="zh">「OG2K 0.000 ppm」(其實截斷 vmax);「M117 比較安靜」(兩個資料夾名顛倒,實際 M117 雜訊是 M98 的 1.33 倍)。</span></li><li><span class="en">&ldquo;<code>0xC38250E4</code> is the header size&rdquo; (retracted twice) and &ldquo;<code>0xC0731C18</code> is the header size&rdquo;.</span><span class="zh">「<code>0xC38250E4</code> 是檔頭尺寸」(收回兩次)、「<code>0xC0731C18</code> 是檔頭尺寸」。</span></li></ul>
+<h2 id="verify"><span class="en">How a recording change is accepted</span><span class="zh">改錄影路徑的驗收規則</span></h2>
+<ol class="verify"><li><span class="en">Decode the DNG. Every recording-path change is accepted on the file, never on live view: file size, strip length, and the adjacent same-phase row correlation beyond column 1936 (good 0.72&ndash;0.98, broken &minus;0.12&ndash;0.03). &ldquo;Non-zero bytes&rdquo; lies, because unfilled area is noise, not zero.</span><span class="zh">解 DNG。改錄影路徑一律用檔案驗收、不看 live view:檔案大小、strip 長度、1936 欄以外的相鄰同相位列相關(正常 0.72&ndash;0.98、壞的 &minus;0.12&ndash;0.03)。「位元組非零」會騙人 —— 未填區是雜訊不是零。</span></li><li><span class="en">Read the outcome from <code>req_cnt</code> / <code>fin_cnt</code> and the stop-reason string before anything else. <code>is_recording</code> returning to 0 does not mean the writes finished.</span><span class="zh">先用 <code>req_cnt</code>/<code>fin_cnt</code> 與停止原因字串判讀結果;<code>is_recording</code> 歸 0 不代表寫完。</span></li><li><span class="en">Measure the sensor's true frame rate with a fixed shutter clamped by the frame period (EXIF 1/250 @240). Angle mode reads the metadata.</span><span class="zh">感光元件真實格率用「固定快門被格週期夾住」的 EXIF 量(1/250 @240);角度模式讀的是 metadata。</span></li><li><span class="en">On a latched system, capture the last overwrite. Every screenshot has to assert REC or STBY from the HUD.</span><span class="zh">有 latch 的系統抓最後一次覆寫;每張截圖都要從 HUD 斷言 REC/STBY。</span></li><li><span class="en">Test every frame rate and every bit depth, not only 29.97 / 12-bit.</span><span class="zh">每個格率、每個位元深度都要測,不能只測 29.97 / 12-bit。</span></li><li><span class="en">Disarm hooks before writing anything they read. Every read or write range must come from a measurement.</span><span class="zh">改 hook 讀的東西前先解除 hook;讀寫範圍要有依據。</span></li></ol>
 
 <h2><span class="en">What is still dark</span><span class="zh">還沒搞懂的部分</span></h2>
 
@@ -742,9 +1321,11 @@ mode 12 出廠就是 239.760240 fps,全片幅 3:2,而且<strong>沒有任何 pic
   </li>
   <li>
     <h3><span class="en">Most of the 306-row profile table</span><span class="zh">306 列 profile 表的大部分</span></h3>
-    <p class="en">About a dozen of roughly 65 columns are understood. <code>+0x030</code>
-    differs between the stills and movie profiles and is unexplained.</p>
-    <p class="zh">大約 65 個欄位裡只懂十來個。<code>+0x030</code> 在拍照跟錄影的 profile 之間不一樣,沒有解釋。</p>
+    <p class="en">Most of the roughly 65 columns are still not understood
+    (<code>+0x030</code> is now known: nominal fps, which sets the buffer count). The
+    minimal set of HSW's seven high-rate fields was never bisected.</p>
+    <p class="zh">大約 65 個欄位大部分仍沒搞懂(<code>+0x030</code> 已解:標稱 fps,決定緩衝張數)。
+    HSW 那七個高速欄位的最小集合沒有二分過。</p>
   </li>
   <li>
     <h3><span class="en">Whether the merge tuple is binning or skipping</span><span class="zh">合併倍率到底是合併還是跳讀</span></h3>
@@ -792,7 +1373,19 @@ out where they occur.</p>
   <a href="https://github.com/ijigen/fpSup"><span class="en">Repository</span><span class="zh">程式庫</span></a></p>
 </footer>
 
-<script src="../assets/lang.js?v=0183bc5d" defer></script>
+<script>
+/* a link to a stage or a pitfall opens its <details> first */
+(function(){
+  function open(){
+    var id = decodeURIComponent(location.hash.slice(1)); if(!id) return;
+    var el = document.getElementById(id); if(!el) return;
+    for (var d = el; d; d = d.parentElement) if (d.tagName === 'DETAILS') d.open = true;
+    el.scrollIntoView();
+  }
+  addEventListener('hashchange', open); addEventListener('DOMContentLoaded', open);
+})();
+</script>
+<script src="../assets/lang.js?v=7c49866d" defer></script>
 
 </body>
 </html>
