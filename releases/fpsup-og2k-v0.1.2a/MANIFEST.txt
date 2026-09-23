@@ -1,0 +1,44 @@
+SIGMA fp — OG2K 3:2 open gate 2K (v0.1.2a)
+banner: fpSup-OG2K-v0.1.2a!
+firmware: SIGMA fp Ver.5.02 only
+
+AutoRun.txt  32,772B  sha256=b1990c9ad58decbc686d3427bb5e712226041fdd1f23b748d08ae318a561dafd
+fpSup.BIN    32,768B  sha256=e6ae63384eebc0fbed34b84d7e77fc10afb3aaa9d6a93a1854f2dc5c8377eaed
+reference_firmware sha256=92a8ee993f6c3d66c251e88d45a2ccd5135c6cf7342717784321c2ed506e2fb4
+
+AutoRun 指令 104 條;所有寫入都在 fpSup.BIN 裡。
+
+payload magic: VBIN
+payload sections: 86
+payload body bytes: 15,400
+payload used bytes including header/table: 16,104 of 32,768
+payload entry: 0xC0731600  (og3krestore;loader 放完所有 section 之後呼叫一次)
+USB shell: absent
+
+canonical source: OG_TARGET=og2k build_og3k_ui_candidate.py --release
+  --banner 'fpSup-OG2K-v0.1.2a!'
+  (projects/open-gate/build,2026-09-24;fpSup 的 fp_usb_shell/templates/loader.S
+   含 D-cache 清除後的 I-cache 失效 F_ICACHE 0xC000EABC)
+OpenGate core 993 words(前一版 782);native UI 360 selected NBU records, 4 hooks.
+UI code sha256=6cc03e385ab2567b4960b2265fa82081912caa8d504f0ab69cb40742b6f8cf7f
+  UI code 與 og2k-debug-qsfix2 卡(OG2K-QsFix2!,2026-09-24 實測)逐位元組相同。
+private NBR sha256=9d840d2c4b1b56404650a48aeabe6f1a5f873529e75156757e59f55143801361(與前一版相同)
+
+相對 fpsup-og2k-v0.1.1a 的 fpSup.BIN 變動(同一份比對,兩個目標形狀相同):
+  新增 hook 0xC005BE58  og3kfmt       錄影格式 setter:OG 只在 CinemaDNG 時生效(MOV 凍結修正)
+  新增      0xC0731400  og3kfmt payload
+  新增      0xC0731600  og3krestore   開機還原(VSHL entry;重複入口、錄影忙碌檢查、結果碼、LV 重讀)
+  變更      0xC0731820  og3ksel       加格式條件與 OGSAVE(XC_CommonSaveData+0x290)寫入
+  新增      0xC0731C20  FMTLATCH(開機值 UNKNOWN 0xFFFFFFFF)與 RLOG 7 字
+  新增 hook 0xC05D90F0  ui_layout     釋放在 hook 裝好之前建好的 QS 版面(UicResourceCache::v3)
+  新增      0xC07327C8  ui_layout 狀態 48 bytes
+  變更      0xC0732D68… UI 程式碼因插入 ui_layout 位移;0xC05E5B58/0xC05E6400 的跳躍目標隨之改變
+
+RAM 用途:OGSAVE 位於 XC_CommonSaveData+0x290,由相機自己在正常關機時保存 ——
+  這是唯一跨電源循環的狀態;其餘全在 RAM,拔電池即恢復原廠。
+
+驗證:projects/open-gate/build/verify_og3k_ui_release.py(release 對 debug 配對)PASS;
+  og3k_plan check() 無錯誤;test_og3k_load.py、test_og4k_plan.py 通過。
+  上機紀錄:projects/open-gate/notes/OG_BOOT_RESTORE_STABILITY_REVIEW_2026-09-23.md §7。
+
+卡上放:AutoRun.txt 與 fpSup.BIN(根目錄),沒有別的。

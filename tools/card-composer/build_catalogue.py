@@ -237,8 +237,8 @@ def refs(product='og3k'):
     tmp = pathlib.Path(tempfile.mkdtemp(prefix=f'{product}ref-'))
     og3k = latest(product)
     og_entry, og_records = parse(payload(og3k).read_bytes())
-    if og_entry != 0:
-        raise SystemExit(f'{og3k.name} unexpectedly carries an entry point')
+    if og_entry and (og_entry < 0x40000000 or og_entry % 4):
+        raise SystemExit(f'{og3k.name} carries an unsupported entry point')
     helpers = [(address, blob) for address, blob in og_records
                if address < 0x40000000]
     if len(helpers) != 1 or helpers[0][0] != 0:
@@ -266,6 +266,8 @@ def refs(product='og3k'):
                '--edition', 'gcsv', '--version', 'catalogue-reference',
                '--banner', f'fpSup-{product.upper()}-Gyro!', '--out', str(d),
                *section_args]
+        if og_entry:
+            cmd += ['--vshl-entry', f'0x{og_entry:08X}']
         if debug:
             cmd.append('--debug')
         r = subprocess.run(cmd, capture_output=True, text=True)

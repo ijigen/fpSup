@@ -69,6 +69,7 @@
 .equ F_CLOSE,     0xC0366020
 .equ F_DTOR,      0xC0365ED0
 .equ F_CACHE,     0xC000E91C
+.equ F_ICACHE,    0xC000EABC
 .equ F_TICK_US,   0xC002B6E0    /* () -> microseconds since power-on      */
 
 .equ VOL_SD,      1             /* FUN_c0444698: 1 = the card, 5 = an SSD */
@@ -286,12 +287,14 @@ load_shut:
 
     /* The rest of the loading travels in the file, as its first section, and is
      * therefore free: every word spelled out here costs the AutoRun one
-     * `mem set` and about sixty milliseconds of boot.  Clean the cache first --
-     * the buffer holds instructions now -- then hand it the buffer.  It places
+     * `mem set` and about sixty milliseconds of boot.  Clean the D-cache and
+     * invalidate the I-cache first -- the buffer holds instructions now --
+     * then hand it the buffer.  It places
      * every section, cleans the cache again, and comes back, unless the file
      * names an entry, which is how the debug build's worker takes the task. */
 
     CALL    F_CACHE
+    CALL    F_ICACHE
     ldr     r1, [r6, #4]                @ section count
     add     r1, r6, r1, lsl #3
     add     r1, r1, #16                 @ past the table: the first section's data
@@ -329,5 +332,3 @@ path:
      * and one loader that takes the name is better than two loaders. */
     .asciz  BIN_PATH
     .align  2
-
-
