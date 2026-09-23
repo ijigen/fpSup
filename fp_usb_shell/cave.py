@@ -83,9 +83,21 @@ def _sh(*args, timeout=25):
                           timeout=timeout, cwd=HERE).stdout
 
 
-def _get(addr):
-    m = re.search(r'D:0x([0-9A-Fa-f]+)', _sh('mem', 'get', f'0x{addr:08X},,4'))
-    return int(m.group(1), 16) if m else None
+def _get(addr, tries=5):
+    """One word, read until it answers.
+
+    `mem get` drops commands -- not often, but often enough that a single read
+    is a coin toss on a busy camera.  boot_id() read LOAD_DONE_US once and
+    raised 'this camera did not boot from a loader card' when the answer went
+    missing, which took putfile down with it in the middle of a deploy and left
+    the card holding two files from different builds.  A dropped read is not an
+    answer, so it is not treated as one.
+    """
+    for _ in range(tries):
+        m = re.search(r'D:0x([0-9A-Fa-f]+)', _sh('mem', 'get', f'0x{addr:08X},,4'))
+        if m:
+            return int(m.group(1), 16)
+    return None
 
 
 def _set(addr, value, tries=8):
