@@ -1,7 +1,8 @@
 # Building a sup: AutoRun → loader → stage2 → entry
 
 [中文](SUP_BUILD_RULES.md) · English. The two say the same thing; a change to
-one is made to both in the same commit.
+one is made to both in the same commit. This is the contract; the walkthrough
+that explains the whole process from the start is [BUILDING.md](BUILDING.md).
 
 Applies to: SIGMA fp Ver.5.02, the load chain as unified on 2026-09-23.
 Readers: anyone — agent or person — writing a new sup, changing an existing one,

@@ -119,6 +119,9 @@ Each page says what has been proven, what is being worked on, and what is open.
 | [`docs/SHELL_CAPABILITIES.md`](docs/SHELL_CAPABILITIES.md) | what those commands reach — memory and I²C writes, menu setters, sensor readout modes |
 | [`docs/MENU_MODIFICATION.md`](docs/MENU_MODIFICATION.md) | every menu item carries its own metadata in ROM, right after its name string |
 | [`docs/FREEZE_ROOTCAUSE.md`](docs/FREEZE_ROOTCAUSE.md) | why the first USB shell froze the camera, mechanism and all |
+| [`BUILDING.md`](BUILDING.md) | how a card works and how to build, combine, test and release one — the walkthrough ([中文](BUILDING.zh.md)) |
+| [`SUP_BUILD_RULES.en.md`](SUP_BUILD_RULES.en.md) | the build contract every sup follows ([中文](SUP_BUILD_RULES.md)) |
+| [`HOOKS_AT_POWER_OFF.md`](HOOKS_AT_POWER_OFF.md) | why a hook must come out at power-off, and how |
 
 ---
 
@@ -181,6 +184,14 @@ Each page says what has been proven, what is being worked on, and what is open.
 - **Open gate 的 12-bit 路徑已驗證全 ISO,原生 UI 已整合。** 3:2 讀出的 3024×2010,整幅邊到邊 —— 解檔實錄驗證,不是推論。v0.2.2a 新增 8-bit 與 10-bit;v0.2.3a 修正 format-table pass-through 指標。精確 no-shell 的 OG3K/UHD/FHD 25p/180°三段共100張 DNG 全為1/50且幾何正確。OG3K 必須關閉 Super35/crop。8/10-bit 的回放與高光餘裕、其他幀率、長時間寫入與新 UI runtime 回放仍待回歸。
 - **IMX410 的 ISO 與增益鏈完整反編譯**,說明頁把「韌體確認的行為」跟「還需要量測的 OTP 值」分開。
 - **USB shell 不會弄壞錄影。** 它建在相機自己的 PTP gadget 上,端點由韌體管,錄影模式重配之後韌體會自己重建。
+
+### 參考
+
+| | |
+|---|---|
+| [`BUILDING.zh.md`](BUILDING.zh.md) | 卡片怎麼運作、怎麼建卡、合併、測試與發布 —— 完整流程說明([English](BUILDING.md)) |
+| [`SUP_BUILD_RULES.md`](SUP_BUILD_RULES.md) | 每個 sup 都要遵守的建置規範([English](SUP_BUILD_RULES.en.md)) |
+| [`HOOKS_AT_POWER_OFF.md`](HOOKS_AT_POWER_OFF.md) | 為什麼 hook 關機時必須拆掉、怎麼拆(英文,附中文摘要) |
 
 ---
 
