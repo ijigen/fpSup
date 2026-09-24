@@ -22,8 +22,15 @@ deleted, because a tag exists only for a folder in `releases/`
 
 ## 2026-09-25
 
-The bug was gyro v1.13's alone; it is fixed in **fpsup-gyro-v1.13.1**, which
-fpSup-Merge now bundles. What it was: [HOOKS_AT_POWER_OFF.md](../../HOOKS_AT_POWER_OFF.md).
+The bug was gyro v1.13's alone; it is fixed in **fpsup-gyro-v1.13.1**. What it
+was: [HOOKS_AT_POWER_OFF.md](../../HOOKS_AT_POWER_OFF.md).
 
-問題只在 gyro v1.13,修正版是 **fpsup-gyro-v1.13.1**,fpSup-Merge 已改為打包它。
-原因見 [HOOKS_AT_POWER_OFF.md](../../HOOKS_AT_POWER_OFF.md)。
+The other three were withdrawn with it but were not implicated, and are back in
+`releases/` unchanged, tags restored: **fpsup-og3k-v0.2.5a**, **fpsup-og2k-v0.1.2a**,
+**fpsup-usbshell-v3.2.0**. fpSup-Merge is the 84ebcff page again and bundles
+them with gyro v1.13.1. Only gyro v1.13 stays here.
+
+問題只在 gyro v1.13,修正版是 **fpsup-gyro-v1.13.1**;原因見
+[HOOKS_AT_POWER_OFF.md](../../HOOKS_AT_POWER_OFF.md)。另外三個與此無關,已原樣搬回
+`releases/` 並補回 tag;fpSup-Merge 恢復 84ebcff 的頁面,打包它們與 gyro v1.13.1。
+這裡只剩 gyro v1.13。

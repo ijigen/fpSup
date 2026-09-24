@@ -38,9 +38,9 @@ card, use the composer rather than copying both.
 |---|---|---|
 <!-- releases:begin:en -->
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.13.1/) | v1.13.1 | Writes Gyroflow's `.gcsv` and `.json` while recording — every sample at 2500 Hz, distortion read off the lens. The profile now carries the size the take was actually recorded at, which open gate got wrong. |
-| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.1a/) | v0.1.1a | The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build. |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.4a/) | v0.2.4a | The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha. |
-| [`fpsup-usbshell`](releases/fpsup-usbshell-v3.1.1/) | v3.1.1 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
+| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.2a/) | v0.1.2a | The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build. |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.5a/) | v0.2.5a | The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha. |
+| [`fpsup-usbshell`](releases/fpsup-usbshell-v3.2.0/) | v3.2.0 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
 <!-- releases:end:en -->
 
 **The two open-gate builds see the same picture.** OG2K is the sensor reduced by three
@@ -140,9 +140,9 @@ Each page says what has been proven, what is being worked on, and what is open.
 |---|---|---|
 <!-- releases:begin:zh -->
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.13.1/) | v1.13.1 | 錄影當下就把 Gyroflow 要的 `.gcsv` 與 `.json` 寫進片段資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭。profile 的尺寸改成實際錄下的那個 —— open gate 下先前是錯的。 |
-| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.1a/) | v0.1.1a | 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。 |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.4a/) | v0.2.4a | 感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。 |
-| [`fpsup-usbshell`](releases/fpsup-usbshell-v3.1.1/) | v3.1.1 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
+| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.2a/) | v0.1.2a | 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。 |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.5a/) | v0.2.5a | 感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。 |
+| [`fpsup-usbshell`](releases/fpsup-usbshell-v3.2.0/) | v3.2.0 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
 <!-- releases:end:zh -->
 
 **兩個 open gate 看到的是同一個畫面。** OG2K 是把感光元件縮三倍而不是兩倍,所以資料量只有三分之一,

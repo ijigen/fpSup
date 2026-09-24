@@ -52,7 +52,7 @@ header{position:relative}
 .support{position:absolute;top:0;right:0;display:flex;gap:8px;flex-wrap:wrap;margin:0}
 @media(max-width:620px){header{position:static}.support{position:static;margin:14px 0 0}}
 header p{color:var(--dim);font-size:.92rem;max-width:52ch;margin:.45em 0 0}
-.cols{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:26px;align-items:start}
+.cols{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:26px;align-items:start}
 @media(max-width:760px){.cols{grid-template-columns:1fr}}
 
 /* Two modes. The default one shows the job -- tick, name, download -- and the
@@ -61,11 +61,8 @@ header p{color:var(--dim);font-size:.92rem;max-width:52ch;margin:.45em 0 0}
    hashes, the upload box) is real and stays one click away, but it is not what
    somebody making their first card needs to read. */
 body.simple .adv{display:none!important}
-/* Narrow the whole page, not just the column. A 440px column inside a 1120px
-   body left 640px of nothing to the right of the cards while the header rule and
-   the footer still ran the full width, and the two support buttons ended up 800px
-   away from anything they related to. One column means one width. */
-body.simple{max-width:620px}
+/* Give the catalogue room for a responsive grid in either detail mode. */
+body.simple{max-width:1000px}
 body.simple .cols{grid-template-columns:minmax(0,1fr)}
 /* The title only needed to dodge the support buttons in the wide layout; here
    the brand row sits below them. */
@@ -105,14 +102,54 @@ body:not(.simple) .d-short{display:none}
 .mod b{display:block;font-weight:600;font-size:.94rem}
 .mod small{color:var(--dim);font-size:.8rem;display:block;margin-top:2px}
 .mod .sz{font-family:var(--mono);font-size:.74rem;color:var(--dim);margin-top:5px;display:block}
-/* The USB shell is not one of the things you choose between -- it is a tool for
-   talking to the camera from a computer, and it adds nothing you can see on the
-   camera. Grouping it under its own heading says that without a paragraph. */
-.group{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;
-  letter-spacing:.1em;color:var(--dim);margin:18px 0 8px;padding-top:14px;
-  border-top:1px solid var(--line);display:flex;justify-content:space-between;
-  align-items:baseline;gap:10px}
-.group em{font-style:normal;text-transform:none;letter-spacing:0;font-size:.74rem}
+/* Category filters change visibility only. Selected SUPs remain visible in
+   the compact selection strip, including those in another category. */
+.catalogue-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.catalogue-heading p{margin:0;color:var(--dim);font-size:.8rem}
+.category-filters{display:flex;gap:7px;flex-wrap:wrap;margin:4px 0 15px}
+.category-filter{font:inherit;font-size:.82rem;border:1px solid var(--line);
+  border-radius:20px;background:transparent;color:var(--dim);padding:6px 12px;cursor:pointer}
+.category-filter span{font-family:var(--mono);font-size:.7rem;margin-left:7px;opacity:.8}
+.category-filter[aria-pressed=true]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.category-filter:hover{border-color:var(--sig)}
+.category-filter:focus-visible,.selection-chip:focus-visible,.remove-upload:focus-visible{
+  outline:2px solid var(--sig);outline-offset:3px}
+.selection-summary{font-size:.8rem;color:var(--dim);margin:0 0 7px}
+.selected-cards{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.selection-chip{font:inherit;font-size:.78rem;padding:4px 9px;border-radius:3px;
+  border:1px solid var(--line);background:var(--sig-soft);color:var(--ink);cursor:pointer}
+.selection-chip span{margin-left:8px;color:var(--dim)}
+.selection-chip:hover{border-color:var(--sig)}
+.sup-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:12px}
+.sup-card{min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);
+  border-radius:5px;background:var(--paper);overflow:hidden}
+.sup-card.selected{border-color:var(--sig);background:var(--sig-soft)}
+.sup-card:focus-within{outline:2px solid var(--sig);outline-offset:2px}
+.sup-choice.mod{border:0;border-radius:0;padding:15px;flex:1;margin:0;background:transparent}
+.sup-copy{min-width:0;overflow-wrap:anywhere}
+.sup-kicker{display:block;font-family:var(--mono);font-size:.65rem;letter-spacing:.06em;
+  color:var(--dim);text-transform:uppercase;margin-bottom:6px}
+.sup-choice b{font-size:1rem;line-height:1.3}
+.sup-version{display:block;font-family:var(--mono);font-size:.73rem;color:var(--dim);margin:4px 0 9px}
+.sup-option.mod{border:0;border-top:1px solid var(--line);border-radius:0;margin:0;
+  padding:12px 15px;font-size:.8rem}
+.sup-option.mod b{font-size:.8rem}
+.remove-upload{align-self:flex-start;margin:0 15px 12px;font:inherit;font-size:.76rem;
+  padding:0;border:0;background:none;color:var(--dim);cursor:pointer;text-decoration:underline}
+.remove-upload:hover{color:var(--bad)}
+.catalogue-empty{grid-column:1/-1;color:var(--dim);font-size:.86rem;margin:0;padding:24px 0}
+/* Fast is a start-up setting, never a SUP tile or a selectable product. */
+.start-setting{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.fast-switch{display:flex;align-items:center;justify-content:space-between;gap:20px;cursor:pointer}
+.fast-switch b{display:block;font-size:.9rem;font-weight:500}
+.fast-switch small{display:block;color:var(--dim);font-size:.8rem;margin-top:2px}
+.fast-switch input{appearance:none;flex:none;width:36px;height:21px;margin:0;border-radius:12px;
+  border:1px solid var(--dim);background:var(--band);position:relative;cursor:pointer}
+.fast-switch input::before{content:'';position:absolute;left:3px;top:3px;width:13px;height:13px;
+  border-radius:50%;background:var(--dim);transition:transform .12s}
+.fast-switch input:checked{background:var(--sig);border-color:var(--sig)}
+.fast-switch input:checked::before{background:var(--panel);transform:translateX(15px)}
+.fast-switch input:focus-visible{outline:2px solid var(--sig);outline-offset:3px}
 label.f{display:block;font-size:.78rem;color:var(--dim);margin:16px 0 5px;
   font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em}
 input[type=text]{width:100%;font-family:var(--mono);font-size:.9rem;padding:8px 9px;
@@ -186,11 +223,8 @@ td.r,th.r{text-align:right}
 .mod.sub::before{content:'';position:absolute;left:-13px;top:-9px;bottom:50%;
   width:11px;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
 .mod.fix{opacity:.72;cursor:default}
-/* Fast start is not part of the default card: dashed until it is ticked, and
-   its caveats sit outside the label so reading them cannot untick it. */
-.mod.care{border-style:dashed}
-.mod.care.on{border-style:solid}
-.caveats{margin:9px 0 0 22px;padding:10px 12px;border-left:2px solid var(--sig);
+/* Fast caveats stay outside its switch label, so reading does not toggle it. */
+.caveats{margin:9px 0 0;padding:10px 12px;border-left:2px solid var(--sig);
   background:var(--sig-soft);font-size:.81rem;color:var(--dim)}
 .caveats p{margin:0 0 6px}
 .caveats p:last-child{margin-bottom:0}
@@ -226,8 +260,8 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
   <p>Tick what you want. You get <code>AutoRun.txt</code> and <code>fpSup.BIN</code>;
      copy both to the root of your SD card and that is the whole job.
      <span class="adv">Composition happens here in the page: no assembler, no toolchain.
-     Every combination is checked against the same rules the build scripts use, and the
-     bytes are identical to what those scripts produce.</span></p>
+     Payload sections are preserved, entries are relocated, and the composed
+     layout is checked before download.</span></p>
     </div>
   </div>
   <div class="support">
@@ -247,8 +281,11 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
 <div class="cols">
   <div class="stack">
     <div class="panel">
-      <h2>Cards</h2>
-      <div id="cards"></div>
+      <div class="catalogue-heading"><h2>SUPs</h2><p>Pick features to combine</p></div>
+      <div id="category-filters" class="category-filters" role="group" aria-label="SUP categories"></div>
+      <p id="selection-summary" class="selection-summary" role="status" aria-live="polite"></p>
+      <div id="selected-cards" class="selected-cards" role="group" aria-label="Selected SUPs"></div>
+      <div id="cards" class="sup-grid"></div>
       <div id="drop" class="drop">
         <input type="file" id="file" accept=".BIN,.bin" multiple hidden>
         <b>Got a payload container from someone else?</b>
@@ -281,13 +318,11 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
       <h2>Checks</h2>
       <div id="checks"></div>
       <p class="note" id="upnote" hidden><b>One thing these checks do not cover.</b>
-      Sections are placed in listed order and uploaded ones go after the built-in
-      cards. Nothing runs until the loader branches to the entry section, which is
-      forced last, so ordering is only a hazard where two sections fight over the same
-      bytes — and that is checked. But a firmware hook placed before the payload it
-      calls is a hazard no static check here can see. Each card keeps its own internal
-      order, so this only matters if an uploaded card hooks something a built-in card
-      supplies.</p>
+      Section and entry checks cannot prove that hooks are safe before
+      initialization finishes. Firmware background paths may reach a hook during
+      loading, whether it belongs to a built-in or uploaded card. Validate that
+      timing in the intended execution context; a correct file layout alone is
+      not an on-camera safety test.</p>
     </div>
     <div class="panel">
       <h2>Sections</h2>
@@ -315,7 +350,7 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
 const CAT = JSON.parse(document.getElementById('cat').textContent);
 </script>
 
-<!-- Everything below is pure: no DOM, no globals but CAT.  compose.mjs
+<!-- Everything below is pure: no DOM, no globals but CAT. test_compose.js
      pulls this exact block out of the built page and runs it, so the
      command line and the page cannot disagree -- there is one copy. -->
 <script id="compose">
@@ -333,8 +368,9 @@ const sel = () => all().filter(c => on.has(c.id));
 
 /* Merge: each card keeps its own record order, the entry section is forced
    last, and a record that is byte-identical to one already taken is folded
-   away -- two cards almost always share the park stub.  Destination zero is
-   the loader's stage2 helper, not an ordinary product section. A single card
+   away -- two cards almost always share the park stub. The FIRST section is
+   the loader's stage2 helper; later destination-zero sections run in place.
+   A single card, with its shipped options unchanged,
    keeps its exact shipped helper; a combination uses the current helper built
    together with the AutoRun templates. */
 /* Where each section's data lands in the file, in order.  An entry below
@@ -346,10 +382,16 @@ function offsetsOf(recs){
                          off += n + ((-n) & 3); return o; });
 }
 
+/* Descriptor patches are BIN records, not AutoRun commands. Only the built-in
+   shell exposes this option; an uploaded payload is preserved as supplied. */
+const isPushRecord = r => CAT.push_sections.some(p =>
+  (p.a >>> 0) === (r.a >>> 0) && p.b === r.b);
+const omitPush = (c, r) => !!c.shell && !pushOn && isPushRecord(r);
+
 /* Compose, and work out the one entry word the header has room for.
 
-   Returns {recs, entry}.  A single card is its own bytes, untouched, entry and
-   all.  A combination drops each card's FIRST section -- that is the loader's
+   Returns {recs, entry}. A single card with unchanged options keeps its bytes.
+   A combination drops each card's FIRST section -- that is the loader's
    own second half, because loader.S branches to the end of the table, so
    whatever is first IS the helper -- and puts one canonical helper back.
 
@@ -370,13 +412,14 @@ function composed(){
      to start fast, which means replacing the helper it shipped with and adding
      the abort.  That re-lays the file out, so its entry has to be recomputed
      like any merge's, and the path below is the one that does that. */
-  if (chosen.length === 1 && !fastOn)
+  if (chosen.length === 1 && !fastOn &&
+      !chosen[0].records.some(r => omitPush(chosen[0], r)))
     return {recs: chosen[0].records.slice(), entry: chosen[0].entry >>> 0,
             entries: (chosen[0].entry >>> 0) ? [chosen[0].entry >>> 0] : []};
   const out = [], runs = [], tail = [], seen = new Map(), kept = new Map(), entries = [];
   for (const c of chosen){
     c.records.forEach((r, i) => {
-      if (i === 0) return;
+      if (i === 0 || omitPush(c, r)) return;
       const k = (r.a >>> 0) + ':' + r.b;
       if (seen.has(k)){ kept.set(r, seen.get(k)); return; }
       seen.set(k, r); kept.set(r, r);
@@ -386,7 +429,7 @@ function composed(){
         : (r.a >>> 0) === CAT.entry_at ? tail : out).push(r);
     });
     // `continue`, not `return`: this is a for..of over the cards, and a card
-    // with no entry -- OG3K is all static writes -- must not end the loop.
+    // with no entry must not end the loop. Current OG cards have a restore entry.
     const e = c.entry >>> 0;
     if (e === 0) continue;
     if (e >= 0x40000000){ entries.push({abs: e}); continue; }
@@ -426,13 +469,13 @@ function composed(){
           entries: entries.map(e => (e.abs !== undefined ? e.abs
                                      : at(e.rec) + e.delta) >>> 0)};
 }
-const carriesWorker = c => !!c.shell || c.records.slice(1).some(r => (r.a >>> 0) === 0);
+const carriesWorker = c => !!c.shell;
 function hasShell(){ return sel().some(carriesWorker); }
 let pushOn = false;
 /* Fast start: the loader is written into the settings block, so the next boot
-   verifies it, copies it into the cave and branches -- twenty-six commands
-   instead of the whole file.  Three carried blobs, all from one build, because
-   store_boot checks a hash of the very loader its own AutoRun spells out; see
+   checks its loader marker, copies it into the cave and branches, skipping the
+   slow loader-writing commands. Three carried blobs, all from one build, because
+   store_boot checks the build-time marker of the loader AutoRun spells out; see
    build_fast() in build_catalogue.py.  Off by default: it is the one option
    that writes to flash. */
 let fastOn = false;
@@ -542,18 +585,15 @@ function runChecks(recs, vshl, banner, entry, entriesNow){
              : over.length ? over[0].w+' runs into the park stub'
              : cave.length+' in cave'});
 
-  /* Most of the USB shell is AutoRun, not the payload: a loader that creates a task
-     (the worker blocks on the endpoint and cannot run in a borrowed callback),
-     68 bytes zeroing the worker's state, and the interface-class patch.  The
-     page carries one whole template per configuration and picks between them. */
+  /* Worker creation, state and descriptor patches now belong to BIN sections,
+     so selecting products or EP83 does not rewrite the loader's AutoRun. */
   /* Counted, not written down.  These were 135 / 189 / 195 and all three are
      now the same script: the descriptor patches and the worker's state words
      became sections in the file, so the AutoRun no longer changes with the
      configuration at all.  A number typed into a label cannot notice that. */
   c.push({ok:true, t:'AutoRun loader',
-          d: {plain:'NOTASK', shell:'task + state + iface',
-              shellpush:'task + state + iface + EP 0x83'}[templateName()]
-             + ' — ' + cmdCount(banner) + ' cmds' + (fastOn ? ', fast start' : '')});
+          d: 'shared loader — ' + cmdCount(banner) + ' cmds'
+             + (fastOn ? ', fast start' : '')});
 
   /* EVERY payload that names an entry has to be called, not just one.
      This check used to say the opposite -- that a card's own entry is "what it
@@ -695,7 +735,7 @@ function runChecks(recs, vshl, banner, entry, entriesNow){
 }
 </script>
 
-<script>
+<script id="ui">
 function band(el, lo, hi, spans, lock){
   const w = x => ((x - lo) / (hi - lo) * 100);
   let h = '<div class="track">';
@@ -715,6 +755,97 @@ let current = null, touchedBanner = false;
 function md(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
                   .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+const escapeHTML = s => String(s).replace(/[&<>"']/g, ch =>
+  ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[ch]));
+const CATEGORY_LABELS = {shooting:'Shooting', development:'Development',
+                         uploaded:'Uploaded', uncategorized:'Other'};
+// Development is closed on first load. This is a view, not a payload option.
+let activeCategory = 'shooting';
+const categoryOf = c => c.upload ? 'uploaded' : (c.category || 'uncategorized');
+function categoryOptions(){
+  const counts = new Map();
+  all().forEach(c => counts.set(categoryOf(c), (counts.get(categoryOf(c)) || 0) + 1));
+  const ids = [...new Set([...Object.keys(CATEGORY_LABELS), ...counts.keys()])]
+    .filter(id => counts.has(id));
+  return [{id:'all', label:'All', count:all().length},
+    ...ids.map(id => ({id, label:CATEGORY_LABELS[id] || id, count:counts.get(id)}))];
+}
+const visibleCards = () => all().filter(c => activeCategory === 'all' || categoryOf(c) === activeCategory);
+
+function renderCatalogue(){
+  const options = categoryOptions();
+  if (!options.some(x => x.id === activeCategory))
+    activeCategory = options.some(x => x.id === 'shooting') ? 'shooting' : 'all';
+  const visible = visibleCards();
+  document.getElementById('category-filters').innerHTML = options.map(x =>
+    `<button type="button" class="category-filter" data-category="${escapeHTML(x.id)}"
+       aria-pressed="${x.id === activeCategory}">${escapeHTML(x.label)}<span>${x.count}</span></button>`).join('');
+  const hidden = sel().filter(c => !visible.includes(c)).length;
+  document.getElementById('selection-summary').textContent =
+    `${sel().length} selected · ${visible.length} of ${all().length} shown`
+      + (hidden ? ` · ${hidden} selected in other categories` : '');
+  document.getElementById('selected-cards').innerHTML = sel().map(c =>
+    `<button type="button" class="selection-chip" data-unselect="${escapeHTML(c.id)}"
+       aria-label="Remove ${escapeHTML(bare(c.name))} from selection">${escapeHTML(bare(c.name))}<span aria-hidden="true">×</span></button>`).join('');
+  document.getElementById('selected-cards').hidden = !sel().length;
+
+  document.getElementById('cards').innerHTML = visible.map(c => {
+    const selected = on.has(c.id);
+    const by = c.records.reduce((s,r) => s + b64(r.b).length, 0);
+    const legacy = c.autorun_current === false
+      ? '<span class="sz adv" style="color:var(--sig)">shipped with the older loader — composed here with the current one</span>' : '';
+    const version = c.name.match(/ v([\d].*)$/);
+    const excl = (c.excl || []).length
+      ? `<span class="sz">not with ${(c.excl || []).map(id => escapeHTML(bare((all().find(x => x.id === id) || {name:id}).name))).join(', ')}</span>` : '';
+    const push = !carriesWorker(c) || !selected ? '' :
+      `<label class="mod sup-option adv">
+        <input type="checkbox" id="push" ${pushOn ? 'checked' : ''}>
+        <span><b>EP 0x83 push patches</b><small>Include six descriptor patches for host frame transfer.</small>
+        <span class="sz">6 BIN sections · AutoRun unchanged</span></span></label>`;
+    return `<article class="sup-card ${selected ? 'selected' : ''}">
+      <label class="mod sup-choice">
+        <input type="checkbox" data-c="${escapeHTML(c.id)}" ${selected ? 'checked' : ''}>
+        <span class="sup-copy">
+          <span class="sup-kicker">${escapeHTML(CATEGORY_LABELS[categoryOf(c)] || categoryOf(c))}</span>
+          <b>${escapeHTML(bare(c.name))}</b>
+          <span class="sup-version">${c.upload ? 'Local BIN' : version ? 'v' + escapeHTML(version[1]) : 'SUP'}</span>
+          <small class="d-short">${md(c.desc.split(/(?<=[.!?])\s+/)[0])}</small>
+          <small class="d-full">${md(c.desc)}</small>${excl}
+          <span class="sz adv">${c.records.length} sections · ${by.toLocaleString()} B · entry ${c.entry ? hex(c.entry) : 'none'}</span>
+          ${legacy}
+        </span>
+      </label>${push}
+      ${c.upload ? `<button type="button" class="remove-upload" data-rm="${escapeHTML(c.id)}">Remove uploaded file</button>` : ''}
+    </article>`;
+  }).join('') || '<p class="catalogue-empty">No SUPs in this category.</p>';
+
+  document.querySelectorAll('[data-category]').forEach(button => button.onclick = () => {
+    activeCategory = button.dataset.category;
+    renderCatalogue(); // Filtering must not modify selection or recompose the files.
+    [...document.querySelectorAll('[data-category]')]
+      .find(x => x.dataset.category === activeCategory)?.focus();
+  });
+  document.querySelectorAll('[data-c]').forEach(input => input.onchange = e => {
+    const id = e.target.dataset.c;
+    if (e.target.checked){
+      const card = all().find(c => c.id === id);
+      for (const other of (card && card.excl) || []) on.delete(other);
+      on.add(id);
+    } else on.delete(id);
+    render();
+  });
+  document.querySelectorAll('[data-unselect]').forEach(button => button.onclick = () => {
+    on.delete(button.dataset.unselect); render();
+  });
+  document.querySelectorAll('[data-rm]').forEach(button => button.onclick = () => {
+    const id = button.dataset.rm;
+    uploads.splice(uploads.findIndex(c => c.id === id), 1);
+    on.delete(id); render();
+  });
+  const pb = document.getElementById('push');
+  if (pb) pb.onchange = e => { pushOn = e.target.checked; render(); };
 }
 
 function setMode(simple){
@@ -746,103 +877,36 @@ function render(){
   const ok = checks.every(x => x.ok);
   current = {vshl, autorun, ok};
 
-  const cardRow = c => {
-    const by = c.records.reduce((s,r) => s + b64(r.b).length, 0);
-    const legacy = c.autorun_current === false
-      ? '<span class="sz adv" style="color:var(--sig)">shipped with the older loader — composed here with the current one</span>' : '';
-    // The catalogue writes descriptions for a reader who wants the whole story.
-    // The first sentence is the part that helps someone choose; the rest is the
-    // part that helps someone understand, and that belongs with the detail.
-    const desc = md(c.desc);
-    const short = md(c.desc.split(/(?<=[.!?])\s+/)[0]);
-    // Exclusivity is not a technical footnote -- it is the one thing that stops
-    // a card working -- so it stays visible in both modes.
-    const excl = (c.excl||[]).length
-      ? `<span class="sz">not with ${(c.excl||[]).map(x => bare((all().find(y=>y.id===x)||{name:x}).name)).join(', ')}</span>` : '';
-    const row = `<label class="mod ${on.has(c.id)?'on':''}">
-      <input type="checkbox" data-c="${c.id}" ${on.has(c.id)?'checked':''}>
-      <span><b>${c.name}${c.upload?' <button class="x" data-rm="'+c.id+'">×</button>':''}</b>
-      <small class="d-short">${short}</small>
-      <small class="d-full">${desc}</small>
-      ${excl}
-      <span class="sz adv">${c.records.length} sections · ${by.toLocaleString()} B · entry ${c.entry?hex(c.entry):'none'}</span>
-      ${legacy}</span></label>`;
-    // The push patches are the shell's option, not a card of their own, so they
-    // hang off it and appear only when it is ticked.
-    if (!carriesWorker(c) || !on.has(c.id)) return row;
-    return row + `<label class="mod sub adv ${pushOn?'on':''}">
-      <input type="checkbox" id="push" ${pushOn?'checked':''}>
-      <span><b>EP 0x83 push patches</b>
-      <small>Six more firmware writes that open the push endpoint. Needed only if
-      the host pulls frames; the development card ships without them.</small>
-      <span class="sz">AutoRun 189 → 195 commands</span></span></label>`;
-  };
-  // Uploaded cards stay with the ones you pick; they are somebody's card, not a
-  // development tool.
-  const pick = all().filter(c => !c.shell);
-  const dev  = all().filter(c => c.shell);
-  // Fast start is not a card and not a development tool: it is how whatever
-  // you picked starts up.  It had been appended to the card list, which put it
-  // under the "Development — not needed for shooting" heading and made it read
-  // as a third thing to tick alongside the shell.  Its own block, after the
-  // list and before the banner, which is the other how-it-starts setting.
-  const fastRow = `<label class="f">Start-up</label>
-    <label class="mod care ${fastOn?'on':''}">
-      <input type="checkbox" id="fast" ${fastOn?'checked':''}>
-      <span><b>Fast start — optional, off by default</b>
-      <small>Keeps the loader in the camera's settings block, which survives a
-      power cycle, so a boot verifies it and branches instead of spelling it out:
-      twenty-six commands instead of the whole file. Read the notes before
-      ticking it — it is the one option here that writes to the camera.</small>
-      <span class="sz">writes to flash · first boot still slow · not for re-combining</span>
-      </span></label>` + (fastOn ? `<div class="caveats">
+  renderCatalogue();
+  const fastRow = `<div class="start-setting">
+    <h2>Start-up</h2>
+    <label class="fast-switch" for="fast">
+      <span><b>Fast Start</b><small id="fast-hint">Optional, off by default · stores the loader in camera flash</small></span>
+      <input type="checkbox" role="switch" id="fast" aria-describedby="fast-hint" ${fastOn ? 'checked' : ''}>
+    </label></div>` + (fastOn ? `<div class="caveats">
       <p><b>It writes to the camera, not just to the card.</b> The loader is put
       into XC_CommonSaveData, which is flash-backed and survives a battery pull.
       Everything else on this page lives on the card and goes away with it.</p>
       <p><b>The first boot is still slow</b> — that is the boot that fills the
-      block — and so is the first boot after any change to the card, because what
-      is stored no longer matches.</p>
+      block — and so is the first boot with a changed loader. Updating a
+      compatible <code>fpSup.BIN</code> alone does not invalidate the stored
+      loader or require a new <code>AutoRun.txt</code>.</p>
       <p><b>A fast card is a finished card.</b> Do not bring it back here to
-      combine with something else: its bootstrap verifies a hash of the loader
-      that its own AutoRun spells out, so the two cannot be taken apart and put
-      back together. Combine the plain cards and tick this again.</p>
+      combine with something else. Combine ordinary cards and tick this again
+      so the bootstrap, loader, stage2 and abort come from one packaging build.</p>
       <p><b>The script is stopped early, on purpose.</b> Once the loader has run,
       the rest of the AutoRun is a slower way to do what is already done, so it is
       cut off. Anything you expected to happen after the load will not.</p>
-      <p><b>A mismatch does nothing at all.</b> The block is branched into only
-      after it verifies; otherwise the camera loads the slow way instead. The
-      worst case is the boot time you have without this.</p>
-      <p><b>Verified on the USB shell card, not yet on a combined card.</b>
-      2026-09-19: written, booted, and the fast path confirmed on a shell-only
-      card. The same three pieces go onto a combined card and nothing about them
-      is card-specific, but that has not been booted yet.</p>
+      <p><b>A loader-marker mismatch takes the slow path.</b> This marker is
+      tied to the loader, not to the BIN’s size, contents, or entry. It is not
+      an integrity check of every byte saved in flash.</p>
+      <p><b>Build checks are not a new on-camera test.</b> The earlier
+      2026-09-19 Fast test covered a shell-only card. It does not validate this
+      refreshed loader or every combined output.</p>
       </div>` : '');
-  document.getElementById('cards').innerHTML =
-    pick.map(cardRow).join('') +
-    (dev.length ? `<div class="group"><span>Development</span>
-       <em>not needed for shooting</em></div>` + dev.map(cardRow).join('') : '');
   document.getElementById('startopt').innerHTML = sel().length ? fastRow : '';
-  const pb = document.getElementById('push');
-  if (pb) pb.onchange = e => { pushOn = e.target.checked; render(); };
   const fb = document.getElementById('fast');
   if (fb) fb.onchange = e => { fastOn = e.target.checked; render(); };
-  document.querySelectorAll('[data-c]').forEach(i => i.onchange = e => {
-    const id = e.target.dataset.c;
-    if (e.target.checked){
-      /* Two cards can claim the same single slot in the camera -- the two open
-         gate builds both take the third entry of the resolution menu. Ticking
-         one unticks the other rather than composing a card that cannot work. */
-      const c = all().find(x => x.id === id);
-      for (const other of (c && c.excl) || []) on.delete(other);
-      on.add(id);
-    } else on.delete(id);
-    render();
-  });
-  document.querySelectorAll('[data-rm]').forEach(b => b.onclick = e => {
-    e.preventDefault(); e.stopPropagation();
-    const id = e.target.dataset.rm;
-    uploads.splice(uploads.findIndex(u => u.id === id), 1); on.delete(id); render();
-  });
 
   document.getElementById('stats').innerHTML = [
     ['Sections', recs.length], ['Payload', vshl.payload.toLocaleString()+' B'],
@@ -891,8 +955,8 @@ function render(){
   const st = document.getElementById('status');
   st.className = 'status' + (ok ? '' : ' bad');
   st.innerHTML = ok
-    ? `<b>✓</b><span>All ${checks.length} checks passed. These two files are a
-       working card.<br><button class="more" type="button" id="seeall">See what was
+    ? `<b>✓</b><span>All ${checks.length} build checks passed. The files are ready
+       to download; this is not an on-camera test.<br><button class="more" type="button" id="seeall">See what was
        checked</button></span>`
     : `<b>✗</b><span><b>Do not use this card.</b> ${failed.length} of
        ${checks.length} checks failed:<ul>${failed.map(f => `<li>${f.t}${f.d?' — '+f.d:''}</li>`).join('')}</ul></span>`;
@@ -941,16 +1005,9 @@ function parseVshl(buf){
                k:(a===CAT.park_at||a===0xC03660E8)?'fixed':'sec'});
     o += ln + ((-ln)&3);
   }
-  /* What belongs here: sections, and one entry that installs itself and
-     returns.  Fast start is not part of it -- this page adds that on the way
-     out, from templates built for it, so a payload author never has to carry a
-     step that has nothing to do with their payload.
-     A card that already has fast start is therefore simply the wrong file: its
-     store_boot verifies a hash of the loader its own AutoRun spells out, and
-     re-laying the file out would mean recomputing that hash, which would turn
-     the one check that cannot be satisfied from inside into one that always
-     agrees with itself.  Not detected here -- a wrong file is a wrong file and
-     there is no end to the list. */
+  /* Inputs are ordinary cards with returning entries. Fast belongs to final
+     packaging: this page adds matching bootstrap/stage2/abort templates.
+     This convention does not add BIN-version or loader-pair validation. */
   return {entry, recs};
 }
 function addFiles(list){
