@@ -79,6 +79,11 @@ OpenGate 是完整專案的 [build_og3k_gyro.py](../projects/open-gate/build/bui
   沿用現行配置機制並核對占用，不憑「讀到零」宣稱位址可用，不搬走其他 sup 或 USB 傳輸的工作區。
 - 動態安裝自己的 hook 時，先準備好它會用到的程式、指標與資源，完成所需 publication，最後才 arm。
   配置失敗時不要讓該 hook 生效，保留可正常返回的路徑；這不等於替其他 sup 增加整包 rollback。
+- **hook 的本體或落點不在韌體映像裡（例如在自己配置的記憶體），關機時必須拆掉。**
+  裝第一個 hook 前先向 `XC_PowerOffMgr` 註冊關機回呼，註冊失敗就不裝；
+  hook 也必須在「沒在錄影」時被觸發仍然正確。做法、位址與原因只寫在
+  [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md)，參考實作是 gyro 的 `s_poff`。
+- 狀態字換位置時，**初值跟著搬**，並測試程式啟動時讀到的值，不只測位址。
 - 新寫入的 ARM 程式在首次執行前，沿用已驗證的 **`0xC000E91C()` → `0xC000EABC()`**。
   DSB、記憶體讀回正確、或「新程式進入後自己 flush」都不能取代首次執行前的快取處理。
 - 已由 pass 1 寫入的靜態 hook 可能在 entry 前被原廠背景路徑碰到；它必須能安全處理尚未初始化的狀態。
@@ -115,6 +120,8 @@ Fast 會使用具持久化能力的設定區，不能描述成「完全不寫任
 - **動 OG 入口、gyro pass-through 或 catalogue refs：**在完整專案根目錄跑
   `python3 -B projects/open-gate/build/test_boot_entry_chain.py`；預設使用新的暫存輸出目錄。
   保留 entry 0／guard-off 相容性；catalogue 驗證只呼叫 refs，不為了測試執行會改網站的 main。
+- **會裝 hook 的 sup：**上機時做一次「開機、不錄影、關機，插卡再開」，重複約十次；
+  錄影測試碰不到這條路（見 [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md)）。
 - **新產品不在現有測試範圍內：**補該產品最小的 entry／安裝測試，不能拿 OG 測試通過代替它的驗收。
 - **上機與發布另計：**建置、機器碼檢查、模擬、上機結果分開記。
   模擬器未成功執行就寫未驗證；未經明確授權，不寫卡、不操作相機、不 commit／push、不發布。

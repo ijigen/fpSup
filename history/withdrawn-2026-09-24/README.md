@@ -20,18 +20,10 @@ deleted, because a tag exists only for a folder in `releases/`
 發現重大 bug,以上四個版本與內含它們的 fpSup-Merge 頁面於 2026-09-24 撤回,
 退回右欄的版本。檔案原樣保留在這裡供調查;tag 已刪除。**請勿使用這些卡。**
 
-## 2026-09-25: the bug, and what replaced these
+## 2026-09-25
 
-The bug was in gyro v1.13 alone: after an ordinary power-off the next boot
-froze with any card in the slot. Two causes, both fixed in e87eae2 -- the gyro
-cursor started at 0 instead of "unarmed", and the hooks' bodies (in the pool
-since v1.13) could fire while the camera shut down; they are now taken out at
-power-off. The fix shipped as **fpsup-gyro-v1.13.1**, and fpSup-Merge bundles
-it. The other three were withdrawn with it but were not implicated: a card with
-only the shared stage2 did not freeze.
+The bug was gyro v1.13's alone; it is fixed in **fpsup-gyro-v1.13.1**, which
+fpSup-Merge now bundles. What it was: [HOOKS_AT_POWER_OFF.md](../../HOOKS_AT_POWER_OFF.md).
 
-問題只在 gyro v1.13:一般關機後,只要插著卡,下次開機就凍結。兩個原因都在
-e87eae2 修掉 —— 游標初值是 0 而不是「未武裝」,以及 hook 本體(v1.13 起在池裡)
-在關機途中仍會觸發,現在關機時會先拆掉。修正版是 **fpsup-gyro-v1.13.1**,
-fpSup-Merge 已改為打包它。另外三個是一起撤回的,但與此無關:只帶共用 stage2
-的卡不會凍結。
+問題只在 gyro v1.13,修正版是 **fpsup-gyro-v1.13.1**,fpSup-Merge 已改為打包它。
+原因見 [HOOKS_AT_POWER_OFF.md](../../HOOKS_AT_POWER_OFF.md)。
