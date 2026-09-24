@@ -963,22 +963,18 @@ if args.loader:
         entry = 0
     binblob = struct.pack('<4sIII', b'VBIN', len(secs), entry, len(body)) + table + body
     binpath = DEST.parent / args.bin_name
-    # Padded to a fixed size for the same reason AutoRun.txt is: putfile writes
-    # over USB and cannot shorten a file, so a smaller binary would leave the
-    # tail of the last one behind.  Thirty-two kilobytes because an edition that
-    # carries its own writer needs more than eight.
-    #
-    # The ceiling is the pool, not this number: the loader reads up to MAXLEN
-    # (0x20000) into pool+0x8000, so pool+0x7000..0x28000 is spoken for while
-    # stage2 runs -- it executes from that buffer and reads the other sections
-    # out of it.  The first pool user above it is the writer blob at 0x44000.
-    # build_base_card.check() derives the window from loader.S and refuses a
-    # pool-relative section that lands in it; an earlier comment here put the
-    # edge at 0x42000, which was neither the buffer's end nor the blob's start.
+    # Match fpSup-Merge: retain 32 KiB output for existing small cards, and pad
+    # larger cards to the loader's read cap. Padding is not a payload limit.
+    # The loader now owns a separate staging buffer, not a shared-pool window.
+    # putfile cannot truncate; descriptor lengths exclude any old padded tail.
     BIN_PAD = 32768
-    if len(binblob) > BIN_PAD:
-        sys.exit(f'binary is {len(binblob)} bytes, past the {BIN_PAD} it pads to')
-    binblob += b'\x00' * (BIN_PAD - len(binblob))
+    read_cap = _equ(HERE / 'templates/loader.S', 'MAXLEN')
+    if read_cap is None or read_cap < BIN_PAD:
+        sys.exit('loader MAXLEN is missing or smaller than the default BIN padding')
+    if len(binblob) > read_cap:
+        sys.exit(f'binary is {len(binblob)} bytes, past loader MAXLEN {read_cap}')
+    padded = BIN_PAD if len(binblob) <= BIN_PAD else read_cap
+    binblob += b'\x00' * (padded - len(binblob))
     binpath.write_bytes(binblob)
     print(f"binary : {binpath.name}  {len(binblob)} bytes, {len(secs)} section(s), "
           f"entry 0x{entry:08X}")

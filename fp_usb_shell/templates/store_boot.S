@@ -6,8 +6,8 @@
  * it out.
  * ============================================================================
  *
- * The AutoRun's expensive part is sixty-four `mem set` commands writing two
- * hundred and fifty-six bytes of loader into the cave, one word each.  The
+ * The AutoRun's expensive part is spelling the loader into the cave with
+ * `mem set` commands, one word each.  The
  * loader exists precisely so the count stops growing with the payload; this is
  * the same trick applied to the loader itself.
  *
@@ -19,9 +19,8 @@
  *
  * So the loader lives there, and the AutoRun carries only this: check the
  * magic, copy the body into the cave, publish it to the caches, and branch.
- * Twenty-six words instead of sixty-four, and they are the only words of the
- * two that a fast boot pays for -- the loader's own two hundred and fifty-six
- * bytes come out of flash and cost the script nothing.
+ * Twenty-six words, and they are the only words of the two that a fast boot
+ * pays for -- the loader's bytes come out of flash and cost the script nothing.
  *
  * WHY IT VERIFIES BEFORE IT BRANCHES.  Those bytes are free today.  They belong
  * to a settings block whose unused fields may stop being unused -- a feature
@@ -49,9 +48,8 @@
  *
  * SUM and VERSION are gone because the magic absorbed both of them.  It is not
  * a string any more, it is a hash of the loader's own bytes computed by the
- * build (see build_autorun.py), so one comparison answers all three questions
- * at once: is this ours, is it THIS build of the loader, and is it intact.  A
- * sum would only have repeated what a mismatching hash already says.
+ * build (see build_autorun.py).  The stored magic identifies the loader build;
+ * it is not a runtime checksum of the stored body or of fpSup.BIN.
  *
  * And the reference comes from the card, not from the store.  That is the part
  * that matters and the part that is easy to lose: a store cannot pass this by
@@ -61,11 +59,10 @@
  * comparing a version word the AutoRun wrote against one baked into itself
  * (2026-09-17).  It is gone, and for the store it is no loss: hashing the
  * loader's bytes made it redundant.  But it also covered something this file
- * never did and still does not -- AutoRun.txt and fpSup.BIN being from
- * different builds.  The loader checks that file's "VBIN" magic and nothing
- * else, so a mismatched pair loads and misbehaves rather than refusing.  If
- * that is ever wanted back it belongs in loader.S against the fpSup.BIN header, not
- * here: this file has already branched by then.
+ * never did and still does not -- binding AutoRun.txt to a specific fpSup.BIN
+ * build.  The loader checks that file's "VBIN" magic, not a version or hash.
+ * Compatible payload updates can therefore replace only fpSup.BIN; neither
+ * this magic nor AutoRun needs to change when only the payload changes.
  *
  * What is left here is the one question the loader cannot answer, because
  * answering it is what lets the loader run at all: is there anything of ours
@@ -124,7 +121,7 @@ _start:                                 /* runs as the borrowed echo handler:
  * `add rX, pc, #(label - label)` rather than `adr`: a label minus a label is a
  * constant the assembler folds, and this assembler resolves only R_ARM_CALL
  * and pc-relative literal loads.  The same idiom the loader's CALL macro uses. */
-    push    {r4-r7, lr}
+    push    {r4-r8, lr}                 @ six words keep SP 8-byte aligned at calls
 8:  add     r7, pc, #(0f - 8b - 8)
     ldmia   r7!, {r4, r5, r6}           @ STORE, STORE_MAGIC, CAVE_LOW
 
@@ -132,12 +129,8 @@ _start:                                 /* runs as the borrowed echo handler:
     cmp     r0, r5
     bne     9f                          @ not ours: leave everything alone
 
-    /* Copy.  Nothing is verified beyond the magic, and nothing needs to be: a
-     * copy that turns out to be the wrong loader is harmless here, because the
-     * loader checks its own version against the card's before it places
-     * anything, and a copy that turns out to be rubbish is harmless because the
-     * rest of the AutoRun writes the real loader straight over it.  Only the
-     * BRANCH was ever worth gating, and the magic gates it. */
+    /* The magic matched this AutoRun's loader build.  Copy its baked length;
+     * this path does not re-hash the stored body or validate the payload. */
     add     r1, r4, #4                  @ src
     mov     r2, r6                      @ dst
     movw    r5, #:lower16:STORE_LEN     @ baked, never read from the store
@@ -158,13 +151,13 @@ _start:                                 /* runs as the borrowed echo handler:
      * comparing the store's magic with the one it was built with -- a direct
      * question instead of a flag somebody has to remember to set. */
     mov     r0, r6
-    pop     {r4-r7, lr}
+    pop     {r4-r8, lr}
     bx      r0                          @ tail into the loader, in the echo
                                         @ handler's context, which is what it
                                         @ was built for
 
 9:  mov     r0, #0                      @ "nothing happened" -- the AutoRun
-    pop     {r4-r7, pc}                 @ carries on and loads the slow way
+    pop     {r4-r8, pc}                 @ carries on and loads the slow way
 
     .align  2
 0:  .word   STORE

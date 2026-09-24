@@ -8,24 +8,23 @@ and no firmware image at run time.  Two facts make that legitimate:
 
   * `fpSup.BIN` is a plain container -- "VBIN", a count, the entry, the payload
     length, then one (dest, len) record per section and the blobs 4-byte
-    aligned.  Firmware/pool sections are independent; destination zero is the
-    loader-owned stage2 helper and is canonicalized when cards are combined.
-  * `AutoRun.txt` does not depend on the section list *or the entry*.  Measured:
-    the OG3K-only card (entry 0) and the OG3K+gyro card (entry 0xC072E064) have
-    the same 135 commands and differ only in three banner lines.  The loader
-    reads the entry out of fpSup.BIN's header, not out of AutoRun.
+    aligned.  The first destination-zero section is the loader-owned stage2
+    helper and is canonicalized when cards are combined; later ones may be
+    payload launchers and must be retained.
+  * `AutoRun.txt` does not depend on the section list *or the entry*.  The
+    loader reads the entry out of fpSup.BIN's header, not out of AutoRun.
+    Normal and Fast templates are rebuilt from the current shared loader;
+    their command counts below are measured, not frozen product constants.
 
-**Cards, not modules.**  An earlier version of this treated the shipped cards as
-subsets of one another and it was wrong: the OG3K-only card is built through a
-different loader path.  It carries no park stub, no F_WRITE prologue restore and
-no entry section, and it has a pool section the merged card does not.  Filtering
-one shipped card's records can produce another only by accident.  So each
-shipped card is carried whole, and combining them is an explicit merge with the
-same checks the build scripts run.
+**Cards, not modules.**  Each shipped card is carried whole, with its own entry.
+Combining them explicitly retains all product records and entries and replaces
+only the common loader helper.  Shell's separately identified EP 0x83 records
+are the one optional subset; they are not inferred from payload addresses.
 
-To add a card: drop its directory in CARDS and run this.  Data, not code.
+To update a product: add its frozen release directory and regenerate the page.
 """
 import base64, hashlib, json, pathlib, re, shutil, struct, subprocess, sys, tempfile, zipfile
+from collections import Counter
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent
@@ -45,38 +44,22 @@ LABELS = {
     0xC072EC60: 'space',       0x00044000: 'gcsv_task (pool)',
 }
 
-# The AutoRun belongs to the loader, not to the card, and there is more than one
-# loader.  Which one a card needs is decided by whether it carries the shell:
-#
-#   plain      loader.S with NOTASK=1.  The file read happens in the borrowed
-#              dispatcher task, once, at boot.  236 bytes.
-#   shell      loader.S without it: 356 bytes, because the worker blocks in
-#              FN_WAIT on the endpoint and cannot run in a borrowed callback --
-#              it needs a task of its own.  Plus 68 bytes zeroing the worker's
-#              state (a warm restart does not clear RAM) and the interface-class
-#              patch, without which the host's PTP stack claims interface 0.
-#   shellpush  the same, plus the six EP 0x83 patches.
-#
-# These are carried whole.  Splitting an AutoRun into optional blocks would be
-# rebuilding build_autorun.py's option matrix in JavaScript, and that matrix
-# grows; a whole template per configuration does not rot.
-# The three AutoRun templates come straight from build_autorun.py.  They are a
-# property of the *loader*, and the loader has exactly three configurations:
-#
-#   --no-shell        NOTASK=1.  236-byte loader, the read happens in the
-#                     borrowed dispatcher task.  135 commands.
-#   --no-ep-patches   the task-creating loader plus the interface-class patch,
-#                     without the six EP 0x83 writes.  189 commands.
-#   (neither)         the same plus the push patches.  195 commands.
-#
-# An earlier version of this file lifted two of them out of merged cards that
-# had been built and left in the tree, which is why a merge tool appeared to
-# depend on merged cards.  It never did: the cards happened to be the first
-# place each loader configuration could be found.  Verified identical.
+# Keep whole templates from each supported shared-builder configuration.  The
+# current AutoRun is identical across these three: the worker, its state and
+# descriptor patches now live in BIN sections.  In particular an EP 0x83 toggle
+# must change those sections; choosing another AutoRun alone cannot do it.
 TEMPLATE_FLAGS = {'plain': ['--no-shell'], 'shell': ['--no-ep-patches'], 'shellpush': []}
 
 
 SHELL_DIR = ROOT / 'fpSup' / 'fp_usb_shell'
+
+
+def push_sections():
+    """The exact optional descriptor records, from the shared builder's source."""
+    sys.path.insert(0, str(SHELL_DIR))
+    from patches import PUSH
+    return [dict(a=address, b=base64.b64encode(struct.pack('<I', word)).decode())
+            for address, word, *_ in PUSH]
 
 
 def build_fast():
@@ -85,19 +68,19 @@ def build_fast():
     A card boots fast when its loader is already in the settings block, and that
     takes four things that all come out of ONE `--store-boot` build:
 
-        the AutoRun    twenty-six words of store_boot, which verify the block and
-                       branch into it, plus the loader spelled out for the boot
-                       that has to put it there
+        the AutoRun    store_boot, which matches the stored loader magic, copies
+                       the loader and tail-calls it, plus the fallback loader
+                       spelled out for the boot that has to put it there
         stage2         the same helper plus the block that writes the loader into
                        flash, once it has been used rather than merely read
         abort          the routine that stops the script the fast path has just
                        made redundant, placed in the cave
         the magic      sha256 of that loader's own bytes, baked into store_boot
 
-    The magic is why these cannot be mixed and matched: it is a hash of the
-    loader that this AutoRun spells out, so a store_boot from one build and a
-    loader from another verify against each other and disagree.  Taking all four
-    from one build is not tidiness, it is the only combination that works.
+    The build-time magic belongs to loader bytes, not to a BIN version. Taking
+    all four from one build preserves that contract; the camera only compares
+    the saved magic and does not recompute a hash. Compatible payload-only
+    changes therefore do not invalidate the stored loader.
 
     And it is why the page needs no assembler to offer a fast card: nothing here
     is computed at merge time.  The page swaps three blobs.
@@ -285,54 +268,6 @@ def refs(product='og3k'):
     return out
 
 
-# Merge checks that cannot pass until a release is cut, with the reason.
-#
-# A named exception rather than a flag: a flag gets passed forever and nobody
-# remembers what it was covering.  Each of these is removed by cutting the
-# release it names, and the check below turns one that starts passing back into
-# a failure so that a stale entry here cannot outlive its reason.
-#
-# Both of these are the same shape: the reference is rebuilt from the source
-# tree, the merge uses the frozen release, and the source tree has moved.  That
-# is by design -- a release freezes a camera-tested payload -- so a difference
-# here is news about the releases, not about the merge.
-STALE = {
-    # Removed by cutting the gyro release that carries the move.
-    'gyro+og3k': 'the gyro drain and the space provider left the cave on '
-                 '2026-09-22 -- they are sections of the writer\'s blob now, '
-                 'and the four call-through words are written by gsup_boot '
-                 'instead of being card sections.  The catalogue merges the '
-                 'FROZEN release (v1.12.1, 14 sections, 1,736 bytes of cave); '
-                 'refs() rebuilds its reference from source (8 sections, 612).  '
-                 'Both are right and they cannot match until a release is cut '
-                 'from the new tree.  Cut it, drop this entry.',
-    'gyro+og2k': 'same as gyro+og3k',
-    'shell+gyro+og3k': 'two different configurations, compared as if they were '
-                       'one.  The catalogue\'s shell card is the release, which '
-                       'is the shellpush build and carries the six EP 0x83 '
-                       'descriptor patches; refs() builds its reference with '
-                       'build_base_card --debug, which passes --no-ep-patches '
-                       'deliberately.  Strip those six and give the reference '
-                       'the trampoline it is compared against and the two carry '
-                       'the same ninety-seven sections exactly -- what is left '
-                       'is the order build_autorun puts them in (the worker '
-                       'before --also-bin, a --boot-bin payload after it), '
-                       'which a merge cannot reproduce without rebuilding the '
-                       'option matrix this file opens by refusing to rebuild.\n'
-                       '\n'
-                       'It passed until the patches and the worker\'s state '
-                       'words stopped being `mem set` lines and became sections: '
-                       'the difference was always there and a payload '
-                       'comparison could not see it.  So this is not a check '
-                       'that went stale, it is a check that was weaker than it '
-                       'looked.  Making it mean something needs refs() to build '
-                       'the configuration the catalogue actually ships, and one '
-                       'place in build_autorun where run-in-place payloads are '
-                       'appended -- which changes the bytes of every released '
-                       'card, so not in the same breath as cutting four.',
-    'shell+gyro+og2k': 'same as shell+gyro+og3k',
-}
-
 def payload(d):
     """The payload container inside a card directory.
 
@@ -354,23 +289,25 @@ RELEASES = ROOT / 'fpSup' / 'releases'
 # three vocabularies for one product.  What is on the screen when the card boots
 # is what the tick box says now, so the two can be matched without translating.
 PRODUCTS = {
-    'usbshell': dict(id='shell', name='fpSup-Shell', shell=True, template='shellpush',
+    'usbshell': dict(id='shell', name='fpSup-Shell', category='development',
+                     shell=True, template='shellpush',
                      desc='The worker that answers `shl` over USB. Selecting it '
-                          'switches the AutoRun to the loader that creates a task, '
-                          'because the worker blocks on the endpoint and cannot run '
-                          'in a borrowed callback.'),
-    'gyro':     dict(id='gyro', name='fpSup-Gyro',
+                          'adds its worker bootstrap, state and interface patch '
+                          'to the BIN. EP 0x83 push patches are optional; the '
+                          'shared AutoRun does not depend on this selection.'),
+    'gyro':     dict(id='gyro', name='fpSup-Gyro', category='shooting',
                      desc='Writes .gcsv and .json into the clip folder while '
                           'recording. The released card, unmodified.'),
-    'og3k':     dict(id='og3k', name='fpSup-OG3K', excl=['og2k'],
+    'og3k':     dict(id='og3k', name='fpSup-OG3K', category='shooting', excl=['og2k'],
                      desc='3024×2010, DNG cropped to 3008×2000, eight frame rates, '
                           '8/10/12-bit CinemaDNG. Sensor modes 98/117 — the sensor\'s '
                           'own 2×2-binned 3:2 modes, so the ISP scales nothing. Native '
                           'OG3K entry in Recording Settings and Quick Set. 219 MB/s at '
                           '24p 12-bit. Super35/crop must be off. Alpha — the release '
-                          'README lists what is and is not verified. Carries no entry '
-                          'section: it is all static writes.'),
-    'og2k':     dict(id='og2k', name='fpSup-OG2K', excl=['og3k'],
+                          'README lists what is and is not verified. Its restore '
+                          'entry is preserved and called after the gyro launcher '
+                          'when the two are combined.'),
+    'og2k':     dict(id='og2k', name='fpSup-OG2K', category='shooting', excl=['og3k'],
                      desc='2016×1344, DNG cropped to 2000×1334 — the same 3:2 field of '
                           'view at a third of the data. Sensor mode 139, the 3×3 '
                           'readout, so all eight frame rates including 100p stay on the '
@@ -379,8 +316,10 @@ PRODUCTS = {
                           'Not with OpenGate 3K: the resolution menu holds three '
                           'entries and each of them takes the third.'),
 }
-# usbshell first: picked() walks this order, and the development card puts the
-# worker at record 1, which is what makes the merge come out byte-identical to it.
+# usbshell first: picked() walks this order, so the generated trampoline calls
+# the worker before gyro and the optional OG restore entry.  Its file layout
+# differs from the independent development builder; semantic_signature checks
+# every original section and this ordered call chain without fixing offsets.
 # og2k last: the merge checks below reproduce cards that predate it, and
 # picked() walks this order, so appending cannot change their bytes.
 ORDER = ['usbshell', 'gyro', 'og3k', 'og2k']
@@ -465,14 +404,19 @@ def parse(blob):
     return entry, recs
 
 
-def compose(recs, entry, size=PAD_TO):
+def compose(recs, entry, size=None):
     tbl = body = b''
     for dst, b in recs:
         tbl += struct.pack('<II', dst, len(b))
         body += b + b'\x00' * (-len(b) % 4)
     out = struct.pack('<4sIII', b'VBIN', len(recs), entry, len(body)) + tbl + body
+    cap = read_cap()
+    if len(out) > cap:
+        raise SystemExit(f'{len(out)} bytes, past the loader read limit {cap}')
+    if size is None:
+        size = PAD_TO if len(out) <= PAD_TO else cap
     if len(out) > size:
-        raise SystemExit(f'{len(out)} bytes, past the {size} the container is padded to')
+        raise SystemExit(f'{len(out)} bytes, past the requested padding {size}')
     return out + b'\x00' * (size - len(out))
 
 
@@ -488,6 +432,66 @@ def offsets(recs):
         out.append(off)
         off += len(blob) + (-len(blob) % 4)
     return out
+
+
+def semantic_signature(blob, tramp, tramp_tbl):
+    """Compare independent builds without mistaking file offsets for identity.
+
+    Only section order and the known entries.S table's relocation may differ.
+    Every other byte remains in a (destination, bytes) multiset, including the
+    first stage2 helper.  Nonzero destinations must not overlap, so reordered
+    writes cannot change their result.  Calls retain their exact order and are
+    resolved to either an absolute address or a whole blob plus byte offset.
+    This is an offline reference check, not a new container/runtime contract.
+    """
+    entry, recs = parse(blob)
+    if not recs or recs[0][0] != 0:
+        raise ValueError('stage2 is not the first destination-zero section')
+    spans = sorted((address, address + len(body)) for address, body in recs
+                   if address and body)
+    if any(left[1] > right[0] for left, right in zip(spans, spans[1:])):
+        raise ValueError('overlapping placed sections cannot be reordered')
+    offs = offsets(recs)
+
+    def locate(value):
+        hits = [(i, value - off) for i, off in enumerate(offs)
+                if off <= value < off + len(recs[i][1])]
+        if len(hits) != 1:
+            raise ValueError(f'file entry 0x{value:08X} is in no section')
+        return hits[0]
+
+    trampoline_index = None
+    calls = [entry] if entry else []
+    if 0 < entry < 0x40000000:
+        index, delta = locate(entry)
+        address, body = recs[index]
+        if delta == 0 and body[:tramp_tbl] == tramp[:tramp_tbl]:
+            if address or index == 0 or len(body) < tramp_tbl + 16:
+                raise ValueError('invalid entries.S trampoline section')
+            if (len(body) - tramp_tbl) % 4:
+                raise ValueError('unaligned entries.S table')
+            words = struct.unpack(f'<{(len(body) - tramp_tbl) // 4}I',
+                                  body[tramp_tbl:])
+            if words[0] != entry + tramp_tbl:
+                raise ValueError('entries.S table self-offset changed')
+            if words[-1] != 0 or not all(words[1:-1]):
+                raise ValueError('entries.S table has a missing/early terminator')
+            trampoline_index, calls = index, list(words[1:-1])
+
+    def resolve(value):
+        if value >= 0x40000000:
+            if not any(lo <= value < hi for lo, hi in spans):
+                raise ValueError(f'absolute entry 0x{value:08X} is not placed')
+            return ('absolute', value)
+        index, delta = locate(value)
+        address, body = recs[index]
+        if address or index == 0 or index == trampoline_index:
+            raise ValueError('entry does not name a payload run-in-place section')
+        return ('file', body, delta)
+
+    content = Counter(record for i, record in enumerate(recs)
+                      if i != trampoline_index)
+    return recs[0], content, tuple(resolve(value) for value in calls)
 
 
 def autorun(template, banner):
@@ -610,6 +614,7 @@ def main():
         out_cards.append(dict(
             id=card['id'], name=card['name'] + ' v' + card['version'],
             desc=card['desc'], excl=card.get('excl', []),
+            category=card.get('category', 'uncategorized'),
             banner=ban, entry=entry, shell=bool(card.get('shell')),
             template=card.get('template', 'plain'),
             records=[dict(a=a, b=base64.b64encode(b).decode(),
@@ -627,20 +632,15 @@ def main():
                  if l.strip() and not l.lstrip().startswith('#')])
         print(f'  template {name:10} {n} commands')
 
-    # The AutoRun template belongs to the *loader*, not to the card: the loader
-    # only reads the container, and even the entry comes out of that file's header.
-    # Two loaders exist.  Everything built now uses the echo-borrow one; the
-    # shipped v1.11b zip predates it and carries the older gyro-callback
-    # bootstrap, 13 commands longer.  Their payload files are identical --
-    # `build_base_card.py --edition gcsv` reproduces the shipped one byte for
-    # byte -- so the difference is purely the loader, and the current one is
-    # both shorter and verified on hardware.  Compose with it.
+    # The template belongs to the loader, not to the card.  Keep frozen
+    # releases untouched; a newly composed card receives current templates.
+    # A source change does not inherit an older build's on-camera evidence.
     template = templates_out['plain']
     for c in out_cards:
         c['autorun_current'] = templates.get(c['banner']) in templates_out.values()
         if not c['autorun_current']:
             print(f'  note: {c["id"]} shipped with the older loader; the page '
-                  f'composes the current one (same payload, shorter AutoRun)')
+                  f'composes the current shared loader')
 
     cap = read_cap()
     cat = dict(cards=out_cards, pad_to=PAD_TO, read_cap=cap,
@@ -657,6 +657,7 @@ def main():
                # not even match.  The entry is worked out from each card's own
                # header instead, which is where it was all along.
                trampoline=dict(b=base64.b64encode(tramp).decode(), tbl=tramp_tbl),
+               push_sections=push_sections(),
                # Everything a fast card needs, from one --store-boot build.  The
                # page swaps these three in; it computes nothing.
                fast=dict(templates=fast_tpl,
@@ -690,7 +691,7 @@ def main():
             print(f'  --    {card["id"]} AutoRun.txt (shipped with the older loader)')
     # The page must also reproduce the cards it can only make by merging.
     by = {c['id']: c for c in out_cards}
-    def merge(ids):
+    def merge(ids, push_on=False):
         # Mirror the page's picked() exactly: it walks the *catalogue* order,
         # not the order the ids were given.  These were allowed to differ once
         # and the check passed while the page produced different bytes.
@@ -711,6 +712,13 @@ def main():
             # have taken the worker off the card silently.
             for i, r in enumerate(recs_in):
                 if i == 0:
+                    continue
+                # Only the explicitly identified Shell card owns this option.
+                # A destination-zero gyro launcher is not a USB worker, and an
+                # uploaded/custom record is never stripped by address alone.
+                if c['shell'] and not push_on and any(
+                        r['a'] == p['a'] and r['b'] == p['b']
+                        for p in cat['push_sections']):
                     continue
                 k = (r['a'], r['b'])
                 if k in seen:
@@ -769,24 +777,27 @@ def main():
         return compose(blobs, entry)
     merges = [
         ('gyro+og3k          == og3k_gyro_release',
-         merge(['gyro', 'og3k']), payload(refs()['plain']).read_bytes()),
+         merge(['gyro', 'og3k']), payload(refs()['plain']).read_bytes(), False),
         ('shell+gyro+og3k    == og3k_gyro (dev)',
-         merge(['shell', 'gyro', 'og3k']), payload(refs()['shell']).read_bytes()),
+         merge(['shell', 'gyro', 'og3k']), payload(refs()['shell']).read_bytes(), True),
         ('gyro+og2k          == og2k_gyro (rebuilt)',
-         merge(['gyro', 'og2k']), payload(refs('og2k')['plain']).read_bytes()),
+         merge(['gyro', 'og2k']), payload(refs('og2k')['plain']).read_bytes(), False),
         ('shell+gyro+og2k    == og2k_gyro (rebuilt, dev)',
-         merge(['shell', 'gyro', 'og2k']), payload(refs('og2k')['shell']).read_bytes()),
+         merge(['shell', 'gyro', 'og2k']), payload(refs('og2k')['shell']).read_bytes(), True),
     ]
-    for what, got, want in merges:
-        ok = got == want
-        stale = next((why for k, why in STALE.items() if what.startswith(k)), None)
-        bad |= not ok and stale is None
-        print(f'  {"OK  " if ok else ("STALE" if stale else "FAIL")}  {what}')
-        if not ok and stale:
-            print(f'          {stale}')
-        if ok and stale:
-            print(f'          passes now -- remove it from STALE')
-            bad = True
+    for what, got, want, semantic in merges:
+        if semantic:
+            try:
+                ok = (semantic_signature(got, tramp, tramp_tbl)
+                      == semantic_signature(want, tramp, tramp_tbl))
+            except ValueError as error:
+                ok = False
+                print(f'          {error}')
+        else:
+            ok = got == want
+        bad |= not ok
+        proof = 'same sections + ordered entries' if semantic else 'byte-identical'
+        print(f'  {"OK  " if ok else "FAIL"}  {what} [{proof}]')
     autos = [
         ('AutoRun plain      == og3k_gyro_release',
          autorun(templates_out['plain'], banner_of(

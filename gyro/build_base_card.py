@@ -280,6 +280,9 @@ def main():
                          'section that overlaps the logger or lands in the '
                          'loader\'s read window fails the build rather than '
                          'the camera.')
+    ap.add_argument('--vshl-entry', type=lambda s: int(s, 0), default=None,
+                    help='optional absolute entry for the extra sections; '
+                         'called after the USB worker and gyro launcher')
     ap.add_argument('--banner', default=None,
                     help='override the screen banner; a merged card is not '
                          'the edition on its own and should not claim to be')
@@ -334,6 +337,9 @@ def main():
     bf = tmp / 'gsup_launch.bin'
     bf.write_bytes(boot_blob)
     cmd += ['--boot-bin', f'{bf}:0']
+    if a.vshl_entry:
+        # build_autorun already orders worker, boot-bin, then this entry.
+        cmd += ['--vshl-entry', f'0x{a.vshl_entry:08X}']
     out.mkdir(parents=True, exist_ok=True)
     r = subprocess.run(cmd, capture_output=True, text=True)
     sys.stdout.write(r.stdout)

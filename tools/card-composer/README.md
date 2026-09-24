@@ -1,206 +1,182 @@
 # fpSup-Merge
 
-**Policy, 2026-09-13: merged cards are produced here and nowhere else.**
+Select ordinary product cards and download `AutoRun.txt` plus `fpSup.BIN`.
+Both files go in the SD card root. This is the merged-card composition path;
+product builders still create individual cards and temporary test references.
 
-Tick the cards you want, get `AutoRun.txt` and `fpSup.BIN`. Drop in someone
-else's payload container to merge that too — a card published before
-2026-09-19 names it `VSHL.BIN`, and either is read.
+Open `index.html` locally: it is self-contained and needs no server or packages.
+GitHub's raw HTML view is source text, not the rendered tool; use the downloaded
+file or the repository's published Pages site. `artifact.html` contains the same
+catalogue and composition code for embedding.
 
-## Which copy to open
+## Browsing and selection
 
-**A person wants the page rendered.** Open `index.html` from disk — it is one
-self-contained file, no server and no build step. Everything works from a
-`file://` URL, downloads included.
+Sup tiles are grouped by category. The page opens on **Shooting**, not All;
+Development is hidden and unselected by default. Open Development or All to
+see Shell, then explicitly select it to include it. Changing categories only
+filters the display: it does not select, deselect or remove a previously
+selected sup from the merged output. OG3K and OG2K remain mutually exclusive.
+Fast start stays a separate, off-by-default settings switch, not a sup tile.
 
-What does *not* work is opening it from GitHub's raw host:
+When adding a sup, set its `category` string in `PRODUCTS` in
+`build_catalogue.py` (`shooting` or `development` for the current products).
+The page derives category buttons from the catalogue, including new category
+names; missing metadata falls back to `uncategorized`.
 
-    raw.githubusercontent.com  ->  content-type: text/plain
+## Current inputs and boot contract
 
-GitHub serves every raw file as plain text on purpose, so it cannot be used as
-a web host, and the browser shows you the source instead of the page. jsDelivr
-does the same for `.html`. To get a rendered page from a URL you need GitHub
-Pages (Settings → Pages → deploy from this branch, folder `/`), which puts it at
-`…github.io/<repo>/tools/card-composer/`.
+`build_catalogue.py` selects the latest frozen directory for each product from
+`releases/`; it never rebuilds or overwrites a frozen release. The 2026-09-24
+refresh uses USB Shell 3.2.0, gyro 1.13, OG3K 0.2.5a and OG2K 0.1.2a.
+OG3K and OG2K are mutually exclusive. New sup authors should first read
+[SUP_BUILD_RULES.md](../../SUP_BUILD_RULES.md).
 
-**An agent wants the text, and `text/plain` is exactly right.** Fetch the raw
-file and pull the two blocks out of it — there is no rendering step anywhere in
-the path, and no browser:
+The loader, stage2 and optional Fast pieces come from the shared
+`fp_usb_shell/build_autorun.py` and assembly templates. The sequence remains:
+
+1. AutoRun invokes the loader; it reads the BIN into its staging buffer.
+2. Loader publishes D-cache then I-cache before executing stage2.
+3. Stage2 pass 1 places absolute-address sections, then publishes D/I.
+4. It calls the payload entries: **worker → gyro → OG restore**, omitting
+   absent products. Every entry must return.
+5. Pass 2 places pool-offset sections, then publishes D/I. Loader returns
+   and frees staging. Only Fast packaging adds provisioning and script abort.
+
+Entry 0 means no entry; a nonzero entry below `0x40000000` is a **file offset**,
+not a pool offset. An entry at or above that boundary is an absolute address.
+Current OG cards have restore entry `0xC0731600`; they are not static-writes-only
+cards. The merger relocates file entries and uses the existing `entries.S`
+trampoline when several entries must run.
+
+## What composition changes
+
+The container is `VBIN`, section count, entry, body length, followed by `(dest,
+length)` records and four-byte-aligned bodies. Only the **first** section is
+replaced by the common stage2 during a merge. Other destination-zero sections
+are run-in-place launchers and must survive; they do not imply USB Shell.
+
+- A single ordinary card with unchanged options retains its frozen BIN bytes.
+- A merge uses the current common stage2, deduplicates identical records and
+  relocates entries. Payload code is retained, not rebuilt by the browser.
+- Fast always replaces stage2 and adds the matching abort section.
+- The built-in Shell's **EP 0x83** option controls the six exact descriptor
+  records derived from `fp_usb_shell/patches.py` (`PUSH`). Off omits them; on
+  retains the shipped set. The interface-class patch stays. Off is the page
+  default, so a standalone Shell with this option off is intentionally
+  repackaged, not byte-identical to its frozen release.
+- Uploaded ordinary BINs retain their own patches. The page does not guess
+  which destination-zero launcher is a shell, nor expose an EP option for them.
+
+The named `plain`, `shell` and `shellpush` AutoRun template slots are retained
+for compatibility, but their executable commands are now the same: worker
+creation, state and descriptor patches reside in the BIN. Changing the EP
+option does **not** add AutoRun commands. The current normal script has 104
+commands; the Fast script has 169 in total, not 26.
+
+BIN output retains 32 KiB padding when it fits. Larger output is padded to the
+loader's `MAXLEN`, currently `0xF000` (61,440 bytes), and output exceeding that
+read capacity is rejected. The browser, catalogue composer and common builder
+use the same policy. The loader owns a separate staging allocation: its read
+buffer is no longer a reserved region of the payload's shared pool.
+
+## Fast start and replacing only the BIN
+
+Fast is optional and off by default. It stores the loader in flash-backed
+settings. On a matching loader marker it copies that loader, publishes D/I,
+and loads the BIN normally; on a mismatch it takes the slow AutoRun path.
+The marker is derived from **loader bytes**, not the BIN's hash, length,
+version or entry. It is not a runtime integrity check of the stored body.
+
+**A compatible payload update with the same loader and packaging needs only a
+new BIN.** Keep the same banner to keep AutoRun byte-identical. A changed
+loader, filename, Fast configuration or boot contract requires the matching
+AutoRun and BIN to be updated together once. This refresh changes the loader,
+so adopting it is such a one-time paired update—not a new per-BIN requirement.
+
+Do not feed an already-Fast card back into the merger. Compose ordinary inputs,
+then enable Fast on the final output so its bootstrap, loader, stage2 and abort
+come from one build. This convention does not add runtime BIN validation.
+
+## Build-time checks and their limits
+
+The page checks overlapping writes, cave and pool bounds, loader read capacity,
+entry placement/trampoline references and banner format before enabling
+downloads. These are packaging checks, **not** proof that a payload's code is
+safe or that a composed card has been tested on a camera. Uploaded code may do
+more than its section destinations suggest. Do not infer whole-card hardware
+validation from an individual product's earlier test results.
+
+## Regenerating and testing
+
+From the fpSup repository root:
+
+```sh
+python3 -B tools/card-composer/build_catalogue.py
+python3 -B tools/card-composer/render.py --check
+node tools/card-composer/test_compose.js
+node tools/card-composer/test_catalog_ui.js
+python3 -B fp_usb_shell/test_boot_chain.py
+```
+
+The catalogue generator requires the existing ARM toolchain. It verifies all
+four frozen payload round-trips, then creates temporary source references from
+the current gyro builder and frozen OG sections, preserving the OG entry.
+Plain gyro+OG references must match byte for byte. Shell+gyro+OG references
+use the same EP configuration and compare every section's bytes and ordered
+entry targets: the shell bootstrap's position differs between the direct
+builder and browser layout, so file offsets alone cannot be byte-identical.
+The checker validates the known trampoline's code, table and terminator before
+normalizing only those layout offsets. There are no tolerated `STALE` results.
+
+`test_compose.js` executes the **actual generated page's composition block**,
+not a copied merger. It covers all 11 legal nonempty selections, normal/Fast,
+Shell EP off/on, entry relocation and order, frozen standalone bytes, embedded
+loader cache calls, Fast stack alignment, payload-independent AutoRun, and
+32 KiB/read-capacity boundaries. No browser, npm packages or camera is required.
+
+`test_catalog_ui.js` runs the generated page's scripts and event handlers with
+a small offline DOM stub. It checks category defaults, selection across filters,
+OG exclusivity, upload/removal and the independent Fast switch. This tests UI
+behaviour, not browser layout or on-camera operation.
+
+`render.py` without `--check` is only for presentation edits: it reuses the
+already embedded catalogue. To refresh releases or boot templates, run
+`build_catalogue.py`; rendering alone cannot update those bytes.
+
+Building locally does not publish the website, authorize writing a card, or
+confirm camera operation. Development results belong in the existing shared
+`projects/usb-shell-sup/notes/CARD_BUILD_PIPELINE.md` in the full research tree,
+not in a second release diary.
+
+## Using the same merger from a script
+
+The `cat` and `compose` script blocks in `index.html` contain the inputs and
+DOM-free implementation. For example, in Node:
 
 ```js
-const html = await fetch(RAW_URL).then(r => r.text());
+const fs = require('node:fs');
+const vm = require('node:vm');
+const html = fs.readFileSync('tools/card-composer/index.html', 'utf8');
+const block = id => html.match(new RegExp(
+  '<script id="' + id + '"[^>]*>([\\s\\S]*?)<\\/script>'))[1];
+const ctx = vm.createContext({
+  CAT: JSON.parse(block('cat')),
+  atob: s => Buffer.from(s, 'base64').toString('binary'),
+  btoa: s => Buffer.from(s, 'binary').toString('base64')
+});
+vm.runInContext(block('compose') + `
+  on.clear(); on.add('gyro'); on.add('og3k'); // also: shell or og2k
+  fastOn = false; pushOn = false;
+  const banner = 'fpSup-Merged!';
+  const c = composed(), bin = composeVshl(c.recs, c.entry);
+  const failed = runChecks(c.recs, bin, banner, c.entry, c.entries)
+    .filter(x => !x.ok);
+  if (failed.length) throw new Error(failed.map(x => x.t + ': ' + x.d).join('; '));
+  globalThis.result = {bin: bin.bytes, auto: composeAutorun(banner)};
+`, ctx);
+fs.writeFileSync('fpSup.BIN', Buffer.from(ctx.result.bin));
+fs.writeFileSync('AutoRun.txt', ctx.result.auto);
 ```
 
-Then follow "Using it from a script, or from an agent" below. The catalogue and
-the composition code are both inside that one file, so the fetch is the whole
-install.
-
-## Why the rule exists
-
-`build_og3k_gyro.py` used to emit a merged OG3K+gyro card directly, and for
-weeks it emitted the wrong one: it called `build_card.py --gcsv-stream`, while
-the shipped v1.11b was built by `build_base_card.py --edition gcsv`. Those two
-produce completely different payloads. The card was called `og3k_gyro_release`,
-its manifest said "gyro", and the gyro inside it was not the gyro we shipped.
-Nothing failed. Nobody noticed until the two were compared section by section.
-
-One place that merges, and that verifies its own output against the shipping
-artefacts, cannot drift like that.
-
-The build scripts still exist and are still the only thing that can *create* a
-card — OG3K's 554 writes come out of `og3k_plan`, and that needs an assembler.
-What they no longer do is combine. `build_og3k_gyro.py` refuses to emit a merged
-card without `--reference`, which is for regenerating this tool's comparison
-baseline, not for putting in a camera.
-
-## How it works
-
-Two facts make browser-side composition exact:
-
-* `fpSup.BIN` is a plain container — `"VBIN"`, a count, the entry, the payload
-  length, then one `(dest, len)` record per section, blobs 4-byte aligned.
-  Firmware and pool sections are independent, so merging is concatenation plus
-  checks. Destination zero is the loader's stage-two helper: a single card keeps
-  its exact shipped helper, while a combination gets exactly one current helper
-  generated alongside the AutoRun templates. This matters when a newer loader
-  changes cache publication but an older standalone card is also selected.
-* `AutoRun.txt` does not depend on the section list, or even on the entry — the
-  loader reads that out of the container's header. Measured: the OG3K-only card
-  (entry 0) and the OG3K+gyro card (entry `0xC072E064`) have the same 135
-  commands and differ in three banner lines.
-
-What AutoRun *does* depend on is the **loader**, and there are three
-configurations — each one flag of `build_autorun.py`, generated on every run:
-
-```
-plain      --no-shell        NOTASK=1, 135 commands
-shell      --no-ep-patches   task loader + interface patch, 189
-shellpush  (neither)         the same plus the EP 0x83 patches, 195
-```
-
-An earlier version lifted two of them out of merged cards that had been built and
-left in the tree, which made a merge tool look like it depended on merged cards.
-It never did — the cards were just the first place each configuration could be
-found. Verified line-for-line identical to generating them directly. They are carried whole rather than assembled from optional
-blocks, because splitting them would be rebuilding `build_autorun.py`'s option
-matrix in JavaScript, and that matrix grows:
-
-```
-plain      135 cmds   loader.S with NOTASK=1.  The file read happens in the
-                      borrowed dispatcher task, once, at boot.  236 bytes.
-shell      189 cmds   loader.S without it -- 356 bytes, because the worker
-                      blocks in FN_WAIT on the endpoint and cannot run in a
-                      borrowed callback, so it needs a task of its own.  Plus
-                      68 bytes zeroing the worker's state (a warm restart does
-                      not clear RAM) and the interface-class patch, without
-                      which the host's PTP stack claims interface 0.
-shellpush  195 cmds   the same, plus the six EP 0x83 patches.
-```
-
-The page picks between them from whether a selected card carries the worker at
-`0xC072F050`, and a checkbox for the push patches.
-
-## Checks
-
-The same rules `build_base_card.py`'s `check()` runs, plus two the merge needs:
-
-- no two sections overlap
-- no pool section lands in the loader's read window (`pool+0x7000..0x28000`,
-  read out of `loader.S`, never written down twice)
-- payload sections stay between the loader and the park stub
-
-  > The cave is not one flat region. `0xC072DE64` loader, `0xC072E064` payload,
-  > `0xC072EFB4` park stub, `0xC072F000` shell state, `0xC072F050` worker. Only
-  > the payload window is bounded by the park stub; the first version of this
-  > check treated the cave as flat and failed every card carrying the shell.
-  > The park stub and the F_WRITE restore are exempt entirely — they go in as
-  > `--also`, not `--also-bin`, so the build scripts' own check never sees them,
-  > and the park stub lives *at* the bound it would be tested against.
-
-- every selected card branches to the same entry
-- the payload fits in 32,768 bytes
-- the banner is printable ASCII (the OSD font has no glyph for anything else)
-
-## Using it from a script, or from an agent
-
-The page is self-contained, and the composition logic is in one `<script>` block
-that touches no DOM. Pull that block and the catalogue out of the file and run
-them anywhere:
-
-```js
-// node, no browser, no dependencies
-const fs   = require('fs');
-const html = fs.readFileSync('index.html', 'utf8');
-const CAT  = JSON.parse(html.match(/<script id="cat"[^>]*>([\s\S]*?)<\/script>/)[1]);
-const src  = html.match(/<script id="compose">([\s\S]*?)<\/script>/)[1];
-
-// The block declares with const/let, so give it a scope and ask for what it made.
-// CAT and atob are the only things it needs from outside.
-const api = new Function('CAT', 'atob', src + `
-  ; return {picked, entryOf, composeVshl, composeAutorun, runChecks, on,
-            setPush: v => pushOn = v};`
-)(CAT, s => Buffer.from(s, 'base64').toString('binary'));
-
-api.on.clear(); api.on.add('gyro'); api.on.add('og3k');   // ids: gyro, og3k, shell
-api.setPush(false);                                       // EP 0x83 patches
-
-const banner = 'fpSup-OG3K-Gyro!';
-const recs   = api.picked();
-const entry  = api.entryOf(recs);
-const vshl   = api.composeVshl(recs, entry);
-const auto   = api.composeAutorun(banner);
-
-const bad = api.runChecks(recs, vshl, banner, entry).filter(c => !c.ok);
-if (bad.length) throw new Error(bad.map(c => c.t + ': ' + c.d).join('\n'));
-
-fs.writeFileSync('fpSup.BIN', Buffer.from(vshl.bytes));
-fs.writeFileSync('AutoRun.txt', auto);
-```
-
-`on` takes card ids — `gyro`, `og3k`, `shell` — and `pushOn = true` adds the
-EP 0x83 patches. There is no second implementation to keep in step: this is the
-same block the page runs.
-
-**Check the result before writing it.** `runChecks` returns the same list the
-page shows; a card that fails one of them is a card that does nothing, or
-freezes the camera at boot.
-
-## Regenerating
-
-    ./build_catalogue.py
-
-Reads the shipping artefacts, tags every section by which card it came from,
-embeds them, and writes `index.html`. It **refuses to write the page** unless
-the catalogue reproduces all of this byte for byte:
-
-```
-gyro              == fp-gyro-sup-v1.11b.zip
-og3k              == og3k_release/
-shell             == fp_usb_shell/autorun/
-og3k+gyro         == build_og3k_gyro.py --reference --release
-shell+og3k+gyro   == build_og3k_gyro.py --reference
-```
-
-The last two are built into a temporary directory and deleted when the run
-finishes. They used to sit in the tree as `og3k_gyro_release/` and `og3k_gyro/`,
-which quietly contradicted the policy this tool exists to enforce: a merged card
-that looks like a finished artefact invites someone to put it on an SD card. They
-are still built on every run, because they are what the page's output is checked
-against — they just do not survive it.
-
-The last two are the ones that matter: they are the merges, and they come out
-identical to what the build scripts produce.
-
-To add a version, put the card in `releases/fpsup-<product>-v<version>/` and run
-this. Nothing here names a version — the products are listed once, and each one
-resolves to the newest directory that matches it. Numbers compare as numbers, so
-`v1.11` beats `v1.2`; among equal numbers a plain release beats a letter revision
-beats `test`.
-
-## Not covered
-
-Sections are placed in listed order, and uploaded cards go after the built-in
-ones. Nothing runs until the loader branches to the entry, which is forced last,
-so ordering is only a hazard where two sections fight over the same bytes — and
-that is checked. A firmware hook placed before the payload it calls is a hazard
-no static check here can see. Each card keeps its own internal order, so this
-only matters if an uploaded card hooks something a built-in card supplies.
+Run this in a fresh output directory, adjusting the HTML path accordingly;
+do not overwrite a release or mounted card as a side effect of testing.
