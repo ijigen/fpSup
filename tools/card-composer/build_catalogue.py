@@ -297,16 +297,6 @@ def refs(product='og3k'):
 # is by design -- a release freezes a camera-tested payload -- so a difference
 # here is news about the releases, not about the merge.
 STALE = {
-    # Removed by cutting the gyro release that carries the move.
-    'gyro+og3k': 'the gyro drain and the space provider left the cave on '
-                 '2026-09-22 -- they are sections of the writer\'s blob now, '
-                 'and the four call-through words are written by gsup_boot '
-                 'instead of being card sections.  The catalogue merges the '
-                 'FROZEN release (v1.12.1, 14 sections, 1,736 bytes of cave); '
-                 'refs() rebuilds its reference from source (8 sections, 612).  '
-                 'Both are right and they cannot match until a release is cut '
-                 'from the new tree.  Cut it, drop this entry.',
-    'gyro+og2k': 'same as gyro+og3k',
     'shell+gyro+og3k': 'two different configurations, compared as if they were '
                        'one.  The catalogue\'s shell card is the release, which '
                        'is the shellpush build and carries the six EP 0x83 '
