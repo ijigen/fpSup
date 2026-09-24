@@ -283,6 +283,20 @@
  * the 576 bytes between the stop hook's end and the counters at 0xC072E8E0. */
 .equ MODE_SITE,      0xC0058310
 
+/* What the firmware has at each site, for putting it back at power-off. */
+.equ ACCEL_ORIG,     0xE3A02000      /* mov  r2, #0                       */
+.equ START_ORIG,     0xE5DB25CE      /* ldrb r2, [r11, #0x5ce]            */
+.equ STOP_ORIG,      0xE3500000      /* cmp  r0, #0                       */
+.equ MODE_ORIG,      0xE1A05001      /* mov  r5, r1                       */
+
+/* XC_PowerOffMgr (src/library/PowerOffMgr).  Its power-off step calls every
+ * registered callback as obj->vtbl[+0xC](obj, reason), first thing, before
+ * anything is shut down (0xC0023C50; 0xC0023F38 for the forced list).  Ten
+ * slots per list; the firmware registers eight normal and one forced. */
+.equ POFF_MGR,       0xC0023A98      /* () -> the manager                 */
+.equ POFF_ADD,       0xC0024118      /* (mgr, cb, forced) -> 1 ok, 0 full */
+.equ F_ICACHE,       0xC000EABC      /* invalidate, after F_CACHE         */
+
 /* The gcsv writer's state, in the gap the space provider left when it moved
  * above the writer words: 0xC072E8F4..0xC072EBA0 is 684 bytes of nothing.
  *

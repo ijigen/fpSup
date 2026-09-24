@@ -1324,5 +1324,68 @@ def _const(name, src, depth=0):
     return int(expr, 0)
 
 
+class PowerOff(unittest.TestCase):
+    """What a card leaves behind when the camera is switched off.
+
+    Both of these froze the camera on the NEXT boot with any card in the slot
+    (2026-09-25), and neither shows in a take: rec_start sets the cursor itself,
+    and nothing records while the camera is powering off."""
+
+    def setUp(self):
+        import ring_task_deploy as R
+        self.code = assemble(HERE / 'gcsv_task.S', ())
+        self.syms = R.symbols(HERE / 'gcsv_task.S', ())
+
+    def slice_of(self, name):
+        start = self.syms[name]
+        after = [v for v in self.syms.values() if v > start]
+        return self.code[start:min(after) if after else len(self.code)]
+
+    def test_the_gyro_cursor_starts_unarmed(self):
+        """gyro_drain takes 0xFFFFFFFF as "first visit"; a zero is a cursor,
+        and the first drain with no take before it copied from address 4."""
+        got = struct.unpack_from('<I', self.code, self.syms['g_ghead'])[0]
+        self.assertEqual(got, S.HEAD_UNARMED if hasattr(S, 'HEAD_UNARMED')
+                         else 0xFFFFFFFF, f'g_ghead starts at 0x{got:08X}')
+
+    def test_the_disarm_puts_back_every_site_the_boot_arms(self):
+        """Decoded from the assembled routine: each movw/movt r0, movw/movt r1,
+        str r1, [r0] is one site and the word it gets back.  They must be
+        exactly the four PRODUCERS name, with their own words."""
+        import imu_stream_deploy as D
+        code = self.slice_of('poff_disarm')
+        words = struct.unpack(f'<{len(code) // 4}I', code)
+
+        def imm(w):
+            return ((w >> 4) & 0xF000) | (w & 0xFFF)
+
+        pairs, regs = {}, {}
+        for w in words:
+            rd = (w >> 12) & 0xF
+            if w & 0x0FF00000 == 0x03000000:          # movw
+                regs[rd] = imm(w)
+            elif w & 0x0FF00000 == 0x03400000:        # movt
+                regs[rd] |= imm(w) << 16
+            elif w == 0xE5801000:                     # str r1, [r0]
+                pairs[regs[0]] = regs[1]
+        want = {site: orig for (_s, _d, site, orig, _t) in D.PRODUCERS.values()}
+        self.assertEqual(pairs, want)
+
+    def test_the_disarm_reaches_nothing_but_immediates(self):
+        """It runs from a copy in the cave while the camera powers off: a
+        pc-relative load would read beside the copy, and anything in the pool
+        is what it exists to avoid.  So no ldr at all."""
+        code = self.slice_of('poff_disarm')
+        for i, w in enumerate(struct.unpack(f'<{len(code) // 4}I', code)):
+            self.assertNotEqual(w & 0x0C500000, 0x04100000,
+                                f'+{i * 4:#x} is a load: 0x{w:08X}')
+
+    def test_nothing_is_armed_before_the_way_out_is_registered(self):
+        src = (HERE / 'writer_core.inc.S').read_text()
+        boot = src[src.index('\ngsup_boot:'):src.index('\ns_hook:')]
+        self.assertLess(boot.index('bl      s_poff'),
+                        boot.index('bl      s_hook'))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
