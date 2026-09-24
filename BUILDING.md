@@ -21,8 +21,12 @@ The fp's firmware runs a script called `AutoRun.txt` from the SD card at boot,
 if it finds one. That script can write words into memory. We use it to write a
 small **loader**, and the loader reads a second file, `fpSup.BIN`, which holds
 everything else: code, data, and patches to the firmware. Nothing is written to
-the camera's flash (one opt-in exception, *Fast start*, section 7). Power the
-camera off, take the card out, and it is a stock camera again.
+the camera's flash (one opt-in exception, *Fast start*, section 7). What is
+loaded lives in RAM, but **switching the camera off and on is not enough to clear
+it**: that is a warm restart, and the patched firmware survives it (section 4).
+Remove the card and take the battery out to get a stock camera back — that
+clears the heap (measured); that it also clears the patched image is expected
+but not yet measured.
 
 A **sup** is one feature packaged this way: the gyro logger, open gate, the USB
 shell. Several sups can share one card.
@@ -101,12 +105,34 @@ Two things to take from this:
 
 ## 4. Where things live in memory
 
-| region | what it is | survives a power-off? |
+| region | what it is | after the power switch (warm restart) |
 |---|---|---|
-| firmware image `0xC0000000…` | the firmware's own code and data. Patches go here | **no** — reloaded from NAND every boot, so every patch is undone |
-| the **cave** `0xC072DE64…0xC0730000` | a few KB of unused firmware image. The loader, and small pieces that must be at a fixed address | no, same as above |
-| allocator memory (the **pool**) | memory asked for at boot. Large code and buffers | contents may linger for minutes, but the allocator hands it to others; treat it as gone |
-| settings block `XC_CommonSaveData` | the camera's own saved settings | **yes**, even a battery pull. Only Fast start writes here |
+| firmware image `0xC0000000…0xC2F30800` | the firmware's own code and data. Patches go here | **kept** — every patch is still in place |
+| the **cave** `0xC072DE64…0xC0730000` | a few KB of unused firmware image. The loader, and small pieces that must be at a fixed address | **kept** — code, pointers and state in it survive |
+| firmware variables (BSS) `0xC3000000…0xC38D6FB0` | the firmware's lists and registrations: observers, power-off callbacks, the pool pointer `0xC3757A7C` | **cleared** — the only range the boot code zeroes |
+| allocator memory (the **pool**, the heap) | memory asked for at boot. Large code, buffers, image data | **gone** — the allocator starts again and hands it to others |
+| settings block `XC_CommonSaveData` | the camera's own saved settings | **kept**, even through a battery pull. Only Fast start writes here |
+
+**The power switch does not restart the camera from scratch.** The DRAM keeps
+refreshing while it is off, and on the next boot the firmware runs the image
+that is already in memory — patches included. Measured 2026-09-25: an open-gate
+card, powered off with the switch, then a card with only the USB shell; all of
+open gate's patches and its cave code were still there, three restarts in a
+row, and open gate recorded correctly before AutoRun had even run. What clears
+it is not yet pinned down: earlier measurements saw memory above the firmware's
+variables lost after 10–25 minutes off, and after a battery pull.
+
+What that means for a sup:
+
+- **Code and data in the image or the cave outlive the card.** On the next warm
+  boot they are there before AutoRun — whichever card is in the slot, or none.
+  So a sup must never assume the words it patches are still stock when it
+  loads; the previous card, or an older version of itself, may be there.
+- **Anything registered with the firmware is gone**, because the lists are in
+  BSS. Register again on every load.
+- **Anything pointing into the pool is dangling.** A hook left in the image that
+  branches into the pool jumps into someone else's memory on the next boot. That
+  is why run-time hooks must come out at power-off (section 5).
 
 The cave is small and shared, so it has a tiny allocator: one word at
 `0xC072E060` holds the next free address, stage2 resets it every boot, and a
@@ -117,8 +143,8 @@ sup takes what it needs by adding to it. Do not pick a cave address yourself.
 **Static patches.** A section with an absolute destination overwrites firmware
 words at load time. Open gate works this way: a few hundred words of tables and
 branches, all placed by stage2 before anything else runs. Simple, and the code
-they branch to also lives in firmware memory (the cave), so it stays valid until
-the camera is off.
+they branch to also lives in firmware memory (the cave), so it stays valid —
+and, as section 4 says, it is still there after a warm restart.
 
 **Run-time hooks.** Your entry allocates memory, copies code into it, and then
 overwrites one firmware instruction with a branch to that code. The gyro logger
@@ -251,8 +277,10 @@ been tested.
 A `--debug` build carries the USB shell, so you can read memory over USB after
 something goes wrong (`fp_usb_shell/README.md`). Release cards never carry it.
 
-If the camera freezes: take the battery out, remove the card, and boot. That is
-a stock camera. Write down the card's SHA-256 before testing, so a result
+If the camera freezes: remove the card, take the battery out (with the USB
+cable unplugged), and boot. Switching it off and on is not enough — the previous
+card's patches are still in memory after a warm restart (section 4). A USB cable
+can keep the camera powered with the battery out, so unplug it first. Write down the card's SHA-256 before testing, so a result
 belongs to exact bytes and not to a command line.
 
 ## 9. Releasing

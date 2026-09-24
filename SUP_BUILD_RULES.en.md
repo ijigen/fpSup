@@ -146,6 +146,13 @@ does not look at r0 and does not stop later entries.
   implementation is gyro's `s_poff`.
 - When state words move, **their initial values move with them**. Test the value
   the code starts with, not just the address.
+- **The power switch is a warm restart: the image and the cave are kept, BSS is
+  cleared, the heap starts again.** A sup must not assume the words it patches
+  are still stock when it loads (the previous card, or an older build of itself,
+  may be there); anything registered with the firmware is registered again on
+  every load; nothing that points into the pool may be left for the next boot.
+  The detail is written in one place only,
+  [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md).
 - Newly written ARM code gets the proven **`0xC000E91C()` → `0xC000EABC()`**
   before it first runs. A DSB, a correct read-back of memory, or "the new code
   flushes once it is running" does not replace cache maintenance before the
@@ -210,6 +217,9 @@ unrelated products re-run.
 - **A sup that installs hooks:** on the camera, boot, do not record, power off,
   then boot with a card in the slot — about ten times. Recording tests never
   reach this path (see [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md)).
+- **Loading over a previous card:** boot another card (or an older build of your
+  own), power off with the switch, then boot yours; check it is still correct
+  when the image it finds is not stock.
 - **A new product outside the existing tests:** add that product's minimal
   entry / installation test; an OG test passing is not its acceptance.
 - **Camera and release are separate:** record build, machine-code checks,

@@ -342,9 +342,10 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
 
 <footer>
   <p style="margin-top:14px">Firmware Ver.5.02 on the original fp only. Both files go in the root of the SD card the
-  camera boots from. Everything is RAM-only — remove <code>AutoRun.txt</code>, power-cycle,
-  and the camera is stock<span id="flashnote"> — nothing is ever written to
-  flash</span>.</p>
+  camera boots from. Everything runs from RAM<span id="flashnote"> — nothing is ever written to
+  flash</span>. Switching the camera off and on does not undo it: that is a warm restart, and the
+  patched firmware stays in memory. To get a stock camera back, remove the card and take the battery
+  out with the USB cable unplugged.</p>
 </footer>
 
 <script id="cat" type="application/json">@@CATALOGUE@@</script>
@@ -805,7 +806,9 @@ function cardReadme(banner, cards, fast, shaAutorun, shaBin){
     '     A bar that stops is a load that stopped there.',
     '',
     'Remove',
-    '  Delete the two files, or take the card out, and power-cycle.',
+    '  Delete the two files or take the card out, then take the battery out',
+    '  (USB cable unplugged) and boot. Switching the camera off and on is not',
+    '  enough: the patched firmware stays in memory through a warm restart.',
     '',
     'SHA-256',
     '  AutoRun.txt  ' + shaAutorun,
