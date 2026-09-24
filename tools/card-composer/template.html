@@ -638,6 +638,36 @@ function runChecks(recs, vshl, banner, entry, entriesNow){
                +', past 0x'+CAT.pool_size.toString(16).toUpperCase()
              : off.length+' spans, highest pool+0x'+top.toString(16).toUpperCase()});
 
+  /* A merge, or a fast repackaging, drops every card's own stage2 and puts in
+     this page's.  That is only safe for a card whose payload asks nothing of
+     stage2 that this page's does not do -- and nothing in the sections says
+     what a payload asks.  gyro v1.13.1 uploaded to the page before it was
+     rebuilt passed every check here and would have written its hook veneers
+     from address 0: the page's stage2 predated the cave allocator, never
+     reset CAVE_BUMP, and gyro takes its veneers from it (2026-09-25).
+     So an uploaded card's own stage2 has to be one this page knows: its own
+     two, or one a catalogued release shipped with, all of which this page's
+     supersedes.  Anything else was built against a stage2 this page has never
+     seen, and the answer is a newer page -- or the card on its own, which
+     keeps its helper untouched. */
+  const replaced = sel().length > 1 || fastOn;
+  const known = new Set([CAT.stage2.b, CAT.fast.stage2.b].concat(
+    CAT.cards.map(k => k.records.length && (k.records[0].a >>> 0) === 0
+                       ? k.records[0].b : null)));
+  const strangers = !replaced ? [] : sel().filter(k => k.upload
+    && k.records.length && (k.records[0].a >>> 0) === 0
+    && !known.has(k.records[0].b));
+  c.push({ok: !strangers.length,
+          t: 'Every uploaded card was built with a stage2 this page knows',
+          d: strangers.length
+             ? strangers.map(k => k.name).join(', ')
+               + ' carries a stage2 this page does not: it may rely on something'
+               + ' this page\'s stage2 does not do. Use a newer page, or use'
+               + ' the card on its own'
+             : !replaced ? 'nothing is replaced: a single card keeps its own'
+             : sel().some(k => k.upload) ? 'every upload\'s stage2 is known'
+             : 'no uploads'});
+
   c.push({ok: sel().length > 0, t:'Something is selected',
           d: sel().length ? sel().length+' card'+(sel().length>1?'s':'') : 'pick at least one'});
 
