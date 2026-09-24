@@ -1,5 +1,7 @@
 # sup 製作守則：AutoRun → loader → stage2 → entry
 
+中文 · [English](SUP_BUILD_RULES.en.md)。兩份內容相同；改其中一份時，在同一個 commit 裡一起改另一份。
+
 適用：SIGMA fp Ver.5.02，2026-09-23 整合後的載入流程。
 讀者：製作新 sup、修改現有 sup 或維護合併建置的 agent。
 
