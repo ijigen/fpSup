@@ -1,7 +1,8 @@
 # fpSup-Merge
 
-Select ordinary product cards and download `AutoRun.txt` plus `fpSup.BIN`.
-Both files go in the SD card root. This is the merged-card composition path;
+Select ordinary product cards and download the card as one zip: `AutoRun.txt`,
+`fpSup.BIN` and the `FPSUPUI` folder (the loading screen). Everything in it goes
+in the SD card root. The zip is the only download. This is the merged-card composition path;
 product builders still create individual cards and temporary test references.
 
 Open `index.html` locally: it is self-contained and needs no server or packages.
@@ -34,7 +35,7 @@ a power-off routine of its own).
 OG3K and OG2K are mutually exclusive. New sup authors should first read
 [SUP_BUILD_RULES.md](../../SUP_BUILD_RULES.md).
 
-The loader, stage2 and optional Fast pieces come from the shared
+The loader, stage2 (with the four-box splash) and optional Fast pieces come from the shared
 `fp_usb_shell/build_autorun.py` and assembly templates. The sequence remains:
 
 1. AutoRun invokes the loader; it reads the BIN into its staging buffer.
@@ -62,7 +63,10 @@ length)` records and four-byte-aligned bodies. Only the **first** section is
 replaced by the common stage2 during a merge. Other destination-zero sections
 are run-in-place launchers and must survive; they do not imply USB Shell.
 
-- A single ordinary card with unchanged options retains its frozen BIN bytes.
+- Every card is repackaged, a single one too (2026-09-25): all AutoRun
+  templates draw the four-box loading screen, which pauses the GUI redraw, and
+  only the current stage2 finishes it and restores the redraw. A release's
+  payload sections stay byte for byte; its own stage2 is replaced.
 - A merge uses the current common stage2, deduplicates identical records and
   relocates entries. Payload code is retained, not rebuilt by the browser.
 - Fast Start 2 always replaces stage2 and adds the matching abort section, and
@@ -78,7 +82,7 @@ are run-in-place launchers and must survive; they do not imply USB Shell.
 The named `plain`, `shell` and `shellpush` AutoRun template slots are retained
 for compatibility, but their executable commands are now the same: worker
 creation, state and descriptor patches reside in the BIN. Changing the EP
-option does **not** add AutoRun commands. The current normal script has 118
+option does **not** add AutoRun commands. The current normal script has 112
 commands; the Fast Start 2 script has 148 in total, and a hit runs about 26.
 
 BIN output retains 32 KiB padding when it fits. Larger output is padded to the

@@ -130,8 +130,7 @@ for (let mask = 1; mask < 2 ** CAT.cards.length; mask++) {
         const out = parse(built.bytes);
         assert.equal(out.used, built.used);
         assert.equal(out.records[0].a, 0, 'first section must be stage2');
-        if (fast || cards.length > 1)
-          assert(out.records[0].bytes.equals(decode(fast ? CAT.fast.stage2 : CAT.stage2)));
+        assert(out.records[0].bytes.equals(decode(fast ? CAT.fast.stage2 : CAT.stage2)));
         const aborts = out.records.filter(r => r.a === (CAT.fast.abort.a >>> 0));
         assert.equal(aborts.length, fast ? 1 : 0);
         if (fast) assert(aborts[0].bytes.equals(decode(CAT.fast.abort)));
@@ -141,10 +140,17 @@ for (let mask = 1; mask < 2 ** CAT.cards.length; mask++) {
           assert.equal(records.length, push ? 1 : 0, 'EP 0x83 option did not change BIN at ' + address.toString(16));
           if (push) assert.equal(records[0].bytes.readUInt32LE(), value);
         }
-        // Push-off deliberately transforms a shell release that shipped with
-        // push. In its shipped configuration every normal single BIN is exact.
+        // Every card is repackaged now, a single one too (the four-box AutoRun
+        // needs the current stage2 to finish the splash and restore the redraw).
+        // What must hold: stage2 is the current one, and every section the
+        // release shipped (except its own stage2) arrives byte for byte.
+        // Push-off deliberately drops a shell release's push records.
         if (!fast && cards.length === 1 && (!cards[0].shell || push === (cards[0].template === 'shellpush'))) {
-          assert(Buffer.from(built.bytes).equals(frozen(cards[0])), 'single normal BIN differs from frozen release');
+          assert(out.records[0].bytes.equals(decode(CAT.stage2)), 'single card: stage2 is not the current one');
+          const rel = parse(frozen(cards[0])).records.slice(1);
+          for (const r of rel)
+            assert(out.records.some(s => s.a === r.a && s.bytes.equals(r.bytes)),
+                   'single card lost released section ' + r.a.toString(16));
           frozenChecks++;
         }
         cases++;
@@ -205,5 +211,5 @@ for (const [mode, auto] of autoByMode) {
   }
 }
 console.log(`PASS ${selections} legal selections / ${cases} normal-Fast-push cases; ` +
-  `${frozenChecks} frozen single BINs; entry relocation/order, payload-independent AutoRun, ` +
+  `${frozenChecks} single cards keep every released section; entry relocation/order, payload-independent AutoRun, ` +
   `4 padding/read-cap boundaries, embedded D/I and Fast stack.`);

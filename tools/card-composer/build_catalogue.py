@@ -176,7 +176,8 @@ def build_templates():
         f = tmp / f'{name}.txt'
         r = subprocess.run([sys.executable,
                             str(ROOT / 'fpSup' / 'fp_usb_shell' / 'build_autorun.py'),
-                            '--loader', *flags, '--banner', '@@BANNER@@',
+                            '--loader', '--four-box-bar', *flags,
+                            '--banner', '@@BANNER@@',
                             '--vshl-entry', '0xC072E064', '--out', str(f)],
                            capture_output=True, text=True)
         if r.returncode:
@@ -261,6 +262,7 @@ def refs(product='og3k'):
         d = tmp / name
         cmd = [sys.executable, str(GYRO / 'build_base_card.py'),
                '--edition', 'gcsv', '--version', 'catalogue-reference',
+               '--four-box-bar',
                '--banner', f'fpSup-{product.upper()}-Gyro!', '--out', str(d),
                *section_args]
         if og_entry:
@@ -522,7 +524,7 @@ def autorun(template, banner):
     return out
 
 
-def banner_of(text):
+def banner_of(text, required=True):
     """The banner is the last `display text` that is not a progress bar.
 
     Progress lines look like `fpSup[###.....]060`; the banner is whatever the
@@ -535,6 +537,9 @@ def banner_of(text):
         if s.startswith('display text ') and 'fpSup[' not in s:
             last = s[len('display text '):]
     if last is None:
+        # A four-box AutoRun draws artwork, not a text banner (2026-09-25).
+        if not required:
+            return ''
         raise SystemExit('no banner line in AutoRun.txt')
     return last
 
@@ -680,11 +685,10 @@ def main():
                                      k='stage2'),
                          abort=dict(a=ABORT_AT,
                                     b=base64.b64encode(fast_abort).decode(),
-                                    l='abort (stops the script)', k='sec'),
-                         # the four-box splash the instant path draws; the zip
-                         # carries them as FPSUPUI/<name> beside the two files
-                         ui=[dict(n=n, b=base64.b64encode(b).decode())
-                             for n, b in fast_ui]),
+                                    l='abort (stops the script)', k='sec')),
+               # The four-box splash every card now shows (2026-09-25): the zip
+               # always carries these as FPSUPUI/<name> beside the two files.
+               ui=[dict(n=n, b=base64.b64encode(b).decode()) for n, b in fast_ui],
                templates=templates_out,
                autorun_template=template, filler=FILLER,
                stage2=dict(a=0, b=base64.b64encode(stage2).decode(),
@@ -819,11 +823,11 @@ def main():
     autos = [
         ('AutoRun plain      == og3k_gyro_release',
          autorun(templates_out['plain'], banner_of(
-             (refs()['plain'] / 'AutoRun.txt').read_text('utf-8'))),
+             (refs()['plain'] / 'AutoRun.txt').read_text('utf-8'), required=False)),
          (refs()['plain'] / 'AutoRun.txt').read_text('utf-8')),
         ('AutoRun shell      == og3k_gyro (dev)',
          autorun(templates_out['shell'], banner_of(
-             (refs()['shell'] / 'AutoRun.txt').read_text('utf-8'))),
+             (refs()['shell'] / 'AutoRun.txt').read_text('utf-8'), required=False)),
          (refs()['shell'] / 'AutoRun.txt').read_text('utf-8')),
     ]
     # There is deliberately no "AutoRun shellpush == fp_usb_shell/autorun" check.
