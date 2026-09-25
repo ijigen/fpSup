@@ -1348,44 +1348,38 @@ class PowerOff(unittest.TestCase):
         self.assertEqual(got, S.HEAD_UNARMED if hasattr(S, 'HEAD_UNARMED')
                          else 0xFFFFFFFF, f'g_ghead starts at 0x{got:08X}')
 
-    def test_the_disarm_puts_back_every_site_the_boot_arms(self):
-        """Decoded from the assembled routine: each movw/movt r0, movw/movt r1,
-        str r1, [r0] is one site and the word it gets back.  They must be
-        exactly the four PRODUCERS name, with their own words."""
+    def test_every_armed_site_is_declared_with_its_own_word(self):
+        """The loader's power-off callback writes back what stage2 journaled,
+        and stage2 only sees sections.  So every site gsup_boot arms must also
+        be a four-byte section holding the firmware's word (LOADER_V2.md)."""
         import imu_stream_deploy as D
-        code = self.slice_of('poff_disarm')
-        words = struct.unpack(f'<{len(code) // 4}I', code)
-
-        def imm(w):
-            return ((w >> 4) & 0xF000) | (w & 0xFFF)
-
-        pairs, regs = {}, {}
-        for w in words:
-            rd = (w >> 12) & 0xF
-            if w & 0x0FF00000 == 0x03000000:          # movw
-                regs[rd] = imm(w)
-            elif w & 0x0FF00000 == 0x03400000:        # movt
-                regs[rd] |= imm(w) << 16
-            elif w == 0xE5801000:                     # str r1, [r0]
-                pairs[regs[0]] = regs[1]
+        import build_base_card as B
+        got = {at: struct.unpack('<I', blob)[0] for at, blob, _ in B.hook_sites()}
         want = {site: orig for (_s, _d, site, orig, _t) in D.PRODUCERS.values()}
-        self.assertEqual(pairs, want)
+        self.assertEqual(got, want)
+        image = HERE.parents[1] / 'out' / 'MAIN_c0000000.bin'
+        if image.exists():
+            raw = image.read_bytes()
+            for site, orig in want.items():
+                self.assertEqual(struct.unpack_from('<I', raw, site - 0xC0000000)[0],
+                                 orig, f'0x{site:08X} is not the stock word')
 
-    def test_the_disarm_reaches_nothing_but_immediates(self):
-        """It runs from a copy in the cave while the camera powers off: a
-        pc-relative load would read beside the copy, and anything in the pool
-        is what it exists to avoid.  So no ldr at all."""
-        code = self.slice_of('poff_disarm')
-        for i, w in enumerate(struct.unpack(f'<{len(code) // 4}I', code)):
-            self.assertNotEqual(w & 0x0C500000, 0x04100000,
-                                f'+{i * 4:#x} is a load: 0x{w:08X}')
+    def test_no_power_off_routine_of_its_own(self):
+        """One restore, the loader's.  A second one registered by the payload
+        was what this replaced."""
+        for name in ('writer_core.inc.S', 'ring_task.inc.S'):
+            src = (HERE / name).read_text()
+            for word in ('s_poff', 'poff_disarm', 'POFF_ADD', 'POFF_MGR'):
+                self.assertNotIn(word, src, f'{name} still has {word}')
 
-    def test_nothing_is_armed_before_the_way_out_is_registered(self):
-        src = (HERE / 'writer_core.inc.S').read_text()
-        boot = src[src.index('\ngsup_boot:'):src.index('\ns_hook:')]
-        self.assertLess(boot.index('bl      s_poff'),
-                        boot.index('bl      s_hook'))
-
+    def test_every_card_gets_the_loaders_power_off_restore(self):
+        """Without it nothing journals the sites and nothing takes the hooks
+        out at power-off -- the v1.13 freeze.  build_autorun adds it to every
+        loader card unconditionally; this card must put its sites in it."""
+        ba = (HERE.parent / 'fp_usb_shell' / 'build_autorun.py').read_text()
+        self.assertIn("    _sd.append('LH_RESTORE=1')\n", ba)
+        src = (HERE / 'build_base_card.py').read_text()
+        self.assertIn('hook_sites() + extra', src)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -1250,22 +1250,12 @@ gsup_boot:
     cmp     r0, #0
     beq     9f                          @ refused: arm nothing
 
-    /* Before any hook: a way to take them all out at power-off.
-     *
-     * The hook bodies are in the pool and the pool is the allocator's.  A hook
-     * that fires while the camera is shutting down -- the stop hook does, from
-     * cDevt_stop, and the accelerometer driver runs to the end -- is a jump
-     * into memory whose owner is being torn down.  v1.12.1 kept the bodies in
-     * the cave, which is firmware image and outlives everything; this is what
-     * makes the pool as safe as that was.
-     *
-     * The disarm routine and its callback object go in the CAVE for the same
-     * reason: they run at power-off, and must not reach the pool to do it.
-     * Registered before arming, so there is never a hook without its way out;
-     * if the manager has no room, nothing is armed at all. */
-    bl      s_poff
-    cmp     r0, #0
-    beq     9f
+    /* No power-off routine of our own any more (2026-09-25).  Every hook site
+     * is also a four-byte section of this card holding the firmware's own word
+     * (build_base_card.hook_sites), so stage2 journals it before this runs and
+     * the loader's shared power-off callback writes it back -- the same one
+     * that puts back every other firmware word a card changes.  See
+     * projects/usb-shell-sup/notes/LOADER_V2.md. */
 
     /* Each hook: eight bytes from the cave's allocator, the veneer written
      * into them, and the site armed to branch there -- in that order, per
@@ -1397,121 +1387,6 @@ s_hook:
     orr     r1, r1, #0xEB000000
     str     r1, [r5]
 
-9:  pop     {r4, r5, r7, pc}
-
-/* poff_disarm(obj, reason) -- every site back to the firmware's own word.
- *
- * Runs from its copy in the cave, as the first thing the camera does when it
- * powers off.  Immediates only: nothing here may reach the pool, which is the
- * whole reason it exists.  Writing a site's own word back is right whether or
- * not that hook was armed, so it does not ask. */
-    .align  2
-poff_disarm:
-    push    {r4, lr}
-    movw    r0, #:lower16:ACCEL_SITE
-    movt    r0, #:upper16:ACCEL_SITE
-    movw    r1, #:lower16:ACCEL_ORIG
-    movt    r1, #:upper16:ACCEL_ORIG
-    str     r1, [r0]
-    movw    r0, #:lower16:START_SITE
-    movt    r0, #:upper16:START_SITE
-    movw    r1, #:lower16:START_ORIG
-    movt    r1, #:upper16:START_ORIG
-    str     r1, [r0]
-    movw    r0, #:lower16:STOP_SITE
-    movt    r0, #:upper16:STOP_SITE
-    movw    r1, #:lower16:STOP_ORIG
-    movt    r1, #:upper16:STOP_ORIG
-    str     r1, [r0]
-#ifdef WANT_MODE_HOOK
-    movw    r0, #:lower16:MODE_SITE
-    movt    r0, #:upper16:MODE_SITE
-    movw    r1, #:lower16:MODE_ORIG
-    movt    r1, #:upper16:MODE_ORIG
-    str     r1, [r0]
-#endif
-    movw    ip, #:lower16:F_CACHE
-    movt    ip, #:upper16:F_CACHE
-    blx     ip
-    movw    ip, #:lower16:F_ICACHE
-    movt    ip, #:upper16:F_ICACHE
-    blx     ip
-    pop     {r4, pc}
-poff_disarm_end:
-poff_len:   .word   poff_disarm_end - poff_disarm
-
-/* s_poff -- put poff_disarm in the cave and register it with XC_PowerOffMgr.
- *
- *   returns r0 = 1 registered, 0 not (the cave is full or the manager is)
- *
- * What goes in the cave, from the allocator like every veneer:
- *
- *   X+0   X-8          the object's vtable pointer, aimed so that the slot
- *                      the manager calls, vtbl+0xC, is the next word
- *   X+4   X+8          that slot: the routine
- *   X+8   poff_disarm  copied here, so nothing it runs is in the pool
- *
- * The manager only ever calls +0xC, and its trace line before each call logs
- * the object's address without reading through it (0xC001A048). */
-s_poff:
-    push    {r4, r5, r7, lr}            @ four: the stack stays 8-aligned
-
-    movw    r7, #:lower16:CAVE_BUMP
-    movt    r7, #:upper16:CAVE_BUMP
-    ldr     r4, [r7]                    @ r4 = X
-    ldr     r2, poff_len
-    add     r1, r4, r2
-    add     r1, r1, #8                  @ the object, then the routine
-    movw    r2, #:lower16:CAVE_ARENA_END
-    movt    r2, #:upper16:CAVE_ARENA_END
-    cmp     r1, r2
-    movhi   r0, #0
-    bhi     9f                          @ the cave is full: arm nothing
-    str     r1, [r7]
-
-    sub     r0, r4, #8
-    str     r0, [r4]                    @ vtbl, so that vtbl+0xC == X+4
-    add     r0, r4, #8
-    str     r0, [r4, #4]                @ vtbl+0xC -> the routine
-
-    adr     r1, poff_disarm             @ copy it; it is position-independent
-    ldr     r2, poff_len
-1:  ldr     r3, [r1], #4
-    str     r3, [r0], #4
-    subs    r2, r2, #4
-    bne     1b
-
-    movw    ip, #:lower16:F_CACHE       @ it is code now: make it real
-    movt    ip, #:upper16:F_CACHE
-    blx     ip
-    movw    ip, #:lower16:F_ICACHE
-    movt    ip, #:upper16:F_ICACHE
-    blx     ip
-
-    movw    ip, #:lower16:POFF_MGR
-    movt    ip, #:upper16:POFF_MGR
-    blx     ip
-    mov     r1, r4
-    mov     r2, #0                      @ the ordinary list
-    movw    ip, #:lower16:POFF_ADD
-    movt    ip, #:upper16:POFF_ADD
-    blx     ip
-    movs    r5, r0
-    beq     8f                          @ no slot: arm nothing
-
-    /* And the forced list, which the manager runs instead of the ordinary one
-     * on its fast path (0xC0023F38, reason 4).  The USB gadget registers in
-     * both for the same reason.  Nine of its ten slots are free. */
-    movw    ip, #:lower16:POFF_MGR
-    movt    ip, #:upper16:POFF_MGR
-    blx     ip
-    mov     r1, r4
-    mov     r2, #1
-    movw    ip, #:lower16:POFF_ADD
-    movt    ip, #:upper16:POFF_ADD
-    blx     ip
-
-8:  mov     r0, r5
 9:  pop     {r4, r5, r7, pc}
 
 #include "mpool.S"

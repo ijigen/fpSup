@@ -793,14 +793,21 @@ function cardReadme(banner, cards, fast, shaAutorun, shaBin){
     'Firmware Ver.5.02 on the original fp only.',
     '',
     'Contains: ' + cards.map(name).join(', '),
-    'Fast start: ' + (fast
+    'Fast Start 2: ' + (fast
       ? 'on -- the first boot stores the loader in the camera\'s settings block,'
-        + '\n            which survives a battery pull. Later boots are shorter.'
+        + '\n            which survives a battery pull. After that a power-switch'
+        + '\n            restart loads in about 1.4 s without the AutoRun and shows the'
+        + '\n            four-box screen; a cold start runs a short AutoRun instead.'
+        + '\n            Power off with the USB cable unplugged: with it attached the'
+        + '\n            next start is always a cold one.'
       : 'off -- nothing is written to the camera\'s flash.'),
     '',
     'Install',
+    ...(fast ? [
+    '  1. Copy AutoRun.txt, fpSup.BIN and the FPSUPUI folder to the ROOT of the',
+    '     SD card the camera boots from.'] : [
     '  1. Copy AutoRun.txt and fpSup.BIN to the ROOT of the SD card the camera',
-    '     boots from. Nothing else is needed.',
+    '     boots from. Nothing else is needed.']),
     '  2. Boot with the USB cable unplugged. A progress bar runs, then the',
     '     screen reads: ' + banner,
     '     A bar that stops is a load that stopped there.',
@@ -955,7 +962,7 @@ function render(){
      keeps making it while the option is ticked is the page lying. */
   const fn = document.getElementById('flashnote');
   if (fn) fn.innerHTML = fastOn
-    ? ' — except the loader, which Fast start puts in the settings block'
+    ? ' — except the loader, which Fast Start 2 puts in the settings block'
     : ' — nothing is ever written to flash';
   const checks = runChecks(recs, vshl, banner, entry, entries);
   const ok = checks.every(x => x.ok);
@@ -965,12 +972,21 @@ function render(){
   const fastRow = `<div class="start-setting">
     <h2>Start-up</h2>
     <label class="fast-switch" for="fast">
-      <span><b>Fast Start</b><small id="fast-hint">Optional, off by default · stores the loader in camera flash</small></span>
+      <span><b>Fast Start 2</b><small id="fast-hint">Optional, off by default · instant start after a power-switch restart, fast after a cold one · stores the loader in camera flash</small></span>
       <input type="checkbox" role="switch" id="fast" aria-describedby="fast-hint" ${fastOn ? 'checked' : ''}>
     </label></div>` + (fastOn ? `<div class="caveats">
       <p><b>It writes to the camera, not just to the card.</b> The loader is put
       into XC_CommonSaveData, which is flash-backed and survives a battery pull.
       Everything else on this page lives on the card and goes away with it.</p>
+      <p><b>Three ways to start.</b> A restart with the power switch keeps the
+      firmware in memory, and the card loads about 1.4 s after power-on without
+      running the AutoRun at all — you see the four-box screen, then the
+      camera's own UI. When the firmware was reloaded (a cold start, a battery
+      pull, or powering off with the USB cable attached) the AutoRun runs, short
+      because the loader comes out of flash. Some restarts come up cold anyway;
+      that costs a few seconds, nothing else.</p>
+      <p><b>Copy the FPSUPUI folder too.</b> The zip carries it beside the two
+      files; the instant path draws its screen from it.</p>
       <p><b>The first boot is still slow</b> — that is the boot that fills the
       block — and so is the first boot with a changed loader. Updating a
       compatible <code>fpSup.BIN</code> alone does not invalidate the stored
@@ -984,9 +1000,9 @@ function render(){
       <p><b>A loader-marker mismatch takes the slow path.</b> This marker is
       tied to the loader, not to the BIN’s size, contents, or entry. It is not
       an integrity check of every byte saved in flash.</p>
-      <p><b>Build checks are not a new on-camera test.</b> The earlier
-      2026-09-19 Fast test covered a shell-only card. It does not validate this
-      refreshed loader or every combined output.</p>
+      <p><b>Build checks are not a new on-camera test.</b> Fast Start 2 was
+      booted on 2026-09-25 with OG3K + USB shell and with gyro + OG3K + USB
+      shell; it does not validate every combined output.</p>
       </div>` : '');
   document.getElementById('startopt').innerHTML = sel().length ? fastRow : '';
   const fb = document.getElementById('fast');
@@ -1157,6 +1173,8 @@ document.getElementById('dl-z').onclick = async () => {
   const zip = zipStore([
     {name: 'AutoRun.txt', data: current.autorun},
     {name: 'fpSup.BIN',   data: current.vshl.bytes},
+    /* Fast Start 2's instant path draws the four-box screen from these. */
+    ...(fastOn ? CAT.fast.ui.map(f => ({name: 'FPSUPUI/' + f.n, data: b64(f.b)})) : []),
     {name: 'README.txt',  data: cardReadme(banner, sel(), fastOn, hex(a), hex(v))}]);
   const stem = banner.replace(/[^A-Za-z0-9._-]+/g, '').replace(/^[.-]+|[.-]+$/g, '') || 'fpSup-card';
   dl.save({filename: stem + '.zip', data: zip});

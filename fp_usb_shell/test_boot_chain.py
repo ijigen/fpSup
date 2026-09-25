@@ -44,8 +44,12 @@ class BootChainTests(unittest.TestCase):
                 self.assertEqual(stage2, [dcall[0] + 6])
                 self.assertEqual(code[icall[0] + 1:stage2[0]],
                                  (0xE5961004, 0xE0861181, 0xE2811010, 0xE1A00006))
-                self.assertEqual(code[1], 0xE92D47F0)  # r4-r10,lr: 32 bytes
-                self.assertTrue(all(i > 1 for i, _target in calls))
+                # +0 the echo entry, +4 the loader hook's entry (stage2 arms
+                # 0xC03DA420 at it), then load's push.
+                self.assertEqual(branch_target(code[0], 0, LOADER_BASE), LOADER_BASE + 8)
+                self.assertEqual(code[1] >> 24, 0xEA)
+                self.assertEqual(code[2], 0xE92D47F0)  # r4-r10,lr: 32 bytes
+                self.assertTrue(all(i > 2 for i, _target in calls))
                 self.assertIn(0xE8BD87F0, code)         # matching return via pc
 
     def test_store_hit_and_miss_preserve_stack_and_return(self):

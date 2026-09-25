@@ -106,6 +106,13 @@
 9:  .word 0xEB000000 + ((((\target) - (LOADER_BASE + (9b - _lstart)) - 8) >> 2) & 0xFFFFFF)
 .endm
 
+/* The same, as a plain branch: for leaving through a firmware routine. */
+.macro JUMP target
+9:  .word 0xEA000000 + ((((\target) - (LOADER_BASE + (9b - _lstart)) - 8) >> 2) & 0xFFFFFF)
+.endm
+
+.equ AR_START,    0xC03DA758    /* ("\AutoRun.txt", 1): starts the script     */
+
 /* --- the borrowed echo handler: called once, by the AutoRun ----------------
  *
  * This used to sit in the gyro callback at 0xC00D0794, and everything odd about
@@ -141,6 +148,11 @@ boot:
      * AutoRun different from a release card's. */
     b       load
 
+/* +4: the loader hook's entry.  FIXED OFFSET: stage2 points 0xC03DA420 at
+ * LOADER_BASE+4 and first checks that this word is this branch, so a loader
+ * from another build -- whose hook may sit elsewhere -- is never armed. */
+    b       lhook
+
 load:
     /* r9 carries the descriptor's address all the way to the free at the end.
      * Two registers more in the push costs nothing -- it is one instruction
@@ -148,6 +160,7 @@ load:
      * down there would take.  The loader is 468 bytes and the store holds 468,
      * so a spare word is not a nicety here. */
     push    {r4, r5, r6, r7, r8, r9, r10, lr}
+    mov     r8, #0                      @ the answer: 1 once stage2 has run
 
 #ifdef LOAD_START_US
     /* --profile: the camera's own microseconds, the moment the loader gets
@@ -300,6 +313,7 @@ load_shut:
     add     r1, r1, #16                 @ past the table: the first section's data
     mov     r0, r6
     blx     r1
+    mov     r8, #1                      @ stage2 ran: the file is loaded
 
 
 /* Nothing was placed: leave the camera exactly as it was, minus the shell.
@@ -319,7 +333,34 @@ load_stop:
     mov     r1, #2
     CALL    H_FREE
 load_fail:
+    mov     r0, r8                      @ 1 loaded, 0 not
     pop     {r4, r5, r6, r7, r8, r9, r10, pc}
+
+/* --- the loader hook ---------------------------------------------------------
+ *
+ * The power switch is a warm restart: the image and the cave survive it, and
+ * with them this loader and the word stage2 wrote at 0xC03DA420 -- the one call
+ * that starts the AutoRun.  So on the next boot the firmware comes here instead,
+ * about 1.4 s after power-on (measured 2026-09-25), with the AutoRun's two
+ * arguments in r0/r1.
+ *
+ * Load.  If that worked, return: the AutoRun never starts.  If it did not -- no
+ * file, not a VBIN, a card from somewhere else -- start the AutoRun exactly as
+ * the firmware would have, and that card's own script takes over.
+ *
+ * The caller has pushed three words, so sp may be 4 off; aligned here and put
+ * back from r4, which the push saves and the callee may not destroy. */
+lhook:
+    push    {r0, r1, r4, lr}
+    mov     r4, sp
+    bic     sp, sp, #7
+    bl      load
+    mov     sp, r4
+    cmp     r0, #0
+    pop     {r0, r1, r4, lr}
+    movne   r0, #0
+    bxne    lr
+    JUMP    AR_START                    @ lr is still the firmware's
 
 
 

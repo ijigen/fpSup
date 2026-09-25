@@ -110,7 +110,37 @@ ap.add_argument('--profile', action='store_true',
                      '`mem set` on one that spells it out, which is why it is a '
                      'flag and not the default.  Read both with '
                      '`mem get 0xC072F6F4,,8`')
+ap.add_argument('--four-box-bar', action='store_true',
+                help='experimental offline-reviewed four-box splash: white fp, '
+                     'reference pink Sup, transparent background, restore native UI 2 seconds after '
+                     'loading. Requires --loader and the generated FPSUPUI folder. '
+                     '--banner applies only to the legacy text display.')
+ap.add_argument('--loader-hook', action='store_true',
+                help='journal every firmware word stage2 overwrites, write them '
+                     'back at power-off, and point 0xC03DA420 (the call that '
+                     'starts the AutoRun) at the loader, so a warm boot loads '
+                     'without the AutoRun.  See LOADER_V2.md')
+ap.add_argument('--loader-hook-mark', type=lambda s: int(s, 0), default=None,
+                metavar='ADDR',
+                help='debug: stage2 writes the journal block address to ADDR+8, '
+                     'and the power-off routine counts its runs at ADDR and stamps '
+                     'ADDR+4')
+ap.add_argument('--loader-hook-banner-at', type=int, default=3_000_000,
+                metavar='US',
+                help='with --loader-hook: draw the banner no earlier than this '
+                     'many microseconds after power-on (default 3 s; drawn at '
+                     '1.35 s it is wiped by the UI coming up)')
 args = ap.parse_args()
+if args.loader_hook and not args.loader:
+    ap.error('--loader-hook requires --loader')
+if args.four_box_bar and not args.loader:
+    ap.error('--four-box-bar requires --loader')
+if args.four_box_bar and args.boot_call:
+    ap.error('--four-box-bar does not support legacy --boot-call; use BIN entries')
+from boot_splash import (FourBoxBar, frames as splash_frames, publish as publish_code,
+                         ASSET_NAME, WIDTH as SPLASH_WIDTH, HEIGHT as SPLASH_HEIGHT,
+                         HOLD_MS as SPLASH_HOLD_MS)
+splash = FourBoxBar() if args.four_box_bar else None
 # The loader's path string, as the C preprocessor wants it: one backslash in
 # the file means two here.  Assembled into the loader rather than written in
 # loader.S, so the two build lines are one file.
@@ -388,6 +418,9 @@ def progress(out, pct: int):
 
     Set FPSUP_THIN_BAR=1 to send once and take the risk.
     """
+    if splash:
+        splash.progress(out, min(3, pct // 25))
+        return
     if NO_BAR:
         return
     if MIN_BAR and BAR_WIPED:
@@ -451,18 +484,26 @@ w("# Boot with the USB cable UNPLUGGED, then attach it.  The gadget is built on"
 w("# attach, so the patches have to land first; and the patched words sit in code")
 w("# that has not run yet, so no stale instruction-cache line can shadow them.")
 w("#")
-w("# The screen reads fpSup[........]0 through fpSup[########]100 while this runs")
-w(f"# and {args.banner} when it is done.  A bar that stops means the load "
-  "stopped there.")
+if splash:
+    w("# Experimental four-box splash: transparent fpSup logo and four progress squares.")
+    w("# Stage2 fills the fourth box after loading, holds for 2 seconds, restores UI.")
+    w("# Keep FPSUPUI/0.BIN through 4.BIN beside this script and fpSup.BIN.")
+else:
+    w("# The screen reads fpSup[........]0 through fpSup[########]100 while this runs")
+    w(f"# and {args.banner} when it is done.  A bar that stops means the load "
+      "stopped there.")
 w("# ============================================================================")
 w("")
 w("# --- screen ------------------------------------------------------------------")
-w("display monitor 0 1")
-for addr, value, why in SCREEN:
-    w(f"# {why}")
-    w(f"mem set 0x{addr:08X} 0x{value:08X}")
-w("")
-progress(out, 0)
+if splash:
+    splash.start(out)
+else:
+    w("display monitor 0 1")
+    for addr, value, why in SCREEN:
+        w(f"# {why}")
+        w(f"mem set 0x{addr:08X} 0x{value:08X}")
+    w("")
+    progress(out, 0)
 w("")
 fw_patches = []
 if args.no_shell:
@@ -562,12 +603,17 @@ if args.store_boot:
     half = len(swords) // 2
     for i in range(len(swords)):
         w(f"mem set 0x{STORE_BOOT_AT + i*4:08X} 0x{word_at(swords, i):08X}")
-        if i == half - 1:
+        if splash:
+            if i + 1 in ((len(swords) + 2) // 3, (2 * len(swords) + 2) // 3, len(swords)):
+                splash.progress(out, round((i + 1) * 3 / len(swords)))
+        elif i == half - 1:
             w("")
             progress(out, 30)
     w("")
     progress(out, 60)
     w("")
+    if splash:
+        publish_code(out)   # publish the freshly written store bootstrap
     w(f"mem set 0x{ECHO_SLOT:08X} 0x{STORE_BOOT_AT:08X}")
     # The last frame before the load.  Everything after this line happens
     # inside our own code, where the script cannot report: if the camera stops
@@ -592,11 +638,12 @@ if args.store_boot:
     # zero, prints its reply and does not reach the screen (measured both ways,
     # 2026-09-19).  The worker's task can -- but og3k, og2k and anyone else's
     # payload have no worker, and the banner has to be the same on every card.
-    for _ in range(3):
-        w("display osd 1 0x00000000")
-    for _ in range(3):
-        w(f"display text {args.banner}")
-        w("display osd 1")
+    if not splash:
+        for _ in range(3):
+            w("display osd 1 0x00000000")
+        for _ in range(3):
+            w(f"display text {args.banner}")
+            w("display osd 1")
     w("")
     w("echo")
     w("")
@@ -689,12 +736,16 @@ if args.loader:
 
     w(f"# --- loader @0x{LOADER:08X}..0x{lend:08X}, {len(lcode)} bytes --------------")
     w("# Reads \\fpSup.BIN and places what it says. The worker itself is in there.")
-    per = (len(lwords) + CHUNKS - 1) // CHUNKS
-    for c in range(CHUNKS):
+    loader_chunks = 3 if splash else CHUNKS
+    per = (len(lwords) + loader_chunks - 1) // loader_chunks
+    for c in range(loader_chunks):
         for i in range(c * per, min((c + 1) * per, len(lwords))):
             w(f"mem set 0x{LOADER + i*4:08X} 0x{word_at(lwords, i):08X}")
         w("")
-        progress(out, 30 + round((c + 1) * 60 / CHUNKS))
+        if splash:
+            splash.progress(out, c + 1)
+        else:
+            progress(out, 30 + round((c + 1) * 60 / CHUNKS))
         w("")
 
 w("# --- start ------------------------------------------------------------------")
@@ -711,12 +762,16 @@ if args.loader:
     # Called from `echo`, it runs where the AutoRun says and nowhere else.
     w("# The loader runs here, once, in the shell dispatcher's task -- where a file")
     w("# read is an ordinary thing to do. The gyro callback is the logger's alone.")
+    if splash:
+        publish_code(out)   # fresh loader instructions, before first execution
     w(f"mem set 0x{ECHO_SLOT:08X} 0x{lboot:08X}")
     w("echo")
-    for _ in range(3):
-        # `mem set` drops commands, and a handler left pointing at the loader
-        # turns the next `echo` into a branch into it.
-        w(f"mem set 0x{ECHO_SLOT:08X} 0x{ECHO_ORIG:08X}")
+    if not splash:
+        for _ in range(3):
+            # `mem set` drops commands, and a handler left pointing at the loader
+            # turns the next `echo` into a branch into it.
+            w(f"mem set 0x{ECHO_SLOT:08X} 0x{ECHO_ORIG:08X}")
+
 else:
     w("# A one-shot branch from the gyro callback: bootstrap calls the routine it")
     w("# displaced, creates the task, and restores this word.")
@@ -790,17 +845,20 @@ for spec in args.boot_call:
     w("")
 
 w("# --- done --------------------------------------------------------------------")
-for _ in range(3):
-    w("display osd 1 0x00000000")
-# The three wipes above clear the surface, so this does not have to be the
-# same length as the bar it replaces -- `display text` leaves standing whatever
-# it does not draw over, and that is what the wipe is for.
-if len(args.banner) > 24:
-    sys.exit(f'--banner is {len(args.banner)} characters; the readout is not '
-             f'that wide')
-for _ in range(3):
-    w(f"display text {args.banner}")
-    w("display osd 1")
+if splash:
+    splash.fallback(out)
+else:
+    for _ in range(3):
+        w("display osd 1 0x00000000")
+    # The three wipes above clear the surface, so this does not have to be the
+    # same length as the bar it replaces -- `display text` leaves standing whatever
+    # it does not draw over, and that is what the wipe is for.
+    if len(args.banner) > 24:
+        sys.exit(f'--banner is {len(args.banner)} characters; the readout is not '
+                 f'that wide')
+    for _ in range(3):
+        w(f"display text {args.banner}")
+        w("display osd 1")
 
 if args.loader:
     if args.payload and not args.entry:
@@ -842,6 +900,38 @@ if args.loader:
         _sd += ['STORE_MAGIC=0', 'STORE_LEN=0']
     if args.store_boot:
         _sd.append('ARM_ABORT=1')
+    # Every loader card journals the firmware words it changes and writes them
+    # back at power-off (LOADER_V2.md).  A payload no longer registers its own
+    # power-off routine -- gyro's poff_disarm is gone -- so this is not optional.
+    _sd.append('LH_RESTORE=1')
+    if args.loader_hook_mark is not None and not args.loader_hook:
+        _sd.append(f'LH_MARK=0x{args.loader_hook_mark:08X}')
+    if args.loader_hook:
+        # The loader's +4 is the hook entry; stage2 checks the word there before
+        # it arms anything, so the word has to come from the loader this build
+        # actually wrote.
+        _lh_at = CAVE_LOW + 4
+        _lh_word = to_words(assemble(HERE / 'templates' / 'loader.S', LOADER_DEFINES))[1]
+        if _lh_word >> 24 != 0xEA:
+            sys.exit(f'loader +4 is 0x{_lh_word:08X}, not a branch to the hook')
+        _lh_site = 0xC03DA420
+        _lh_bl = 0xEB000000 | (((_lh_at - _lh_site - 8) >> 2) & 0xFFFFFF)
+        _sd += ['LOADER_HOOK=1', f'LH_ENTRY_AT=0x{_lh_at:08X}',
+                f'LH_ENTRY_WORD=0x{_lh_word:08X}', f'LH_BL=0x{_lh_bl:08X}']
+        if args.loader_hook_mark is not None:
+            _sd.append(f'LH_MARK=0x{args.loader_hook_mark:08X}')
+        # The warm path skips the AutoRun and its banner; stage2 draws it --
+        # the text banner, or with the four-box splash its frame 0 + finish.
+        _sd.append(f'LH_BANNER_AT_US={args.loader_hook_banner_at}')
+        if not splash:
+            _sd.append(f'LH_BANNER_TEXT="{args.banner}"')
+            _sd.append('LH_BANNER=1')
+        else:
+            _sd.append('LH_SPLASH=1')
+    if splash:
+        _sd += ['SPLASH_FINISH=1', f'SPLASH_HOLD_MS={SPLASH_HOLD_MS}',
+                f'SPLASH_WIDTH_TEXT="{SPLASH_WIDTH}"',
+                f'SPLASH_HEIGHT_TEXT="{SPLASH_HEIGHT}"', 'SPLASH_OFFSET_TEXT="0"']
     stage2 = assemble(HERE / 'templates' / 'stage2.S', _sd)
     verify_stage2_cache_publish(stage2)
     secs = [(0, stage2)]
@@ -922,6 +1012,12 @@ if args.loader:
         tramp_tbl = symbols(HERE / 'templates' / 'entries.S', [])['table']
         tramp_sec = len(secs)
         secs.append((0, tramp + b'\x00' * (4 * (entry_count + 1))))
+    if splash:
+        # This mode temporarily owns the redraw prologue until UI cleanup.
+        # A payload that patches the same word needs a different integration.
+        for addr, blob in secs:
+            if addr >= 0x40000000 and addr < 0xC0528704 and addr + len(blob) > 0xC0528700:
+                sys.exit('payload section overlaps the four-box redraw pause')
     table = b''
     body = b''
     at = {}
@@ -976,6 +1072,14 @@ if args.loader:
     padded = BIN_PAD if len(binblob) <= BIN_PAD else read_cap
     binblob += b'\x00' * (padded - len(binblob))
     binpath.write_bytes(binblob)
+    if splash:
+        asset_path = DEST.parent / ASSET_NAME
+        asset_path.mkdir(exist_ok=True)
+        artwork = splash_frames()
+        for frame, pixels in enumerate(artwork):
+            (asset_path / f'{frame}.BIN').write_bytes(pixels)
+        print(f'splash : {asset_path.name}/  {sum(map(len, artwork))} bytes; '
+              'hardware untested; keep beside AutoRun.txt and fpSup.BIN')
     print(f"binary : {binpath.name}  {len(binblob)} bytes, {len(secs)} section(s), "
           f"entry 0x{entry:08X}")
 
@@ -1032,7 +1136,7 @@ print(f"patches: {(len(fw_patches) if not args.no_shell else 0) + _retain} firmw
       f"({'iface' if not args.no_shell else '-'}"
       f"{'+push' if not args.no_shell and not args.no_ep_patches else ''}"
       f"{'+retain' if _retain else ''}), "
-      f"{len(SCREEN)} screen")
+      f"{0 if splash else len(SCREEN)} screen")
 print(f"wrote  : {DEST}  {len(out)} lines  "
       f"sha256={hashlib.sha256(text.encode()).hexdigest()[:16]}")
 commands = [l for l in out if l and not l.startswith('#')]

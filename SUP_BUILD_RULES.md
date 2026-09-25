@@ -49,10 +49,14 @@ OpenGate 是完整專案的 [build_og3k_gyro.py](../projects/open-gate/build/bui
 1. AutoRun 放置並呼叫 loader；Fast 命中時由 store_boot 複製 loader、完成 D/I 快取處理後尾呼叫。
 2. loader 配置自己的 staging buffer，開檔／讀檔／關檔，沿用現有 VBIN magic 檢查。
 3. **loader 先 D-cache 維護，再 I-cache invalidate，才第一次執行 staging 裡的 stage2。**
-4. stage2 做 pass 1：放置固定位址區段，然後 D/I publication。
+4. stage2 放任何東西之前，先配置還原記錄（journal），並向 `XC_PowerOffMgr` 的兩張清單註冊 loader 的關機回呼。
+   接著做 pass 1：放置固定位址區段——每個 cave 以外的韌體字，覆寫前先把原值記進 journal——然後 D/I publication。
+   關機時回呼把 journal 寫回，相機以原廠狀態關機。
 5. 呼叫 header entry；有多個入口就依序呼叫，**每個都必須返回**。
 6. stage2 做 pass 2：放置 pool-offset 區段，然後再次 D/I publication。
-7. 僅 Fast 封裝具有 store provision 與 abort 安排；stage2 返回，loader 釋放 staging。
+7. 僅 Fast Start 2 封裝具有 store provision、abort 與 loader hook：
+   只有確實有 AutoRun 在跑時才安排 abort；並把 `0xC03DA420`（啟動 AutoRun 的那條呼叫）指向 loader 的 `+4` 入口，
+   讓暖開機不跑 AutoRun 就載入。stage2 返回，loader 釋放 staging。
    **Fast 命中且載入完成**時，下一個 echo 執行 abort，跳過慢路徑；
    首次／未命中的 fallback loader 返回後，AutoRun 還原 echo slot 並正常收尾，不再呼叫 abort。
    普通卡也照既有 AutoRun 收尾。
@@ -82,13 +86,14 @@ OpenGate 是完整專案的 [build_og3k_gyro.py](../projects/open-gate/build/bui
   沿用現行配置機制並核對占用，不憑「讀到零」宣稱位址可用，不搬走其他 sup 或 USB 傳輸的工作區。
 - 動態安裝自己的 hook 時，先準備好它會用到的程式、指標與資源，完成所需 publication，最後才 arm。
   配置失敗時不要讓該 hook 生效，保留可正常返回的路徑；這不等於替其他 sup 增加整包 rollback。
-- **hook 的本體或落點不在韌體映像裡（例如在自己配置的記憶體），關機時必須拆掉。**
-  裝第一個 hook 前先向 `XC_PowerOffMgr` 註冊關機回呼，註冊失敗就不裝；
-  hook 也必須在「沒在錄影」時被觸發仍然正確。做法、位址與原因只寫在
-  [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md)，參考實作是 gyro 的 `s_poff`。
+- **卡片改過的每個韌體字，由 loader 在關機時寫回，不由 sup 自己拆。**
+  區段由 stage2 自動記錄。執行期才裝 hook 的 sup，要把每個 hook 位址宣告成一個 4 bytes 的區段、內容是韌體原字，
+  讓 stage2 在 entry 之前把它記進 journal（參考：`build_base_card.py` 的 gyro `hook_sites()`）。
+  sup 不再自己註冊關機回呼。hook 在「沒在錄影」時被觸發仍必須正確。
+  原因與歷史見 [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md)。
 - 狀態字換位置時，**初值跟著搬**，並測試程式啟動時讀到的值，不只測位址。
 - **撥電源開關是暖開機：映像與 cave 保留，BSS 清零，堆積重來。** 載入時不能假設要修補的位址還是原廠值
-  （上一張卡或自己的舊版可能還在）；向韌體註冊的東西每次載入重做；指向池的東西不能留到下次開機。
+  （上一張卡或自己的舊版可能還在）；向韌體註冊的東西每次載入重做；指向池的東西不能留到下次開機（有宣告的位址由 loader 的關機寫回處理）。
   細節只寫在 [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md)。
 - 新寫入的 ARM 程式在首次執行前，沿用已驗證的 **`0xC000E91C()` → `0xC000EABC()`**。
   DSB、記憶體讀回正確、或「新程式進入後自己 flush」都不能取代首次執行前的快取處理。
@@ -96,6 +101,10 @@ OpenGate 是完整專案的 [build_og3k_gyro.py](../projects/open-gate/build/bui
   載入順序不是與 REC／QS 的互斥鎖，不能因此宣稱錄影中安裝也安全。
 
 ## 5. Fast start 與「只換 BIN」
+
+合併頁面的選項是 **Fast Start 2**：這條設定區快路徑加上 loader hook，由同一次
+`--store-boot --loader-hook --four-box-bar` 建置產生。暖開機時開機後約 1.4 秒就載入、不跑 AutoRun，
+顯示四格畫面；冷開機時跑短版 Fast AutoRun。單一產品發布卡兩者都不帶。
 
 Fast 只是縮短 AutoRun 拼出 loader 的工作，不是第二套 sup 初始化流程，**命中後仍重新讀 BIN**。
 store_boot 命中 loader magic：複製 loader → D/I → 還原 LR 並尾呼叫；

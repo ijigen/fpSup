@@ -219,6 +219,22 @@ def launch(edition):
     return boot + code, len(code)
 
 
+def hook_sites():
+    """Each hook site as a four-byte section holding the firmware's own word.
+
+    gsup_boot arms these at run time, which stage2 cannot see.  Declared here,
+    stage2 journals each site before the entry runs -- and writing a site's own
+    word back is a no-op on a stock image and a repair on one a missed power-off
+    left patched.  The loader's power-off callback then writes them back with
+    everything else, which is why gsup_boot has no disarm of its own any more
+    (2026-09-25, LOADER_V2.md).  One list: imu_stream_deploy.PRODUCERS."""
+    import struct
+    import imu_stream_deploy as D
+    return [(site, struct.pack('<I', orig), f'hook site {name}')
+            for name, (_src, _defs, site, orig, _t) in sorted(D.PRODUCERS.items(),
+                                                              key=lambda kv: kv[1][2])]
+
+
 def check(secs):
     """Nothing overlaps, nothing in the cave reaches the park stub, and nothing
     in the pool lands on the loader while it is still reading."""
@@ -283,6 +299,13 @@ def main():
     ap.add_argument('--vshl-entry', type=lambda s: int(s, 0), default=None,
                     help='optional absolute entry for the extra sections; '
                          'called after the USB worker and gyro launcher')
+    ap.add_argument('--loader-hook', action='store_true',
+                    help='instant boot (dev cards; releases leave it to the '
+                         'merge page)')
+    ap.add_argument('--loader-hook-mark', default=None, metavar='ADDR',
+                    help='debug: passed to build_autorun.py (see there)')
+    ap.add_argument('--four-box-bar', action='store_true',
+                    help='passed to build_autorun.py')
     ap.add_argument('--banner', default=None,
                     help='override the screen banner; a merged card is not '
                          'the edition on its own and should not claim to be')
@@ -298,7 +321,7 @@ def main():
             raise SystemExit(f'--also-bin wants 0xADDR:FILE, got {spec!r}')
         f = pathlib.Path(path)
         extra.append((int(at, 0), f.read_bytes(), f'extra {f.name}'))
-    secs = secs + extra
+    secs = secs + hook_sites() + extra
     check(secs)
 
     tmp = pathlib.Path(tempfile.mkdtemp())
@@ -316,8 +339,15 @@ def main():
     # the camera, and "which build is in there" has been guessed at more than
     # once.
     banner = a.banner or f'fpSup-{BANNER[a.edition]}-{a.version}!'
+    # The power-off restore is every loader card's now (build_autorun always
+    # adds it; hook_sites above is what puts these hooks in it).  --loader-hook
+    # only adds the instant path, which the merge page's Fast Start 2 owns.
     cmd = [sys.executable, str(SHELL / 'build_autorun.py'),
            '--loader', '--banner', banner] + (
+               ['--loader-hook'] if a.loader_hook else []) + (
+               ['--loader-hook-mark', a.loader_hook_mark]
+               if a.loader_hook_mark else []) + (
+               ['--four-box-bar'] if a.four_box_bar else []) + (
                ['--store-boot'] if a.store_boot else []) + (
                ['--no-ep-patches'] if a.debug else ['--no-shell']) + [
            # A soft power cycle can leave a previous session's diagnostic patch

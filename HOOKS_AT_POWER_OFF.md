@@ -9,9 +9,21 @@ you got from the allocator, this applies to you.
 
 ## The rule
 
-> A hook whose landing point or body is not firmware image must be taken out
-> when the camera powers off. Register a power-off callback **before** arming
-> anything, and do not arm if the registration fails.
+> Every firmware word a card changes must be back to stock when the camera
+> powers off.
+
+**Since 2026-09-25 the loader does this, not the sup** (usbshell v3.3.0, gyro
+v1.14.0, og3k v0.2.6a, og2k v0.1.3a and the fpSup-Merge page). stage2 registers
+one power-off callback in both lists before it places anything, copies every
+firmware word outside the cave into a journal before overwriting it, and the
+callback writes the journal back. A sup that arms a hook at run time declares
+the site as a four-byte section holding the firmware's own word, so the journal
+has it -- gyro's `hook_sites()` in `gyro/build_base_card.py`. A sup no longer
+registers a power-off routine of its own. Design and camera results:
+`projects/usb-shell-sup/notes/LOADER_V2.md` in the research tree.
+
+The rest of this page is how the rule was found, and the power-off manager's
+API, which the loader now uses.
 
 A static patch whose code sits in the firmware image (a VBIN section at a fixed
 address in the cave) is not covered: that code stays valid, and it survives a
@@ -133,6 +145,10 @@ Register in **both** lists. The USB gadget does, for the same reason.
 
 ## What the disarm routine must be
 
+*History: this was gyro v1.13.1's own routine, removed in v1.14.0. The loader's
+write-back (`lh_unhook` in `fp_usb_shell/templates/stage2.S`) replaces it; it
+runs from the journal block, which is still valid at power-off.*
+
 - **It lives in the cave, not in the pool.** It runs at power-off, so it
   must not depend on the memory it exists to stop you jumping into. Take its
   space from the cave allocator (`CAVE_BUMP` `0xC072E060`), copy it there, then
@@ -174,18 +190,25 @@ Recording tests do not reach it. For every card that arms a hook:
 
 Also power off right after a take, and after switching still/cine.
 
-## Next
+## Done (2026-09-25)
 
-This is gyro's own code today. The plan is to move it into the shared loader:
-stage2 registers one power-off callback, and a shared `hook_arm(site, target)`
-records each site's original word before writing the branch. Every sup, and
-every module on a platform built on this loader, would then get the disarm
-without writing it. Not implemented yet. It changes stage2, so every product
-has to be verified on the camera again.
+The move this section used to plan is done: the shared loader journals and
+writes back, and gyro's `s_poff` / `poff_disarm` are gone. One case is known
+and open: if a power-off callback never ran (a frozen camera with the battery
+pulled), the next load journals whatever is left in memory as if it were stock.
+Recorded in LOADER_V2.md, not solved.
 
 ---
 
 ## 中文摘要
+
+**2026-09-25 起:卡片改過的每個韌體字,由 loader 在關機時寫回,sup 不再自己註冊關機回呼。**
+stage2 先註冊關機回呼(兩張清單),每個 cave 以外的韌體字覆寫前先記進 journal,關機時寫回。
+執行期才裝 hook 的 sup,把 hook 位址宣告成內容為韌體原字的 4 bytes 區段(gyro 的 `hook_sites()`)。
+未解:關機回呼沒跑到時,下次載入會把殘留當成原廠值記下(見 LOADER_V2.md)。
+
+以下是原本的摘要(gyro v1.13.1 時代):
+
 
 **規則:hook 的程式本體或落點不在韌體映像裡的,關機時必須拆掉。**
 先向 `XC_PowerOffMgr` 註冊關機回呼,註冊成功才裝 hook。

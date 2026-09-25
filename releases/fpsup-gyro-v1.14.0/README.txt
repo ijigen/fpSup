@@ -4,6 +4,34 @@ Put AutoRun.txt and fpSup.BIN in the root of the SD card the camera boots
 from, and record CinemaDNG.  Nothing else: no folder to make, no file to
 convert, no step after the take.
 
+WHAT CHANGED SINCE v1.13.1
+
+  The payload is unchanged.  The loader and its second stage are new
+  (2026-09-25), and they change what happens when the camera is
+  switched off.
+
+  - Every firmware word this card changes is recorded when it loads
+    and written back when the camera powers off.  Turning the camera
+    off with the power switch keeps the firmware in memory -- it is a
+    warm restart, not a cold one -- and until now the changes stayed
+    in it, into the next boot and whatever card was in the slot then.
+    Now the camera powers off stock.
+
+    The gyro no longer registers a power-off routine of its own.  Its
+    four hook sites are part of the loader's write-back, the same one
+    that covers every other card.
+
+  - This card still starts the ordinary way on every boot: the
+    AutoRun runs and the progress bar shows.  The instant start (the
+    card loaded about 1.4 s after power-on, no AutoRun) and the short
+    cold start are packaging, not part of this card: build the card on
+    the fpSup-Merge page and tick Fast Start 2.
+
+  NOTE  The write-back runs as part of a normal power-off.  If the
+        camera loses power without one -- a frozen camera with the
+        battery pulled -- it does not run, and the changed words can
+        stay in memory until the camera next starts cold.
+
 Each take writes both of the files Gyroflow wants, inside the clip's own
 folder, while it is being recorded:
 

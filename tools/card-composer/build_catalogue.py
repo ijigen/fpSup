@@ -85,13 +85,19 @@ def build_fast():
     And it is why the page needs no assembler to offer a fast card: nothing here
     is computed at merge time.  The page swaps three blobs.
     """
+    # Fast Start 2 (2026-09-25): the settings-block fast path AND the loader
+    # hook, so a warm boot loads without the AutoRun at all and a cold one
+    # starts fast; the four-box splash is what the instant path shows.  See
+    # projects/usb-shell-sup/notes/LOADER_V2.md.
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='fast-'))
     out = {}
     stage2 = abort = None
+    ui = None
     for name, flags in TEMPLATE_FLAGS.items():
         f = tmp / f'{name}.txt'
         r = subprocess.run([sys.executable, str(SHELL_DIR / 'build_autorun.py'),
-                            '--loader', '--store-boot', *flags,
+                            '--loader', '--store-boot', '--loader-hook',
+                            '--four-box-bar', *flags,
                             '--banner', '@@BANNER@@',
                             '--vshl-entry', '0xC072E064', '--out', str(f)],
                            capture_output=True, text=True)
@@ -109,6 +115,14 @@ def build_fast():
             stage2, abort = records[0][1], aborts[0]
         elif (records[0][1], aborts[0]) != (stage2, abort):
             raise SystemExit(f'fast {name} disagrees with the other fast builds')
+        frames = [(p.name, p.read_bytes())
+                  for p in sorted((tmp / 'FPSUPUI').glob('*.BIN'))]
+        if ui is None:
+            ui = frames
+        elif frames != ui:
+            raise SystemExit(f'fast {name}: the splash frames differ')
+    if not ui:
+        raise SystemExit('the fast build wrote no FPSUPUI frames')
     shutil.rmtree(tmp, ignore_errors=True)
     # The one thing that makes these four pieces a set: store_boot's expected
     # magic is sha256 of the loader that its own AutoRun spells out.  Checked
@@ -127,7 +141,7 @@ def build_fast():
             raise SystemExit(f'fast {name}: store_boot does not carry '
                              f'sha256 of the {len(loader)}-byte loader it '
                              f'spells out (0x{want:08X})')
-    return out, stage2, abort
+    return out, stage2, abort, ui
 
 
 ABORT_AT = 0xC072F080           # where the abort routine is placed in the cave
@@ -626,7 +640,7 @@ def main():
 
     templates_out, stage2 = build_templates()
     tramp, tramp_tbl = trampoline()
-    fast_tpl, fast_stage2, fast_abort = build_fast()
+    fast_tpl, fast_stage2, fast_abort, fast_ui = build_fast()
     for name in TEMPLATE_FLAGS:
         n = len([l for l in autorun(templates_out[name], 'X').splitlines()
                  if l.strip() and not l.lstrip().startswith('#')])
@@ -666,7 +680,11 @@ def main():
                                      k='stage2'),
                          abort=dict(a=ABORT_AT,
                                     b=base64.b64encode(fast_abort).decode(),
-                                    l='abort (stops the script)', k='sec')),
+                                    l='abort (stops the script)', k='sec'),
+                         # the four-box splash the instant path draws; the zip
+                         # carries them as FPSUPUI/<name> beside the two files
+                         ui=[dict(n=n, b=base64.b64encode(b).decode())
+                             for n, b in fast_ui]),
                templates=templates_out,
                autorun_template=template, filler=FILLER,
                stage2=dict(a=0, b=base64.b64encode(stage2).decode(),

@@ -37,10 +37,10 @@ card, use the composer rather than copying both.
 | product | version | what it does |
 |---|---|---|
 <!-- releases:begin:en -->
-| [`fpsup-gyro`](releases/fpsup-gyro-v1.13.1/) | v1.13.1 | Writes Gyroflow's `.gcsv` and `.json` while recording — every sample at 2500 Hz, distortion read off the lens. The profile now carries the size the take was actually recorded at, which open gate got wrong. |
-| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.2a/) | v0.1.2a | The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build. |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.5a/) | v0.2.5a | The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha. |
-| [`fpsup-usbshell`](releases/fpsup-usbshell-v3.2.0/) | v3.2.0 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
+| [`fpsup-gyro`](releases/fpsup-gyro-v1.14.0/) | v1.14.0 | Writes Gyroflow's `.gcsv` and `.json` while recording — every sample at 2500 Hz, distortion read off the lens. The profile now carries the size the take was actually recorded at, which open gate got wrong. |
+| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.3a/) | v0.1.3a | The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build. |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.6a/) | v0.2.6a | The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha. |
+| [`fpsup-usbshell`](releases/fpsup-usbshell-v3.3.0/) | v3.3.0 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
 <!-- releases:end:en -->
 
 **The two open-gate builds see the same picture.** OG2K is the sensor reduced by three
@@ -67,10 +67,10 @@ Each page says what has been proven, what is being worked on, and what is open.
 
 | # | Project | What it is | Status |
 |---|---|---|---|
-| 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — v3.1.0. The channel is built on the camera's own PTP gadget, so recording survives it |
+| 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB firmware research and data transport | **released** — v3.2.0. The channel is built on the camera's own PTP gadget, so recording survives it |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 modes, ISO, gain, sensor control | **research complete** — [explainer](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html), and the mode-table ambiguity closed |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | Gyro, six-axis logging, Gyroflow workflow | **released** — two editions; Base writes a raw `.GYR` instead, converted [in a browser](gyro/convert/) |
-| 4 | [**open gate**](projects/open-gate.md) | Recording the sensor's full 3:2 area | **OG3K v0.2.3a alpha · OG2K v0.1.0test** — 3024×2010 or 2016×1344, same field of view; Super35/crop must remain off |
+| 4 | [**open gate**](projects/open-gate.md) | Recording the sensor's full 3:2 area | **OG3K v0.2.5a alpha · OG2K v0.1.2a test** — 3024×2010 or 2016×1344, same field of view; Super35/crop must remain off |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | Getting the best 6K the link can carry | designed; 8-bit lands within 94–100% of native 6K across every remaining unknown |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD, focus model, lens control, follow focus | AF decompiled in depth; no collector built |
 | 7 | [**raw sup**](projects/raw-sup.md) | Bayer capture, streaming, compression, packaging | researched; the engine's sustained rate is still the one unmeasured number |
@@ -142,10 +142,10 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 產品 | 版本 | 做什麼 |
 |---|---|---|
 <!-- releases:begin:zh -->
-| [`fpsup-gyro`](releases/fpsup-gyro-v1.13.1/) | v1.13.1 | 錄影當下就把 Gyroflow 要的 `.gcsv` 與 `.json` 寫進片段資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭。profile 的尺寸改成實際錄下的那個 —— open gate 下先前是錯的。 |
-| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.2a/) | v0.1.2a | 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。 |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.5a/) | v0.2.5a | 感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。 |
-| [`fpsup-usbshell`](releases/fpsup-usbshell-v3.2.0/) | v3.2.0 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
+| [`fpsup-gyro`](releases/fpsup-gyro-v1.14.0/) | v1.14.0 | 錄影當下就把 Gyroflow 要的 `.gcsv` 與 `.json` 寫進片段資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭。profile 的尺寸改成實際錄下的那個 —— open gate 下先前是錯的。 |
+| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.3a/) | v0.1.3a | 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。 |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.6a/) | v0.2.6a | 感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。 |
+| [`fpsup-usbshell`](releases/fpsup-usbshell-v3.3.0/) | v3.3.0 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
 <!-- releases:end:zh -->
 
 **兩個 open gate 看到的是同一個畫面。** OG2K 是把感光元件縮三倍而不是兩倍,所以資料量只有三分之一,
@@ -167,10 +167,10 @@ Each page says what has been proven, what is being worked on, and what is open.
 
 | # | 項目 | 是什麼 | 狀態 |
 |---|---|---|---|
-| 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸 | **已釋出** —— v3.1.0。通道建在相機自己的 PTP gadget 上,所以錄影撐得過去 |
+| 1 | [**usb shell sup**](projects/usb-shell-sup.md) | USB 韌體研究與資料傳輸 | **已釋出** —— v3.2.0。通道建在相機自己的 PTP gadget 上,所以錄影撐得過去 |
 | 2 | [**sensor lab sup**](projects/sensor-lab-sup.md) | IMX410 模式、ISO、增益、感光元件控制 | **研究完成** —— [互動說明](https://ijigen.github.io/fpSup/explainers/imx410-iso-gain.html),模式表的歧義也收掉了 |
 | 3 | [**gyro sup**](projects/gyro-sup.md) | 陀螺儀、六軸記錄、Gyroflow 流程 | **已釋出** —— 兩個版本;Base 版寫原始 `.GYR`,[在瀏覽器裡](gyro/convert/)轉換 |
-| 4 | [**open gate**](projects/open-gate.md) | 錄下感光元件完整的 3:2 面積 | **OG3K v0.2.3a alpha · OG2K v0.1.0test** —— 3024×2010 或 2016×1344,視角相同;Super35/crop 必須關閉 |
+| 4 | [**open gate**](projects/open-gate.md) | 錄下感光元件完整的 3:2 面積 | **OG3K v0.2.5a alpha · OG2K v0.1.2a test** —— 3024×2010 或 2016×1344,視角相同;Super35/crop 必須關閉 |
 | 5 | [**6k to ssd**](projects/6k-to-ssd.md) | 把鏈路載得動的最好 6K 拿出來 | 設計完成;8bit 在所有剩餘未知數下都落在原生 6K 的 94–100% |
 | 6 | [**focus sup**](projects/focus-sup.md) | DFD、對焦模型、鏡頭控制、跟焦 | AF 深度反編譯完成;收集器還沒做 |
 | 7 | [**raw sup**](projects/raw-sup.md) | Bayer 擷取、串流、壓縮、封裝 | 研究過;引擎的持續速率仍是唯一沒量到的數字 |

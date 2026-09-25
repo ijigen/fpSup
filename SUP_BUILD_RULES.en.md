@@ -85,15 +85,22 @@ or released.
    file, and checks the existing VBIN magic.
 3. **The loader cleans the D-cache, then invalidates the I-cache, before it
    first runs the stage2 in staging.**
-4. stage2 runs pass 1: it places the fixed-address sections, then publishes
-   D/I.
+4. Before placing anything, stage2 allocates the write-back journal and
+   registers the loader's power-off callback in both of `XC_PowerOffMgr`'s
+   lists. Pass 1 then places the fixed-address sections, copying each firmware
+   word outside the cave into the journal before overwriting it, and publishes
+   D/I. At power-off the callback writes the journal back, so the camera powers
+   off stock.
 5. It calls the header entry. With several entries it calls each in turn, and
    **each must return**.
 6. stage2 runs pass 2: it places the pool-offset sections, then publishes D/I
    again.
-7. Only a Fast package has the store provisioning and the abort. stage2
-   returns and the loader frees staging. On a **Fast hit with the load
-   complete**, the next `echo` runs the abort and skips the slow path. On a
+7. Only a Fast Start 2 package has the store provisioning, the abort and the
+   loader hook. stage2 arms the abort only when an AutoRun is actually running,
+   and points `0xC03DA420` (the call that starts the AutoRun) at the loader's
+   `+4` entry, so a warm restart loads without the AutoRun. stage2 returns and
+   the loader frees staging. On a **Fast hit with the load complete**, the next
+   `echo` runs the abort and skips the slow path. On a
    first boot or a miss, the fallback loader returns, AutoRun restores the echo
    slot and finishes normally, and does not call the abort. An ordinary card
    finishes through its AutoRun as it always has.
@@ -137,20 +144,22 @@ does not look at r0 and does not stop later entries.
   an allocation fails, do not let that hook take effect, and keep a path that
   returns normally. This does not mean adding an all-or-nothing rollback for
   other sups.
-- **A hook whose body or landing point is not firmware image (for example, it
-  is in memory you allocated) must be taken out at power-off.** Before arming
-  the first hook, register a power-off callback with `XC_PowerOffMgr`; if the
-  registration fails, arm nothing. A hook must also behave correctly when it
-  fires with no recording in progress. How, where and why are written in one
-  place only, [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md); the reference
-  implementation is gyro's `s_poff`.
+- **Every firmware word a card changes is written back at power-off by the
+  loader, not by the sup.** Sections are journaled by stage2 automatically. A
+  sup that arms hooks at run time declares each site as a four-byte section
+  holding the firmware's own word, so stage2 journals it before the entry runs
+  (reference: gyro's `hook_sites()` in `build_base_card.py`). A sup does not
+  register a power-off routine of its own. A hook must still behave correctly
+  when it fires with no recording in progress. Why, and the history, are in
+  [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md).
 - When state words move, **their initial values move with them**. Test the value
   the code starts with, not just the address.
 - **The power switch is a warm restart: the image and the cave are kept, BSS is
   cleared, the heap starts again.** A sup must not assume the words it patches
   are still stock when it loads (the previous card, or an older build of itself,
   may be there); anything registered with the firmware is registered again on
-  every load; nothing that points into the pool may be left for the next boot.
+  every load; nothing that points into the pool may be left for the next boot
+  (the loader's write-back takes care of every declared site).
   The detail is written in one place only,
   [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md).
 - Newly written ARM code gets the proven **`0xC000E91C()` → `0xC000EABC()`**
@@ -163,6 +172,12 @@ does not look at r0 and does not stop later entries.
   during recording safe.
 
 ## 5. Fast start and "only the BIN changes"
+
+The merge page's option is **Fast Start 2**: this settings-block fast path plus
+the loader hook, built in one `--store-boot --loader-hook --four-box-bar` run.
+A warm restart then loads about 1.4 s after power-on without the AutoRun and
+shows the four-box screen; a cold start runs the short Fast AutoRun. Single
+product releases carry neither.
 
 Fast only shortens the work of AutoRun spelling out the loader. It is not a
 second sup initialisation path; **a hit still re-reads the BIN**. When

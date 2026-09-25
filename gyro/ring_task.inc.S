@@ -293,8 +293,6 @@
  * registered callback as obj->vtbl[+0xC](obj, reason), first thing, before
  * anything is shut down (0xC0023C50; 0xC0023F38 for the forced list).  Ten
  * slots per list; the firmware registers eight normal and one forced. */
-.equ POFF_MGR,       0xC0023A98      /* () -> the manager                 */
-.equ POFF_ADD,       0xC0024118      /* (mgr, cb, forced) -> 1 ok, 0 full */
 .equ F_ICACHE,       0xC000EABC      /* invalidate, after F_CACHE         */
 
 /* The gcsv writer's state, in the gap the space provider left when it moved

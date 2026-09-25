@@ -16,7 +16,7 @@ Development is hidden and unselected by default. Open Development or All to
 see Shell, then explicitly select it to include it. Changing categories only
 filters the display: it does not select, deselect or remove a previously
 selected sup from the merged output. OG3K and OG2K remain mutually exclusive.
-Fast start stays a separate, off-by-default settings switch, not a sup tile.
+Fast Start 2 stays a separate, off-by-default settings switch, not a sup tile.
 
 When adding a sup, set its `category` string in `PRODUCTS` in
 `build_catalogue.py` (`shooting` or `development` for the current products).
@@ -26,8 +26,11 @@ names; missing metadata falls back to `uncategorized`.
 ## Current inputs and boot contract
 
 `build_catalogue.py` selects the latest frozen directory for each product from
-`releases/`; it never rebuilds or overwrites a frozen release. The 2026-09-24
-refresh uses USB Shell 3.2.0, gyro 1.13, OG3K 0.2.5a and OG2K 0.1.2a.
+`releases/`; it never rebuilds or overwrites a frozen release. The 2026-09-25
+refresh uses USB Shell 3.3.0, gyro 1.14.0, OG3K 0.2.6a and OG2K 0.1.3a: the
+same payloads as before on the new loader and stage2, which write back every
+firmware word a card changed when the camera powers off (gyro no longer carries
+a power-off routine of its own).
 OG3K and OG2K are mutually exclusive. New sup authors should first read
 [SUP_BUILD_RULES.md](../../SUP_BUILD_RULES.md).
 
@@ -36,11 +39,15 @@ The loader, stage2 and optional Fast pieces come from the shared
 
 1. AutoRun invokes the loader; it reads the BIN into its staging buffer.
 2. Loader publishes D-cache then I-cache before executing stage2.
-3. Stage2 pass 1 places absolute-address sections, then publishes D/I.
+3. Stage2 registers the loader's power-off write-back, then pass 1 places
+   absolute-address sections -- recording each firmware word first -- and
+   publishes D/I.
 4. It calls the payload entries: **worker → gyro → OG restore**, omitting
    absent products. Every entry must return.
 5. Pass 2 places pool-offset sections, then publishes D/I. Loader returns
-   and frees staging. Only Fast packaging adds provisioning and script abort.
+   and frees staging. Only Fast Start 2 packaging adds provisioning, the script
+   abort (armed only while an AutoRun runs) and the loader hook at
+   `0xC03DA420`.
 
 Entry 0 means no entry; a nonzero entry below `0x40000000` is a **file offset**,
 not a pool offset. An entry at or above that boundary is an absolute address.
@@ -58,7 +65,8 @@ are run-in-place launchers and must survive; they do not imply USB Shell.
 - A single ordinary card with unchanged options retains its frozen BIN bytes.
 - A merge uses the current common stage2, deduplicates identical records and
   relocates entries. Payload code is retained, not rebuilt by the browser.
-- Fast always replaces stage2 and adds the matching abort section.
+- Fast Start 2 always replaces stage2 and adds the matching abort section, and
+  the zip carries the four-box frames as `FPSUPUI/0.BIN`..`4.BIN`.
 - The built-in Shell's **EP 0x83** option controls the six exact descriptor
   records derived from `fp_usb_shell/patches.py` (`PUSH`). Off omits them; on
   retains the shipped set. The interface-class patch stays. Off is the page
@@ -70,8 +78,8 @@ are run-in-place launchers and must survive; they do not imply USB Shell.
 The named `plain`, `shell` and `shellpush` AutoRun template slots are retained
 for compatibility, but their executable commands are now the same: worker
 creation, state and descriptor patches reside in the BIN. Changing the EP
-option does **not** add AutoRun commands. The current normal script has 104
-commands; the Fast script has 169 in total, not 26.
+option does **not** add AutoRun commands. The current normal script has 118
+commands; the Fast Start 2 script has 148 in total, and a hit runs about 26.
 
 BIN output retains 32 KiB padding when it fits. Larger output is padded to the
 loader's `MAXLEN`, currently `0xF000` (61,440 bytes), and output exceeding that
@@ -79,10 +87,17 @@ read capacity is rejected. The browser, catalogue composer and common builder
 use the same policy. The loader owns a separate staging allocation: its read
 buffer is no longer a reserved region of the payload's shared pool.
 
-## Fast start and replacing only the BIN
+## Fast Start 2 and replacing only the BIN
 
-Fast is optional and off by default. It stores the loader in flash-backed
-settings. On a matching loader marker it copies that loader, publishes D/I,
+Fast Start 2 is optional and off by default, and built in one
+`--store-boot --loader-hook --four-box-bar` run. A power-switch restart keeps
+the firmware in memory and with it the hook at `0xC03DA420`: the card loads
+about 1.4 s after power-on without the AutoRun and shows the four-box screen.
+When the firmware was reloaded (cold start, battery pull, power-off with the USB
+cable attached, and some restarts anyway) the Fast AutoRun runs. See
+`projects/usb-shell-sup/notes/LOADER_V2.md` in the research tree.
+
+It stores the loader in flash-backed settings. On a matching loader marker it copies that loader, publishes D/I,
 and loads the BIN normally; on a mismatch it takes the slow AutoRun path.
 The marker is derived from **loader bytes**, not the BIN's hash, length,
 version or entry. It is not a runtime integrity check of the stored body.

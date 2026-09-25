@@ -21,7 +21,7 @@ The fp's firmware runs a script called `AutoRun.txt` from the SD card at boot,
 if it finds one. That script can write words into memory. We use it to write a
 small **loader**, and the loader reads a second file, `fpSup.BIN`, which holds
 everything else: code, data, and patches to the firmware. Nothing is written to
-the camera's flash (one opt-in exception, *Fast start*, section 7). What is
+the camera's flash (one opt-in exception, *Fast Start 2*, section 7). What is
 loaded lives in RAM, but **switching the camera off and on is not enough to clear
 it**: that is a warm restart, and the patched firmware survives it (section 4).
 Remove the card and take the battery out to get a stock camera back — that
@@ -111,7 +111,7 @@ Two things to take from this:
 | the **cave** `0xC072DE64…0xC0730000` | a few KB of unused firmware image. The loader, and small pieces that must be at a fixed address | **kept** — code, pointers and state in it survive |
 | firmware variables (BSS) `0xC3000000…0xC38D6FB0` | the firmware's lists and registrations: observers, power-off callbacks, the pool pointer `0xC3757A7C` | **cleared** — the only range the boot code zeroes |
 | allocator memory (the **pool**, the heap) | memory asked for at boot. Large code, buffers, image data | **gone** — the allocator starts again and hands it to others |
-| settings block `XC_CommonSaveData` | the camera's own saved settings | **kept**, even through a battery pull. Only Fast start writes here |
+| settings block `XC_CommonSaveData` | the camera's own saved settings | **kept**, even through a battery pull. Only Fast Start 2 writes here |
 
 **The power switch does not restart the camera from scratch.** The DRAM keeps
 refreshing while it is off, and on the next boot the firmware runs the image
@@ -132,7 +132,8 @@ What that means for a sup:
   BSS. Register again on every load.
 - **Anything pointing into the pool is dangling.** A hook left in the image that
   branches into the pool jumps into someone else's memory on the next boot. That
-  is why run-time hooks must come out at power-off (section 5).
+  is why every firmware word a card changes is written back at power-off
+  (section 5).
 
 The cave is small and shared, so it has a tiny allocator: one word at
 `0xC072E060` holds the next free address, stage2 resets it every boot, and a
@@ -151,14 +152,21 @@ overwrites one firmware instruction with a branch to that code. The gyro logger
 works this way, because its code is too large for the cave. This is more
 flexible, and it has one rule that is easy to miss:
 
-> **A hook whose code is not in the firmware image must be taken out when the
-> camera powers off.** Register a power-off callback before arming anything, and
-> arm nothing if registration fails.
+> **Declare every site you will hook as a four-byte section holding the
+> firmware's own word.**
 
-A hook left in place fires while the camera is shutting down and jumps into
-memory that is being torn down. This froze cameras on the next boot with gyro
-v1.13. The full story, the firmware's callback API and a reference
-implementation are in [HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md).
+The loader writes back every firmware word a card changed when the camera
+powers off (since 2026-09-25): stage2 records each section's destination before
+placing it, and a power-off callback it registers writes the records back. It
+cannot see a word your entry writes later -- unless the site was also a section.
+Writing the firmware's own word there at load is harmless, and puts the site in
+the record. gyro's `hook_sites()` in `gyro/build_base_card.py` is the reference.
+Do not register a power-off routine of your own.
+
+A hook left in place fires on the next boot and jumps into memory the allocator
+has since given to someone else. That froze cameras with gyro v1.13. The story
+and the firmware's power-off API are in
+[HOOKS_AT_POWER_OFF.md](HOOKS_AT_POWER_OFF.md).
 
 ## 6. Writing and building a sup
 
@@ -183,8 +191,8 @@ For an **entry** (the installer stage2 calls):
   the firmware's `LDRD`s fault otherwise.
 - Do the work, then **return**. Never loop forever here.
 - Ask the allocator for memory; do not assume another sup already did.
-- For a hook: prepare its code and data first, register the power-off
-  callback, then write the branch last.
+- For a hook: declare its site (section 5), prepare its code and data first,
+  then write the branch last.
 - If an allocation fails, arm nothing and return normally. A card that half
   works is worse than one that does nothing.
 
@@ -230,7 +238,7 @@ Every builder runs checks before it writes anything: sections must not overlap,
 must fit what the loader can read, and must not land where the loader is
 working. If one fails, fix the cause; do not remove the check.
 
-## 7. Combining sups, and Fast start
+## 7. Combining sups, and Fast Start 2
 
 **fpSup-Merge** combines released sups into one card in the browser:
 <https://ijigen.github.io/fpSup/tools/card-composer/>. Tick the cards, get
@@ -247,14 +255,22 @@ What it does when it combines:
   including a check that refuses an uploaded card built for a newer stage2
   than the page carries
 
-**Fast start** is a switch on that page. It saves about half the boot script:
-on the first boot the loader copies itself into the camera's settings block;
-on every boot after that the script checks a fingerprint and runs the stored
-loader instead of spelling it out again. If the fingerprint does not match (a
-different card, a newer loader), it simply takes the slow path and stores the
-new one.
+**Fast Start 2** is a switch on that page. It gives a card three ways to start:
 
-Fast start is the **only** thing that writes to persistent memory. It survives a
+- **Instant** -- a restart with the power switch keeps the firmware in memory,
+  and with it a hook at the one call that starts the AutoRun. The card loads
+  about 1.4 s after power-on without running the AutoRun, and shows the
+  four-box screen (the `FPSUPUI` folder the zip carries).
+- **Fast** -- when the firmware was reloaded (a cold start, a battery pull, or a
+  power-off with the USB cable attached), the script checks a fingerprint and
+  runs the loader stored in the camera's settings block instead of spelling it
+  out again.
+- **Slow** -- the first boot, or a fingerprint mismatch (a different card, a
+  newer loader): the script spells the loader out and stores it.
+
+Some power-switch restarts come up cold anyway; they take the fast path.
+
+Fast Start 2 is the **only** thing that writes to persistent memory. It survives a
 battery pull and outlives deleting `AutoRun.txt`, so it is a choice for the
 person who installs it; single-product releases never include it. Resetting
 the camera's settings from the menu is expected to clear it, but that has not
@@ -271,8 +287,10 @@ been tested.
 5. For anything that installs hooks, also: boot, **do not record**, power off,
    and boot again **with a card in the slot**. Do it about ten times. Recording
    tests never reach this path.
-6. For a Fast card: boot twice. The first is slow and stores the loader; the
-   second should draw the banner once and skip most of the bar.
+6. For a Fast Start 2 card: boot once (slow, stores the loader), restart with the
+   power switch with the USB cable unplugged (instant: no progress, the four-box
+   screen), and power off with the cable attached then start (fast: a short
+   progress).
 
 A `--debug` build carries the USB shell, so you can read memory over USB after
 something goes wrong (`fp_usb_shell/README.md`). Release cards never carry it.
@@ -329,5 +347,5 @@ fix ships, say in that README what replaced it.
 | cave | a small unused area of firmware memory, shared through an allocator |
 | pool | memory a sup asks the camera's allocator for at boot |
 | hook | a firmware instruction replaced by a branch into sup code |
-| Fast start | keeping the loader in the settings block so later boots are shorter |
+| Fast Start 2 | the merge-page option: instant start after a power-switch restart (loader hook), fast after a cold start (loader kept in the settings block) |
 | banner | the text shown when loading finishes; it names the build |

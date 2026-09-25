@@ -464,3 +464,52 @@ shell 有 `mem save`(記憶體→檔案)但沒有反向的,所以 AutoRun 拼出
 EP 0x83 是啟用的、是 bulk,實測 **100 次全部成功**。
 (這一條 README 早就寫著了,今晚只是用數字撞了一次。)
 
+
+
+### Experimental transparent four-box splash (offline candidate, 2026-09-24)
+
+`build_autorun.py --loader --four-box-bar --out <new-dir>/AutoRun.txt` selects
+an opt-in splash: white `fp`, the user-reference pink `Sup` tone, and four outlined
+squares filled from left to right, vertically centered on the visible logo. The
+group starts at x=16 at the same height; completed squares become solid white,
+covering their gray outlines. It pauses native GUI redraw. The first frame overwrites the full 1024×56
+top row, then the four remaining frames update only the upper-left 176×56
+rectangle. The lower status row remains as it was and does not update during loading. Neither layer is cleared at startup,
+and no black strip is drawn. Stage2 draws the fourth square
+after its two passes and entries finish, holds for 2 seconds, then restores the
+redraw function, clears native main/sub layers and requests a full GUI repaint
+with the firmware ReqForceDraw packet (`C0527E68`, `{0x101, -1, 0}`). The hold is after
+`LOAD_DONE_US`; it is not included in the load timestamp.
+
+Keep `AutoRun.txt`, `fpSup.BIN`, and the generated `FPSUPUI/` folder together.
+Its first ARGB4444 frame is 114,688 bytes (1024×56); the remaining four are
+19,712 bytes each (176×56). The native `osdfile` handler reads its whole input,
+so each stage uses a separate file. All five stages, with three buffer copies
+each, request 580,608 bytes total (567 KiB), excluding the normal payload read.
+Only the first frame clears the right side; later updates retain that cleared
+area without repeatedly reading a full-width image.
+
+This option works with ordinary/debug and `--store-boot` builds; it does not
+support legacy `--boot-call`. `--banner` and the old bar measurement environment
+variables affect only the legacy display. Existing product/composer builds keep
+their default display until explicitly wired to carry the additional artwork.
+The first adoption needs the new AutoRun, BIN, and artwork; subsequent compatible
+payload-only updates retain identical AutoRun/artwork. No new runtime version or
+hash pairing is introduced. Loader bytes and both existing pass/entry contracts
+are unchanged.
+
+Offline validation: `python3 -B fp_usb_shell/test_boot_chain.py` and
+`python3 -B fp_usb_shell/test_splash.py`. The latter executes generated ARM with
+mocked firmware calls when Unicorn is permitted by the host sandbox. This does
+not establish physical LCD appearance or elapsed boot time. The option reserves
+`0xC0528700` throughout this boot interval; payloads that replace that redraw hook
+are not supported. Missing BIN still reaches AutoRun's prologue/cache restoration;
+the explicit full redraw request is available only after BIN loads. The user tested the prior clear-only build: static UI stayed missing and the
+artwork flashed until a menu round trip. The full-repaint correction and new
+placement have offline validation only. The subsequent lower-UI preservation
+change removes the eight startup monitor/clear commands; BIN and artwork are
+byte-identical to that full-repaint revision. A user screenshot of that narrower
+version showed the time/STBY/file name still visible to the right. The next
+change expands only frame 0 and its three AutoRun draws to full width; BIN and
+frames 1–4 remain identical. This full-width revision has offline validation
+only; the screenshot does not establish completion/restoration timing.
