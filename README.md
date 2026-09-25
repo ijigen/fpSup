@@ -40,6 +40,7 @@ card, use the composer rather than copying both.
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.14.0/) | v1.14.0 | Writes Gyroflow's `.gcsv` and `.json` while recording — every sample at 2500 Hz, distortion read off the lens. The profile now carries the size the take was actually recorded at, which open gate got wrong. |
 | [`fpsup-og2k`](releases/fpsup-og2k-v0.1.3a/) | v0.1.3a | The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build. |
 | [`fpsup-og3k`](releases/fpsup-og3k-v0.2.6a/) | v0.2.6a | The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha. |
+| [`fpsup-raw-view`](releases/fpsup-raw-view-v0.1.0test/) | v0.1.0test | RAW monitoring for CinemaDNG 12-bit: a RAW row in the COLOR menu makes the LCD show what will be recorded — recording gain in standby, sensor saturation as white, two latitude curves (SA/GA). The recorded RAW is not changed. Test build; ordinary card and Fast Start 2. |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.3.0/) | v3.3.0 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
 <!-- releases:end:en -->
 
@@ -145,6 +146,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.14.0/) | v1.14.0 | 錄影當下就把 Gyroflow 要的 `.gcsv` 與 `.json` 寫進片段資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭。profile 的尺寸改成實際錄下的那個 —— open gate 下先前是錯的。 |
 | [`fpsup-og2k`](releases/fpsup-og2k-v0.1.3a/) | v0.1.3a | 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。 |
 | [`fpsup-og3k`](releases/fpsup-og3k-v0.2.6a/) | v0.2.6a | 感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。 |
+| [`fpsup-raw-view`](releases/fpsup-raw-view-v0.1.0test/) | v0.1.0test | CinemaDNG 12-bit 的 RAW 監看:COLOR 選單多一列 RAW,螢幕顯示即將錄下的內容——待機用錄影增益、感光元件飽和即白、兩條寬容度曲線(SA/GA)。錄下的 RAW 不被改動。測試版;附一般卡與 Fast Start 2 卡。 |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.3.0/) | v3.3.0 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
 <!-- releases:end:zh -->
 
