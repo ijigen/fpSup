@@ -131,7 +131,9 @@ Fast 會使用具持久化能力的設定區，不能描述成「完全不寫任
 - **每個 sup：**確認預期區段、entry 與組合順序沒有漏掉；使用既有 build-time 的大小、對齊、重疊檢查。
   沒有既有檢查覆蓋的新落點，要補對應的離線檢查，不拿掉守衛硬過。
 - **支援合併／Fast：**驗自己的普通、debug、Fast 及有關組合；同 loader 配置改 payload 後，AutoRun 應不變。
-- **動共用載入鏈：**在 fpSup 根目錄跑 `python3 -B fp_usb_shell/test_boot_chain.py`。
+- **動共用載入鏈：**在 `fpSup/fp_usb_shell` 跑 `python3 -B -m unittest test_boot_chain test_loader_hook test_splash`。
+  `test_loader_hook` 用 unicorn 對著韌體映像執行真的 loader 與 stage2（hook 路徑、journal、關機寫回、三段式開機）；
+  新測試第一次就過時，要故意改壞一行確認它會失敗（研究樹的技能 `fp-unicorn-emulation`）。
 - **動 OG 入口、gyro pass-through 或 catalogue refs：**在完整專案根目錄跑
   `python3 -B projects/open-gate/build/test_boot_entry_chain.py`；預設使用新的暫存輸出目錄。
   保留 entry 0／guard-off 相容性；catalogue 驗證只呼叫 refs，不為了測試執行會改網站的 main。
@@ -153,6 +155,7 @@ Fast 會使用具持久化能力的設定區，不能描述成「完全不寫任
   [store_boot.S](fp_usb_shell/templates/store_boot.S)、[entries.S](fp_usb_shell/templates/entries.S)：執行契約。
 - [build_autorun.py](fp_usb_shell/build_autorun.py)：容器、入口表、容量與封裝選項。
 - [test_boot_chain.py](fp_usb_shell/test_boot_chain.py)：共用鏈回歸。
+- [test_loader_hook.py](fp_usb_shell/test_loader_hook.py)：loader hook 與關機寫回的模擬執行。
 - [releases/README.md](releases/README.md)：真正獲准發布時的命名與打包規則；版號查目前 tags／產物，不抄舊例子。
 
 loader 大小、AutoRun 條數與速度屬於具體建置的結果，不在新產品中複製另一份硬編碼常數。

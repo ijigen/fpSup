@@ -89,6 +89,12 @@ runprobe.py          runs a candidate routine ONCE on a live camera through the
                      shell to replace it with, and the card comes out of the slot
 bootmeasure.py       reboots and waits for the shell; the number worth quoting is
                      the camera's own stamp at 0xC072F6F4, not this one
+test_loader_hook.py  the loader and stage2 under unicorn against the firmware
+                     image: hook path, journal, power-off write-back, three-way
+                     boot, four-box on the hook path (skill fp-unicorn-emulation)
+loader_hook_check.py reads a --loader-hook-mark card's state off the camera and
+                     checks the live journal against the stock image
+warm_gate_card.py    the first minimal warm-boot gate test (templates/gate.S)
 host/fpshd.c         daemon, listens on /tmp/fpshd.sock
 host/fpsh            client
 host/lsdesc.c        prints the descriptor the host actually received
@@ -107,8 +113,11 @@ docs/                reverse-engineering notes (Traditional Chinese)
 - Python 3 for the build script
 
 Nothing is flashed. Everything the camera runs is written into RAM at boot by an
-`AutoRun.txt` on the card, and is gone the moment you power off — including all
-seven firmware patches.
+`AutoRun.txt` on the card. The power switch is a warm restart that keeps the
+firmware in memory, so the loader writes every patched word — all seven firmware
+patches included — back when the camera powers off (see *Power-off write-back
+and the loader hook*, below). The one exception is Fast Start 2 on the merge
+page, which also stores the loader in the settings block.
 
 ## Use
 
@@ -326,6 +335,10 @@ runprobe.py          借 echo 在活著的相機上把候選常式跑一次。lo
                      卡只能從卡槽拔出來
 bootmeasure.py       重開並等 shell 回話;真正該引用的數字是相機自己在
                      0xC072F6F4 寫下的戳記,不是這支印的
+test_loader_hook.py  用 unicorn 對著韌體映像跑 loader 與 stage2:hook 路徑、journal、
+                     關機寫回、三段式開機、hook 路徑上的四格畫面(技能 fp-unicorn-emulation)
+loader_hook_check.py 從相機讀 --loader-hook-mark 卡的狀態,並拿現場 journal 比對原廠映像
+warm_gate_card.py    第一個暖開機閘門最小測試(templates/gate.S)
 host/fpshd.c         daemon,監聽 /tmp/fpshd.sock
 host/fpsh            客戶端
 host/lsdesc.c        印出主機實際列舉到的描述元
@@ -343,8 +356,10 @@ docs/                逆向筆記(繁體中文)
   近期的 clang 都可以,不需要另外裝交叉工具鏈
 - Python 3(建置腳本用)
 
-**不需要重刷韌體。** 相機執行的一切都是開機時由卡上的 `AutoRun.txt` 寫進 RAM 的,
-一關機就消失 —— 包括那七個韌體 patch。
+**不需要重刷韌體。** 相機執行的一切都是開機時由卡上的 `AutoRun.txt` 寫進 RAM 的。
+撥電源開關是暖開機、韌體會留在記憶體裡,所以 loader 在關機時把改過的每個字寫回 ——
+包括那七個韌體 patch(見下方「關機寫回與 loader hook」)。唯一例外是合併頁面的
+Fast Start 2,它另外把 loader 存進設定區。
 
 ### 使用
 
@@ -424,6 +439,26 @@ FPSH v1,64 byte 幀,little-endian。
 * v1 的 hook-push 程式碼仍指向舊端點(`0xC31E3274`、`StartTransfer(9)`);
   在這個 gadget 上要改成 `0xC31E3270` 與 `StartTransfer(7)`。
 
+### 關機寫回與 loader hook(2026-09-25)
+
+每張 `--loader` 卡的 stage2 都帶 `LH_RESTORE`:pass 1 之前先配 journal、向 `XC_PowerOffMgr`
+兩張清單註冊一個關機回呼;pass 1 覆寫 cave(`0xC072D000..0xC0735000`)以外的韌體字之前先把原值記進
+journal;關機時回呼寫回。執行期才裝 hook 的 payload 把每個 hook 位址宣告成內容為韌體原字的 4 bytes
+區段(gyro 的 `hook_sites()`),不再自己註冊關機回呼。
+
+| 旗標 | 效果 |
+|---|---|
+| (預設) | 關機寫回 |
+| `--loader-hook` | 另外把 `0xC03DA420`(啟動 AutoRun 的呼叫)指向 loader 的 `+4` 入口:暖開機約 1.4 秒載入、不跑 AutoRun。配 `--four-box-bar` 時 hook 路徑自己畫四格畫面,否則在 `--loader-hook-banner-at`(預設 3 秒)畫文字 banner |
+| `--loader-hook-mark ADDR` | 除錯:journal 區塊位址寫在 ADDR+8、關機回呼次數在 ADDR、時間戳在 ADDR+4(`loader_hook_check.py` 讀) |
+| `--store-boot --loader-hook --four-box-bar` | 合併頁面的 Fast Start 2:同一次建置出瞬開、快開、慢開 |
+
+`--store-boot` 的中止程式只在確實有 AutoRun 註冊時才安排,hook 路徑不會把 `echo` 留在它上面。
+插著 USB 線關機一律冷開機。設計、上機結果與唯一未解的情況(關機回呼沒跑到時會把殘留當原字記下):
+研究樹的 `projects/usb-shell-sup/notes/LOADER_V2.md`。
+
+測試:`python3 -B -m unittest test_loader_hook test_boot_chain test_splash`。
+
 ## v3 改了什麼
 
 v2 把程式碼「一個字一個命令」寫進相機,把資料複製過暫存區再逐塊拉回來。
@@ -466,6 +501,31 @@ EP 0x83 是啟用的、是 bulk,實測 **100 次全部成功**。
 
 
 
+### Power-off write-back and the loader hook (2026-09-25)
+
+Every `--loader` card now builds stage2 with `LH_RESTORE`: before pass 1 it
+allocates a journal and registers one power-off callback in both of
+`XC_PowerOffMgr`'s lists; pass 1 copies each firmware word outside the cave
+(`0xC072D000..0xC0735000`) into the journal before overwriting it; at power-off
+the callback writes them back. A payload that arms hooks at run time declares
+each site as a four-byte section holding the firmware's own word (gyro's
+`hook_sites()`). Payloads no longer register a power-off routine of their own.
+
+| flag | effect |
+|---|---|
+| *(default)* | power-off write-back |
+| `--loader-hook` | also points `0xC03DA420` (the call that starts the AutoRun) at the loader's `+4` entry: a warm boot loads ~1.4 s after power-on without the AutoRun. With `--four-box-bar` the hook path draws the splash itself; without it, the text banner at `--loader-hook-banner-at` (default 3 s) |
+| `--loader-hook-mark ADDR` | debug: journal block at ADDR+8, power-off runs at ADDR, their stamp at ADDR+4 (`loader_hook_check.py` reads them) |
+| `--store-boot --loader-hook --four-box-bar` | Fast Start 2, the merge page's option: instant, fast and slow boot from one build |
+
+The abort that stops the AutoRun (`--store-boot`) is armed only when an AutoRun
+is registered, so the hook path never leaves `echo` pointing at it. Powering off
+with the USB cable attached always gives a cold start. Design, camera results
+and the one open case (a power-off that never ran journals leftovers as stock):
+`projects/usb-shell-sup/notes/LOADER_V2.md` in the research tree.
+
+Tests: `python3 -B -m unittest test_loader_hook test_boot_chain test_splash`.
+
 ### Experimental transparent four-box splash (offline candidate, 2026-09-24)
 
 `build_autorun.py --loader --four-box-bar --out <new-dir>/AutoRun.txt` selects
@@ -491,12 +551,12 @@ area without repeatedly reading a full-width image.
 
 This option works with ordinary/debug and `--store-boot` builds; it does not
 support legacy `--boot-call`. `--banner` and the old bar measurement environment
-variables affect only the legacy display. Existing product/composer builds keep
-their default display until explicitly wired to carry the additional artwork.
+variables affect only the legacy display. Single-product releases keep the text
+display; the merge page's Fast Start 2 carries the splash and its artwork
+(2026-09-25).
 The first adoption needs the new AutoRun, BIN, and artwork; subsequent compatible
 payload-only updates retain identical AutoRun/artwork. No new runtime version or
-hash pairing is introduced. Loader bytes and both existing pass/entry contracts
-are unchanged.
+hash pairing is introduced. Both pass/entry contracts are unchanged.
 
 Offline validation: `python3 -B fp_usb_shell/test_boot_chain.py` and
 `python3 -B fp_usb_shell/test_splash.py`. The latter executes generated ARM with
@@ -513,3 +573,8 @@ version showed the time/STBY/file name still visible to the right. The next
 change expands only frame 0 and its three AutoRun draws to full width; BIN and
 frames 1–4 remain identical. This full-width revision has offline validation
 only; the screenshot does not establish completion/restoration timing.
+
+**2026-09-25:** booted on the camera through the loader hook path and the fast
+path (LH6, then page-composed shell+gyro+OG3K with Fast Start 2): the splash
+shows and the UI comes back complete. The text and boxes now carry a black
+outline (2 px, 1 px) so the logo reads over a bright live view.

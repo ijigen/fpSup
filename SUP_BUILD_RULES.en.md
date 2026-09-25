@@ -222,8 +222,12 @@ unrelated products re-run.
 - **Merge / Fast support:** verify your own ordinary, debug, Fast and related
   combinations. With the same loader configuration, a payload change must leave
   AutoRun unchanged.
-- **The shared load chain was touched:** run
-  `python3 -B fp_usb_shell/test_boot_chain.py` from the fpSup root.
+- **The shared load chain was touched:** from `fpSup/fp_usb_shell` run
+  `python3 -B -m unittest test_boot_chain test_loader_hook test_splash`.
+  `test_loader_hook` runs the real loader and stage2 under unicorn against the
+  firmware image (hook path, journal, power-off write-back, three-way boot).
+  A new test that passes first time must be broken on purpose, one line, to
+  show it can fail (the research tree's skill `fp-unicorn-emulation`).
 - **An OG entry, gyro pass-through or catalogue refs were touched:** run
   `python3 -B projects/open-gate/build/test_boot_entry_chain.py` from the full
   project root; by default it uses a fresh temporary output directory. Keep
@@ -259,6 +263,8 @@ contract really changes, not with a running log of each experiment.
   table, capacity and packaging options.
 - [test_boot_chain.py](fp_usb_shell/test_boot_chain.py): regression for the
   shared chain.
+- [test_loader_hook.py](fp_usb_shell/test_loader_hook.py): the loader hook and
+  the power-off write-back, emulated.
 - [releases/README.md](releases/README.md): naming and packaging rules for when a
   release is actually approved. Look up version numbers in the current tags and
   artefacts; do not copy old examples.
