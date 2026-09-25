@@ -216,14 +216,27 @@ class SplashTests(unittest.TestCase):
             visible = [(i % self.width, i // self.width)
                        for i, pixel in enumerate(frame) if pixel >> 12]
             xs, ys = zip(*visible)
+            o, ob = boot_splash.OUTLINE_PX, boot_splash.BOX_OUTLINE_PX
             self.assertEqual((min(xs), min(ys), max(xs), max(ys)),
-                             (16, 10, 161, 37),
-                             'artwork must be left aligned at its existing height')
+                             (16 - o, 10 - o, 161 + ob, 37 + o),
+                             'artwork must be left aligned at its existing height, '
+                             'grown only by the black outline')
         self.assertTrue(any(0 < pixel >> 12 < 15 for pixel in frames[0]),
                         'logo must retain its antialiased alpha edge')
-        self.assertFalse(any(pixel >> 12 and pixel & 0xFFF == 0
-                             for frame in frames for pixel in frame),
-                         'artwork must not contain an opaque black background')
+        # Black is the outline (2026-09-25, user request) and nothing else: every
+        # black pixel lies within OUTLINE_PX of a non-black one -- no black strip.
+        o = boot_splash.OUTLINE_PX
+        for frame in frames:
+            def ink(x, y):
+                v = frame[y * self.width + x]
+                return v >> 12 and v & 0xFFF
+            for i, pixel in enumerate(frame):
+                if pixel >> 12 and pixel & 0xFFF == 0:
+                    x, y = i % self.width, i // self.width
+                    self.assertTrue(any(ink(x + dx, y + dy)
+                                        for dy in range(-o, o + 1) for dx in range(-o, o + 1)
+                                        if 0 <= x + dx < self.width and 0 <= y + dy < self.height),
+                                    f'black at ({x},{y}) is not part of an outline')
         colors = set(frames[0])
         self.assertIn(0xFFFF, colors, 'fp white is missing')
         self.assertIn(0xFD35, colors, 'reference Sup pink is missing')

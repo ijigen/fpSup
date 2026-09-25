@@ -24,6 +24,10 @@ HOLD_MS = 2000
 # User reference: white fp and Sup pink sampled near #E03959.
 # Native 4-bit channels quantize the pink to #DD3355.
 WHITE, PINK, OUTLINE, FILL = 0xFFFFFF, 0xDD3355, 0x888888, 0xFFFFFF
+# Black outline around the logo text and around each box, in pixels.  The
+# boxes are 4 px apart, so theirs is 1 px and a transparent gap stays.
+OUTLINE_PX = 2
+BOX_OUTLINE_PX = 1
 # SF system UI, regular upright weight, with the font's natural baseline/spacing.
 # Only these rendered alpha masks are carried; no font is needed by the builder.
 MASK_HEIGHT = 28
@@ -61,6 +65,11 @@ def asset():
     left = 16
     assert left + total <= WIDTH
 
+    # The logo as float coverage and colour first, so the black outline can go
+    # under it (2026-09-25: user asked for a black outline around the text, to
+    # read over a bright live view).  Same 4-bit quantisation as before.
+    ink = {}                            # (x, y) -> (alpha 0..1, rgb)
+
     def logo(encoded, width, x, color):
         alpha = zlib.decompress(base64.b85decode(encoded))
         assert len(alpha) == width * MASK_HEIGHT
@@ -68,18 +77,47 @@ def asset():
         for y in range(min(MASK_HEIGHT, HEIGHT - 10)):
             for dx in range(width):
                 a = alpha[y * width + dx]
-                alpha4 = (a + 8) // 17
-                r, g, b = [(c + 8) // 17 for c in rgb]
-                base[(y + 10) * WIDTH + x + dx] = ((alpha4 << 12) | (r << 8) |
-                                                              (g << 4) | b) if alpha4 else 0
+                if a:
+                    ink[(x + dx, y + 10)] = (a / 255, rgb)
 
     logo(FP_MASK, FP_WIDTH, left, WHITE)
     logo(SUP_MASK, SUP_WIDTH, left + FP_WIDTH, PINK)
+    # Outline: the coverage grown by OUTLINE_PX (a disc), painted black under
+    # the glyphs, then the glyphs composited over it.
+    reach = [(dx, dy) for dy in range(-OUTLINE_PX, OUTLINE_PX + 1)
+             for dx in range(-OUTLINE_PX, OUTLINE_PX + 1)
+             if dx * dx + dy * dy <= OUTLINE_PX * OUTLINE_PX + OUTLINE_PX]
+    ring = {}
+    for (x, y), (a, _) in ink.items():
+        for dx, dy in reach:
+            q = (x + dx, y + dy)
+            if 0 <= q[0] < WIDTH and 0 <= q[1] < HEIGHT and ring.get(q, 0) < a:
+                ring[q] = a
+    for (x, y), oa in ring.items():
+        ga, rgb = ink.get((x, y), (0, (0, 0, 0)))
+        out_a = ga + oa * (1 - ga)
+        if out_a <= 0:
+            continue
+        # glyph over black: the black contributes no colour, only coverage
+        r, g, b = [c * ga / out_a for c in rgb]
+        alpha4 = int(out_a * 15 + 0.5)
+        if alpha4:
+            base[y * WIDTH + x] = ((alpha4 << 12) | ((int(r) + 8) // 17 << 8) |
+                                   ((int(g) + 8) // 17 << 4) | (int(b) + 8) // 17)
+
     # Align the square outlines with the visible logo, not its padded mask.
     # Derive the center from the quantized ink so padding cannot shift the boxes.
     ink_rows = [i // WIDTH for i, pixel in enumerate(base) if pixel >> 12]
     boxes_y = (min(ink_rows) + max(ink_rows) + 1 - box_size) // 2
     boxes_x = left + logo_width + logo_gap
+    # The same black outline around every box, in every frame, under the box.
+    for box in range(4):
+        x0, y0 = boxes_x + box * (box_size + gap), boxes_y
+        for y in range(y0 - BOX_OUTLINE_PX, y0 + box_size + BOX_OUTLINE_PX):
+            for x in range(x0 - BOX_OUTLINE_PX, x0 + box_size + BOX_OUTLINE_PX):
+                if 0 <= x < WIDTH and 0 <= y < HEIGHT and not (
+                        x0 <= x < x0 + box_size and y0 <= y < y0 + box_size):
+                    base[y * WIDTH + x] = 0xF000
     frames = []
     for filled in range(5):
         pixels = base.copy()
