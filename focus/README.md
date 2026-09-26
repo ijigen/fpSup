@@ -6,7 +6,6 @@ Code and method for [focus sup](../projects/focus-sup.md).
 
 | | |
 |---|---|
-| [**lv-boost/**](lv-boost/) | Experimental STILL preview lift with +1/+2/+3 levels, an automatic +2 startup default, and optional Fast Start 2 |
 | [**dfd/**](dfd/) | Depth from defocus using the camera's own AF statistics — no frame extraction. Method, addresses, and the code that streams the green AF band<br>用相機自己的 AF 統計做 depth-from-defocus,不必抽幀。方法、位址,以及串出綠 AF band 的程式 |
 | [**lens/**](lens/) | Reading lens data through the firmware's own API — focal length, minimum focus distance, calibration blocks<br>透過韌體自己的 API 讀鏡頭資料:焦距、最近對焦距離、校準區塊 |
 

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT / 'focus/lv-boost/build'), str(ROOT / 'fp_usb_shell')]
+sys.path[:0] = [str(ROOT / 'raw/lv-boost/build'), str(ROOT / 'fp_usb_shell')]
 import build_lv_boost as B
 import fl_tables as F
 import test_loader_hook as T

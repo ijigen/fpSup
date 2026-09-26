@@ -1,5 +1,7 @@
 # LV Boost (Live View Boost): STILL preview +1 / +2 / +3
 
+Part of the [RAW/live-view tools](../README.md), alongside [RAW View](../../releases/fpsup-raw-view-v0.2.0test/).
+
 Development module for **SIGMA fp firmware 5.02**. LV Boost adds a COLOR-menu
 row that brightens the preview at a fixed capture exposure. The included
 v0.5.2 card enables **Fast Start 2** and automatically selects **+2** after
@@ -54,9 +56,9 @@ research devkit, these are the same segments its builders use; its extracted
 From the repository root, build into a fresh directory:
 
 ```sh
-python3 focus/lv-boost/build/build_lv_boost.py --fs2 --out focus/lv-boost/out/auto2
-python3 focus/lv-boost/test_lv_boost.py -v
-python3 focus/lv-boost/verify_card.py focus/lv-boost/out/auto2
+python3 raw/lv-boost/build/build_lv_boost.py --fs2 --out raw/lv-boost/out/auto2
+python3 raw/lv-boost/test_lv_boost.py -v
+python3 raw/lv-boost/verify_card.py raw/lv-boost/out/auto2
 ```
 
 `--default-level 1|2|3` selects the startup level (default: 2). Omit `--fs2`
@@ -90,7 +92,7 @@ retry failed selections, or hold pointers into the freed staging buffer.
 With an already connected USB shell, read diagnostics without changing settings:
 
 ```sh
-python3 focus/lv-boost/read_diagnostics.py --out /path/to/diagnostics.json
+python3 raw/lv-boost/read_diagnostics.py --out /path/to/diagnostics.json
 ```
 
 `startup_state`: 0 waiting, 1 applied, 2 manual menu override, 3 applying,
