@@ -1,0 +1,40 @@
+SIGMA fp — RAW monitoring (v0.2.0test)
+banner (ordinary card): fpSup-RAW-v0.2.0test!
+firmware: SIGMA fp Ver.5.02 only
+
+ordinary card
+  AutoRun.txt                       32,772B  sha256=38203cf33b285ea45e7cb6793598ab0188e4d85b36576dd4dc668fa065fc0f68
+  fpSup.BIN                         61,440B  sha256=d375f6275c65877703a037c2355dd71968f5736b6ac39f5f630618886a7705ba
+
+Fast Start 2 (FastStart2/)
+  FastStart2/AutoRun.txt            32,768B  sha256=8383a3b22d08068add948ac27b4f4cf195cf6c17bd6f73f1125c9dfa42db187b
+  FastStart2/fpSup.BIN              61,440B  sha256=704b33143ea27be350137c202a33b89d2fdedaf8ee4376dc842a460acaefa07a
+  FastStart2/FPSUPUI/0.BIN         114,688B  sha256=89cd5a002595ea0a22f7cbd5a05990612477dd5da2c2d561b9fad8a3aed7c6ea
+  FastStart2/FPSUPUI/1.BIN          19,712B  sha256=48dddff9f4b9d2a352faf43e80afd18383fe0d48a3c0617a060b2b977d81f0fb
+  FastStart2/FPSUPUI/2.BIN          19,712B  sha256=d5567299a7b695afa26090c124f941a15b3ca701b60a58629af45eb10943efbe
+  FastStart2/FPSUPUI/3.BIN          19,712B  sha256=c1a5c9cc59528f7dbe88ee6a6631cb2c93c0ad4575234a29f7c271f9f48ccd2c
+  FastStart2/FPSUPUI/4.BIN          19,712B  sha256=065a09b93c88784f0774ce819ae5f6fa3a5aba41d8c4e9ddd7e902e3b20921d3
+
+zips
+  fpsup-raw-view-v0.2.0test.zip            sha256=d62df02ac62c60f0c50aa04b9f85d0345b07608f4df85b378aba7111175ebb3b
+  fpsup-raw-view-v0.2.0test-FastStart2.zip sha256=64bfdd3e10ed88f3d7dd6759e126c5d1048b7467adc44aa271a0ddec7874eb42
+
+payload: the rawview launcher section (47,616 B) is byte for byte the one in dev card fs2-21
+  (with USB shell), written to the camera on 2026-09-27 and looked at on the LCD by the user
+  ("looks good"). These two release cards themselves have not been booted.
+loader: unchanged. FastStart2/AutoRun.txt is byte for byte v0.1.0test's; the ordinary
+  AutoRun.txt differs from v0.1.0test's only in the banner text (the display requirement for
+  a new version name).
+
+source (research tree beside this repo, not in it): projects/rawview/build
+  ordinary:     build_rawview.py --release --banner 'fpSup-RAW-v0.2.0test!'
+  Fast Start 2: build_rawview.py --fs2 --no-shell
+  both reproduce these bytes exactly from the source at release time.
+tests: test_rawview_image.py + test_rawview_build.py, 48 pass (unicorn against the firmware
+  image), including the AEL contrast and saturation sites and the 124 tone tables against
+  rv_tables; card-level emulation of both cards: stage2 entry reached on each boot path, 46
+  stock-word sections journaled as stock, 2 power-off callbacks. cave_audit clean.
+not on the camera: the SA/GA curves were looked at on the LCD, but no numeric
+  screen-versus-table measurement was made for v0.2.0test's 709-spacing SA, and the
+  Saturation +0.2 CinemaDNG ColorMatrix was not re-recorded with this build.
+not in fpSup-Merge.

@@ -1,0 +1,631 @@
+# ============================================================================
+# USB shell.
+#
+# The camera keeps its own PTP gadget exactly as the firmware builds it, so the
+# firmware owns the descriptors, creates and enables the endpoints, and
+# re-creates them after a record-mode reconfiguration.  A few words are changed
+# so nothing competes for those pipes and so PTP's unused interrupt endpoint
+# becomes a second bulk IN for streaming; the rest of this file is the worker.
+#
+#   EP 0x01 OUT  commands      EP 0x82 IN  replies      EP 0x83 IN  streaming
+#
+# The worker understands one command: `shl <line>`, which runs <line> in the
+# firmware's own shell and returns what it printed.  `mem set` and `mem save`
+# come along for free, so the worker needs no memory commands of its own.
+#
+# Boot with the USB cable UNPLUGGED, then attach it.  The gadget is built on
+# attach, so the patches have to land first; and the patched words sit in code
+# that has not run yet, so no stale instruction-cache line can shadow them.
+#
+# Experimental four-box splash: transparent fpSup logo and four progress squares.
+# Stage2 fills the fourth box after loading, holds for 2 seconds, restores UI.
+# Keep FPSUPUI/0.BIN through 4.BIN beside this script and fpSup.BIN.
+# ============================================================================
+
+# --- screen ------------------------------------------------------------------
+# --- four-box UI: pause native redraw, publish the code patch ---
+mem set 0xC0528700 0xE12FFF1E
+mem set 0xC0BAC2F8 0xC000E91C
+echo
+mem set 0xC0BAC2F8 0xC000EABC
+echo
+# four-box frame 0/4
+display osdfile \FPSUPUI\0.BIN 0 0 1024 56 0
+display osdfile \FPSUPUI\0.BIN 0 0 1024 56 0
+display osdfile \FPSUPUI\0.BIN 0 0 1024 56 0
+
+# --- no shell ----------------------------------------------------------------
+# The endpoint patches and the worker's state block are the USB shell's, and
+# there is no shell here: forty-two commands that a camera nobody is going to
+# plug a debugger into does not need. The loader sleeps instead of becoming a
+# worker: the loader reads the file from the callback and returns.
+
+
+# --- the pool is the loader's business now -----------------------------------
+# `memmgr bufmem get` lived here, and it was the script asking for something
+# only the loader uses.  The loader asks the allocator itself -- class 0, the
+# same channel -- and still leaves the address at 0xC3757A7C for everything
+# downstream that reads it from there.
+
+
+# --- store bootstrap @0xC072F700..0xC072F768, 104 bytes -----
+# The loader lives in XC_CommonSaveData, which survives a power cycle.  If
+# the header and sum check out this copies it into the cave and branches,
+# and the loader ends by stopping the script -- everything below is then
+# a slower way to do what has already been done.  If they do not, this
+# returns having touched nothing and the file carries on.
+mem set 0xC072F700 0xE92D41F0
+mem set 0xC072F704 0xE28F7048
+mem set 0xC072F708 0xE8B70070
+mem set 0xC072F70C 0xE5940000
+mem set 0xC072F710 0xE1500005
+mem set 0xC072F714 0x1A00000C
+mem set 0xC072F718 0xE2841004
+mem set 0xC072F71C 0xE1A02006
+mem set 0xC072F720 0xE300513C
+# four-box frame 1/4
+display osdfile \FPSUPUI\1.BIN 0 0 176 56 0
+display osdfile \FPSUPUI\1.BIN 0 0 176 56 0
+display osdfile \FPSUPUI\1.BIN 0 0 176 56 0
+mem set 0xC072F724 0xE491C004
+mem set 0xC072F728 0xE482C004
+mem set 0xC072F72C 0xE2555004
+mem set 0xC072F730 0x1AFFFFFB
+mem set 0xC072F734 0xE8970030
+mem set 0xC072F738 0xE12FFF34
+mem set 0xC072F73C 0xE12FFF35
+mem set 0xC072F740 0xE1A00006
+mem set 0xC072F744 0xE8BD41F0
+# four-box frame 2/4
+display osdfile \FPSUPUI\2.BIN 0 0 176 56 0
+display osdfile \FPSUPUI\2.BIN 0 0 176 56 0
+display osdfile \FPSUPUI\2.BIN 0 0 176 56 0
+mem set 0xC072F748 0xE12FFF10
+mem set 0xC072F74C 0xE3A00000
+mem set 0xC072F750 0xE8BD81F0
+mem set 0xC072F754 0xC3075264
+mem set 0xC072F758 0x5C502AA9
+mem set 0xC072F75C 0xC072DE64
+mem set 0xC072F760 0xC000E91C
+mem set 0xC072F764 0xC000EABC
+# four-box frame 3/4
+display osdfile \FPSUPUI\3.BIN 0 0 176 56 0
+display osdfile \FPSUPUI\3.BIN 0 0 176 56 0
+display osdfile \FPSUPUI\3.BIN 0 0 176 56 0
+
+
+mem set 0xC0BAC2F8 0xC000E91C
+echo
+mem set 0xC0BAC2F8 0xC000EABC
+echo
+mem set 0xC0BAC2F8 0xC072F700
+
+echo
+
+echo
+mem set 0xC0BAC2F8 0xC03D99A0
+mem set 0xC0BAC2F8 0xC03D99A0
+mem set 0xC0BAC2F8 0xC03D99A0
+
+# --- loader @0xC072DE64..0xC072DFA0, 316 bytes --------------
+# Reads \fpSup.BIN and places what it says. The worker itself is in there.
+mem set 0xC072DE64 0xEA000000
+mem set 0xC072DE68 0xEA00003F
+mem set 0xC072DE6C 0xE92D47F0
+mem set 0xC072DE70 0xE3A08000
+mem set 0xC072DE74 0xE30F96D8
+mem set 0xC072DE78 0xE34C9072
+mem set 0xC072DE7C 0xE1A00009
+mem set 0xC072DE80 0xE3A01000
+mem set 0xC072DE84 0xE3A02801
+mem set 0xC072DE88 0xE3A03000
+mem set 0xC072DE8C 0xEBE3BE2B
+mem set 0xC072DE90 0xE1A00009
+mem set 0xC072DE94 0xEBE3BE55
+mem set 0xC072DE98 0xE3500000
+mem set 0xC072DE9C 0x0A000030
+mem set 0xC072DEA0 0xE1A04000
+mem set 0xC072DEA4 0xE2845000
+mem set 0xC072DEA8 0xE2846A01
+mem set 0xC072DEAC 0xEBF459E9
+mem set 0xC072DEB0 0xE3A01000
+mem set 0xC072DEB4 0xEBF459F7
+mem set 0xC072DEB8 0xE1A07000
+mem set 0xC072DEBC 0xE1A01007
+mem set 0xC072DEC0 0xE1A00005
+mem set 0xC072DEC4 0xEBF0DFF1
+mem set 0xC072DEC8 0xE1A00005
+mem set 0xC072DECC 0xE28F10C0
+
+
+mem set 0xC072DED0 0xE3A02001
+mem set 0xC072DED4 0xEBF0E035
+mem set 0xC072DED8 0xE3500000
+mem set 0xC072DEDC 0x1A000006
+mem set 0xC072DEE0 0xE1A00005
+mem set 0xC072DEE4 0xE3A01002
+mem set 0xC072DEE8 0xEBF0DFF8
+mem set 0xC072DEEC 0xE3570001
+mem set 0xC072DEF0 0x0A000018
+mem set 0xC072DEF4 0xE3A07001
+mem set 0xC072DEF8 0xEAFFFFEF
+mem set 0xC072DEFC 0xE1A00005
+mem set 0xC072DF00 0xE1A01006
+mem set 0xC072DF04 0xE3A02A0F
+mem set 0xC072DF08 0xE3A03000
+mem set 0xC072DF0C 0xEBF0E053
+mem set 0xC072DF10 0xE1A00005
+mem set 0xC072DF14 0xEBF0E041
+mem set 0xC072DF18 0xE1A00005
+mem set 0xC072DF1C 0xE3A01002
+mem set 0xC072DF20 0xEBF0DFEA
+mem set 0xC072DF24 0xE5960000
+mem set 0xC072DF28 0xE3041256
+mem set 0xC072DF2C 0xE3441E49
+mem set 0xC072DF30 0xE1500001
+mem set 0xC072DF34 0x1A000007
+mem set 0xC072DF38 0xEBE38277
+
+
+mem set 0xC072DF3C 0xEBE382DE
+mem set 0xC072DF40 0xE5961004
+mem set 0xC072DF44 0xE0861181
+mem set 0xC072DF48 0xE2811010
+mem set 0xC072DF4C 0xE1A00006
+mem set 0xC072DF50 0xE12FFF31
+mem set 0xC072DF54 0xE3A08001
+mem set 0xC072DF58 0xE1A00009
+mem set 0xC072DF5C 0xE3A01002
+mem set 0xC072DF60 0xEBE3BE0E
+mem set 0xC072DF64 0xE1A00008
+mem set 0xC072DF68 0xE8BD87F0
+mem set 0xC072DF6C 0xE92D4013
+mem set 0xC072DF70 0xE1A0400D
+mem set 0xC072DF74 0xE3CDD007
+mem set 0xC072DF78 0xEBFFFFBB
+mem set 0xC072DF7C 0xE1A0D004
+mem set 0xC072DF80 0xE3500000
+mem set 0xC072DF84 0xE8BD4013
+mem set 0xC072DF88 0x13A00000
+mem set 0xC072DF8C 0x112FFF1E
+mem set 0xC072DF90 0xEAF2B1F0
+mem set 0xC072DF94 0x5370665C
+mem set 0xC072DF98 0x422E7075
+mem set 0xC072DF9C 0x00004E49
+
+
+# --- start ------------------------------------------------------------------
+# The loader runs here, once, in the shell dispatcher's task -- where a file
+# read is an ordinary thing to do. The gyro callback is the logger's alone.
+mem set 0xC0BAC2F8 0xC000E91C
+echo
+mem set 0xC0BAC2F8 0xC000EABC
+echo
+mem set 0xC0BAC2F8 0xC072DE64
+echo
+
+# --- done --------------------------------------------------------------------
+# --- four-box UI fallback: restore even if BIN did not load ---
+mem set 0xC0528700 0xE92D4BF0
+mem set 0xC0528700 0xE92D4BF0
+mem set 0xC0528700 0xE92D4BF0
+mem set 0xC0BAC2F8 0xC000E91C
+echo
+mem set 0xC0BAC2F8 0xC000EABC
+echo
+mem set 0xC0BAC2F8 0xC03D99A0
+mem set 0xC0BAC2F8 0xC03D99A0
+mem set 0xC0BAC2F8 0xC03D99A0
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+# pad -- see PAD_TO: mode 7 overwrites but does not truncate
+#####################################################
