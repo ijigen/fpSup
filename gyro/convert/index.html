@@ -50,33 +50,122 @@
   label.ck{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:.88rem}
   label.ck small{display:block;color:var(--dim)}
   footer{margin-top:34px;color:var(--dim);font-size:.82rem;max-width:64ch}
+  .lang{display:flex;gap:4px;justify-content:flex-end;margin-bottom:10px}
+  .lang button{appearance:none;font:inherit;font-size:.8rem;padding:3px 9px;cursor:pointer;
+    border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--dim)}
+  .lang button[aria-pressed="true"]{color:var(--sig);border-color:var(--sig)}
 </style>
 </head>
 <body>
 <main>
-  <h1>fpSup 陀螺記錄轉檔</h1>
-  <p class="sub">把相機寫的 <code>.GYR</code> 拖進來，換成 Gyroflow 吃的
-  <code>.gcsv</code>。全部在這一頁裡做完，沒有東西被上傳。</p>
-  <p class="sub">這是新版轉檔器。需要鏡頭 profile（<code>.json</code>）時用
-  <a href="../web/">舊版轉檔器</a>。</p>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button>
+    <button type="button" data-lang="zh-Hans">简</button>
+    <button type="button" data-lang="zh-Hant">繁</button>
+  </div>
+  <h1 data-i18n="title"></h1>
+  <p class="sub" data-i18n="sub"></p>
+  <p class="sub" data-i18n="newold"></p>
 
   <div class="panel">
     <div id="drop" class="drop">
       <input type="file" id="file" accept=".GYR,.gyr,.BIN,.bin" hidden>
-      <b>把 .GYR 拖進來</b>
-      <small>或 <u>選一個檔案</u>。新舊格式都讀得動，版本自動判斷。</small>
+      <b data-i18n="drop"></b>
+      <small data-i18n="dropsub"></small>
     </div>
     <div id="out"></div>
   </div>
 
-  <footer>
-    鏡頭 profile 不在這裡產。相機錄影時就把 <code>.json</code> 寫在
-    <code>.GYR</code> 旁邊了，裡面有真正的焦距和畸變係數 —— 直接跟影格一起
-    丟進 Gyroflow 就好。
-  </footer>
+  <footer data-i18n="footer"></footer>
 </main>
 
 <script>
+/* Three languages, EN / 简 / 繁 (2026-09-26).  Only what the page shows is
+ * translated; the .gcsv it writes is the same bytes in every language. */
+const I18N = {
+  en: {
+    title: 'fpSup gyro log converter',
+    sub: 'Drop the <code>.GYR</code> the camera wrote and get the <code>.gcsv</code> Gyroflow reads. Everything happens in this page; nothing is uploaded.',
+    newold: 'This is the current converter. For a lens profile (<code>.json</code>) use the <a href="../web/">older converter</a>.',
+    drop: 'Drop a .GYR here',
+    dropsub: 'or <u>choose a file</u>. Old and new formats are both read; the version is detected.',
+    footer: 'No lens profile is made here. The Base edition does not write a <code>.json</code>; if you need one, the <a href="../web/">older converter</a> makes it from the lens you name. The gcsv edition writes it on the camera, beside the clip.',
+    short: 'Shorter than a header',
+    unknownfmt: 'The start of this file is not recognised: it is not an fpSup gyro log',
+    noperiod: 'The header has no sample period',
+    trunc: 'The body is {body} bytes, {rem} over a multiple of {rec}. The file was cut off part-way, and records have no framing, so every one after the break is misaligned.',
+    badtag: '{n} records have a tag that is neither 0 nor 1. That field is the only place misalignment shows, so part of this file is damaged.',
+    cantread: 'Cannot read',
+    item: 'Item', value: 'Value',
+    format: 'Format', clip: 'Clip', gyro: 'Gyro samples', rate: 'Sample rate', accel: 'Accelerometer', orient: 'Axes',
+    samples: '{n} samples · {s} s', ratev: '{hz} Hz ({us} µs per sample)', accelv: '{n} samples · {hz} Hz',
+    fmt_v7: 'v7 — 64-byte header', fmt_v8: 'new — 20-byte header',
+    x_mode: 'Sensor mode', x_size: 'Frame size', x_drop: 'Dropped blocks',
+    withacc: 'Include the accelerometer', withaccsub: 'Gyroflow uses it to find the direction of gravity. A log without accelerometer readings has no such column.',
+    dl: 'Download .gcsv',
+  },
+  'zh-Hans': {
+    title: 'fpSup 陀螺仪记录转换',
+    sub: '把相机写的 <code>.GYR</code> 拖进来，换成 Gyroflow 读取的 <code>.gcsv</code>。全部在这一页里完成，不会上传任何东西。',
+    newold: '这是新版转换器。需要镜头 profile（<code>.json</code>）时用<a href="../web/">旧版转换器</a>。',
+    drop: '把 .GYR 拖进来',
+    dropsub: '或 <u>选一个文件</u>。新旧格式都能读，版本自动判断。',
+    footer: '这里不生成镜头 profile。Base 版不会写 <code>.json</code>；需要时用<a href="../web/">旧版转换器</a>，依你指定的镜头生成。gcsv 版会在相机上把它写在片段旁边。',
+    short: '比一个文件头还短',
+    unknownfmt: '认不出这个文件的开头 —— 它不是 fpSup 的陀螺仪记录',
+    noperiod: '文件头没有采样周期',
+    trunc: '主体是 {body} 字节，除以 {rec} 余 {rem}。文件在中途被截断了，而记录没有分隔，所以断点之后的每一条都会错位。',
+    badtag: '{n} 条记录的 tag 既不是 0 也不是 1。这一栏是错位唯一看得见的地方，所以这个文件有一段是坏的。',
+    cantread: '读不了',
+    item: '项目', value: '值',
+    format: '格式', clip: '片段', gyro: '陀螺仪样本', rate: '采样率', accel: '加速度', orient: '轴向',
+    samples: '{n} 条 · {s} 秒', ratev: '{hz} Hz（每条 {us} µs）', accelv: '{n} 条 · {hz} Hz',
+    fmt_v7: 'v7 — 64 字节文件头', fmt_v8: '新版 — 20 字节文件头',
+    x_mode: '传感器模式', x_size: '画幅尺寸', x_drop: '丢失区块',
+    withacc: '把加速度一起写进去', withaccsub: 'Gyroflow 用它推算重力方向。没有加速度的记录就没有这一栏。',
+    dl: '下载 .gcsv',
+  },
+  'zh-Hant': {
+    title: 'fpSup 陀螺記錄轉檔',
+    sub: '把相機寫的 <code>.GYR</code> 拖進來，換成 Gyroflow 吃的 <code>.gcsv</code>。全部在這一頁裡做完，沒有東西被上傳。',
+    newold: '這是新版轉檔器。需要鏡頭 profile（<code>.json</code>）時用<a href="../web/">舊版轉檔器</a>。',
+    drop: '把 .GYR 拖進來',
+    dropsub: '或 <u>選一個檔案</u>。新舊格式都讀得動，版本自動判斷。',
+    footer: '鏡頭 profile 不在這裡產。Base 版不會寫 <code>.json</code>；需要時用<a href="../web/">舊版轉檔器</a>，依你指定的鏡頭產生。gcsv 版會在相機上把它寫在片段旁邊。',
+    short: '比一個檔頭還短',
+    unknownfmt: '認不得這個檔案的開頭 —— 它不是 fpSup 的陀螺記錄',
+    noperiod: '檔頭沒有取樣週期',
+    trunc: '本體是 {body} 位元組，除以 {rec} 餘 {rem}。檔案在中途被截斷了，而記錄沒有框，所以斷點之後的每一筆都會錯位。',
+    badtag: '{n} 筆記錄的 tag 既不是 0 也不是 1。這一欄是錯位唯一看得見的地方，所以這個檔案有一段是壞的。',
+    cantread: '讀不了',
+    item: '項目', value: '值',
+    format: '格式', clip: '片段', gyro: '陀螺樣本', rate: '取樣率', accel: '加速度', orient: '軸向',
+    samples: '{n} 筆 · {s} 秒', ratev: '{hz} Hz（每筆 {us} µs）', accelv: '{n} 筆 · {hz} Hz',
+    fmt_v7: 'v7 — 64 位元組檔頭', fmt_v8: '新版 — 20 位元組檔頭',
+    x_mode: '感光元件模式', x_size: '畫格尺寸', x_drop: '掉落區塊',
+    withacc: '把加速度一起寫進去', withaccsub: 'Gyroflow 用它推重力方向。沒有加速度的記錄就沒有這一欄。',
+    dl: '下載 .gcsv',
+  },
+};
+function pickLang() {
+  try { const s = localStorage.getItem('fpsup-convert-lang'); if (s && I18N[s]) return s; } catch (e) {}
+  const nav = (navigator.languages || [navigator.language || 'en']).map(x => String(x).toLowerCase());
+  for (const l of nav) {
+    if (!l.startsWith('zh')) continue;
+    return /(hant|tw|hk|mo)/.test(l) ? 'zh-Hant' : 'zh-Hans';
+  }
+  return 'en';
+}
+let LANG = typeof navigator === 'undefined' ? 'en' : pickLang();
+/* A message is kept as a key and its values, not as text, so switching the
+ * language re-renders it in the new one. */
+const T = (key, vars) => (I18N[LANG][key] ?? I18N.en[key] ?? key)
+  .replace(/\{(\w+)\}/g, (_, k) => vars && k in vars ? vars[k] : '{' + k + '}');
+class Msg extends Error {
+  constructor(key, vars) { super(key); this.key = key; this.vars = vars; }
+  get text() { return T(this.key, this.vars); }
+}
+
 /* Two header layouts, one body.
  *
  * The records have never differed: eight bytes, x at 0, y at 2, tag at 4, z at
@@ -99,7 +188,7 @@
  */
 const FMT = {
   v7: {
-    name: 'GFS7', hdr: 64, label: 'v7 — 64 位元組檔頭',
+    name: 'GFS7', hdr: 64, label: 'fmt_v7',
     detect: d => d.getUint32(0, true) === 0x37534647,      // "GFS7"
     read: d => ({
       periodPs: d.getUint32(8, true),
@@ -108,14 +197,14 @@ const FMT = {
       orient:   str(d, 16, 4),
       clip:     str(d, 20, 8),
       extra: {
-        '感光元件模式': d.getUint32(40, true) || '—',
-        '畫格尺寸': (d.getUint32(48, true) || '?') + ' × ' + (d.getUint32(52, true) || '?'),
-        '掉落區塊': d.getUint32(36, true),
+        x_mode: d.getUint32(40, true) || '—',
+        x_size: (d.getUint32(48, true) || '?') + ' × ' + (d.getUint32(52, true) || '?'),
+        x_drop: d.getUint32(36, true),
       },
     }),
   },
   v8: {
-    name: 'fpSup stream', hdr: 20, label: '新版 — 20 位元組檔頭',
+    name: 'fpSup stream', hdr: 20, label: 'fmt_v8',
     detect: d => d.getUint32(0, true) === 0x9F5BEB0D,
     read: d => ({
       periodPs: d.getUint32(4, true),
@@ -140,12 +229,12 @@ function str(d, at, n) {
 
 function read(buf, filename) {
   const d = new DataView(buf);
-  if (buf.byteLength < 20) throw new Error('比一個檔頭還短');
+  if (buf.byteLength < 20) throw new Msg('short');
   const key = Object.keys(FMT).find(k => FMT[k].detect(d));
-  if (!key) throw new Error('認不得這個檔案的開頭 —— 它不是 fpSup 的陀螺記錄');
+  if (!key) throw new Msg('unknownfmt');
   const f = FMT[key];
   const h = f.read(d);
-  if (!h.periodPs) throw new Error('檔頭沒有取樣週期');
+  if (!h.periodPs) throw new Msg('noperiod');
 
   const body = buf.byteLength - f.hdr;
   const c = {
@@ -154,9 +243,8 @@ function read(buf, filename) {
     periodS: h.periodPs / 1e12, gscale: h.gscale, ascale: h.ascale,
     orientation: h.orient, extra: h.extra, warnings: [],
   };
-  if (body % REC) c.warnings.push({bad: true, text:
-    `本體是 ${body} 位元組，除以 ${REC} 餘 ${body % REC}。檔案在中途被截斷了，` +
-    `而記錄沒有框，所以斷點之後的每一筆都會錯位。`});
+  if (body % REC) c.warnings.push({bad: true, key: 'trunc',
+    vars: {body, rec: REC, rem: body % REC}});
 
   const n = Math.floor(body / REC);
   const gx = new Int16Array(n), gy = new Int16Array(n), gz = new Int16Array(n);
@@ -177,9 +265,7 @@ function read(buf, filename) {
       az.push(d.getInt16(o + 6, true));
     } else unknown++;
   }
-  if (unknown) c.warnings.push({bad: true, text:
-    `${unknown} 筆記錄的 tag 既不是 0 也不是 1。這一欄是錯位唯一看得見的地方，` +
-    `所以這個檔案有一段是壞的。`});
+  if (unknown) c.warnings.push({bad: true, key: 'badtag', vars: {n: unknown}});
 
   Object.assign(c, {n: ng, gx, gy, gz, aAt, ax, ay, az});
   c.durationS = ng * c.periodS;
@@ -226,45 +312,60 @@ function save(name, text) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
 }
 
-let cap = null;
+let cap = null, lastErr = null;
 
 function render(c, err) {
   const out = $('#out');
   if (err) {
-    out.innerHTML = `<p class="note bad"><b>${err.name || '讀不了'}</b> ${err.message}</p>`;
+    const text = err instanceof Msg ? err.text : err.message;
+    out.innerHTML = `<p class="note bad"><b>${T('cantread')}</b> ${text}</p>`;
     return;
   }
+  if (!c) { out.innerHTML = ''; return; }
+  const acc = document.getElementById('acc');
+  const accOn = acc ? acc.checked : !!c.aAt.length;
   const rows = [
-    ['格式', `<span class="tag">${c.fmt.label}</span>`],
-    ['片段', `<span class="mono">${c.clip}</span>`],
-    ['陀螺樣本', `<span class="mono">${c.n.toLocaleString()}</span> 筆 ·
-                 ${c.durationS.toFixed(3)} 秒`],
-    ['取樣率', `<span class="mono">${(1 / c.periodS).toFixed(3)}</span> Hz
-                （每筆 ${(c.periodS * 1e6).toFixed(4)} µs）`],
-    ['加速度', c.aAt.length
-        ? `<span class="mono">${c.aAt.length.toLocaleString()}</span> 筆 ·
-           ${c.accelHz.toFixed(1)} Hz`
+    [T('format'), `<span class="tag">${T(c.fmt.label)}</span>`],
+    [T('clip'), `<span class="mono">${c.clip}</span>`],
+    [T('gyro'), T('samples', {n: `<span class="mono">${c.n.toLocaleString()}</span>`,
+                             s: c.durationS.toFixed(3)})],
+    [T('rate'), T('ratev', {hz: `<span class="mono">${(1 / c.periodS).toFixed(3)}</span>`,
+                           us: (c.periodS * 1e6).toFixed(4)})],
+    [T('accel'), c.aAt.length
+        ? T('accelv', {n: `<span class="mono">${c.aAt.length.toLocaleString()}</span>`,
+                       hz: c.accelHz.toFixed(1)})
         : '—'],
-    ['軸向', `<span class="mono">${c.orientation}</span>`],
-    ...Object.entries(c.extra).map(([k, v]) => [k, `<span class="mono">${v}</span>`]),
+    [T('orient'), `<span class="mono">${c.orientation}</span>`],
+    ...Object.entries(c.extra).map(([k, v]) => [T(k), `<span class="mono">${v}</span>`]),
   ];
   out.innerHTML =
-    '<table><thead><tr><th>項目</th><th>值</th></tr></thead><tbody>' +
+    `<table><thead><tr><th>${T('item')}</th><th>${T('value')}</th></tr></thead><tbody>` +
     rows.map(([k, v]) => `<tr><td class="k">${k}</td><td>${v}</td></tr>`).join('') +
     '</tbody></table>' +
-    c.warnings.map(w => `<p class="note${w.bad ? ' bad' : ''}">${w.text}</p>`).join('') +
-    `<label class="ck"><input type="checkbox" id="acc" ${c.aAt.length ? 'checked' : 'disabled'}>
-      <span>把加速度一起寫進去
-      <small>Gyroflow 用它推重力方向。沒有加速度的記錄就沒有這一欄。</small></span></label>
-     <button class="btn go" id="go">下載 .gcsv</button>`;
+    c.warnings.map(w => `<p class="note${w.bad ? ' bad' : ''}">${T(w.key, w.vars)}</p>`).join('') +
+    `<label class="ck"><input type="checkbox" id="acc" ${c.aAt.length ? (accOn ? 'checked' : '') : 'disabled'}>
+      <span>${T('withacc')}
+      <small>${T('withaccsub')}</small></span></label>
+     <button class="btn go" id="go">${T('dl')}</button>`;
   $('#go').onclick = () => save(c.clip + '.gcsv', gcsv(c, $('#acc').checked && !!c.aAt.length));
+}
+
+function setLang(l) {
+  LANG = I18N[l] ? l : 'en';
+  try { localStorage.setItem('fpsup-convert-lang', LANG); } catch (e) {}
+  document.documentElement.lang = LANG === 'en' ? 'en' : LANG;
+  document.title = T('title');
+  document.querySelectorAll('[data-i18n]').forEach(e => { e.innerHTML = T(e.dataset.i18n); });
+  document.querySelectorAll('.lang button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.lang === LANG)));
+  render(cap, lastErr);
 }
 
 function load(f) {
   const rd = new FileReader();
   rd.onload = () => {
-    try { cap = read(rd.result, f.name); render(cap); }
-    catch (e) { cap = null; render(null, e); }
+    try { cap = read(rd.result, f.name); lastErr = null; render(cap); }
+    catch (e) { cap = null; lastErr = e; render(null, e); }
   };
   rd.readAsArrayBuffer(f);
 }
@@ -277,6 +378,8 @@ fin.onchange = e => { if (e.target.files[0]) load(e.target.files[0]); e.target.v
 ['dragleave', 'drop'].forEach(k => drop.addEventListener(k, e => {
   e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+document.querySelectorAll('.lang button').forEach(b => b.onclick = () => setLang(b.dataset.lang));
+setLang(LANG);
 </script>
 </body>
 </html>
