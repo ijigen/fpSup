@@ -20,10 +20,11 @@ STACK = T.STACK - 0x1000
 TONE, KEY, APP = 0xC02D2E50, 0xC2F19D44, 0xC3033A44
 FLAG, VAR = RES + 4, RES + 0x1A4
 ORIGINAL = 0xC09C3F34
+SAVE, MAGIC = 0xC307544C, 0x4C560100
 
 
 class Rig:
-    def __init__(self, blob, corrupt=None, task_result=7):
+    def __init__(self, blob, corrupt=None, task_result=7, preference=0):
         self.cam = T.Camera({}, b'')
         self.mu = self.cam.mu
         self.mu.mem_write(B.SEG1_BASE, B.SEG1.read_bytes())
@@ -31,6 +32,7 @@ class Rig:
             self.put(corrupt, 0xE320F000)
         self.put(0xC3033A54, 1)  # Stable STILL live-view readback.
         self.put(0xC072E060, 0xC072E100)
+        self.put(SAVE, preference)
         self.mu.mem_write(STAGING, blob)
         self.writes = set()
         self.mu.hook_add(UC_HOOK_MEM_WRITE, self.record_write)
@@ -310,8 +312,13 @@ class Startup(unittest.TestCase):
     def setUpClass(cls):
         cls.blob, cls.info = B.build_blob(True, cls.default_level)
 
-    def run_startup(self, states, cancel_at=None, task_result=7, refuse_color=False):
-        r = Rig(self.blob, task_result=task_result)
+    def run_startup(self, states, cancel_at=None, task_result=7, refuse_color=False,
+                    preference=0, expected_level=2):
+        r = Rig(self.blob, task_result=task_result, preference=preference)
+        self.assertEqual(r.cam.word(SAVE), preference)
+        # Native restore callbacks before the task must not overwrite saved data.
+        r.step(0xC0075CF4, r4=0xC31ACDC4, sl=12, r6=0)
+        self.assertEqual(r.cam.word(SAVE), preference)
         self.assertEqual(r.task[:2], (0, 0x41))
         self.assertTrue(RES <= r.task[2] < RES + self.info['resident'])
         self.assertEqual(r.task[3:5], (28, 0x2000))
@@ -356,7 +363,7 @@ class Startup(unittest.TestCase):
                 self.assertEqual(mu.reg_read(UC_ARM_REG_R0), r.conv)
                 self.assertEqual(mu.reg_read(UC_ARM_REG_R1), 12)
                 self.assertEqual(mu.reg_read(UC_ARM_REG_R2), 1)
-                self.assertEqual(r.cam.word(VAR), self.default_level - 1)
+                self.assertEqual(r.cam.word(VAR), expected_level - 1)
                 self.assertEqual(r.cam.word(RES + 0x94), 17)
                 changes.append(ticks[0])
                 if refuse_color:
@@ -388,6 +395,64 @@ class Startup(unittest.TestCase):
         r.select(15)
         self.assertEqual(r.cam.word(FLAG), 0)
         self.assertEqual(r.tone(), ORIGINAL)
+
+    def test_saved_levels_disable_and_reenable_across_reboots(self):
+        for level in (1, 2, 3):
+            with self.subTest(level=level):
+                r, _ = self.run_startup([(2, 1)] * 10)
+                r.step(0xC0568A3C, r1=level)
+                saved = r.cam.word(SAVE)
+                self.assertEqual(saved, MAGIC | 4 | (level - 1))
+                reboot, changes = self.run_startup([(2, 1)] * 10,
+                    preference=saved, expected_level=level)
+                self.assertEqual(changes, [10])
+                self.assertEqual(reboot.tone(), T.HEAP + (level - 1) * 4096)
+                for row in (0, 15):  # native preset and native OFF
+                    reboot.select(row)
+                    saved = reboot.cam.word(SAVE)
+                    self.assertEqual(saved, MAGIC | (level - 1))
+                    disabled, changes = self.run_startup([(2, 1)], preference=saved)
+                    self.assertEqual(changes, [])
+                    self.assertEqual(disabled.cam.word(RES + 0x50), 5)
+                    self.assertEqual(disabled.cam.word(VAR), level - 1)
+                    self.assertEqual(disabled.cam.word(FLAG), 0)
+                    disabled.select(16)
+                    self.assertEqual(disabled.cam.word(SAVE), MAGIC | 4 | (level - 1))
+                # Non-menu native preset changes also disable after startup.
+                reboot.select(16)
+                reboot.step(0xC0075CF4, r4=0xC31ACDC4, sl=12, r6=1)
+                self.assertEqual(reboot.cam.word(SAVE), MAGIC | (level - 1))
+
+    def test_invalid_preferences_fall_back_and_failed_restore_keeps_saved_word(self):
+        for invalid in (0, 0xFFFFFFFF, MAGIC | 3, MAGIC | 7, MAGIC ^ 0x100):
+            r, changes = self.run_startup([(2, 1)] * 10, preference=invalid)
+            self.assertEqual(changes, [10])
+            self.assertEqual(r.cam.word(SAVE), MAGIC | 5)
+        r, _ = self.run_startup([(2, 1)] * 10, preference=MAGIC | 6,
+                                expected_level=3, refuse_color=True)
+        self.assertEqual(r.cam.word(SAVE), MAGIC | 6)
+        # A choice before the startup worker runs wins and saves the loaded level.
+        r = Rig(self.blob, preference=MAGIC | 6)
+        r.select(0)
+        self.assertEqual(r.cam.word(SAVE), MAGIC | 2)
+        self.assertEqual(r.cam.word(RES + 0x50), 2)
+
+    def test_preference_write_is_one_word_outside_other_settings(self):
+        r, _ = self.run_startup([(2, 1)] * 10)
+        start, length = 0xC307523C, 0x410
+        before = bytes(r.mu.mem_read(start, length))
+        writes = []
+        handle = r.mu.hook_add(UC_HOOK_MEM_WRITE,
+            lambda mu, access, addr, size, value, data: writes.append((addr, size)),
+            begin=start, end=start + length - 1)
+        r.step(0xC0568A3C, r1=1)
+        r.select(0)
+        r.mu.hook_del(handle)
+        self.assertEqual(writes, [(SAVE, 4), (SAVE, 4)])
+        after = bytes(r.mu.mem_read(start, length))
+        self.assertEqual(before[:0x210], after[:0x210])
+        self.assertEqual(before[0x214:], after[0x214:])
+        self.assertNotIn(SAVE, {a for a, _, _ in B.hook_sites(True)})
 
     def test_cine_playback_and_transitions_do_not_trigger_default(self):
         states = [(2, 2)] * 20 + [(3, 1)] * 10 + [(2, 1)] * 9 + [(2, 0)] + [(5, 1)] * 10

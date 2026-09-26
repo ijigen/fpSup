@@ -4,11 +4,13 @@ Part of the [RAW/live-view tools](../README.md), alongside [RAW View](../../rele
 
 Development module for **SIGMA fp firmware 5.02**. LV Boost adds a COLOR-menu
 row that brightens the preview at a fixed capture exposure. The included
-v0.5.2 card enables **Fast Start 2** and automatically selects **+2** after
-stable STILL live view begins. Selecting a native color preset disables the
-lift; a manual menu selection cancels a pending startup selection.
+v0.6.0 card enables **Fast Start 2** and restores the last selected LV Boost
+level after stable STILL live view begins. First use defaults to **+2**.
+Selecting OFF or a native color preset saves LV Boost as disabled; the next
+boot leaves the native color choice alone. A manual menu selection cancels a
+pending startup restore.
 
-[Download the v0.5.2 development card](LV-Boost-v0.5.2-FS2-Auto2-Sigma-fp-5.02.zip).
+[Download the v0.6.0 development card](LV-Boost-v0.6.0-FS2-Saved-Sigma-fp-5.02.zip).
 This is a standalone alternative to RAW View, not a merge input. Both use the
 same color-menu hooks. It is deliberately outside the release catalogue.
 
@@ -19,20 +21,22 @@ Back up your existing card files. Copy `AutoRun.txt`, `fpSup.BIN`, and the
 FS2 boot can be slower while the stored loader is provisioned. Boot with USB
 unplugged; attach USB only after boot if using the diagnostic shell.
 
-To update the previously installed v0.5.1 +2 card, replace **only `fpSup.BIN`**.
-AutoRun and all five splash files are byte-identical. This v0.5.2 build changes
-the COLOR-menu icon to **LV BOOST**; the automatic +2 behavior is unchanged.
+To update an existing v0.5.1 or v0.5.2 FS2 card, replace **only `fpSup.BIN`**.
+AutoRun and all five splash files are byte-identical.
 
-The default is applied once after ten consecutive 100 ms samples of stable
-STILL live view. You may then select +1, +2, +3, OFF, or another preset normally.
-The next boot uses the built-in default again; the last-used level is not saved.
+Select LV BOOST in COLOR and adjust it to +1, +2, or +3. Turn the camera off
+normally to let its existing settings save complete. On next boot, the saved
+level is applied once after ten consecutive 100 ms samples of stable STILL.
+Selecting OFF or another color preset disables automatic LV Boost restoration
+while retaining its last level for when you select LV BOOST again. A battery
+removal before normal shutdown may lose the latest change. Reset/invalid
+settings fall back to the built-in +2 default.
 The menu icon reads LV BOOST. The full color title may still read OFF because the native firmware sees OFF
 plus private mod state. The lifted display is not an exposure/clipping reference.
 
 FS2 uses the existing shared loader's stored bootstrap and warm-restart hook.
 It writes loader bytes to the camera's persistent common settings area;
-deleting the card files does not erase those bytes. No new persistent storage
-for LV Boost preferences is introduced.
+deleting the card files does not erase those bytes or the saved LV Boost preference.
 
 ## Build
 
@@ -61,7 +65,8 @@ python3 raw/lv-boost/test_lv_boost.py -v
 python3 raw/lv-boost/verify_card.py raw/lv-boost/out/auto2
 ```
 
-`--default-level 1|2|3` selects the startup level (default: 2). Omit `--fs2`
+`--default-level 1|2|3` selects the first-use/fallback level (default: 2); a valid
+saved preference takes precedence. Omit `--fs2`
 for ordinary AutoRun loading; add `--no-shell` to omit the diagnostic shell.
 The builder uses the repository's shared `fp_usb_shell/build_autorun.py` and
 its existing loader, stage2, journal, Fast bootstrap and splash resources.
@@ -89,6 +94,22 @@ through the native settings facade with the private LV Boost selection,
 checks the result, and parks. It does not call settings APIs from ISP hooks,
 retry failed selections, or hold pointers into the freed staging buffer.
 
+Preferences occupy one aligned word at `0xC307544C` (`XC_CommonSaveData +0x210`):
+`0x4C560100 | (enabled << 2) | level_index`, where the index is 0..2. The
+upper 29 bits identify format version 1; both invalid index encodings are
+rejected. Installation only reads it. Successful startup, menu selection, and
+level changes update the RAM mirror; the camera's normal shutdown saves it.
+Native initialization/apply callbacks do not overwrite it before restoration.
+No new file I/O, explicit flash writes, or polling saves are introduced.
+This preference deliberately stays out of the firmware-patch shutdown journal.
+
+The full devkit's `research/firmware/notes/PERSISTENT_STORE_COMMONSAVE.md`
+records power-cycle survival of the +0x210..+0x280 span. This word is outside
+Fast's entire +0x028..+0x200 reservation and OpenGate's +0x290 preference.
+Those research notes are not bundled here. Historical survival does not prove
+that no untested native feature uses this reserved area; this remains an
+experimental allocation for fp 5.02 and needs camera power-cycle validation.
+
 With an already connected USB shell, read diagnostics without changing settings:
 
 ```sh
@@ -96,7 +117,7 @@ python3 raw/lv-boost/read_diagnostics.py --out /path/to/diagnostics.json
 ```
 
 `startup_state`: 0 waiting, 1 applied, 2 manual menu override, 3 applying,
-4 verification failed. `startup_task` and `startup_task_result` report native
+4 verification failed, 5 saved disabled. `startup_task` and `startup_task_result` report native
 task creation/start results. A task id at or below zero is a creation failure
 (the JSON reader presents native words as unsigned integers).
 
@@ -107,18 +128,24 @@ task creation/start results. A task id at or below zero is a creation failure
   powering up in STILL. Cold versus warm startup was not distinguished.
 - v0.5.1 +2 was installed, fully read back and safely ejected. Physical +2
   startup confirmation is still pending.
-- All 13 LV Boost tests pass in this repository, including native tone lookup,
+- All 16 LV Boost tests pass in this repository, including native tone lookup,
   restricted navigation, selection/disable, startup +2, transitions, cancellation,
-  and task/selection failure handling.
+  task/selection failure handling, saved levels/disabled state, invalid data,
+  boot callback protection, and writes confined to the preference word.
 - Exact-card emulation runs the actual payloads through ordinary, stored-bootstrap
   and warm-hook loading, checking task creation and shutdown restoration.
   Native I/O, task scheduling, and settings side effects are mocked.
 - Before the rename, the standalone sources reproduced all seven installed
   v0.5.1 card files byte-for-byte. The renamed v0.5.2 package was rebuilt and
   passed the same 13 tests and exact-card emulation; it has not booted on camera.
-  The shared loader/splash suite and composer checks are also exercised.
+  The shared loader/splash suite and composer checks were also exercised.
+- v0.6.0 passes all 16 tests and exact-card emulation of all three loading paths.
+  Fast provisioning and shutdown preserve the preference word. Saved settings
+  have not yet been validated on the camera; flash persistence and native task
+  scheduling are not simulated.
 - Development mutation checks caught a shortened stabilization wait and an OFF
-  request substituted for the private LV Boost request.
+  request substituted for the private LV Boost request. Removing the saved-word
+  store also makes the new persistence test fail for all three levels.
 
 No native startup gate was bypassed: FS2 still depends on the existing AutoRun
 trigger. The STILL power-up report is not evidence that every cold-start path
@@ -126,6 +153,6 @@ works. Repeated idle power cycles, capture/JPEG/embedded-preview isolation,
 AE behavior, focus magnification, and HDMI/EVF behavior remain unverified.
 This is a development PR, not a production-readiness claim.
 
-Renamed v0.5.2 `fpSup.BIN` SHA-256:
-`b248c7e1764c0b8a6b7c7357166e74f48776fddd75b2343d06f7719d0dee6bf2`.
+v0.6.0 `fpSup.BIN` SHA-256:
+`02da37e5f987350114dcadde56f72fe5eaaf4344b23de5cf5b08a54a30909281`.
 The ZIP includes checksums for every card file.

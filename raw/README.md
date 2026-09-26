@@ -13,7 +13,7 @@ separately for each tool.
 | Tool | Purpose | Status |
 |---|---|---|
 | [RAW View](../releases/fpsup-raw-view-v0.2.0test/) | CinemaDNG 12-bit monitoring aligned with recorded RAW | Existing test release; ordinary and Fast Start 2 cards |
-| [LV Boost](lv-boost/) | +1/+2/+3 STILL preview brightness, automatic +2, optional Fast Start 2 | Development module; source, tests, and card package |
+| [LV Boost](lv-boost/) | +1/+2/+3 STILL preview brightness, saved level/on-off state (first-use +2), optional Fast Start 2 | Development module; source, tests, and card package |
 
 These are alternative COLOR-menu mods; do not combine their card files.
 
@@ -30,7 +30,7 @@ updates and do not produce an unsigned `.bin` for flashing.
 
 這裡收錄 RAW／即時預覽監看工具，以及 fp RAW 路徑的相機端探針與主機端安全檢查。
 [RAW View](../releases/fpsup-raw-view-v0.2.0test/) 用於 CinemaDNG 12-bit 監看；
-[LV Boost](lv-boost/) 提供 STILL 預覽 +1／+2／+3 提亮、預設自動 +2 與可選 Fast Start 2。
+[LV Boost](lv-boost/) 提供 STILL 預覽 +1／+2／+3 提亮、記憶上次級別與開關狀態（首次預設 +2）及可選 Fast Start 2。
 兩者是不同的 COLOR 選單模組，卡片檔案不可混用。每一組工具都必須把
 「實機證據」、「離線驗證」與「尚未完成」分開寫清楚。
 

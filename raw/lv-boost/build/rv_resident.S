@@ -422,6 +422,34 @@ stub_dg:
 
 #endif
 
+#ifdef FL_DEFAULT
+/* One aligned word: versioned magic | enabled<<2 | level_index.
+ * This is a settings RAM mirror, automatically saved by normal shutdown,
+ * not a firmware patch to undo in the shared journal. No flash API here.
+ * Skip native boot/apply callbacks until restore succeeds or the user acts. */
+.macro LV_SAVE_SETTINGS
+    push    {r0, r1, ip}
+    ldr     r0, [r3, #0x50]
+    cmp     r0, #1
+    beq     .Lsave\@
+    cmp     r0, #2
+    bne     .Lsaved\@
+.Lsave\@:
+    ldr     r0, [r3, #P_VAR]
+    cmp     r0, #2
+    bhi     .Lsaved\@
+    ldr     r1, [r3, #P_FLAG]
+    and     r1, r1, #1
+    orr     r0, r0, r1, lsl #2
+    ldr     ip, =LV_MAGIC
+    orr     r0, r0, ip
+    ldr     ip, =LV_SAVE
+    str     r0, [ip]
+.Lsaved\@:
+    pop     {r0, r1, ip}
+.endm
+#endif
+
 stub_mj:
     ldr     ip, =GUI_TO_ENUM_AJ
     b       1f
@@ -487,6 +515,9 @@ stub_mc:
     cmp     r6, #0xC
     movne   r2, #0                  /* 新值不是 OFF:一律清 */
     strne   r2, [r3, #P_FLAG]
+#ifdef FL_DEFAULT
+    LV_SAVE_SETTINGS
+#endif
     ldr     r2, [r3, #P_FLAG]       /* r2 = 新生效列 */
     cmp     r2, #0
     movne   r2, #16
@@ -553,6 +584,9 @@ stub_ef:
     movlt   ip, #0                  /* 往下 → SA */
 #endif
     str     ip, [r3, #P_VAR]
+#ifdef FL_DEFAULT
+    LV_SAVE_SETTINGS
+#endif
 #ifdef LV_BOOST
     ldr     r0, =KEY_CTX0
     mvn     r1, #0

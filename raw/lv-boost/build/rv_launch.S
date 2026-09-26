@@ -351,6 +351,27 @@ entry:
     str     r4, [r9, #0x10]         @ tab_base
     str     r10, [r9, #0x14]        @ slots
     str     r11, [r9, #0x18]        @ mode_copy
+#ifdef FL_DEFAULT
+    /* Read preferences before exposing menu hooks. CommonSave +0x210 is
+     * outside Fast's +0x028..200 and OpenGate's +0x290 word. Never seed it
+     * during installation: native boot callbacks must not erase a choice. */
+    mov     r0, #(FL_DEFAULT - 1)
+    str     r0, [r9, #0x1A4]
+    LDA     r1, LV_SAVE
+    ldr     r0, [r1]
+    bic     r1, r0, #7
+    LDA     r2, LV_MAGIC
+    cmp     r1, r2
+    bne     lv_loaded
+    and     r1, r0, #3
+    cmp     r1, #2
+    bhi     lv_loaded
+    str     r1, [r9, #0x1A4]
+    tst     r0, #4
+    moveq   r0, #5                 @ saved disabled: leave native color alone
+    streq   r0, [r9, #0x50]
+lv_loaded:
+#endif
 #ifndef LV_BOOST
     add     r1, r6, #NREC * 4 + 4   @ THR[]
     add     r0, r9, #0x1C

@@ -148,7 +148,8 @@ def build_blob(focus_lift=True, focus_lift_default=None):
     res_src = HERE / 'rv_resident.S'
     variant = ['LV_BOOST=1'] if focus_lift else []
     if focus_lift_default is not None:
-        variant += [f'FL_DEFAULT={focus_lift_default}']
+        variant += [f'FL_DEFAULT={focus_lift_default}',
+                    'LV_SAVE=0xC307544C', 'LV_MAGIC=0x4C560100']
     res = assemble(res_src, variant)
     rs = symbols(res_src, variant)
     assert rs['sat_tab'] - rs['params'] == 0x1C0, f'sat_tab 在 +0x{rs["sat_tab"] - rs["params"]:X}'
@@ -211,7 +212,7 @@ def check_calls(code, startup=False):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--default-level', type=int, choices=(1, 2, 3), default=2,
-                    help='Startup LV Boost level (default: +2)')
+                    help='First-use LV Boost level; saved settings take precedence (default: +2)')
     ap.add_argument('--fs2', action='store_true', help='Enable Fast Start 2')
     ap.add_argument('--no-shell', action='store_true', help='Omit the diagnostic USB shell')
     ap.add_argument('--out', type=pathlib.Path, required=True)

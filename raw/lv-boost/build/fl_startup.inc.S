@@ -1,6 +1,6 @@
 /* One startup selection in task context. No settings calls from ISP hooks.
  * Private diagnostics: +50 state (0 waiting, 1 applied, 2 user cancelled,
- * 3 applying, 4 verification failed), +54 task id, +58 start result.
+ * 3 applying, 4 verification failed, 5 saved disabled), +54 task id, +58 start result.
  * The firmware has no proven task-exit wrapper; park after the one-shot.
  * This uses the same yielding delay and task ABI as the USB shell worker. */
 .align 2
@@ -37,8 +37,6 @@ fl_wait:
     bne     fl_wait
     mov     r0, #3
     str     r0, [r4, #0x50]
-    mov     r0, #(FL_DEFAULT - 1)
-    str     r0, [r4, #P_VAR]
     mov     r0, #17               @ same private selection as GUI row 16
     str     r0, [r4, #P_PEND]
     mov     r0, r6
@@ -56,6 +54,8 @@ fl_wait:
     bne     fl_failed
     mov     r0, #1
     str     r0, [r4, #0x50]
+    mov     r3, r4
+    LV_SAVE_SETTINGS
     b       fl_park
 fl_failed:
     mov     r0, #0

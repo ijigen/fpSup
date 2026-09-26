@@ -4,7 +4,7 @@ import re
 import struct
 import sys
 
-from test_lv_boost import B, T, STACK, TONE
+from test_lv_boost import B, T, STACK, TONE, SAVE, MAGIC
 from unicorn.arm_const import UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_SP
 
 
@@ -40,6 +40,7 @@ def verify(path):
     loader = {a: w for a, w in pairs if T.CAVE_LOW <= a < T.CAVE_LOW + 0x200}
     bootstrap = {a: w for a, w in pairs if 0xC072F700 <= a < 0xC0730000}
     c = Card(loader, (path / 'fpSup.BIN').read_bytes())
+    c.mu.mem_write(SAVE, struct.pack('<I', MAGIC | 6))
     c.now = 15_000_000
     c.mu.mem_write(T.AR_TABLE + 0x21C, struct.pack('<I', 0))
     for mode in ('ordinary loader', 'stored bootstrap', 'warm hook'):
@@ -63,11 +64,14 @@ def verify(path):
         assert T.HEAP + 0x300000 <= c.tasks[1][2] < T.HEAP + 0x307000
         assert len(c.registered) == 2
         assert c.word(T.STORE) != 0
+        assert c.word(SAVE) == MAGIC | 6
+        assert c.word(T.HEAP + 0x303200 + 0x1A4) == 2
         obj = c.registered[0][0]
         c.call(c.word(obj + 4), r0=obj, r1=4, sp=STACK)
         for a, word, _ in B.hook_sites(True):
             assert bytes(c.mu.mem_read(a, 4)) == word, hex(a)
         assert c.word(T.DRAW) == T.DRAW_STOCK
+        assert c.word(SAVE) == MAGIC | 6
         print(mode + ': real payload installed, both tasks created, shutdown restored all LV Boost sites')
 
 
