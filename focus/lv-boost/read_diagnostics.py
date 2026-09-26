@@ -1,4 +1,4 @@
-"""Read Focus Lift v0.2 diagnostics over the existing fp USB shell.
+"""Read LV Boost v0.2 diagnostics over the existing fp USB shell.
 
 No camera settings, hooks, or files are changed. The GUI getter provides the
 owned allocation address; never scan arbitrary camera RAM for a magic word.
@@ -27,7 +27,7 @@ def main():
     from putfile import mem_get, sh
     addr = resident(mem_get(0xC06C07CC, 2))
     if mem_get(addr, 1) != [int.from_bytes(b'FLF1', 'little')]:
-        raise SystemExit('Focus Lift is not installed at the GUI allocation')
+        raise SystemExit('LV Boost is not installed at the GUI allocation')
     words = mem_get(addr + 0x1C, 13)
     names = ('gain_calls', 'last_gain_app', 'tone_calls', 'last_context',
              'last_pq_color', 'last_channels', 'last_stock_pointer',

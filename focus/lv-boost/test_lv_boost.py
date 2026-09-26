@@ -7,8 +7,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT / 'focus/lift/build'), str(ROOT / 'fp_usb_shell')]
-import build_focus_lift as B
+sys.path[:0] = [str(ROOT / 'focus/lv-boost/build'), str(ROOT / 'fp_usb_shell')]
+import build_lv_boost as B
 import fl_tables as F
 import test_loader_hook as T
 from unicorn import UC_HOOK_MEM_WRITE, UC_HOOK_CODE
@@ -95,7 +95,7 @@ class Rig:
         return self.mu.reg_read(UC_ARM_REG_R1)
 
 
-class FocusLift(unittest.TestCase):
+class LVBoost(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.blob, cls.info = B.build_blob(True)
@@ -273,7 +273,7 @@ class FocusLift(unittest.TestCase):
                 return super()._hook(mu, addr, size, data)
 
         with tempfile.TemporaryDirectory() as td:
-            blob = Path(td) / 'focus-lift.bin'
+            blob = Path(td) / 'lv-boost.bin'
             blob.write_bytes(self.blob)
             args = ['--no-shell', '--boot-bin', str(blob) + ':0']
             for a, word, _ in B.hook_sites(True):

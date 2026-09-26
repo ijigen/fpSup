@@ -1,4 +1,4 @@
-"""Focus Lift: three preview tone tables, without changing acquisition gain.
+"""LV Boost: three preview tone tables, without changing acquisition gain.
 
 The stock OFF table closely fits sRGB(i/1918) * 8190. This prototype
 adds exposure in that linear input domain, with a smooth shoulder above

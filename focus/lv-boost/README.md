@@ -1,12 +1,12 @@
-# Focus Lift: STILL preview +1 / +2 / +3
+# LV Boost (Live View Boost): STILL preview +1 / +2 / +3
 
-Development module for **SIGMA fp firmware 5.02**. Focus Lift adds a COLOR-menu
+Development module for **SIGMA fp firmware 5.02**. LV Boost adds a COLOR-menu
 row that brightens the preview at a fixed capture exposure. The included
-v0.5.1 card enables **Fast Start 2** and automatically selects **+2** after
+v0.5.2 card enables **Fast Start 2** and automatically selects **+2** after
 stable STILL live view begins. Selecting a native color preset disables the
 lift; a manual menu selection cancels a pending startup selection.
 
-[Download the v0.5.1 development card](Focus-Lift-v0.5.1-FS2-Auto2-Sigma-fp-5.02.zip).
+[Download the v0.5.2 development card](LV-Boost-v0.5.2-FS2-Auto2-Sigma-fp-5.02.zip).
 This is a standalone alternative to RAW View, not a merge input. Both use the
 same color-menu hooks. It is deliberately outside the release catalogue.
 
@@ -17,20 +17,20 @@ Back up your existing card files. Copy `AutoRun.txt`, `fpSup.BIN`, and the
 FS2 boot can be slower while the stored loader is provisioned. Boot with USB
 unplugged; attach USB only after boot if using the diagnostic shell.
 
-For an update from the Focus Lift v0.5.0 +3 card, replace **only `fpSup.BIN`**.
-AutoRun and all five splash files are byte-identical. Changing the default
-from +3 to +2 changes one byte of the payload's startup instruction.
+To update the previously installed v0.5.1 +2 card, replace **only `fpSup.BIN`**.
+AutoRun and all five splash files are byte-identical. This v0.5.2 build changes
+the COLOR-menu icon to **LV BOOST**; the automatic +2 behavior is unchanged.
 
 The default is applied once after ten consecutive 100 ms samples of stable
 STILL live view. You may then select +1, +2, +3, OFF, or another preset normally.
 The next boot uses the built-in default again; the last-used level is not saved.
-The full color title may still read OFF because the native firmware sees OFF
+The menu icon reads LV BOOST. The full color title may still read OFF because the native firmware sees OFF
 plus private mod state. The lifted display is not an exposure/clipping reference.
 
 FS2 uses the existing shared loader's stored bootstrap and warm-restart hook.
 It writes loader bytes to the camera's persistent common settings area;
 deleting the card files does not erase those bytes. No new persistent storage
-for Focus Lift preferences is introduced.
+for LV Boost preferences is introduced.
 
 ## Build
 
@@ -54,9 +54,9 @@ research devkit, these are the same segments its builders use; its extracted
 From the repository root, build into a fresh directory:
 
 ```sh
-python3 focus/lift/build/build_focus_lift.py --fs2 --out focus/lift/out/auto2
-python3 focus/lift/test_focus_lift.py -v
-python3 focus/lift/verify_card.py focus/lift/out/auto2
+python3 focus/lv-boost/build/build_lv_boost.py --fs2 --out focus/lv-boost/out/auto2
+python3 focus/lv-boost/test_lv_boost.py -v
+python3 focus/lv-boost/verify_card.py focus/lv-boost/out/auto2
 ```
 
 `--default-level 1|2|3` selects the startup level (default: 2). Omit `--fs2`
@@ -67,11 +67,10 @@ There is no separate loader implementation. Generated includes and local
 build output are ignored. Do not commit extracted firmware images.
 
 The `rv_*` sources are derived from the research devkit's RAW View implementation.
-Its FOCUS_LIFT assembly variant is retained to reproduce the tested machine
-code. The Python wrapper is restricted to Focus Lift and uses this repository's
+Its LV_BOOST assembly variant is retained to preserve the tested startup and tone behavior. The Python wrapper is restricted to LV Boost and uses this repository's
 paths, so no external research-tree modules or data are required after supplying
 the firmware segments. The unused matrix buffers retain their original layout;
-the Focus Lift hooks do not install the RAW gain, global tone/matrix-root, or
+the LV Boost hooks do not install the RAW gain, global tone/matrix-root, or
 DNG-writer patches.
 
 ## Implementation
@@ -84,14 +83,14 @@ cache when the selection changes; it preserves the original gain-state result.
 All firmware hook sites are declared for the shared loader's shutdown journal.
 
 A priority-28 task with an 8 KiB stack waits for stable STILL, requests OFF
-through the native settings facade with the private Focus Lift selection,
+through the native settings facade with the private LV Boost selection,
 checks the result, and parks. It does not call settings APIs from ISP hooks,
 retry failed selections, or hold pointers into the freed staging buffer.
 
 With an already connected USB shell, read diagnostics without changing settings:
 
 ```sh
-python3 focus/lift/read_diagnostics.py --out /path/to/diagnostics.json
+python3 focus/lv-boost/read_diagnostics.py --out /path/to/diagnostics.json
 ```
 
 `startup_state`: 0 waiting, 1 applied, 2 manual menu override, 3 applying,
@@ -106,16 +105,18 @@ task creation/start results. A task id at or below zero is a creation failure
   powering up in STILL. Cold versus warm startup was not distinguished.
 - v0.5.1 +2 was installed, fully read back and safely ejected. Physical +2
   startup confirmation is still pending.
-- All 13 Focus Lift tests pass in this repository, including native tone lookup,
+- All 13 LV Boost tests pass in this repository, including native tone lookup,
   restricted navigation, selection/disable, startup +2, transitions, cancellation,
   and task/selection failure handling.
 - Exact-card emulation runs the actual payloads through ordinary, stored-bootstrap
   and warm-hook loading, checking task creation and shutdown restoration.
   Native I/O, task scheduling, and settings side effects are mocked.
-- The standalone sources reproduce all seven installed card files byte-for-byte.
+- Before the rename, the standalone sources reproduced all seven installed
+  v0.5.1 card files byte-for-byte. The renamed v0.5.2 package was rebuilt and
+  passed the same 13 tests and exact-card emulation; it has not booted on camera.
   The shared loader/splash suite and composer checks are also exercised.
 - Development mutation checks caught a shortened stabilization wait and an OFF
-  request substituted for the private Focus Lift request.
+  request substituted for the private LV Boost request.
 
 No native startup gate was bypassed: FS2 still depends on the existing AutoRun
 trigger. The STILL power-up report is not evidence that every cold-start path
@@ -123,6 +124,6 @@ works. Repeated idle power cycles, capture/JPEG/embedded-preview isolation,
 AE behavior, focus magnification, and HDMI/EVF behavior remain unverified.
 This is a development PR, not a production-readiness claim.
 
-Exact installed v0.5.1 `fpSup.BIN` SHA-256:
-`3252fbc975416e3ac4b454eab801beeb008562736692891343006f9e2bc766dd`.
+Renamed v0.5.2 `fpSup.BIN` SHA-256:
+`b248c7e1764c0b8a6b7c7357166e74f48776fddd75b2343d06f7719d0dee6bf2`.
 The ZIP includes checksums for every card file.

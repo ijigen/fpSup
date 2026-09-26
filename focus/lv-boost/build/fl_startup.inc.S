@@ -42,7 +42,7 @@ fl_wait:
     mov     r0, #17               @ same private selection as GUI row 16
     str     r0, [r4, #P_PEND]
     mov     r0, r6
-    mov     r1, #12               @ native OFF; Focus Lift owns private flag
+    mov     r1, #12               @ native OFF; LV Boost owns private flag
     mov     r2, #1
     ldr     ip, =0xC005C958        @ native SetColorMode, with notifications
     blx     ip

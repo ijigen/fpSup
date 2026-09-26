@@ -26,7 +26,7 @@
 
 .equ H_GET,        0xC001D740       /* (desc, class, size, 0) */
 .equ H_ADDR,       0xC001D7F0       /* (desc) -> address */
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
 .equ ALLOC,        0x7000
 #else
 .equ ALLOC,        0x42000
@@ -39,7 +39,7 @@
 
 .equ SITE_A,       0xC0313244
 .equ ORIG_A,       0xE595200C
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
 .equ SITE_B,       0xC02D2E50
 .equ ORIG_B,       0xE5901004
 #else
@@ -79,7 +79,7 @@
 .equ THUMB_VENEER, 0xF000F8DF       /* ldr.w pc, [pc, #0] */
 .equ CURVE_ENTRIES, 0xC0971114
 
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
 .equ OFF_SLOTS, 0x3004
 .equ OFF_MODE,  0x3060
 .equ OFF_RES,   0x3200
@@ -249,7 +249,7 @@ entry:
     add     r4, r4, r1
     bic     r4, r4, r1              @ r4 = T0
 
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     ldr     r5, blob_rel1
 11: add     r5, pc, r5
     LDA     r0, TDATA_OFF
@@ -351,7 +351,7 @@ entry:
     str     r4, [r9, #0x10]         @ tab_base
     str     r10, [r9, #0x14]        @ slots
     str     r11, [r9, #0x18]        @ mode_copy
-#ifndef FOCUS_LIFT
+#ifndef LV_BOOST
     add     r1, r6, #NREC * 4 + 4   @ THR[]
     add     r0, r9, #0x1C
     mov     r2, #NTHR
@@ -446,7 +446,7 @@ entry:
     add     r0, r9, r0
     LDA     r1, CBM_VT_V26
     str     r0, [r1]
-#ifndef FOCUS_LIFT
+#ifndef LV_BOOST
     /* DNG writer:OFF 常數位址 → 常駐 cm_buf(CM1)、cm_buf + 72(CM2) */
     LDA     r3, CMBUF
     add     r3, r9, r3

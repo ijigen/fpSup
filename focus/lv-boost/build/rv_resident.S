@@ -96,7 +96,7 @@
 .equ OFF_QUAL,      0x788           /* CinemaDNG 位深(0 = 12-bit) */
 .equ NTHR,          30
 
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
 #include "fl_fv.inc"
 #else
 #include "rv_fv.inc"
@@ -158,7 +158,7 @@
 .endm
 
 params:
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     .ascii  "FLF1"
 #else
     .ascii  "RVW1"
@@ -182,8 +182,8 @@ dbg:
 .align 3
 #include "rv_dngcm.inc"             /* cm_buf(初值 = 第 0 級 = 原廠 OFF 常數)、cm_tab */
 
-#ifdef FOCUS_LIFT
-/* Focus Lift does not alter gain_state, RAW_CORR, matrices or DNG metadata.
+#ifdef LV_BOOST
+/* LV Boost does not alter gain_state, RAW_CORR, matrices or DNG metadata.
  * Site A is used only to invalidate the native preview tone cache on changes.
  * Application status: native status/get app_current reads C303384C+1F8.
  * Stable STILL live view reports app 2, attribute 1 (SetRecMode=0,
@@ -513,7 +513,7 @@ stub_mc:
     add     ip, ip, #1
     cmp     ip, #NGUI
     blo     5b
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     ldr     r1, =KEY_CTX0
     mvn     ip, #0
     str     ip, [r1]
@@ -537,12 +537,12 @@ stub_ef:
     cmp     ip, #0
     beq     9f
     ldr     r2, [r3, #P_VAR]        /* 目前顯示值 = lat:SA = 0、GA = 1 */
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     add     r2, r2, #1             /* displayed values +1 / +2 / +3 */
 #endif
     cmp     r1, r2
     beq     5f                      /* 等於顯示值(含我們自己發布的回呼):不動 */
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     sub     ip, r1, #1
     cmp     ip, #0
     movlt   ip, #0
@@ -553,14 +553,14 @@ stub_ef:
     movlt   ip, #0                  /* 往下 → SA */
 #endif
     str     ip, [r3, #P_VAR]
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     ldr     r0, =KEY_CTX0
     mvn     r1, #0
     str     r1, [r0]
 #endif
     push    {r4, lr}
     mov     r4, ip                  /* r4 = 新顯示值 */
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     add     r4, r4, #1
 #endif
     mov     r0, #0
@@ -586,7 +586,7 @@ stub_en:
     cmp     r7, #0xC
     bne     9f
     ldr     r0, [r3, #P_VAR]        /* SA → 0、GA → 1 */
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     add     r0, r0, #1
 #endif
     bx      lr
@@ -600,7 +600,7 @@ stub_sa:
     mov     r2, r1                  /* r2 = 原值 */
     cmp     r1, #0
     movlt   r1, #0                  /* 夾到 0..5 */
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
     mov     r1, #0
 #else
     cmp     r1, #5
@@ -726,7 +726,7 @@ stub_fv:
     ldr     pc, =0xC05E5BF1         /* 回 Thumb */
 
 .ltorg
-#ifdef FOCUS_LIFT
+#ifdef LV_BOOST
 #ifdef FL_DEFAULT
 #include "fl_startup.inc.S"
 #endif

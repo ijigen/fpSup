@@ -1,10 +1,10 @@
-"""Emulate an exact Focus Lift card; task scheduling and native I/O are mocked."""
+"""Emulate an exact LV Boost card; task scheduling and native I/O are mocked."""
 from pathlib import Path
 import re
 import struct
 import sys
 
-from test_focus_lift import B, T, STACK, TONE
+from test_lv_boost import B, T, STACK, TONE
 from unicorn.arm_const import UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_SP
 
 
@@ -17,7 +17,7 @@ class Card(T.Camera):
 
     def _hook(self, mu, addr, size, data):
         if addr == self.entry:
-            self.entry = None  # Run the actual chain, USB bootstrap and Focus Lift entry.
+            self.entry = None  # Run the actual chain, USB bootstrap and LV Boost entry.
         if addr == T.F['H_ADDR']:
             result = T.HEAP + self.allocations * 0x100000
             self.allocations += 1
@@ -68,7 +68,7 @@ def verify(path):
         for a, word, _ in B.hook_sites(True):
             assert bytes(c.mu.mem_read(a, 4)) == word, hex(a)
         assert c.word(T.DRAW) == T.DRAW_STOCK
-        print(mode + ': real payload installed, both tasks created, shutdown restored all Focus Lift sites')
+        print(mode + ': real payload installed, both tasks created, shutdown restored all LV Boost sites')
 
 
 if __name__ == '__main__':
