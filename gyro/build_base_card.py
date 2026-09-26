@@ -96,7 +96,9 @@ lens profile, no USB shell.  If you would rather the camera wrote the .gcsv and
 the .json for you and left no .GYR at all, that is the main fpGyroSup release,
 in the same folder.
 
-    https://ijigen.github.io/fpSup/gyro/web/     convert in a browser
+    https://ijigen.github.io/fpSup/gyro/convert/ convert in a browser
+    https://ijigen.github.io/fpSup/gyro/web/     the older converter, which also
+                                                 writes a lens profile .json
     ./gyro/gyr7.py                               convert on the command line
 """
 
