@@ -311,9 +311,17 @@ PRODUCTS = {
                           'adds its worker bootstrap, state and interface patch '
                           'to the BIN. EP 0x83 push patches are optional; the '
                           'shared AutoRun does not depend on this selection.'),
-    'gyro':     dict(id='gyro', name='fpSup-Gyro', category='shooting',
+    'gyro':     dict(id='gyro', name='fpSup-Gyro', category='shooting', excl=['gyro-base'],
                      desc='Writes .gcsv and .json into the clip folder while '
                           'recording. The released card, unmodified.'),
+    'gyro-base': dict(id='gyro-base', name='fpSup-Gyro-Base', category='shooting',
+                      excl=['gyro'],
+                      desc='Writes the gyro and accelerometer as a raw .GYR in '
+                           '\\GYRO\\ beside every take -- every sample, the camera '
+                           'only streams -- converted afterwards in the browser. '
+                           'Needs an empty GYRO folder on every volume you record '
+                           'to. Same code as the Gyro edition; not with it: they '
+                           'hook the same places.'),
     'og3k':     dict(id='og3k', name='fpSup-OG3K', category='shooting', excl=['og2k'],
                      desc='3024×2010, DNG cropped to 3008×2000, eight frame rates, '
                           '8/10/12-bit CinemaDNG. Sensor modes 98/117 — the sensor\'s '
@@ -338,7 +346,10 @@ PRODUCTS = {
 # every original section and this ordered call chain without fixing offsets.
 # og2k last: the merge checks below reproduce cards that predate it, and
 # picked() walks this order, so appending cannot change their bytes.
-ORDER = ['usbshell', 'gyro', 'og3k', 'og2k']
+ORDER = ['usbshell', 'gyro', 'gyro-base', 'og3k', 'og2k']
+# gyro-base right after gyro (2026-09-26): the two are exclusive, so no
+# existing combination changes, and its launcher runs before the OG restore
+# the way gyro's does.
 
 
 def version_key(q):

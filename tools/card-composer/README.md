@@ -28,7 +28,8 @@ names; missing metadata falls back to `uncategorized`.
 
 `build_catalogue.py` selects the latest frozen directory for each product from
 `releases/`; it never rebuilds or overwrites a frozen release. The 2026-09-25
-refresh uses USB Shell 3.3.0, gyro 1.14.0, OG3K 0.2.6a and OG2K 0.1.3a: the
+refresh uses USB Shell 3.3.0, gyro 1.14.0, gyro-base 1.14.0 (added 2026-09-26;
+exclusive with gyro), OG3K 0.2.6a and OG2K 0.1.3a: the
 same payloads as before on the new loader and stage2, which write back every
 firmware word a card changed when the camera powers off (gyro no longer carries
 a power-off routine of its own).

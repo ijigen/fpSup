@@ -73,9 +73,10 @@ const pushWords = [...pushSource[1].matchAll(/\((0x[\dA-Fa-f]+),\s*(0x[\dA-Fa-f]
 assert(pushWords.length > 0, 'empty PUSH definitions');
 
 function checkEntries(cards, out) {
-  // Required product order is worker -> gyro -> OG restore, regardless of the
-  // order checkboxes were clicked. Do not derive this expectation from sel().
-  const ordered = ['shell', 'gyro', 'og3k', 'og2k'].filter(id => cards.some(c => c.id === id));
+  // Required product order is worker -> gyro (or gyro-base, exclusive with it)
+  // -> OG restore, regardless of the order checkboxes were clicked. Do not
+  // derive this expectation from sel().
+  const ordered = ['shell', 'gyro', 'gyro-base', 'og3k', 'og2k'].filter(id => cards.some(c => c.id === id));
   const expected = ordered.map(id => sourceEntry(byId.get(id), out)).filter(Boolean);
   if (expected.length < 2) {
     assert.equal(out.entry, expected[0] || 0);

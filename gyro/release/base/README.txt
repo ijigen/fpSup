@@ -1,6 +1,6 @@
-fpGyroSup Base v1 -- SIGMA fp firmware Ver.5.02 only
+fpGyroSup Base v1.14.0 -- SIGMA fp firmware Ver.5.02 only
 
-Put AutoRun.txt and VSHL.BIN in the root of the SD card the camera boots
+Put AutoRun.txt and fpSup.BIN in the root of the SD card the camera boots
 from, and make sure there is a folder called
 
     GYRO

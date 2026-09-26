@@ -138,19 +138,19 @@ function assertCategoryOnly(category, expected) {
   assert.deepEqual(chips(), selection(), 'selected chips must cross category boundaries');
 }
 
-assert.equal(api.cards.length, 4);
+assert.equal(api.cards.length, 5);
 assert.deepEqual(selection(), ['gyro', 'og3k']);
 assert.equal(api.category(), 'shooting', 'development must not be the initial category');
-assert.deepEqual(ids('data-c').sort(), ['gyro', 'og2k', 'og3k']);
+assert.deepEqual(ids('data-c').sort(), ['gyro', 'gyro-base', 'og2k', 'og3k']);
 assert.deepEqual(ids('data-category').sort(), ['all', 'development', 'shooting']);
 for (const node of document.querySelectorAll('[data-c]')) assert(node.closest('.sup-card'), 'product is not a tile');
 const fast = document.getElementById('fast');
 assert(fast && fast.getAttribute('role') === 'switch', 'Fast start must remain a switch');
 assert(!fast.closest('.sup-card') && !fast.closest('.mod'), 'Fast start must not be a product card');
 assert.equal(api.fast(), false);
-assertCategoryOnly('all', ['shell', 'gyro', 'og3k', 'og2k']);
+assertCategoryOnly('all', ['shell', 'gyro', 'gyro-base', 'og3k', 'og2k']);
 assertCategoryOnly('development', ['shell']);
-assertCategoryOnly('shooting', ['gyro', 'og3k', 'og2k']);
+assertCategoryOnly('shooting', ['gyro', 'gyro-base', 'og3k', 'og2k']);
 
 const normalFiles = {bin: bytes(), auto: api.autorun()};
 let fastToggle = document.getElementById('fast');
@@ -159,7 +159,7 @@ assert.equal(api.fast(), true);
 assert.notDeepEqual(bytes(), normalFiles.bin, 'Fast switch did not repackage BIN');
 assert.notEqual(api.autorun(), normalFiles.auto, 'Fast switch did not select Fast AutoRun');
 assertCategoryOnly('development', ['shell']);
-assertCategoryOnly('shooting', ['gyro', 'og3k', 'og2k']);
+assertCategoryOnly('shooting', ['gyro', 'gyro-base', 'og3k', 'og2k']);
 fastToggle = document.getElementById('fast');
 fastToggle.checked = false; fastToggle.onchange(event(fastToggle));
 assert.equal(api.fast(), false);
@@ -173,6 +173,9 @@ assert.deepEqual(selection(), ['og3k']);
 choose('shooting'); toggle('gyro', true); toggle('og2k', true);
 assert.deepEqual(selection(), ['gyro', 'og2k']);
 toggle('og3k', true); assert.deepEqual(selection(), ['gyro', 'og3k']);
+// Gyro and Gyro-Base hook the same places: ticking one drops the other.
+toggle('gyro-base', true); assert.deepEqual(selection(), ['gyro-base', 'og3k']);
+toggle('gyro', true); assert.deepEqual(selection(), ['gyro', 'og3k']);
 choose('development'); toggle('shell', true);
 assert.deepEqual(selection(), ['gyro', 'og3k', 'shell']);
 const pushOff = bytes(), auto = api.autorun();
@@ -180,7 +183,7 @@ const push = document.getElementById('push'); assert(push && typeof push.onchang
 push.checked = true; push.onchange(event(push));
 assert.notDeepEqual(bytes(), pushOff, 'push checkbox no longer changes descriptor sections');
 assert.equal(api.autorun(), auto, 'push must not change AutoRun');
-assertCategoryOnly('shooting', ['gyro', 'og3k', 'og2k']);
+assertCategoryOnly('shooting', ['gyro', 'gyro-base', 'og3k', 'og2k']);
 click('data-unselect', 'shell'); assert.deepEqual(selection(), ['gyro', 'og3k']);
 
 // Classification comes from metadata, not a hardcoded list of product IDs.
@@ -210,5 +213,5 @@ assert(!ids('data-category').includes('uploaded'), 'empty uploaded category shou
 assert(ids('data-c').length || document.getElementById('cards').innerHTML.trim(), 'empty category has no explanation');
 assert.deepEqual(selection(), ['gyro', 'og3k']);
 
-console.log('PASS catalogue UI: shooting default, four tiles, category filters preserve files, cross-category chips, ' +
+console.log('PASS catalogue UI: shooting default, five tiles, Gyro/Gyro-Base exclusivity, category filters preserve files, cross-category chips, ' +
   'OG exclusivity, push, Fast on/off and filter persistence, metadata-derived categories, upload and removal.');
