@@ -37,6 +37,10 @@ class Element {
   getAttribute(name) { return name === 'class' ? this.className : this.attrs[name] ?? null; }
   setAttribute(name, value) { this.attrs[name] = String(value); }
   insertAdjacentHTML(where, value) { assert.equal(where, 'beforeend'); this.innerHTML += value; }
+  appendChild(node) {
+    if (node.parentElement) node.parentElement.children = node.parentElement.children.filter(c => c !== node);
+    node.parentElement = this; this.children.push(node); return node;
+  }
   addEventListener(name, handler) { this['on' + name] = handler; }
   querySelectorAll(selector) { return descendants(this).filter(node => matches(node, selector)); }
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
@@ -211,7 +215,20 @@ assert(!selection().includes(uploaded));
 assert(!ids('data-c').includes(uploaded));
 assert(!ids('data-category').includes('uploaded'), 'empty uploaded category should disappear');
 assert(ids('data-c').length || document.getElementById('cards').innerHTML.trim(), 'empty category has no explanation');
+// The "+ Add a .BIN" tile is the grid's last card after every re-render, in any
+// category, and it still opens the file input.
+for (const cat of ['all', 'shooting', 'development']) {
+  choose(cat);
+  const grid = document.getElementById('cards');
+  assert.equal(grid.children.at(-1)?.attrs.id, 'drop', 'add tile is not the last card in ' + cat);
+}
+let opened = 0; const fileInput = document.getElementById('file');
+const clickWas = fileInput.click; fileInput.click = () => { opened++; };
+document.getElementById('drop').onclick(event(document.getElementById('drop')));
+document.getElementById('drop').onkeydown({key: 'Enter', preventDefault() {}});
+fileInput.click = clickWas;
+assert.equal(opened, 2, 'add tile must open the file input on click and on Enter');
 assert.deepEqual(selection(), ['gyro', 'og3k']);
 
-console.log('PASS catalogue UI: shooting default, five tiles, Gyro/Gyro-Base exclusivity, category filters preserve files, cross-category chips, ' +
+console.log('PASS catalogue UI: shooting default, five tiles, add-tile last in the grid, Gyro/Gyro-Base exclusivity, category filters preserve files, cross-category chips, ' +
   'OG exclusivity, push, Fast on/off and filter persistence, metadata-derived categories, upload and removal.');

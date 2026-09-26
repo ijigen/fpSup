@@ -218,12 +218,16 @@ td.r,th.r{text-align:right}
 .tag.gyro{background:var(--ok);color:var(--panel)}
 .tag.og3k{background:var(--sig);color:#fff}
 .hash{font-family:var(--mono);font-size:.7rem;color:var(--dim);word-break:break-all;line-height:1.5}
-.drop{margin-top:11px;padding:13px;border:1px dashed var(--line);border-radius:3px;
-  cursor:pointer;text-align:left;transition:border-color .12s,background .12s}
-.drop:hover,.drop.over{border-color:var(--sig);background:var(--sig-soft)}
-.drop b{display:block;font-size:.88rem;font-weight:600}
-.drop small{display:block;color:var(--dim);font-size:.78rem;margin-top:3px}
-.drop u{color:var(--sig);text-decoration:underline}
+/* The "add your own .BIN" tile: the last card of the grid, a dashed empty
+   slot with a plus (2026-09-26; it used to be a paragraph under the grid). */
+.add-card{align-items:center;justify-content:center;text-align:center;gap:4px;
+  padding:18px 15px;border-style:dashed;background:transparent;cursor:pointer;
+  min-height:150px;color:var(--dim);transition:border-color .12s,background .12s,color .12s}
+.add-card:hover,.add-card.over,.add-card:focus-visible{border-color:var(--sig);
+  background:var(--sig-soft);color:var(--sig);outline:none}
+.add-card .plus{font-size:2.6rem;line-height:1;font-weight:300}
+.add-card b{font-size:.9rem;font-weight:600;color:var(--ink)}
+.add-card small{font-size:.76rem;color:var(--dim);max-width:30ch}
 .mod.sub{margin-left:22px;border-left-width:2px;position:relative}
 .mod.sub::before{content:'';position:absolute;left:-13px;top:-9px;bottom:50%;
   width:11px;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -296,12 +300,14 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
       <p id="selection-summary" class="selection-summary" role="status" aria-live="polite"></p>
       <div id="selected-cards" class="selected-cards" role="group" aria-label="Selected SUPs"></div>
       <div id="cards" class="sup-grid"></div>
-      <div id="drop" class="drop">
+      <!-- Moved into the grid as its last card by renderCatalogue(). -->
+      <div id="drop" class="sup-card add-card" role="button" tabindex="0"
+           aria-label="Add a .BIN">
         <input type="file" id="file" accept=".BIN,.bin" multiple hidden>
-        <b>Got a payload container from someone else?</b>
-        <small class="d-short">Drop it here, or <u>choose a file</u>. It gets merged
-        with whatever is ticked above.</small>
-        <small class="d-full">Drop one here, or <u>choose a file</u>. Its sections are parsed and merged with whatever is ticked above; bytes identical to one already taken are folded away, genuine collisions show up as a failed check.</small>
+        <span class="plus" aria-hidden="true">+</span>
+        <b>Add a .BIN</b>
+        <small class="d-short">A sup someone sent you</small>
+        <small class="d-full">Drop an fpSup.BIN here or click to choose one. Its sections are merged with whatever is ticked; bytes identical to one already taken are folded away, genuine collisions show up as a failed check.</small>
       </div>
       <div id="startopt"></div>
       <button class="btn" id="dl-z">Download sup (.zip)</button>
@@ -867,7 +873,10 @@ function categoryOptions(){
 }
 const visibleCards = () => all().filter(c => activeCategory === 'all' || categoryOf(c) === activeCategory);
 
+let addTileEl = null;   // the "+ Add a .BIN" tile; kept, because resetting the
+                        // grid's innerHTML detaches it and getElementById loses it
 function renderCatalogue(){
+  const addTile = addTileEl || (addTileEl = document.getElementById('drop'));
   const options = categoryOptions();
   if (!options.some(x => x.id === activeCategory))
     activeCategory = options.some(x => x.id === 'shooting') ? 'shooting' : 'all';
@@ -913,6 +922,8 @@ function renderCatalogue(){
       ${c.upload ? `<button type="button" class="remove-upload" data-rm="${escapeHTML(c.id)}">Remove uploaded file</button>` : ''}
     </article>`;
   }).join('') || '<p class="catalogue-empty">No SUPs in this category.</p>';
+  // The add tile closes the grid.  Moving the node keeps its listeners.
+  if (addTile) document.getElementById('cards').appendChild(addTile);
 
   document.querySelectorAll('[data-category]').forEach(button => button.onclick = () => {
     activeCategory = button.dataset.category;
@@ -1124,7 +1135,10 @@ function addFiles(list){
   });
 }
 const drop = document.getElementById('drop'), fin = document.getElementById('file');
-drop.onclick = () => fin.click();
+drop.onclick = e => { if (e.target !== fin) fin.click(); };
+drop.onkeydown = e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fin.click(); }
+};
 fin.onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 ['dragenter','dragover'].forEach(k => drop.addEventListener(k, e => {
   e.preventDefault(); drop.classList.add('over'); }));
