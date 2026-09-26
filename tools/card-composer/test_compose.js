@@ -162,6 +162,17 @@ for (let mask = 1; mask < 2 ** CAT.cards.length; mask++) {
 }
 assert.equal(frozenChecks, CAT.cards.length, 'not every frozen release was checked');
 
+// No text reaches AutoRun.txt as a command: the templates carry no banner
+// placeholder any more, and composeAutorun strips a would-be banner to
+// printable ASCII even if one did (2026-09-26, the banner input is gone).
+api.select(['gyro'], false, false);
+for (const fast of [false, true]) {
+  api.select(['gyro'], fast, false);
+  const plain = api.composeAutorun('fpSup-X!');
+  assert.equal(api.composeAutorun('x\ndelall\r\u00e9'), plain, 'a banner changed the AutoRun');
+  assert(!plain.includes('@@BANNER@@'), 'a template still carries the banner placeholder');
+}
+
 // Crossing the usual USB-write padding is legal; crossing the loader's read
 // capacity must be a visible failed check, not an exception that blanks the UI.
 api.select(['gyro'], false, false);

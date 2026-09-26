@@ -296,10 +296,7 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
         <small class="d-full">Drop one here, or <u>choose a file</u>. Its sections are parsed and merged with whatever is ticked above; bytes identical to one already taken are folded away, genuine collisions show up as a failed check.</small>
       </div>
       <div id="startopt"></div>
-      <label class="f" for="ban">Boot banner</label>
-      <input type="text" id="ban" maxlength="24" value="fpSup-Custom!">
-      <!-- maxlength mirrors build_autorun's bound; the CHECK derives it. -->
-      <button class="btn" id="dl-z">Download card (.zip)</button>
+      <button class="btn" id="dl-z">Download sup (.zip)</button>
       <!-- The zip is the only download (2026-09-25): a card can be more than
            two files -- Fast Start 2 adds the FPSUPUI folder -- and the two files
            alone would be an incomplete card. -->
@@ -518,8 +515,14 @@ function composeVshl(recs, entry){
   return {bytes: out, used: o, pad, payload: blobs.reduce((s,b)=>s+b.length,0)};
 }
 function composeAutorun(banner){
+  /* Every template draws the four-box screen now and carries no text banner, so
+     there is normally nothing to fill in.  Should a template ever carry the
+     placeholder again, it gets the name reduced to what the OSD readout can
+     show -- printable ASCII, CAT.banner_max long -- so no text from anywhere
+     can add a line to the file. */
+  const safe = String(banner).replace(/[^\x20-\x7E]/g, '').slice(0, CAT.banner_max) || 'fpSup!';
   let t = (fastOn ? CAT.fast.templates : CAT.templates)[templateName()]
-            .split('@@BANNER@@').join(banner);
+            .split('@@BANNER@@').join(safe);
   const f = CAT.filler, P = CAT.pad_to;
   /* P - 1, not P: the last byte is the newline below, and a run of filler that
      landed exactly on P left nothing for it -- '#'.repeat(-1) throws, and the
@@ -715,26 +718,6 @@ function runChecks(recs, vshl, banner, entry, entriesNow){
   c.push({ok: sel().length > 0, t:'Something is selected',
           d: sel().length ? sel().length+' card'+(sel().length>1?'s':'') : 'pick at least one'});
 
-  /* DO NOT RELAX THIS TO ALLOW ACCENTS.  The banner is the only text on the
-     page that reaches AutoRun.txt: everything else is one of three templates
-     built by build_autorun.py and verified byte-for-byte against the shipped
-     cards, and an uploaded .BIN contributes payload records only -- its own
-     AutoRun is never even read.  So this range check is the whole injection
-     boundary, not a font note.  A banner of "x\ndelall" composes a file with
-     four more commands in it; rejecting anything outside printable ASCII is
-     what stops that, and a failed check disables every download button. */
-  /* Length as well as content.  build_autorun refuses a banner past
-     CAT.banner_max -- read from it, not typed here -- and the input's maxlength
-     only limits what is typed into it, so nothing caught a longer one. */
-  const bad = /[^\x20-\x7E]/.test(banner) || !banner.length
-              || banner.length > CAT.banner_max;
-  c.push({ok:!bad, t:'Banner is printable ASCII, and fits the readout',
-          d: !banner.length ? 'empty'
-             : banner.length > CAT.banner_max
-               ? banner.length + ' chars; the readout holds ' + CAT.banner_max
-             : /[^\x20-\x7E]/.test(banner)
-               ? 'a newline here would add commands to the file; also no OSD glyph'
-             : banner.length + ' of ' + CAT.banner_max + ' chars'});
   return c;
 }
 
@@ -787,6 +770,18 @@ function zipStore(files){
 
 /* What is inside, for whoever opens the zip.  Plain ASCII except the names the
    catalogue gives, and no dates, so the zip stays reproducible. */
+/* The card's name, for the zip and its README: no longer typed in -- the
+   four-box screen draws no text banner (2026-09-26).  One product keeps its
+   release name; a combination is the products' short names joined. */
+function cardName(){
+  const cards = sel();
+  if (cards.length === 1 && !cards[0].upload) return cards[0].banner.replace(/!$/, '');
+  const short = c => c.upload ? 'Upload'
+    : (c.banner || c.name).replace(/^fpSup-/, '').replace(/-v[0-9].*$/, '').replace(/!$/, '');
+  return 'fpSup-' + (cards.length ? cards.map(short).join('-') : 'card');
+}
+/* ...and the name with the start-up option, for the zip and its README. */
+const cardLabel = () => cardName() + (fastOn ? '-FS2' : '');
 function cardReadme(banner, cards, fast, shaAutorun, shaBin){
   const name = c => c.upload ? c.name + ' (uploaded)' : (c.banner || c.name).replace(/!$/, '');
   return [
@@ -837,7 +832,7 @@ function band(el, lo, hi, spans, lock){
   el.insertAdjacentHTML('beforeend', h + '</div>');
 }
 
-let current = null, touchedBanner = false;
+let current = null;
 
 // The catalogue writes `code` in backticks because it is also read as text by
 // build_catalogue.py and by anything scripting this page. On screen they should
@@ -947,13 +942,7 @@ function setMode(simple){
 
 function render(){
   const {recs, entry, entries} = composed();
-  const one = sel().length === 1 ? sel()[0] : null;
-  const ban = document.getElementById('ban');
-  /* A combination is nobody's release, so it says so.  It used to default to
-     fpSup-Merged!, and before that to whatever was in the markup -- which on a
-     first load was one product's banner on a card that was not that product. */
-  if (!touchedBanner) ban.value = one ? one.banner : 'fpSup-Custom!';
-  const banner = ban.value;
+  const banner = cardName();
   const vshl = composeVshl(recs, entry);
   const autorun = composeAutorun(banner);
   const cmds = autorun.split('\n').filter(l => l.trim() && !l.trimStart().startsWith('#')).length;
@@ -1070,7 +1059,6 @@ function render(){
       `AutoRun.txt&nbsp; ${h(a)}<br>fpSup.BIN&nbsp;&nbsp;&nbsp; ${h(v)}`;
   });
 }
-document.getElementById('ban').oninput = () => { touchedBanner = true; render(); };
 
 // Opened straight off a disk there is no site to go back to, and "../.." is
 // somebody's Documents folder.
@@ -1158,11 +1146,11 @@ if (typeof claude !== 'undefined' && claude.use) {
   });
 } else { dl = {save: localSave}; }
 /* One file to download: the card, a README, and the checksums it names.  The
-   name comes from the banner, which the checks already hold to printable
-   ASCII; anything a file system might mind is dropped. */
+   name comes from cardName() -- catalogue names, not typed text -- and anything
+   a file system might mind is dropped anyway. */
 document.getElementById('dl-z').onclick = async () => {
   if (!dl || !current || !current.ok) return;
-  const banner = document.getElementById('ban').value;
+  const banner = cardLabel();
   const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
   const [a, v] = await Promise.all([
     crypto.subtle.digest('SHA-256', new TextEncoder().encode(current.autorun)),

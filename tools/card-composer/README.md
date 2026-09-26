@@ -107,7 +107,9 @@ The marker is derived from **loader bytes**, not the BIN's hash, length,
 version or entry. It is not a runtime integrity check of the stored body.
 
 **A compatible payload update with the same loader and packaging needs only a
-new BIN.** Keep the same banner to keep AutoRun byte-identical. A changed
+new BIN.** The AutoRun no longer carries a banner (the four-box screen draws
+none, and the page has no banner field since 2026-09-26), so it stays
+byte-identical by itself. A changed
 loader, filename, Fast configuration or boot contract requires the matching
 AutoRun and BIN to be updated together once. This refresh changes the loader,
 so adopting it is such a one-time paired update—not a new per-BIN requirement.
@@ -119,8 +121,8 @@ come from one build. This convention does not add runtime BIN validation.
 ## Build-time checks and their limits
 
 The page checks overlapping writes, cave and pool bounds, loader read capacity,
-entry placement/trampoline references and banner format before enabling
-downloads. These are packaging checks, **not** proof that a payload's code is
+entry placement/trampoline references before enabling the download. No typed
+text reaches `AutoRun.txt`: the zip's name comes from the selected products. These are packaging checks, **not** proof that a payload's code is
 safe or that a composed card has been tested on a camera. Uploaded code may do
 more than its section destinations suggest. Do not infer whole-card hardware
 validation from an individual product's earlier test results.
