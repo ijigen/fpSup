@@ -339,7 +339,7 @@ PRODUCTS = {
                           'which an ordinary fast card can sustain. Test build. '
                           'Not with OpenGate 3K: the resolution menu holds three '
                           'entries and each of them takes the third.'),
-    'raw-view': dict(id='raw-view', name='fpSup-RAW', category='shooting',
+    'raw-view': dict(id='raw-view', name='fpSup-RAW-View', category='shooting',
                      desc='RAW monitoring for CinemaDNG 12-bit: a RAW row (17th) in '
                           'the COLOR menu makes the LCD show what will be recorded -- '
                           'recording gain in standby, sensor saturation as white, two '
