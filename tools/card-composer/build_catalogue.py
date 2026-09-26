@@ -339,6 +339,14 @@ PRODUCTS = {
                           'which an ordinary fast card can sustain. Test build. '
                           'Not with OpenGate 3K: the resolution menu holds three '
                           'entries and each of them takes the third.'),
+    'raw-view': dict(id='raw-view', name='fpSup-RAW', category='shooting',
+                     desc='RAW monitoring for CinemaDNG 12-bit: a RAW row (17th) in '
+                          'the COLOR menu makes the LCD show what will be recorded -- '
+                          'recording gain in standby, sensor saturation as white, two '
+                          'latitude curves (SA/GA) on a 709 screen. AEL Contrast and '
+                          'Saturation pick the shadow display and the colour matrix; '
+                          'all of it is remembered across a power-off. The recorded '
+                          'RAW is not changed. Test build.'),
 }
 # usbshell first: picked() walks this order, so the generated trampoline calls
 # the worker before gyro and the optional OG restore entry.  Its file layout
@@ -346,10 +354,14 @@ PRODUCTS = {
 # every original section and this ordered call chain without fixing offsets.
 # og2k last: the merge checks below reproduce cards that predate it, and
 # picked() walks this order, so appending cannot change their bytes.
-ORDER = ['usbshell', 'gyro', 'gyro-base', 'og3k', 'og2k']
+ORDER = ['usbshell', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view']
 # gyro-base right after gyro (2026-09-26): the two are exclusive, so no
 # existing combination changes, and its launcher runs before the OG restore
 # the way gyro's does.
+# raw-view last (2026-09-27): appending changes no existing combination, and its
+# launcher runs after the OG restore, so its stock-word guards see whatever the
+# others installed and it stands down rather than overwrite them.  Its 47
+# declared sites overlap no section of any other product.
 
 
 def version_key(q):
@@ -366,12 +378,18 @@ def version_key(q):
     return (nums, rank, tail)
 
 
+def version_of(d):
+    """The version part of fpsup-<product>-v<version>: the boundary is -v followed by a
+    digit (releases/README.md), not the first -v -- raw-view's own name has one."""
+    return re.split(r'-v(?=\d)', d.name, maxsplit=1)[1]
+
+
 def latest(product):
     """Newest fpsup-<product>-v<version>/ directory, or None."""
     found = []
     for d in RELEASES.glob(f'fpsup-{product}-v*'):
         if d.is_dir() and payload(d) and (d / 'AutoRun.txt').exists():
-            found.append((version_key(d.name.split('-v', 1)[1]), d))
+            found.append((version_key(version_of(d)), d))
     return max(found)[1] if found else None
 
 
@@ -385,7 +403,7 @@ def discover():
             raise SystemExit(f'no release for {key} in {RELEASES}')
         spec = dict(PRODUCTS[key])
         spec['dir'] = d
-        spec['version'] = d.name.split('-v', 1)[1]
+        spec['version'] = version_of(d)
         out.append(spec)
     return out
 
