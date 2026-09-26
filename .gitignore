@@ -15,3 +15,6 @@ raw/*
 # committing the masters would publish them too. (The logo is the exception and
 # is tracked, in assets/src/ -- tools/build_assets.py reads it on every run.)
 h2u_asess/
+
+# Extracted firmware used by offline builders and emulation; never publish it.
+/out/
