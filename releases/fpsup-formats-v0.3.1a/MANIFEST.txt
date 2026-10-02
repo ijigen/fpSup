@@ -1,0 +1,53 @@
+SIGMA fp -- fpSup-Formats, six resolutions in one menu (v0.3.1a)
+banner: fpSup-Fmt-v0.3.1a!
+firmware: SIGMA fp Ver.5.02 only
+
+AutoRun.txt  32,772B  sha256=33bca172ed4b3e95fa2be58bf6d575b5f0ca98f9a9464f70d79a680130dda2cf
+fpSup.BIN    32,768B  sha256=68f3e8d2029887d7b7f9afa553e10592c0f3a1d2f60b79274b49d346cebc6676
+
+Built 2026-10-01 from the sigmafp-mods repository: `./mods/formats/build.sh release031`
+(build_ui6.py with UI_SIZE_ICONS -> UI base menu6-s16e; build_reg.py with REG_COMPAT=v0.3.0a
+REG_DMAFIX=1 REG_MAGSB=23,21 REG_FORMATS=v031; pack_release.py --banner 'fpSup-Fmt-v0.3.1a!', i.e.
+fp_usb_shell/build_autorun.py --loader --no-shell of the pinned ijigen/fpSup 332404d).  The
+script compares the result with the hashes above.  Loader and stage2 of 2026-09-25 (journal of
+every firmware word outside the cave, written back at power-off); AutoRun 118 commands, equal
+to v0.3.0a's except the banner lines.
+
+fpSup.BIN is byte for byte the camera-tested card ff11 (ff9 = this minus the magnifier change,
+tested as a card; the magnifier change was then installed live over the shell on ff9dbg,
+live_patch_section.py, and tested; the ff11 card itself was never booted as a card); only the
+banner text changed for the release.
+payload: VBIN, 108 sections = stage2 (in file) + 107 placed, 26,692 B of payload, no entry.
+USB shell: absent (debug twin: pack_release.py --debug).
+
+Differences from v0.3.0a (e0b22de9…), section by section:
+  data   0xC0730D00 (PARAM values)   OG3.5K 4040->4032, 2308->2304, 1345->1344; S16 1248->1250
+  data   0xC0731240/0xC0731400       registry crop/canvas lists: the same two heights
+  code   0xC0730A90  regdma.S (140 B, new): skips the first "frame start" post of an S16 take
+  hook   0xC031D884  E12FFF32 -> branch to regdma (new)
+  data   0xC0731C18  zero block 24 -> 32 B (DMASKIP counter 0xC0731C30)
+  code   0xC0732400  regcanvas 728 -> 736 B: the standby crop list also applies to the
+                     magnifier's live-view profiles (23 = 8x, 21 = 4x; measured live)
+  UI     0xC0793060  resource pack 6,972 -> 9,912 B: + font_S_imageSize_{2096,1238,1334,3456,2304}
+  UI     0xC0732C84  two words (pack size);  0xC12C7CF8 menu CSV text "OG3.5K 3456x2304"
+Everything else identical.  Section overlap and stock-zero checks at build.
+
+camera log:
+  2026-10-01 20:02-20:03, the operator's fp, clips to the SD card, camera moved between takes,
+    test card ff9 (this fpSup.BIN): A001_605 S16 after cold boot, 606-608 OG3.5K, 609-611 S16,
+    612 FHD, 613 S16.  Analysed on the computer (check_first_frame.py + identity/stride
+    tests): every first frame a fresh capture of its own take, Bayer phase and data width
+    right; OG3.5K 3464x2304 crop 3456x2304 at (4,0).  S16 0 bad of 5 (v0.3.0a: 4 of 4 in
+    these cases); OG3.5K 0 bad of 3 (+20 of 20 on the same window, 18:33-19:xx).
+  Earlier the same day on the intermediate cards (ff1, ff2, ff4): OG3.5K 4032-row window 23
+    takes clean; S16 1250 margin 26 same-format takes clean; playback size numbers drawn.
+  2026-10-01 evening, THIS EXACT FILE: booted on the operator's fp, "está bien y funciona
+    bien" (user): banner, rows, recording.  One known thing, not a regression: in S16 with
+    the focus magnifier on, the picture outside the magnifier shows the whole frame instead
+    of the S16 crop (the standby crop list only covered the normal live-view profile).
+  2026-10-01 22:00-22:25, ff9dbg + the magnifier change installed live (= this fpSup.BIN's
+    payload): magnifier at 4x and 8x in S16 keeps the S16 crop in the background; UHD and
+    OG3.5K magnifier unchanged; takes A001_619 (S16, first after boot), 620 (UHD), 621
+    (OG3.5K), 622 (S16 after OG3.5K) analysed on the computer: first frames fresh and right;
+    DMASKIP = 2 (one skip per S16 take, as designed); "funciona bien" (user).  Quirk: in S16 the 4x and 8x levels look
+    the same.  Ten power cycles not counted.

@@ -37,10 +37,11 @@ card, use the composer rather than copying both.
 | product | version | what it does |
 |---|---|---|
 <!-- releases:begin:en -->
+| [`fpsup-formats`](releases/fpsup-formats-v0.3.1a/) | v0.3.1a | Six resolutions in one Resolution menu: stock UHD/FHD, a Super 16 crop (2096x1238 at 1:1), the binned OG2K and OG3K open gates, and OG3.5K (3456x2304 from the whole sensor, ISP-scaled). 12-bit CinemaDNG, native UI. v0.3.1a fixes the first frame of OG3.5K and S16 takes and the playback size numbers. OG3.5K needs an external SSD. Alpha. |
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.14.0/) | v1.14.0 | Writes Gyroflow's `.gcsv` and `.json` while recording — every sample at 2500 Hz, distortion read off the lens. The profile now carries the size the take was actually recorded at, which open gate got wrong. |
 | [`fpsup-gyro-base`](releases/fpsup-gyro-base-v1.14.0/) | v1.14.0 | Writes the gyro and accelerometer as a raw .GYR in the root of the disk the take went to — every sample, nothing on the camera but the stream — converted afterwards in a browser. Same code as fpGyroSup v1.14.0. |
-| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.3a/) | v0.1.3a | The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build. |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.6a/) | v0.2.6a | The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha. |
+| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.4a/) | v0.1.4a | The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build. |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.7a/) | v0.2.7a | The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha. |
 | [`fpsup-raw-view`](releases/fpsup-raw-view-v0.2.2test/) | v0.2.2test | RAW monitoring for CinemaDNG 12-bit: a RAW row in the COLOR menu makes the LCD show what will be recorded — recording gain in standby, sensor saturation as white, two latitude curves (SA/GA) mapped onto a 709 screen. The recorded RAW is not changed. Test build; ordinary card and Fast Start 2. |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.3.0/) | v3.3.0 | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
 <!-- releases:end:en -->
@@ -144,10 +145,11 @@ Each page says what has been proven, what is being worked on, and what is open.
 | 產品 | 版本 | 做什麼 |
 |---|---|---|
 <!-- releases:begin:zh -->
+| [`fpsup-formats`](releases/fpsup-formats-v0.3.1a/) | v0.3.1a | 一個解析度選單裡有六種格式:原廠 UHD/FHD、Super 16 裁切(2096x1238,1:1)、合併像素的 OG2K 與 OG3K 開放式全片幅,以及 OG3.5K(3456x2304,全感光元件讀出、ISP 縮圖)。12-bit CinemaDNG,原生 UI。v0.3.1a 修正 OG3.5K 與 S16 每段錄影的第一格,以及回放的尺寸數字。OG3.5K 需要外接 SSD。Alpha。 |
 | [`fpsup-gyro`](releases/fpsup-gyro-v1.14.0/) | v1.14.0 | 錄影當下就把 Gyroflow 要的 `.gcsv` 與 `.json` 寫進片段資料夾。2500 Hz 每個樣本都在,畸變直接讀鏡頭。profile 的尺寸改成實際錄下的那個 —— open gate 下先前是錯的。 |
 | [`fpsup-gyro-base`](releases/fpsup-gyro-base-v1.14.0/) | v1.14.0 | 在錄影那顆磁碟的根目錄寫一個原始 .GYR(陀螺儀與加速度計每個樣本都在),機上只做串流,事後在瀏覽器轉換。與 fpGyroSup v1.14.0 同一份程式。 |
-| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.3a/) | v0.1.3a | 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。 |
-| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.6a/) | v0.2.6a | 感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。 |
+| [`fpsup-og2k`](releases/fpsup-og2k-v0.1.4a/) | v0.1.4a | 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。 |
+| [`fpsup-og3k`](releases/fpsup-og3k-v0.2.7a/) | v0.2.7a | 感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。 |
 | [`fpsup-raw-view`](releases/fpsup-raw-view-v0.2.2test/) | v0.2.2test | CinemaDNG 12-bit 的 RAW 監看:COLOR 選單多一列 RAW,螢幕顯示即將錄下的內容——待機用錄影增益、感光元件飽和即白、兩條寬容度曲線(SA/GA)映射到 709 螢幕。錄下的 RAW 不被改動。測試版;附一般卡與 Fast Start 2 卡。 |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.3.0/) | v3.3.0 | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
 <!-- releases:end:zh -->

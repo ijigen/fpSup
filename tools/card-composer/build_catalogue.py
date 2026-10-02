@@ -430,7 +430,7 @@ PRODUCTS = {
                            'beside it; the .GYR is converted afterwards in the '
                            'browser. No folder to make. Same code as the Gyro '
                            'edition; not with it: they hook the same places.'),
-    'og3k':     dict(id='og3k', name='fpSup-OG3K', category='shooting', excl=['og2k'],
+    'og3k':     dict(id='og3k', name='fpSup-OG3K', category='shooting', excl=['og2k', 'formats'],
                      guide='guide/og3k.html',
                      desc='3024×2010, DNG cropped to 3008×2000, eight frame rates, '
                           '8/10/12-bit CinemaDNG. Sensor modes 98/117 — the sensor\'s '
@@ -440,7 +440,7 @@ PRODUCTS = {
                           'README lists what is and is not verified. Its restore '
                           'entry is preserved and called after the gyro launcher '
                           'when the two are combined.'),
-    'og2k':     dict(id='og2k', name='fpSup-OG2K', category='shooting', excl=['og3k'],
+    'og2k':     dict(id='og2k', name='fpSup-OG2K', category='shooting', excl=['og3k', 'formats'],
                      guide='guide/og2k.html',
                      desc='2016×1344, DNG cropped to 2000×1334 — the same 3:2 field of '
                           'view at a third of the data. Sensor mode 139, the 3×3 '
@@ -458,6 +458,14 @@ PRODUCTS = {
                           'Saturation pick the shadow display and the colour matrix; '
                           'all of it is remembered across a power-off. The recorded '
                           'RAW is not changed. Test build.'),
+    'formats':  dict(id='formats', name='fpSup-Formats', category='shooting', excl=['og3k', 'og2k'],
+                     desc='Six rows in the Resolution menu: stock UHD and FHD, S16 (a '
+                          '2112x1250 1:1 Super 16 crop, DNG 2096x1238), OG2K and OG3K '
+                          '(the binned open gates, on the same card) and OG3.5K (the whole '
+                          '3:2 sensor read 1:1 and ISP-scaled /1.75, DNG 3456x2304). 12-bit '
+                          'CinemaDNG, native UI in Settings and Quick Set, rates a row '
+                          'cannot record greyed. Not with OG3K or OG2K: it contains both. '
+                          'Alpha -- the release README lists what is and is not verified.'),
 }
 # usbshell first: picked() walks this order, so the generated trampoline calls
 # the worker before gyro and the optional OG restore entry.  Its file layout
@@ -465,11 +473,13 @@ PRODUCTS = {
 # every original section and this ordered call chain without fixing offsets.
 # og2k last: the merge checks below reproduce cards that predate it, and
 # picked() walks this order, so appending cannot change their bytes.
-ORDER = ['usbshell', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view']
+ORDER = ['usbshell', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view', 'formats']
 # gyro-base right after gyro (2026-09-26): the two are exclusive, so no
 # existing combination changes, and its launcher runs before the OG restore
 # the way gyro's does.
-# raw-view last (2026-09-27): appending changes no existing combination, and its
+# formats last (2026-10-02): it declares no entry, so the call chain of every
+# existing combination is unchanged; appending keeps their bytes.
+# raw-view before it (2026-09-27): appending changes no existing combination, and its
 # launcher runs after the OG restore, so its stock-word guards see whatever the
 # others installed and it stands down rather than overwrite them.  Its 48
 # declared sites overlap no section of any other product.
