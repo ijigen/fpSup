@@ -1,0 +1,155 @@
+fpSup-Formats -- changelog
+SIGMA fp, firmware Ver.5.02 only.  Newest first.
+
+================================================================
+v0.3.2a  2026-10-03   replaces v0.3.1a
+================================================================
+
+  Added
+
+    - S16 on a real sensor window (mode 121 rewritten: register
+      block, timing crop 40..1290, size/AE/clamp/defect rows for
+      2112x1250).  Frame time 7.7 ms instead of 25 (the skew across
+      the crop was already 7.7 ms; what is new is that the sensor no
+      longer reads the other rows).
+    - S16 frame rates 48, 50, 59.94 and 100 (12-bit 100 fps =
+      396 MB/s, SSD, buffer-limited takes).
+    - Focus magnifier in S16: 4x acts as 8x; crop kept behind it.
+    - Registry rows: the effective frame-rate maximum is the row's
+      own ceiling, not the stock media/bit-depth gate.
+    - UI runtime accepts a uishare "FSPL" string pool, so the card
+      composes with Lossless, RAW-View v0.2.3 and OG v0.2.8.
+    - Boot ~30 s faster: lean AutoRun (no comments/padding; the CLI's
+      1 ms-per-character sleep is nop'ed while the script runs and
+      put back at the end).
+    - Loader and stage2 from ijigen/fpSup 756244a.
+
+  Removed
+
+    - The S16 first-frame DMA skip of v0.3.1a (not needed with the
+      sensor window; it would break the DMA alternation).
+
+  Known / not done
+
+    - 119.88 in S16 is impossible with the 1238-row crop at this
+      sensor timing (needs 71..80 blanking rows, 59 left): four test
+      cards froze; a live vmax sweep put the limit between 118 and
+      119 fps.  Would need a smaller crop (~1226 rows).
+    - S16 at 100 fps does not work with fpSup-Gyro on the card
+      (bisected on the camera; without it, and with Lossless, 100 fps
+      recorded without stopping).  Reported upstream.
+    - 30-take S16 series and the light-bar rolling-shutter
+      measurement pending.
+
+================================================================
+v0.3.1a  2026-10-01   replaces v0.3.0a
+================================================================
+
+  Same six rows and UI as v0.3.0a.  Three fixes, all measured on
+  the camera with the clips analysed on a computer:
+
+  Fixed
+
+    - OG3.5K: first frame of ~70 % of takes with an extra top line
+      and swapped Bayer rows (magenta).  Window 6062x4040 ->
+      6062x4032 so the ISP's /1.75 gives 2304 lines exactly; raster
+      3464x2304, DNG crop 3456x2304 (was 2308).  23 of 23 clean.
+    - S16: first frame of every take was old buffer content (white
+      after a cold boot, another format's frame after a switch, the
+      previous take otherwise).  Window 2112x1248 -> 2112x1250 (even
+      crop margin) and a hook that skips the recorder's first DMA
+      address replacement of each S16 take, which came 2 ms before
+      S16's first active line.  DNG crop still 2096x1238.  5 of 5
+      clean in the cases that always failed.
+    - Playback header "W x H" for S16, OG2K and OG3.5K: the five
+      missing number images are on the card.
+    - S16: the focus magnifier (4x and 8x) keeps the S16 crop in the
+      background instead of showing the whole frame.
+
+  Changed
+
+    - Menu text "OG3.5K 3456x2304".  Source: the published v0.3.0a
+      now rebuilds byte for byte from the sigmafp-mods repository
+      (build.sh checks it), and so does this build.
+
+  Not verified
+
+    - S16 first-frame fix on a 30-take series (5 measured).
+    - Everything listed under v0.3.0a that was not verified then.
+
+================================================================
+v0.3.0a  2026-09-28   replaces v0.1.0a (0.2.x were internal)
+================================================================
+
+  Contains
+
+    Six rows in the Resolution menu: UHD, FHD (stock), S16, OG2K,
+    OG3K, OG3.5K.  Native UI in Settings (list, closed row) and
+    Quick Set (tile, six-label footer with cursor).  12-bit
+    CinemaDNG on every row.  Loader and stage2 of 2026-09-25.
+
+  Added
+
+    - S16: Super 16 crop, 2112x1248 photosites at 1:1 (12.55 x
+      7.41 mm), DNG crop 2096x1238, 23.98..29.97, 95 MB/s at 24p;
+      standby live view cropped and centred.
+    - OG3.5K: whole 3:2 sensor read 1:1 and scaled /1.75 by the ISP
+      (window 6062x4040), raster 3464x2308, DNG crop 3456x2308,
+      23.98..29.97, 290 MB/s at 24p 12-bit; live view through the
+      stock UHD video profile (hardware-binned, fluid, no reframe
+      when REC starts).
+    - Frame rates a row cannot record are greyed (popup and Quick
+      Set); the stored rate is kept.  OG2K up to 100, OG3K up to
+      59.94, 119.88 greyed on both.
+    - Crop Mode greyed and effectively OFF on the new rows, stored
+      value kept.
+    - Cold boot: the saved row is applied by the card ~20 s after
+      loading, display refreshed.
+    - Switching rows inside Quick Set updates the live view (with a
+      one-frame crop flash when the aspect changes).
+
+  Changed
+
+    - Built through fpSup's shared loader (power-off write-back of
+      every changed firmware word); no USB shell on the card.
+    - Combines on fpSup-Merge with Gyro / Gyro-Base / Shell / Fast
+      Start 2 (page checks); not with OG3K or OG2K cards.
+    - Registry: the UHD 12-bit video profile is a donor (its raster
+      copy in k49/k50 was the missing piece); OG3K keeps its stock
+      profile values; two spare registry slots stay empty.
+
+  Removed
+
+    - FHD+, 3K+, OG2K+, OG3K+ (OG3.5K supersedes OG3K+; the /3 rows
+      aliased; 3K+ was SSD-only for no gain over OG3K).
+    - The need to turn Super35 / crop OFF by hand before selecting a
+      new row.
+
+  Not verified (alpha)
+
+    8/10-bit on S16 and OG3.5K, in-camera playback of the new rows,
+    MOV or stills with a new row selected, the combined cards on the
+    camera.  Media-speed table (Samsung T5) in README.txt.
+
+================================================================
+v0.2.0a .. v0.2.1a  2026-09-27   internal
+================================================================
+
+  Eight-row set (UHD, FHD, FHD+, 3K+, OG2K, OG2K+, OG3K, OG3K+) on
+  the shared loader; frame-rate greying, effective values, crop
+  greying, cold-boot apply.  Used for the feasibility study that
+  led to v0.3.0a (OG4K rejected: its preview freezes the display;
+  OG3.5K and S16 measured).
+
+================================================================
+v0.1.0a  2026-09-24   withdrawn -- use v0.3.0a
+================================================================
+
+  First card with the eight-row Resolution menu: the format registry
+  (six formats x eight frame rates), full-photosite "+" rows scaled
+  by the ISP, native eight-row UI.  Recording measured on every row.
+  Known then, fixed since: frame rates above 29.97 offered on the
+  "+" rows and silently recorded at 29.97; Super35 / crop had to be
+  OFF by hand; after a battery pull the saved row was not applied
+  until re-selected; loader of 2026-09-22 (patches stayed in memory
+  across a warm restart); development USB shell on the card.
