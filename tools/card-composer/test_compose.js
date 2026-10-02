@@ -21,7 +21,7 @@ const ctx = vm.createContext({CAT,
   atob: s => Buffer.from(s, 'base64').toString('binary'),
   btoa: s => Buffer.from(s, 'binary').toString('base64')});
 vm.runInContext(block('compose') + `
-  globalThis.api = {composed, composeVshl, composeAutorun, runChecks, templateName,
+  globalThis.api = {composed, composeVshl, composeAutorun, runChecks, templateName, uploads,
     select(ids, fast, push) {
       on.clear(); ids.forEach(id => on.add(id)); fastOn = fast; pushOn = push;
     }};`, ctx, {filename: page + '#compose'});
@@ -101,6 +101,42 @@ function frozen(card) {
   const file = ['fpSup.BIN', 'VSHL.BIN'].map(n => path.join(dir, n)).find(fs.existsSync);
   assert(file, 'missing frozen release ' + dir);
   return fs.readFileSync(file);
+}
+
+// A selection past the loader's read cap: the page raises the cap by rewriting
+// the two loader words instead of refusing.  Synthetic: the two largest catalogue
+// cards plus an upload that pushes the total past CAT.read_cap.
+{
+  const big = CAT.cards.slice().sort((a, b) =>
+    b.records.reduce((s, r) => s + decode(r).length, 0) - a.records.reduce((s, r) => s + decode(r).length, 0)).slice(0, 2);
+  const filler = Buffer.alloc(40 * 1024, 0x5A);                  // one placed section, 40 KiB
+  // Shaped like a release: its first record is its own stage2, which composed() drops.
+  api.uploads.push({id: 'oversize', name: 'oversize v0', entry: 0, excl: [],
+    records: [{a: 0, b: Buffer.alloc(16).toString('base64')}, {a: 0xC1000000, b: filler.toString('base64')}]});   // an address no catalogue card writes
+  const ids = big.map(c => c.id).concat('oversize');
+  for (const fast of [false, true]) {
+    api.select(ids, fast, false);
+    const composed = api.composed();
+    const built = api.composeVshl(composed.recs, composed.entry);
+    assert(built.used > CAT.read_cap, 'the oversize selection must exceed the shipped cap');
+    assert(built.cap > CAT.read_cap && built.cap >= built.used && built.pad === built.cap, 'cap raised to hold the card');
+    const checks = api.runChecks(composed.recs, built, 'fpSup-Test!', composed.entry, composed.entries);
+    const bad = checks.filter(c => !c.ok).map(c => c.t + ': ' + c.d);
+    assert.equal(bad.length, 0, bad.join('\n'));
+    const raised = api.composeAutorun('fpSup-Test!', built.cap).split('\n');
+    const stock = api.composeAutorun('fpSup-Test!').split('\n');
+    assert.equal(raised.length, stock.length);
+    const diff = raised.map((l, i) => [l, stock[i]]).filter(([a, b]) => a !== b);
+    assert.equal(diff.length, 2, 'exactly the two loader words change');
+    const decodeMov = w => { const v = parseInt(w, 16); assert.equal(v >>> 12, 0xE3A02, 'mov r2 kept'); const rot = (v >> 8) & 15, imm = v & 255; return rot ? imm * 2 ** (32 - 2 * rot) : imm; };
+    const words = Object.fromEntries(diff.map(([a]) => a.match(/^mem set (0x[0-9A-F]{8}) (0x[0-9A-F]{8})$/).slice(1)));
+    assert.equal(decodeMov(words['0xC072DF04']), built.cap, 'MAXLEN = the raised cap');
+    assert(decodeMov(words['0xC072DE84']) >= built.cap + 0x1000, 'POOL_BYTES covers O_BUF + the file');
+    assert.equal(parse(built.bytes).used, built.used);
+  }
+  api.uploads.pop();
+  api.select([], false, false);
+  console.log('oversize selection: cap raised, two loader words, checks pass');
 }
 
 let selections = 0, cases = 0, frozenChecks = 0;
@@ -193,6 +229,7 @@ for (const need of [CAT.pad_to, CAT.pad_to + 4, CAT.read_cap, CAT.read_cap + 4])
 // Verify the embedded AutoRun machine code, not merely the current .S file:
 // an unregenerated page must fail even if the source templates are fixed.
 const LOADER = 0xC072DE64, STORE = 0xC072F700;
+
 function writes(text) {
   return new Map([...text.matchAll(/^mem set (0x[\dA-Fa-f]+) (0x[\dA-Fa-f]+)/gm)]
     .map(m => [Number(m[1]), Number(m[2])]));

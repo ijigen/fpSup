@@ -87,9 +87,15 @@ option does **not** add AutoRun commands. The current normal script has 112
 commands; the Fast Start 2 script has 148 in total, and a hit runs about 26.
 
 BIN output retains 32 KiB padding when it fits. Larger output is padded to the
-loader's `MAXLEN`, currently `0xF000` (61,440 bytes), and output exceeding that
-read capacity is rejected. The browser, catalogue composer and common builder
-use the same policy. The loader owns a separate staging allocation: its read
+loader's `MAXLEN`, currently `0xF000` (61,440 bytes). A selection past that is
+not refused: the cap is two words of the loader that the AutoRun writes
+(`mov r2, #POOL_BYTES` at `0xC072DE84`, the staging buffer, and `mov r2,
+#MAXLEN` at `0xC072DF04`), so the page rewrites those two `mem set` lines with
+the smallest ARM immediates that hold the selection (buffer = cap + `0x1000`)
+and pads the BIN to the raised cap. Selections that fit keep the shipped words
+and bytes; the "loader can read the whole card" check reports a raised cap.
+The buffer is USER-class heap, taken for the load and freed afterwards. The
+catalogue composer and the common builder keep the fixed cap. The loader owns a separate staging allocation: its read
 buffer is no longer a reserved region of the payload's shared pool.
 
 ## Fast Start 2 and replacing only the BIN

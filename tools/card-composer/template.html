@@ -492,6 +492,44 @@ function templateName(){
   return !hasShell() ? 'plain' : pushOn ? 'shellpush' : 'shell';
 }
 
+/* The read cap is not a property of the camera: it is two words of the loader,
+   written by the AutoRun as `mem set` lines -- `mov r2, #POOL_BYTES` (the staging
+   buffer the loader asks the allocator for, with O_BUF = 0x1000 in front of the
+   file) and `mov r2, #MAXLEN` (how much of the file it reads into it).  Both are
+   ARM immediates: an 8-bit value rotated right by an even amount, which is why a
+   raised cap is a round-ish number and not the exact size.  The buffer is
+   USER-class heap, taken for the load and given back, so a bigger one costs the
+   camera nothing lasting.  A selection past CAT.read_cap therefore gets the
+   smallest immediates that hold it, instead of a refusal; a selection that fits
+   keeps the shipped words and the shipped bytes. */
+const LOADER_WORDS = [
+  {at: 0xC072DE84, name: 'POOL_BYTES', over: 0x1000},   // loader.S: the file lands at O_BUF
+  {at: 0xC072DF04, name: 'MAXLEN',     over: 0},
+];
+function armImm(v){            // smallest value >= v that `mov rN, #imm` can encode, or null
+  for (let s = 0; s < 32; s += 2) {
+    const w = Math.ceil(v / 2 ** s);
+    if (w < 256) return w * 2 ** s;
+  }
+  return null;
+}
+function movR2(v){             // E3A02xxx: mov r2, #v, v an encodable immediate
+  for (let s = 0; s < 32; s += 2) {
+    const w = v / 2 ** s;
+    if (Number.isInteger(w) && w < 256) {
+      const rot = ((32 - s) / 2) % 16;
+      return (0xE3A02000 | (rot << 8) | w) >>> 0;
+    }
+  }
+  return null;
+}
+function readCap(need){        // the cap a selection of `need` bytes gets
+  if (need <= CAT.read_cap) return CAT.read_cap;
+  const t = (fastOn ? CAT.fast.templates : CAT.templates)[templateName()];
+  const present = LOADER_WORDS.every(w => new RegExp('^mem set ' + hex(w.at) + ' 0x[0-9A-Fa-f]{8}$', 'm').test(t));
+  const cap = armImm(need), pool = cap === null ? null : armImm(cap + LOADER_WORDS[0].over);
+  return present && cap !== null && pool !== null ? cap : CAT.read_cap;   // unknown loader: refuse as before
+}
 function composeVshl(recs, entry){
   const blobs = recs.map(r => b64(r.b));
   const bodyLen = blobs.reduce((s,b) => s + b.length + ((-b.length)&3), 0);
@@ -508,7 +546,8 @@ function composeVshl(recs, entry){
      wrote off the end of this array and threw -- and a throw in here takes the
      whole page's render with it, including the check whose job was to say so. */
   const need = 16 + recs.length*8 + bodyLen;
-  const pad = need <= CAT.pad_to ? CAT.pad_to : CAT.read_cap;
+  const cap = readCap(need);
+  const pad = need <= CAT.pad_to ? CAT.pad_to : cap;
   const out = new Uint8Array(Math.max(pad, need));
   const dv = new DataView(out.buffer);
   out.set([0x56,0x42,0x49,0x4E]);
@@ -520,9 +559,9 @@ function composeVshl(recs, entry){
     dv.setUint32(t, r.a >>> 0, true); dv.setUint32(t+4, blobs[i].length, true); t += 8;
     out.set(blobs[i], o); o += blobs[i].length + ((-blobs[i].length)&3);
   });
-  return {bytes: out, used: o, pad, payload: blobs.reduce((s,b)=>s+b.length,0)};
+  return {bytes: out, used: o, pad, cap, payload: blobs.reduce((s,b)=>s+b.length,0)};
 }
-function composeAutorun(banner){
+function composeAutorun(banner, cap = CAT.read_cap){
   /* Every template draws the four-box screen now and carries no text banner, so
      there is normally nothing to fill in.  Should a template ever carry the
      placeholder again, it gets the name reduced to what the OSD readout can
@@ -531,6 +570,10 @@ function composeAutorun(banner){
   const safe = String(banner).replace(/[^\x20-\x7E]/g, '').slice(0, CAT.banner_max) || 'fpSup!';
   let t = (fastOn ? CAT.fast.templates : CAT.templates)[templateName()]
             .split('@@BANNER@@').join(safe);
+  if (cap > CAT.read_cap)      // a raised cap: the two loader words, nothing else
+    for (const w of LOADER_WORDS)
+      t = t.replace(new RegExp('^(mem set ' + hex(w.at) + ' )0x[0-9A-Fa-f]{8}$', 'm'),
+                    '$1' + hex(movR2(armImm(cap + w.over))));
   const f = CAT.filler, P = CAT.pad_to;
   /* P - 1, not P: the last byte is the newline below, and a run of filler that
      landed exactly on P left nothing for it -- '#'.repeat(-1) throws, and the
@@ -574,9 +617,12 @@ function runChecks(recs, vshl, banner, entry, entriesNow){
      inside the shared pool.  Its offsets and a payload's pool offsets are now
      two address spaces, and every destination-zero section has offset zero, so
      it flagged all of them: the page told everyone not to use any card. */
-  c.push({ok: vshl.used <= CAT.read_cap, t:'The loader can read the whole card',
-          d: vshl.used.toLocaleString()+' of '+CAT.read_cap.toLocaleString()+' B'
-             + ', padded to '+vshl.pad.toLocaleString()});
+  c.push({ok: vshl.used <= vshl.cap, t:'The loader can read the whole card',
+          d: vshl.used.toLocaleString()+' of '+vshl.cap.toLocaleString()+' B'
+             + ', padded to '+vshl.pad.toLocaleString()
+             + (vshl.cap > CAT.read_cap
+                ? ' — read cap raised from '+CAT.read_cap.toLocaleString()+' by two loader words in the AutoRun'
+                : '')});
 
   /* The cave is not one flat region and an earlier version of this check
      treated it as one, which failed every card that carries the USB shell:
@@ -963,7 +1009,7 @@ function render(){
   const {recs, entry, entries} = composed();
   const banner = cardName();
   const vshl = composeVshl(recs, entry);
-  const autorun = composeAutorun(banner);
+  const autorun = composeAutorun(banner, vshl.cap);
   const cmds = autorun.split('\n').filter(l => l.trim() && !l.trimStart().startsWith('#')).length;
   /* The footer's promise is true of every card but a fast one, and a page that
      keeps making it while the option is ticked is the page lying. */
