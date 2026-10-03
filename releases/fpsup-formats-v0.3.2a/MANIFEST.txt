@@ -1,0 +1,59 @@
+SIGMA fp -- fpSup-Formats, six resolutions in one menu (v0.3.2a)
+banner: fpSup-Fmt-v0.3.2a!
+firmware: SIGMA fp Ver.5.02 only
+
+AutoRun.txt   3,367B  sha256=c12482d950ce42a7a91f9b13d79cfecea18370b25fd1ab51bfd19b073c8169b6
+fpSup.BIN    32,768B  sha256=18ddb4fe6738960eb8c62729eda2289543fed0bb47ffb5201e6c95cbd4e05a7c
+
+Built 2026-10-03 from the sigmafp-mods repository: `./mods/formats/build.sh release032`
+(build_ui6.py with UI_FSPL=1 UI_SIZE_ICONS -> UI base menu6-s16f c8e4945a…; build_reg.py with
+REG_RATE_UNGATE=1 REG_KICK=v4p REG_MAGSB=23,21 REG_MAG8=1 REG_FORMATS=v032 -> registry card
+66ecd0a9…; pack_release.py --lean --banner 'fpSup-Fmt-v0.3.2a!', i.e. fp_usb_shell/
+build_autorun.py --loader --no-shell of ijigen/fpSup 756244a, then autorun_lean.py).  The script
+compares the result with the hashes above.  Loader and stage2 of 2026-10-03 (756244a: journal of
+every firmware word outside the cave, written back at power-off; an 8-aligned stack for every
+entry).  AutoRun: 120 commands, 3,250 characters; the first nops the CLI's per-character sleep
+(0xC04215F4: bl FUN_c0421770 -> E1A00000), the last restores the stock word EB00005D.
+Debug twin (USB shell): fpSup.BIN 5dc797aa….
+payload: VBIN, 117 sections = stage2 (in file) + 116 placed, 26,156 B of payload, no entry.
+fpSup.BIN is byte for byte the t5 test card's.
+
+Composed cards (merge_cards.py --lean --maxlen fit, loader read cap by --read-cap, Bei's
+lossless FPUI menu block carried at the read cap):
+  fpsup-formats-v0.3.2a-gyro-rawview-lossless  fpSup.BIN 2bb0a3ff… (139,264 B, cap 0x1A000):
+     Gyro v1.14.0 + RAW-View v0.2.3test + Lossless v0.1.2test (releases of 756244a)
+  fpsup-formats-v0.3.2a-gyro-rawview           fpSup.BIN 8eaf1fe4…
+  fpsup-formats-v0.3.2a-lossless               fpSup.BIN 1e58e7b1…
+The Formats sections are identical inside every composed card (section compare at build).
+fpSup-Merge page of 756244a with this fpSup.BIN as "Add a .BIN": 10/10 checks in every
+combination with gyro, gyro-base, shell, raw-view, lossless and Fast Start 2 (merge_check.js).
+
+Differences from v0.3.1a (68f3e8d2…): S16 timing rows on mode 121 (register block, size, AE,
+clamp, defect rows as data sections 0xC0B59F54.., 0xC0B607D4..), formats registry (S16 rates up
+to 100, seven high-rate canvas fields), regfrmax/regfrclass (row ceiling), regmag (magnifier 8x),
+no regdma, UI runtime +56 B (pool_check), stage2 876 B (was 864), AutoRun lean.
+
+camera log (operator's fp):
+  2026-10-02  ff16dbg: S16 window 23.98..29.97 clean.  ff17dbg: 48/50/59.94 clean (A001_627..629).
+              ff18/ff19: 100 fps 12-bit, A001_634 (282 frames, 2.8 s) and a 14 s take; 119.88
+              froze at 8 and 12 bits.  ff20 (vblank 30), ff21 (119.88 timing in the 100 slot):
+              froze -> sensor timing.
+  2026-10-03  live vmax sweep (ff21, SD, 8-bit, USB): 1480/1420/1390/1370 record (109..118 fps,
+              A001_635..638), 1360 (70 blanking rows) freezes.
+              t3 trio: Lossless row missing (composer dropped the menu block).  t4-lossless:
+              row present, UI intact, lossless records (SD: 23 s at 48 fps, continuous at 30;
+              S16 100 fps 12-bit: 43 of 97 frames compressed at 0.235x).  t4/t5 pairs with
+              gyro or raw-view: row missing (the Discord launcher reads its block at a fixed
+              0xF000; live: FLPC record armed, menu not installed).
+              t5 trio with Bei's released lossless v0.1.2test + raw-view v0.2.3test
+              (= fpsup-formats-v0.3.2a-gyro-rawview-lossless, 2bb0a3ff…): "ahora sí parece
+              funcionar": Lossless RAW row, gyro info, RAW-View, SD with almost every frame
+              compressed (user).
+              THIS EXACT standalone file (fpSup-Fmt-v0.3.2a!): booted; S16 100 fps 12-bit to the SD
+              card recorded 1 s and stopped cleanly (the SD cannot sustain 396 MB/s), as designed.
+              THIS EXACT composed file (fpSup-Fmt032a+LL+G+RV, 2bb0a3ff...): booted and used by the
+              operator: "la version compuesta funciona" (Lossless RAW row, gyro, RAW-View, S16 compressed).
+              Bisection of S16 at 100 fps over four cards with this same Formats payload: alone
+              (1 s on SD; up to 30 s uncompressed on the author's SSD), +Lossless, +Lossless+RAW-View
+              (1f33509b...: 100 fps recorded without stopping with Lossless on) and +Lossless+RAW-View
+              +Gyro (2bb0a3ff...: fails).  So Gyro v1.14.0 is what S16 at 100 fps does not take.
