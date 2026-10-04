@@ -108,7 +108,7 @@ function checkEntries(cards, out) {
   // Required product order is worker -> gyro (or gyro-base, exclusive with it)
   // -> OG restore, regardless of the order checkboxes were clicked. Do not
   // derive this expectation from sel().
-  const ordered = ['shell', 'lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view'].filter(id => cards.some(c => c.id === id));
+  const ordered = ['shell', 'lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view', 'formats', 'fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k'].filter(id => cards.some(c => c.id === id));
   const expected = ordered.flatMap(id => sourceEntries(byId.get(id), out)).filter(Boolean);
   if (expected.length < 2) {
     assert.equal(out.entry, expected[0] || 0);

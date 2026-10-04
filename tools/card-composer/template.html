@@ -375,7 +375,7 @@ const CAT = JSON.parse(document.getElementById('cat').textContent);
      pulls this exact block out of the built page and runs it, so the
      command line and the page cannot disagree -- there is one copy. -->
 <script id="compose">
-const on = new Set(['gyro','og3k']);   // the combination og3k_gyro_release used to be
+const on = new Set(['gyro','fmt-og3k']);   // was gyro + og3k (og3k_gyro_release); OG3K is now the fpSup-Formats one, the old card is deprecated
 const uploads = [];                       // {id,name,entry,records}
 const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const b64enc = u => btoa(String.fromCharCode(...u));

@@ -459,9 +459,9 @@ PRODUCTS = {
                            'beside it; the .GYR is converted afterwards in the '
                            'browser. No folder to make. Same code as the Gyro '
                            'edition; not with it: they hook the same places.'),
-    'og3k':     dict(id='og3k', name='fpSup-OG3K', category='shooting', excl=['og2k', 'formats'],
+    'og3k':     dict(id='og3k', name='fpSup-OG3K', category='deprecated', excl=['og2k', 'formats'] + ['fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k'],
                      guide='guide/og3k.html',
-                     desc='3024×2010, DNG cropped to 3008×2000, eight frame rates, '
+                     desc='Deprecated: use fpSup-Formats-OG3K, which combines with the other formats. 3024×2010, DNG cropped to 3008×2000, eight frame rates, '
                           '8/10/12-bit CinemaDNG. Sensor modes 98/117 — the sensor\'s '
                           'own 2×2-binned 3:2 modes, so the ISP scales nothing. Native '
                           'OG3K entry in Recording Settings and Quick Set. 219 MB/s at '
@@ -469,17 +469,17 @@ PRODUCTS = {
                           'README lists what is and is not verified. Its restore '
                           'entry is preserved and called after the gyro launcher '
                           'when the two are combined.'),
-    'og2k':     dict(id='og2k', name='fpSup-OG2K', category='shooting', excl=['og3k', 'formats'],
+    'og2k':     dict(id='og2k', name='fpSup-OG2K', category='deprecated', excl=['og3k', 'formats'] + ['fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k'],
                      guide='guide/og2k.html',
-                     desc='2016×1344, DNG cropped to 2000×1334 — the same 3:2 field of '
+                     desc='Deprecated: use fpSup-Formats-OG2K, which combines with the other formats. 2016×1344, DNG cropped to 2000×1334 — the same 3:2 field of '
                           'view at a third of the data. Sensor mode 139, the 3×3 '
                           'readout, so all eight frame rates including 100p stay on the '
                           'quiet one; rolling shutter 8.3 ms. 98 MB/s at 24p 12-bit, '
                           'which an ordinary fast card can sustain. Test build. '
                           'Not with OpenGate 3K: the resolution menu holds three '
                           'entries and each of them takes the third.'),
-    'formats':  dict(id='formats', name='fpSup-Formats', category='shooting', excl=['og3k', 'og2k'],
-                     desc='Six rows in the Resolution menu: stock UHD and FHD, S16 (a 2112x1250 '
+    'formats':  dict(id='formats', name='fpSup-Formats-All', category='shooting', excl=['og3k', 'og2k'] + ['fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k'],
+                     desc='All four formats of fpSup-Formats in one card (v0.3.2a; the same formats one by one are the fpSup-Formats-S16, -OG2K, -OG3K and -OG3.5K tiles). Six rows in the Resolution menu: stock UHD and FHD, S16 (a 2112x1250 '
                           '1:1 Super 16 crop read as a real sensor window, '
                           'DNG 2096x1238, 23.98..59.94 and 100 fps), OG2K and OG3K (the binned open '
                           'gates, on the same card) and OG3.5K (the whole 3:2 sensor read 1:1 and '
@@ -487,6 +487,18 @@ PRODUCTS = {
                           'Settings and Quick Set, rates a row cannot record greyed. Composes with '
                           'Gyro, RAW-View and Lossless. Not with OG3K or OG2K: it contains both. '
                           'Alpha -- the release README lists what is and is not verified.'),
+    'fmt-s16':  dict(id='fmt-s16', name='fpSup-Formats-S16', category='shooting', excl=['og3k', 'og2k', 'formats'],
+                     desc='One format of fpSup-Formats v0.4.0a as its own sup. Combine any of the four (S16, OG2K, OG3K, OG3.5K) with each other and with Gyro, RAW-View and Lossless: they share an identical core the page folds, and at boot the Resolution menu is built from the formats on the card. Not with the deprecated OG3K/OG2K cards or fpSup-Formats-All. Test build. '
+                          'Super 16: 2112x1250 1:1 crop read as a sensor window, DNG 2096x1238, 23.98..59.94 and 100 fps.'),
+    'fmt-og2k': dict(id='fmt-og2k', name='fpSup-Formats-OG2K', category='shooting', excl=['og3k', 'og2k', 'formats'],
+                     desc='One format of fpSup-Formats v0.4.0a as its own sup. Combine any of the four (S16, OG2K, OG3K, OG3.5K) with each other and with Gyro, RAW-View and Lossless: they share an identical core the page folds, and at boot the Resolution menu is built from the formats on the card. Not with the deprecated OG3K/OG2K cards or fpSup-Formats-All. Test build. '
+                          'OG2K: 2016x1344 (3x3 binned, mode 139), DNG 2000x1334, up to 100 fps.'),
+    'fmt-og3k': dict(id='fmt-og3k', name='fpSup-Formats-OG3K', category='shooting', excl=['og3k', 'og2k', 'formats'],
+                     desc='One format of fpSup-Formats v0.4.0a as its own sup. Combine any of the four (S16, OG2K, OG3K, OG3.5K) with each other and with Gyro, RAW-View and Lossless: they share an identical core the page folds, and at boot the Resolution menu is built from the formats on the card. Not with the deprecated OG3K/OG2K cards or fpSup-Formats-All. Test build. '
+                          'OG3K: 3024x2010 (2x2 binned, mode 98), DNG 3008x2000, up to 59.94 fps.'),
+    'fmt-og35k': dict(id='fmt-og35k', name='fpSup-Formats-OG3.5K', category='shooting', excl=['og3k', 'og2k', 'formats'],
+                     desc='One format of fpSup-Formats v0.4.0a as its own sup. Combine any of the four (S16, OG2K, OG3K, OG3.5K) with each other and with Gyro, RAW-View and Lossless: they share an identical core the page folds, and at boot the Resolution menu is built from the formats on the card. Not with the deprecated OG3K/OG2K cards or fpSup-Formats-All. Test build. '
+                          'OG3.5K: the whole 3:2 sensor read 1:1 and ISP-scaled, DNG 3456x2304, 23.98..29.97 fps.'),
     'raw-view': dict(id='raw-view', name='fpSup-RAW-View', category='shooting',
                      guide='guide/raw-view.html',
                      desc='RAW monitoring for CinemaDNG 12-bit: a RAW row (17th) in '
@@ -516,7 +528,8 @@ PRODUCTS = {
 # every original section and this ordered call chain without fixing offsets.
 # og2k last: the merge checks below reproduce cards that predate it, and
 # picked() walks this order, so appending cannot change their bytes.
-ORDER = ['usbshell', 'lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view', 'formats']
+ORDER = ['usbshell', 'lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view', 'formats',
+         'fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k']   # appended: no existing combination moves
 # gyro-base right after gyro (2026-09-26): the two are exclusive, so no
 # existing combination changes, and its launcher runs before the OG restore
 # the way gyro's does.

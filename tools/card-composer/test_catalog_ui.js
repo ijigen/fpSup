@@ -148,19 +148,20 @@ function assertCategoryOnly(category, expected) {
   assert.deepEqual(chips(), selection(), 'selected chips must cross category boundaries');
 }
 
-assert.equal(api.cards.length, 7);
-assert.deepEqual(selection(), ['gyro', 'og3k']);
+assert.equal(api.cards.length, 12);
+assert.deepEqual(selection(), ['fmt-og3k', 'gyro']);
 assert.equal(api.category(), 'shooting', 'development must not be the initial category');
-assert.deepEqual(ids('data-c').sort(), ['gyro', 'gyro-base', 'lossless', 'og2k', 'og3k', 'raw-view']);
-assert.deepEqual(ids('data-category').sort(), ['all', 'development', 'shooting']);
+assert.deepEqual(ids('data-c').sort(), ['fmt-og2k', 'fmt-og35k', 'fmt-og3k', 'fmt-s16', 'formats', 'gyro', 'gyro-base', 'lossless', 'raw-view']);
+assert.deepEqual(ids('data-category').sort(), ['all', 'deprecated', 'development', 'shooting']);
 for (const node of document.querySelectorAll('[data-c]')) assert(node.closest('.sup-card'), 'product is not a tile');
 const fast = document.getElementById('fast');
 assert(fast && fast.getAttribute('role') === 'switch', 'Fast start must remain a switch');
 assert(!fast.closest('.sup-card') && !fast.closest('.mod'), 'Fast start must not be a product card');
 assert.equal(api.fast(), false);
-assertCategoryOnly('all', ['shell', 'lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view']);
+assertCategoryOnly('all', ['shell', 'lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view', 'formats', 'fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k']);
 assertCategoryOnly('development', ['shell']);
-assertCategoryOnly('shooting', ['lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view']);
+assertCategoryOnly('shooting', ['lossless', 'gyro', 'gyro-base', 'raw-view', 'formats', 'fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k']);
+assertCategoryOnly('deprecated', ['og3k', 'og2k']);
 
 const normalFiles = {bin: bytes(), auto: api.autorun()};
 let fastToggle = document.getElementById('fast');
@@ -169,7 +170,7 @@ assert.equal(api.fast(), true);
 assert.notDeepEqual(bytes(), normalFiles.bin, 'Fast switch did not repackage BIN');
 assert.notEqual(api.autorun(), normalFiles.auto, 'Fast switch did not select Fast AutoRun');
 assertCategoryOnly('development', ['shell']);
-assertCategoryOnly('shooting', ['lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view']);
+assertCategoryOnly('shooting', ['lossless', 'gyro', 'gyro-base', 'raw-view', 'formats', 'fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k']);
 fastToggle = document.getElementById('fast');
 fastToggle.checked = false; fastToggle.onchange(event(fastToggle));
 assert.equal(api.fast(), false);
@@ -179,22 +180,27 @@ assert.equal(api.autorun(), normalFiles.auto, 'switching Fast off did not restor
 // Selection is independent of the visible category; chips can deselect a
 // hidden product, and OG choices still own the same exclusive menu slot.
 choose('development'); click('data-unselect', 'gyro');
-assert.deepEqual(selection(), ['og3k']);
-choose('shooting'); toggle('gyro', true); toggle('og2k', true);
-assert.deepEqual(selection(), ['gyro', 'og2k']);
-toggle('og3k', true); assert.deepEqual(selection(), ['gyro', 'og3k']);
+assert.deepEqual(selection(), ['fmt-og3k']);
+// The deprecated OG cards own the menu slot alone: ticking one drops the fpSup-Formats
+// formats and the other OG card; the fpSup-Formats formats combine with each other.
+choose('deprecated'); toggle('og2k', true); assert.deepEqual(selection(), ['og2k']);
+choose('shooting'); toggle('gyro', true); assert.deepEqual(selection(), ['gyro', 'og2k']);
+choose('deprecated'); toggle('og3k', true); assert.deepEqual(selection(), ['gyro', 'og3k']);
+choose('shooting'); toggle('fmt-og3k', true); assert.deepEqual(selection(), ['fmt-og3k', 'gyro']);
+toggle('fmt-og2k', true); assert.deepEqual(selection(), ['fmt-og2k', 'fmt-og3k', 'gyro']);
+toggle('fmt-og2k', false); assert.deepEqual(selection(), ['fmt-og3k', 'gyro']);
 // Gyro and Gyro-Base hook the same places: ticking one drops the other.
-toggle('gyro-base', true); assert.deepEqual(selection(), ['gyro-base', 'og3k']);
-toggle('gyro', true); assert.deepEqual(selection(), ['gyro', 'og3k']);
+toggle('gyro-base', true); assert.deepEqual(selection(), ['fmt-og3k', 'gyro-base']);
+toggle('gyro', true); assert.deepEqual(selection(), ['fmt-og3k', 'gyro']);
 choose('development'); toggle('shell', true);
-assert.deepEqual(selection(), ['gyro', 'og3k', 'shell']);
+assert.deepEqual(selection(), ['fmt-og3k', 'gyro', 'shell']);
 const pushOff = bytes(), auto = api.autorun();
 const push = document.getElementById('push'); assert(push && typeof push.onchange === 'function');
 push.checked = true; push.onchange(event(push));
 assert.notDeepEqual(bytes(), pushOff, 'push checkbox no longer changes descriptor sections');
 assert.equal(api.autorun(), auto, 'push must not change AutoRun');
-assertCategoryOnly('shooting', ['lossless', 'gyro', 'gyro-base', 'og3k', 'og2k', 'raw-view']);
-click('data-unselect', 'shell'); assert.deepEqual(selection(), ['gyro', 'og3k']);
+assertCategoryOnly('shooting', ['lossless', 'gyro', 'gyro-base', 'raw-view', 'formats', 'fmt-s16', 'fmt-og2k', 'fmt-og3k', 'fmt-og35k']);
+click('data-unselect', 'shell'); assert.deepEqual(selection(), ['fmt-og3k', 'gyro']);
 
 // Classification comes from metadata, not a hardcoded list of product IDs.
 const gyro = api.cards.find(card => card.id === 'gyro'), oldCategory = gyro.category;
@@ -270,7 +276,7 @@ assert(!ids('data-category').includes('uploaded'), 'empty uploaded category shou
 assert(ids('data-c').length || document.getElementById('cards').innerHTML.trim(), 'empty category has no explanation');
 // The "+ Add a .BIN" tile is the grid's last card after every re-render, in any
 // category, and it still opens the file input.
-for (const cat of ['all', 'shooting', 'development']) {
+for (const cat of ['all', 'shooting', 'development', 'deprecated']) {
   choose(cat);
   const grid = document.getElementById('cards');
   assert.equal(grid.children.at(-1)?.attrs.id, 'drop', 'add tile is not the last card in ' + cat);
@@ -281,7 +287,7 @@ document.getElementById('drop').onclick(event(document.getElementById('drop')));
 document.getElementById('drop').onkeydown({key: 'Enter', preventDefault() {}});
 fileInput.click = clickWas;
 assert.equal(opened, 2, 'add tile must open the file input on click and on Enter');
-assert.deepEqual(selection(), ['gyro', 'og3k']);
+assert.deepEqual(selection(), ['fmt-og3k', 'gyro']);
 // A failed local upload can have a hostile filename.  Its diagnostic is text,
 // not markup executed on the public Pages origin.
 const hostileName = '<img src=x onerror=alert(1)>.BIN';
