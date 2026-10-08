@@ -70,7 +70,7 @@ PRODUCTS = {
                        data=dict(dir='RESCUS', ext='.RCD',
                                  names={'OG35K': 'OG3.5K'}),
                        author=AUTHOR, credits=['Vitaly Li (the first open gate on the fp)',
-                                               'Jose Hurtado (S16 / OG3.5K / OG4K format data, used with his permission)'],
+                                               'Jose Hurtado (the S16, OG3.5K and OG4K formats, used with his permission; the one-core, row-per-format design, the greyed-out options and the video clamp)'],
                        pending=True),
     'lossless':   dict(name='Lossless',
                        summary=dict(en="Lossless-compressed CinemaDNG, by the camera's own hardware codec.",
