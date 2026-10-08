@@ -67,9 +67,38 @@ figure.diagram .arrow{stroke:var(--ink); stroke-width:1.5; fill:none; marker-end
   <p class="en"><b>Vitaly Li got open gate out of a SIGMA fp first</b> (FP3K) &mdash; his work showed
   the fp could do it at all. <b>S16, OG3.5K and OG4K are Jose Hurtado's formats</b> (fpSup-Formats
   v0.6.1): his timings, readout windows and canvas values are carried here unchanged, as data.</p>
+  <p class="en">Jose's work also shaped the core that runs every format here:</p>
+  <ul class="en">
+    <li><b>One core, one row of data per format.</b> Res-Custom's layout follows his format registry, including
+    how switching works: put every format's changes back to stock, then apply the chosen one.</li>
+    <li><b>Greying out what a format cannot do.</b> He found where the camera decides which frame rates and
+    whether Crop Mode can be picked, and that S16 needs the 8&times; magnifier. Res-Custom hooks the same places.</li>
+    <li><b>The video clamp.</b> He found that the open-gate formats borrow stills modes whose black level steps
+    from frame to frame at high ISO (flickering shadows), and fixed it by turning on the video clamp.
+    Res-Custom does the same for all five formats.</li>
+    <li><b>Firmware facts</b> read from his cards: how to read the current resolution and Crop Mode, and how the
+    live-view frame and the Crop variants are set per format.</li>
+    <li><b>Camera tests</b> of S16, OG3.5K and OG4K, recorded on his camera.</li>
+  </ul>
+  <p class="en">The code is ours, written from source; the ideas above and the three formats' numbers are his.</p>
+  <p class="en">Visit Jose's blog, <a href="https://www.elcacharrista.com/en/"><b>El Cacharrista</b></a>.
+  His code is on GitHub: <a href="https://github.com/jahurtado">github.com/jahurtado</a>.</p>
   <p class="zh"><b>在 SIGMA fp 上第一個做出 open gate 的是 Vitaly Li</b>(FP3K)—— 是他證明了 fp 做得到。
   <b>S16、OG3.5K、OG4K 是 Jose Hurtado 的格式</b>(fpSup-Formats v0.6.1):
   他的時序、讀出視窗與畫布數值原封不動,以資料的形式帶過來。</p>
+  <p class="zh">執行所有格式的核心,也有很多地方來自 Jose 的研究:</p>
+  <ul class="zh">
+    <li><b>一個核心、每個格式一列資料。</b>Res-Custom 的架構照他的格式登錄表設計,連切換方式也一樣:
+    先把所有格式改過的地方寫回原廠,再套用選中的那一個。</li>
+    <li><b>格式做不到的選項會反灰。</b>相機在哪裡決定可選的格率、Crop Mode 能不能選,是他找到的;
+    S16 要用 8 倍放大鏡也是他發現的。Res-Custom 掛在同樣的地方。</li>
+    <li><b>Video clamp。</b>他發現 open gate 格式借用的靜態模式,在高 ISO 時黑位會逐格跳一階(暗部閃爍),
+    並以打開 video clamp 修正。Res-Custom 五個格式都照這樣做。</li>
+    <li><b>從他的卡讀出的韌體知識:</b>怎麼讀目前的解析度與 Crop Mode,以及每個格式的即時預覽框與 Crop 版本怎麼設定。</li>
+    <li><b>實機測試:</b>S16、OG3.5K、OG4K 在他的相機上錄過。</li>
+  </ul>
+  <p class="zh">程式碼是我們從原始碼寫的;上面這些構想與三個格式的數值是他的。</p>
+  <p class="zh">歡迎逛逛 Jose 的部落格 <a href="https://www.elcacharrista.com/en/"><b>El Cacharrista</b></a>。他的 GitHub:<a href="https://github.com/jahurtado">github.com/jahurtado</a>。</p>
 </section>
 
 <!-- 1. INSTALL -->
