@@ -16,7 +16,7 @@
  */
 (function () {
   var MAP = {
-    "篩":"筛","輯":"辑",
+    "篩":"筛","輯":"辑","將":"将",
     /* sensor-to-cinemadng pitfalls section */
     "著":"着","飽":"饱","塗":"涂","爍":"烁",
     /* added after a sweep of every .zh element on the site: these were the

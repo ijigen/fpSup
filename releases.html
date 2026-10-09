@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Release notes and older cards | fpSup</title>
+<meta name="description" content="fpSup release notes and card versions for the SIGMA fp. For the current selection of tools, use fpSup-Merge.">
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<div class="langbar">
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
+  </div>
+</div>
+<a class="back" href="./">&larr; fpSup</a>
+<header class="hero">
+  <div>
+    <h1><span class="en">Release notes and older cards</span><span class="zh">版本說明與舊版卡片</span></h1>
+    <p class="lede en">The latest card version of each product, including earlier card formats.
+    Each release's notes explain its layout, tested behaviour and limits.</p>
+    <p class="lede zh">各產品最新的卡片版本,也包含沿用舊卡片格式的產品。
+    每個版本的說明列出卡片結構、測試結果與限制。</p>
+  </div>
+</header>
+<p class="note en">To choose tools for a new card, use <a href="tools/card-composer/">fpSup-Merge</a>.
+Its recording formats are combined in <a href="guide/res-custom.html">Res-Custom</a>.
+Older single-container cards are made in the <a href="tools/card-composer/legacy/">previous fpSup-Merge</a>;
+follow the guide for the card you use.</p>
+<p class="note zh">製作新卡片請到 <a href="tools/card-composer/">fpSup-Merge</a> 選擇功能;
+目前的錄影格式整合在 <a href="guide/res-custom.html">Res-Custom</a>。
+舊的單一容器卡片使用<a href="tools/card-composer/legacy/">舊版 fpSup-Merge</a>製作,
+請依照所用卡片的指南操作。</p>
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">product</span><span class="zh">產品</span></th><th><span class="en">version</span><span class="zh">版本</span></th><th><span class="en">what it does</span><span class="zh">做什麼</span></th></tr></thead>
+  <tbody>
+<!-- releases:begin -->
+    <tr><td><a href="releases/fpsup-gyro-v1.14.1test/README.txt">fpsup-gyro</a></td><td>v1.14.1test</td>
+        <td><span class="en">Writes Gyroflow .gcsv motion and .json lens files while recording CinemaDNG. This test build needs on-camera audio sync validation.</span><span class="zh">錄製 CinemaDNG 時寫出 Gyroflow 的 .gcsv 運動紀錄與 .json 鏡頭檔。此測試版的聲畫同步仍待實機驗證。</span></td></tr>
+    <tr><td><a href="releases/fpsup-gyro-base-v1.14.0/README.txt">fpsup-gyro-base</a></td><td>v1.14.0</td>
+        <td><span class="en">Writes the gyro and accelerometer as a raw .GYR in the root of the disk the take went to — every sample, nothing on the camera but the stream — converted afterwards in a browser. Same code as fpGyroSup v1.14.0.</span><span class="zh">在錄影那顆磁碟的根目錄寫一個原始 .GYR(陀螺儀與加速度計每個樣本都在),機上只做串流,事後在瀏覽器轉換。與 fpGyroSup v1.14.0 同一份程式。</span></td></tr>
+    <tr><td><a href="releases/fpsup-gyro2-v0.1.0/README.txt">fpsup-gyro2</a></td><td>v0.1.0</td>
+        <td><span class="en">Writes the fp's gyro and level data into every CinemaDNG frame; the Gyroflow (fpSup) plugin for DaVinci Resolve reads it from the frames and stabilises the clip, with no sync step. Works with Lossless.</span><span class="zh">把 fp 的陀螺儀與水平儀資料寫進每一格 CinemaDNG;DaVinci Resolve 的 Gyroflow (fpSup) 外掛直接從畫面檔讀取並防震，不用手動同步。可與 Lossless 同卡。</span></td></tr>
+    <tr><td><a href="releases/fpsup-lossless-v0.2.0test/README.txt">fpsup-lossless</a></td><td>v0.2.0test</td>
+        <td><span class="en">Lossless-compressed CinemaDNG, by the camera's own hardware codec: a Lossless RAW row (SHOOT page 2, CINE) turns it on; frames the codec cannot finish in time are written uncompressed, and compressed clips play back in the camera. Test build.</span><span class="zh">用相機自己的硬體編碼器錄無損壓縮 CinemaDNG:SHOOT 第 2 頁(CINE)多一列 Lossless RAW 開關;來不及壓的畫格照原樣寫入未壓縮,壓縮過的片段可在機內回放。測試版。</span></td></tr>
+    <tr><td><a href="releases/fpsup-og2k-v0.1.5a/README.txt">fpsup-og2k</a></td><td>v0.1.5a</td>
+        <td><span class="en">The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.</span><span class="zh">同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。</span></td></tr>
+    <tr><td><a href="releases/fpsup-og3k-v0.2.8a/README.txt">fpsup-og3k</a></td><td>v0.2.8a</td>
+        <td><span class="en">The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha.</span><span class="zh">感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。</span></td></tr>
+    <tr><td><a href="releases/fpsup-raw-view-v0.3.0test/README.txt">fpsup-raw-view</a></td><td>v0.3.0test</td>
+        <td><span class="en">RAW monitoring for CinemaDNG 12-bit: a RAW row in the COLOR menu makes the LCD show what will be recorded — recording gain in standby, sensor saturation as white, two latitude curves (SA/GA) mapped onto a 709 screen. The recorded RAW is not changed. Loader v3 card; settings are kept in its own file, not in the camera. Test build.</span><span class="zh">CinemaDNG 12-bit 的 RAW 監看:COLOR 選單多一列 RAW,螢幕顯示即將錄下的內容——待機用錄影增益、感光元件飽和即白、兩條寬容度曲線(SA/GA)映射到 709 螢幕。錄下的 RAW 不被改動。Loader v3 卡;設定存在自己的檔案,不寫相機設定。測試版。</span></td></tr>
+    <tr><td><a href="releases/fpsup-res-custom-v0.1.2test/README.txt">fpsup-res-custom</a></td><td>v0.1.2test</td>
+        <td><span class="en">Open Gate formats in one: OG2K, OG3K, OG3.5K, OG4K and S16 as extra movie resolutions in Settings and Quick Set, each a small data file in fpSup\RESCUS; the camera's own tables are not changed. Test.</span><span class="zh">Open Gate 各格式合一:OG2K、OG3K、OG3.5K、OG4K、S16 成為 Settings 與 QS 的錄影解析度新選項,每個格式是 fpSup\RESCUS 裡的一個小資料檔;不改相機原廠的任何表。測試版。</span></td></tr>
+    <tr><td><a href="releases/fpsup-screenflip-v0.1.0test/README.txt">fpsup-screenflip</a></td><td>v0.1.0test</td>
+        <td><span class="en">Flip the rear screen 180°, mirror it, or both — set separately for each custom display mode, applied when you switch into that mode. Test build.</span><span class="zh">背螢幕翻轉 180°、鏡像或兩者 —— 每個自訂顯示模式各自設定,切換進那個模式時才套用。測試版。</span></td></tr>
+    <tr><td><a href="releases/fpsup-usbshell-v3.4.0test/README.txt">fpsup-usbshell</a></td><td>v3.4.0test</td>
+        <td><span class="en">The shell that answers <code>shl</code> over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints.</span><span class="zh">透過 USB 回應 <code>shl</code> 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。</span></td></tr>
+<!-- releases:end -->
+  </tbody>
+</table>
+</div>
+<footer>
+  <p><a href="./">fpSup</a> &middot; <a href="guide.html"><span class="en">Setup guide</span><span class="zh">使用指南</span></a> &middot; <a href="https://github.com/ijigen/fpSup/tree/main/releases"><span class="en">All release files on GitHub</span><span class="zh">GitHub 上的完整版本檔案</span></a></p>
+</footer>
+<script src="assets/lang.js?v=264d81bd" defer></script>
+</body>
+</html>

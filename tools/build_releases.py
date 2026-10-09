@@ -143,7 +143,9 @@ def main():
     rels = latest()
     if not rels:
         raise SystemExit('  no releases found')
-    work = [(ROOT / 'index.html', [('', rows_html(rels))]),
+    # The home page introduces current tools and links to their guides.
+    # Versioned release blurbs belong in the dedicated catalogue.
+    work = [(ROOT / 'releases.html', [('', rows_html(rels))]),
             (ROOT / 'README.md', [(':en', rows_md(rels, 'en')),
                                   (':zh', rows_md(rels, 'zh'))])]
     stale = []

@@ -41,7 +41,7 @@ FPSUPUI/      使用載入畫面的版本需包含完整的 0.BIN～4.BIN
 把 `AutoRun.txt`、`fpSup.BIN` 放進 SD 卡根目錄；如果該版附有 `FPSUPUI/`，
 也要把整個資料夾放在根目錄，依該版 `README.txt` 安裝。
 
-`ABOUT.txt` 是**首頁表格那一格的唯一來源**:
+`ABOUT.txt` 是**版本目錄 (`releases.html`) 與 GitHub README 表格的唯一來源**:
 
 ```
 en: The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build.
@@ -65,13 +65,16 @@ zh: 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出
 建好卡片,放進 `fpsup-<product>-v<版本>/`,附上 `ABOUT.txt`,然後:
 
 ```sh
-tools/build_releases.py                  # 首頁與 README 的表格
+tools/build_releases.py                  # 版本目錄與 README 的表格
 tools/card-composer/build_catalogue.py   # 合併器的卡片目錄
 ```
 
-**`index.html` 和 `README.md` 都不用手動改。** `build_releases.py` 掃 `releases/`,
+**`releases.html` 和 `README.md` 的版本表格都不用手動改。** `build_releases.py` 掃 `releases/`,
 每個產品挑最新的一版(用上面那條規則),把表格重新產生在
 `<!-- releases:begin -->` / `<!-- releases:end -->` 之間。
+
+`index.html` 首頁只介紹目前功能並連到使用指南,不從版本說明產生內容。
+各功能的設定、儲存需求與測試限制留在各功能指南與版本說明。
 
 來源是**資料夾不是 tag**:兩者依上面的規則是同一組,但資料夾才是網站真正連出去、
 Pages 真正發佈的東西,而且在 workflow 的淺複製裡就有 —— tag 還要另外 fetch。

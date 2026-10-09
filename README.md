@@ -23,16 +23,17 @@ happens to be at those addresses on another.
 releases and the reference, in one page.
 
 **[fpSup-Merge](https://ijigen.github.io/fpSup/tools/card-composer/)** — pick the
-products you want on one card and get `AutoRun.txt` and `fpSup.BIN`. Merged cards are
-produced here and nowhere else, and every combination is checked against the same
-rules the build scripts use. Runs in the browser — no toolchain, no camera.
+tools you want on one card and download the zip. Copy `AutoRun.txt` and the `fpSup`
+folder to the card root, following the install steps on that page. Runs in the
+browser — no toolchain, no camera.
 
 ### Releases
 
-Two files each — copy `AutoRun.txt` and the payload container to the root of
-the card (`fpSup.BIN`; releases published before 2026-09-19 name it `VSHL.BIN`). No
-folder to make, nothing to convert, no step afterwards. To put two of them on one
-card, use the composer rather than copying both.
+Current cards contain `AutoRun.txt` and a `fpSup` folder with one file per tool.
+Older cards contain a single payload (`fpSup.BIN`, or `VSHL.BIN` before 2026-09-19)
+and use the [previous composer](https://ijigen.github.io/fpSup/tools/card-composer/legacy/).
+Follow the guide for your card format. [Release notes](https://ijigen.github.io/fpSup/releases.html)
+list the versions below.
 
 | product | version | what it does |
 |---|---|---|
@@ -49,12 +50,14 @@ card, use the composer rather than copying both.
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.4.0test/) | v3.4.0test | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
 <!-- releases:end:en -->
 
-**The two open-gate builds see the same picture.** OG2K is the sensor reduced by three
+**The older separate open-gate builds see the same picture.** OG2K is the sensor reduced by three
 rather than two, so it is a third of the data and stays on the quiet readout even at 100p.
 They cannot share a card — the resolution menu holds three entries and each build takes the
 third. **Super35/crop must be off for either.** Both are pre-release; each release's
 `README.txt` lists exactly what was verified and what was not. Open gate on an fp was first
 done by [Vitaly Li](https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/).
+For a new card, [Res-Custom](https://ijigen.github.io/fpSup/guide/res-custom.html) combines
+OG2K, OG3K, OG3.5K, OG4K and S16 on one card.
 
 Named `fpsup-<product>-v<version>`, one directory each, and the tag is spelled
 identically — see [`releases/README.md`](releases/README.md) and
@@ -137,13 +140,16 @@ Each page says what has been proven, what is being worked on, and what is open.
 
 **[ijigen.github.io/fpSup](https://ijigen.github.io/fpSup/)** —— 工具、釋出版、參考資料都在一頁。
 
-**[fpSup-Merge](https://ijigen.github.io/fpSup/tools/card-composer/)** —— 勾選要的產品,
-產生 `AutoRun.txt` 與 `fpSup.BIN`。**合併版只在這裡產生**,而且每個組合都用建置腳本
-同一套規則檢查過。在瀏覽器裡跑 —— 不用工具鏈,不用相機。
+**[fpSup-Merge](https://ijigen.github.io/fpSup/tools/card-composer/)** —— 勾選要放在同一張卡的功能,
+下載 zip,照頁上的安裝步驟把 `AutoRun.txt` 和 `fpSup` 資料夾複製到卡片根目錄。
+在瀏覽器裡跑 —— 不用工具鏈,不用相機。
 
 ### 釋出版
 
-每份就兩個檔 —— `AutoRun.txt` 與 `fpSup.BIN`(2026-09-19 之前發布的版本叫 `VSHL.BIN`)放進卡片根目錄。不用建資料夾、不用轉檔、事後沒有步驟。要把兩份放同一張卡,用合併器,不要兩份都複製。
+目前的卡片是 `AutoRun.txt` 和 `fpSup` 資料夾,每個功能各有一個檔案。
+舊卡片使用單一容器 `fpSup.BIN`(2026-09-19 之前叫 `VSHL.BIN`),在
+[舊版合併器](https://ijigen.github.io/fpSup/tools/card-composer/legacy/)製作。
+請依照所用卡片格式的指南操作;以下版本的完整說明在[版本目錄](https://ijigen.github.io/fpSup/releases.html)。
 
 | 產品 | 版本 | 做什麼 |
 |---|---|---|
@@ -160,10 +166,12 @@ Each page says what has been proven, what is being worked on, and what is open.
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.4.0test/) | v3.4.0test | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
 <!-- releases:end:zh -->
 
-**兩個 open gate 看到的是同一個畫面。** OG2K 是把感光元件縮三倍而不是兩倍,所以資料量只有三分之一,
+**舊版分開的兩個 open gate 看到的是同一個畫面。** OG2K 是把感光元件縮三倍而不是兩倍,所以資料量只有三分之一,
 而且連 100p 都還在安靜讀出上。兩者**不能放同一張卡** —— 解析度選單只有三格,各自佔用第三格。
 **兩者都必須關閉 Super35/crop。**都還是預覽版:各自的 `README.txt` 寫明了驗過什麼、沒驗什麼。
 最早在 fp 實現 open gate 的是 [Vitaly Li](https://www.facebook.com/groups/1124721801045663/permalink/3266113850239770/)。
+製作新卡片可使用 [Res-Custom](https://ijigen.github.io/fpSup/guide/res-custom.html),
+把 OG2K、OG3K、OG3.5K、OG4K 與 S16 放在同一張卡上。
 
 命名是 `fpsup-<產品>-v<版本>`,一個版本一個資料夾,tag 逐字相同 ——
 見 [`releases/README.md`](releases/README.md) 與 [`releases/TAGS.md`](releases/TAGS.md)。
