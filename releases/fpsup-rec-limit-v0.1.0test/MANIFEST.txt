@@ -1,0 +1,18 @@
+SIGMA fp -- Recording time limit (v0.1.0test), Loader v3 card
+firmware: SIGMA fp Ver.5.02 only
+
+AutoRun.txt                3,561B  sha256=889800fa363c75bfe0d9da43da82312276388a8929748ce05221ce0da931bb4c
+fpSup/46RECLM.BIN            344B  sha256=6780ca8b6c02e40725f5ee1d87e084c496f334e837f4519d8bcee28f70559c06
+fpSup/LOADER.BIN           7,328B  sha256=21bd88bc0696c00a6734591954ff20c43e63410dc4624c5237a5112be9a6db98
+fpSup/UI/0.BIN           114,688B  sha256=89cd5a002595ea0a22f7cbd5a05990612477dd5da2c2d561b9fad8a3aed7c6ea
+fpSup/UI/1.BIN            19,712B  sha256=48dddff9f4b9d2a352faf43e80afd18383fe0d48a3c0617a060b2b977d81f0fb
+fpSup/UI/2.BIN            19,712B  sha256=d5567299a7b695afa26090c124f941a15b3ca701b60a58629af45eb10943efbe
+fpSup/UI/3.BIN            19,712B  sha256=c1a5c9cc59528f7dbe88ee6a6631cb2c93c0ad4575234a29f7c271f9f48ccd2c
+fpSup/UI/4.BIN            19,712B  sha256=065a09b93c88784f0774ce819ae5f6fa3a5aba41d8c4e9ddd7e902e3b20921d3
+
+46RECLM.BIN header: magic=0x31425346, header_len=0x20, file_len=0x158, block_size=0x158, entry_off=0x20, sup_id=RCLM, version=1, min_svc=1
+LOADER.BIN gives services v3
+
+Built by fpSup/tools/release_v3.py rec-limit 0.1.0test
+fpSup HEAD e816ec884aadec347b861a79a70f92a995652f54
+Not yet written to a card or tested on the camera.

@@ -45,6 +45,7 @@ list the versions below.
 | [`fpsup-og2k`](releases/fpsup-og2k-v0.1.5a/) | v0.1.5a | The same open gate at 2016×1344, on the sensor's quiet readout at every frame rate. 98 MB/s at 24p 12-bit, 8.3 ms rolling shutter. Test build. |
 | [`fpsup-og3k`](releases/fpsup-og3k-v0.2.8a/) | v0.2.8a | The sensor's whole 3:2 area at 3024×2010, eight frame rates from 23.976 to 100, native UI in Settings and Quick Set. 221 MB/s at 24p 12-bit — this needs an external SSD, not an SD card. Alpha. |
 | [`fpsup-raw-view`](releases/fpsup-raw-view-v0.3.0test/) | v0.3.0test | RAW monitoring for CinemaDNG 12-bit: a RAW row in the COLOR menu makes the LCD show what will be recorded — recording gain in standby, sensor saturation as white, two latitude curves (SA/GA) mapped onto a 709 screen. The recorded RAW is not changed. Loader v3 card; settings are kept in its own file, not in the camera. Test build. |
+| [`fpsup-rec-limit`](releases/fpsup-rec-limit-v0.1.0test/) | v0.1.0test | The stock two-hour recording stop is raised to eight hours with two firmware data words; code untouched, RAM only, stock cap back at power-off. |
 | [`fpsup-res-custom`](releases/fpsup-res-custom-v0.1.2test/) | v0.1.2test | Open Gate formats in one: OG2K, OG3K, OG3.5K, OG4K and S16 as extra movie resolutions in Settings and Quick Set, each a small data file in fpSup\RESCUS; the camera's own tables are not changed. Test. |
 | [`fpsup-screenflip`](releases/fpsup-screenflip-v0.1.0test/) | v0.1.0test | Flip the rear screen 180°, mirror it, or both — set separately for each custom display mode, applied when you switch into that mode. Test build. |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.4.0test/) | v3.4.0test | The shell that answers `shl` over USB, parasitic on the camera's own PTP gadget so the firmware keeps owning the endpoints. |
@@ -161,6 +162,7 @@ Each page says what has been proven, what is being worked on, and what is open.
 | [`fpsup-og2k`](releases/fpsup-og2k-v0.1.5a/) | v0.1.5a | 同樣的 open gate,2016×1344,每個幀率都走感光元件的安靜讀出。24p 12-bit 為 98 MB/s,捲簾 8.3 ms。測試版。 |
 | [`fpsup-og3k`](releases/fpsup-og3k-v0.2.8a/) | v0.2.8a | 感光元件完整的 3:2 面積,3024×2010,八個幀率從 23.976 到 100,Settings 與 QS 有原生 UI。24p 12-bit 為 221 MB/s ——這個碼率要外接 SSD,SD 卡不夠。Alpha。 |
 | [`fpsup-raw-view`](releases/fpsup-raw-view-v0.3.0test/) | v0.3.0test | CinemaDNG 12-bit 的 RAW 監看:COLOR 選單多一列 RAW,螢幕顯示即將錄下的內容——待機用錄影增益、感光元件飽和即白、兩條寬容度曲線(SA/GA)映射到 709 螢幕。錄下的 RAW 不被改動。Loader v3 卡;設定存在自己的檔案,不寫相機設定。測試版。 |
+| [`fpsup-rec-limit`](releases/fpsup-rec-limit-v0.1.0test/) | v0.1.0test | 用兩個韌體資料字把原廠兩小時錄影上限改成八小時;不改程式碼、只在記憶體、關機即還原。 |
 | [`fpsup-res-custom`](releases/fpsup-res-custom-v0.1.2test/) | v0.1.2test | Open Gate 各格式合一:OG2K、OG3K、OG3.5K、OG4K、S16 成為 Settings 與 QS 的錄影解析度新選項,每個格式是 fpSup\RESCUS 裡的一個小資料檔;不改相機原廠的任何表。測試版。 |
 | [`fpsup-screenflip`](releases/fpsup-screenflip-v0.1.0test/) | v0.1.0test | 背螢幕翻轉 180°、鏡像或兩者 —— 每個自訂顯示模式各自設定,切換進那個模式時才套用。測試版。 |
 | [`fpsup-usbshell`](releases/fpsup-usbshell-v3.4.0test/) | v3.4.0test | 透過 USB 回應 `shl` 的 shell。寄生在相機自己的 PTP gadget 上,端點仍由韌體管。 |
