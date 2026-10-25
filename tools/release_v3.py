@@ -46,6 +46,8 @@ PRODUCTS = {
                    '30OG2K.BIN', 'OG2K', 'Open Gate 2K'),
     'gyro2':      ([ROOT / 'projects' / 'gyro2-sup' / 'build.py'], '20GYR2.BIN', 'GYR2', 'Gyro2'),
     'screenflip': ([FPSUP / 'screenflip' / 'build_v3_flip.py'], '40FLIP.BIN', 'FLIP', 'Screen flip'),
+    'rec-limit': ([FPSUP / 'rec-limit' / 'build_v3_reclimit.py'], '46RECLM.BIN', 'RCLM',
+                  'Recording time limit'),
     'raw-view':   ([ROOT / 'projects' / 'rawview' / 'build' / 'build_v3_rawview.py'], '45RAWV.BIN',
                    'RAWV', 'RAW view'),
     # the OpenGate formats (2026-10-07): one core + one data file per format in \fpSup\RESCUS\
