@@ -40,13 +40,14 @@ ENTRIES = {'OFF_INIT': 'wr_card_init', 'OFF_SEND': 'wr_send', 'OFF_INSTALLED': '
            'OFF_CKPT': 'wr_cb_ckpt', 'OFF_RB': 'wr_cb_rollback', 'OFF_REL': 'wr_cb_release',
            'OFF_TASK': 'wr_task', 'OFF_START': 'wr_take_start', 'OFF_LATE': 'wr_late_frame',
            'OFF_SERVICE': 'wr_service',   # test_card.py runs the writer through wr_service
-           'OFF_CTL': 'ix_ctl_task', 'OFF_STEP': 'ix_ctl_step'}   # ... and the control task by step
+           'OFF_CTL': 'ix_ctl_task', 'OFF_STEP': 'ix_ctl_step',
+           'OFF_PUSH': 'ix_push', 'OFF_PXREL': 'ix_push_release', 'OFF_CDNG': 'ix_cdng_run'}   # the push engine, called directly by tests   # ... and the control task by step
 CFLAGS = ['--target=armv7a-none-eabi', '-mcpu=cortex-a9', '-mthumb', '-mfloat-abi=soft',
           '-mfpu=none', '-mstackrealign', '-ffreestanding', '-fno-builtin', '-nostdlib',
           '-fno-jump-tables', '-fropi', '-fno-addrsig', '-O2', '-std=c11', '-Wall', '-Wextra',
           '-Werror', '-Wno-unused-function']
 API = re.compile(r'^((?:int|void|uint32_t|bq_block)\s*\*?\s*((?:bq|wr|ix)_\w+)\s*\()', re.M)
-SOURCES = [(WRITER, 'bq.h'), (WRITER, 'bq.c'), (HERE, 'ix_wr.h'), (HERE, 'ix_wr.c'), (HERE, 'ix_card.c')]
+SOURCES = [(WRITER, 'bq.h'), (WRITER, 'bq.c'), (HERE, 'ix_wr.h'), (HERE, 'ix_push.c'), (HERE, 'ix_cdng.c'), (HERE, 'ix_wr.c'), (HERE, 'ix_card.c')]
 
 
 class BuildError(RuntimeError):
@@ -60,7 +61,7 @@ def unity(tree):
                                   else 'static ') + m.group(1), text)
         (tree / f).write_text(text)
     u = tree / 'unity.c'
-    u.write_text('#include "bq.c"\n#include "ix_wr.c"\n#include "ix_card.c"\n')
+    u.write_text('#include "bq.c"\n#include "ix_push.c"\n#include "ix_cdng.c"\n#include "ix_wr.c"\n#include "ix_card.c"\n')
     return u
 
 

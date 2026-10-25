@@ -165,6 +165,19 @@ class Take(Base):
                          (R.MODES['sd'], 0, R.CTL['armed'], 3000, 2000))
         self.assertFalse(ispl.ALLOC_KEEP.exists())
 
+    def test_ctl_only_does_not_free_an_old_sink_allocation(self):
+        ispl.ALLOC_KEEP.write_text('old sink allocation: do not free after a reboot')
+        saved = ispl.SUP_FILE
+        ispl.SUP_FILE = 'ISPC.BIN'
+        try:
+            a = types.SimpleNamespace(start_ms=3000, rec_ms=2000, focus=False)
+            def no_heap(*args):
+                raise AssertionError('ISPC touched the old sink allocation')
+            ispl.cmd_take(a, FakeApi(), no_heap, lambda s: None)
+        finally:
+            ispl.SUP_FILE = saved
+        self.assertEqual(ispl.ALLOC_KEEP.read_text(), 'old sink allocation: do not free after a reboot')
+
     def test_refuses_while_recording(self):
         api = FakeApi(recording=1)
         with self.assertRaises(SystemExit):
@@ -227,14 +240,16 @@ class Pull(Base):
 
 
 class OwnCallfnBlock(unittest.TestCase):
-    """IMX410_RULES §71: callfn must not run from the shared putfile.CODE."""
-    def test_flush_runs_callfn_from_its_own_claim(self):
+    """The shared callfn now owns its block; ISP Lab must not redirect it."""
+    def test_flush_reuses_the_shared_callfn_block(self):
         import sys
-        shared = 0x4400_0000
+        shared = 0xC072E980
         ran = []
-        fake_callfn = types.SimpleNamespace(CODE=shared, CODE_END=shared + 512)
+        fake_callfn = types.SimpleNamespace(CODE=shared, CODE_END=shared + 160, _own_code=False)
         fake_callfn.call = lambda fn, **k: (ran.append((fn, fake_callfn.CODE)), (True, 0))[1]
-        fake_cave = types.SimpleNamespace(claim=lambda name, n: {'ispl.callfn.code': 0x4500_0000}[name])
+        def no_extra_claim(*args):
+            raise AssertionError('ISP Lab claimed another callfn block')
+        fake_cave = types.SimpleNamespace(claim=no_extra_claim)
         saved = {m: sys.modules.get(m) for m in ('callfn', 'cave')}
         sys.modules.update(callfn=fake_callfn, cave=fake_cave)
         try:
@@ -245,8 +260,8 @@ class OwnCallfnBlock(unittest.TestCase):
                     sys.modules.pop(m, None)
                 else:
                     sys.modules[m] = v
-        self.assertEqual(ran, [(ispl.F_DCACHE, 0x4500_0000)] * 2)
-        self.assertEqual(fake_callfn.CODE_END - fake_callfn.CODE, ispl.CALLFN_CLAIM[1])
+        self.assertEqual(ran, [(ispl.F_DCACHE, shared)] * 2)
+        self.assertEqual(fake_callfn.CODE_END - fake_callfn.CODE, 160)
 
 
 if __name__ == '__main__':

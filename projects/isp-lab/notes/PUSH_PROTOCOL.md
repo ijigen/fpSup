@@ -1,5 +1,8 @@
 # 相機主動推送協定 FPP1（v1，2026-10-24；v0 經 sigmafp-re-40 審過，五點修正已併入）
 
+**10-26 上機更新**：[接手驗證](../validation/20261026-resume-preflight-01/RESULTS.md)。fpshd 3.3.0、內建引擎的待機 LV 與停錄後 CDNG 已通；錄影中 LV 未驗。主機 `listen()` 現在等完 quiet 才返回，串流出錯時先用主機端 STATUS 確認 listener 結束。
+相機掃出的 13 個 DNG 候選只有 10 個與卡檔相同，最新 DateTime 不代表最終版本。
+
 imx410-lab 與 isp-lab 共用一份。分工（10-24 雙方同意）：
 - **相機端推送引擎＋BUFA0 整合**：sigmafp-re-40（imx410-lab）
 - **協定規格、fpshd 內的 EP83 接收、python 解析、isp-lab 的三個呼叫端**（LV、BUFA1、停錄後 CDNG）：sigmafp-re-38（isp-lab）
@@ -59,7 +62,7 @@ header（little-endian，256 B）：
 - 每次 libusb bulk 讀 **1 MiB**（整數個封包），短包就轉送，不等讀滿；逾時帶回的部分資料也轉送。
 - 結束後 `q=` 毫秒內（預設 1000）除 STATUS 外一律回 `ERR quiet`，把靜默規則放在唯一的擁有者身上。
 - 不改既有的 `EP83 <bytes> <shellline>`（64 KiB 一問一答）。
-- 原始碼 `fpSup/fp_usb_shell/host/fpshd.c`；`-Wall -Wextra` 無警告；**尚未上機、尚未替換正在跑的 daemon**。
+- 原始碼 `fpSup/fp_usb_shell/host/fpshd.c`；`-Wall -Wextra` 無警告；**10-25 已切換 3.3.0，10-26 端到端上機通過**。
 
 ### python：`push_rx.py`（isp-lab/host，兩邊共用）
 - 連 fpshd、送 LISTEN83、把區塊串回位元組流，依 header 切張；magic + CRC 對不上就往後找下一個 `FPP1` 重新同步，並記下丟掉的位元組數。
@@ -69,7 +72,14 @@ header（little-endian，256 B）：
 - 輸出：每張存成 `<source>_<seq>.bin` ＋ `index.jsonl`（header 全欄位、收到時間、是否完整）。按 fmt 另存可看的 png（YUYV／Bayer-8／decode12）。
 - 統計：每個 source 的 seq 跳號（相機跳過）、resync 次數、總位元組、平均速率。
 
-## 4. 相機端引擎（sigmafp-re-40 負責，這裡只寫介面需求）
+## 4. 相機端引擎（10-25 起由 sigmafp-re-38 接手；實作 `sup/ix_push.c`，10-26 待機 LV／停錄後 DNG 上機通過）
+- **實作要點（10-25）**：header 256 B 與 TRB 鏈放在 sup 狀態裡，一律經非快取別名寫，不需快取維護；TRB 的 buffer 是 **DMA 位址 = 非快取 CPU 位址 − 0x40000000**
+  （韌體自己就這樣寫）。StartTransfer(phys) 交給控制器的是 `[0xC31E3238 + 4·ctx]`（DMA），`[0xC31E3264 + 4·ctx]` 是同一個 TRB 的 CPU 位址；
+  引擎占用 ctx 3 時改寫這兩格、`ix_push_release` 還原。中段 TRB ctrl 0x15（HWO|CHN|normal），最後 0x813（韌體的）。
+  忙／超時／啟動失敗都會讓 seq 前進並記 n_skip，主機看到跳號。`lv_push = 1` 時 LV 取樣直接用內建引擎。
+  unicorn `PushEngineTests` 8 項（假控制器沿 TRB 鏈收位元組、用 push_rx 解析）＋ CRC 突變。
+- **上機前提**：EP83 必須是 bulk（patches.py PUSH 的目標為 1024；10-25 重新列舉實際 bulk/64 也完成 16 KiB 推送，10-26 LV/CDNG 亦通）；現行 v4 發行版刻意不帶（v4 負責人 10-25 確認），
+  要用開發版 shell（`build_v4.shell_sup` 帶 `ep_patches=True`），且相機要在修補寫入**之後**才列舉（開機完成後再插線）。
 - `push(mode, source, frame_no, w, h, fmt, stride, flags, aux, segs[], nseg)`：組 header（在池裡）、依序 arm header＋各段。
   mode 0：上一張未完成 → 不做，n_skip[source]++，回「跳過」；任何 task／hook 可呼叫，不睡不配置。
   mode 1：等上一張完成再推、推完等 HWO 清才回；只能在 task 裡。

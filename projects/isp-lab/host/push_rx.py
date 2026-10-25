@@ -128,6 +128,7 @@ def file_sink(out):
         (out / name).write_bytes(payload)
         index.write(json.dumps(dict(h, file=name, rx_time=time.time())) + '\n')
         index.flush()
+    sink.close = index.close
     return sink
 
 
@@ -151,31 +152,73 @@ def read_exact(conn, n):
     return bytes(b)
 
 
+class ListenerUnsettled(RuntimeError):
+    """Cannot prove the daemon has left LISTEN83; camera cleanup must wait."""
+
+
+def listener_barrier(timeout_ms):
+    """Host-only STATUS is handled after the single-threaded listener exits.
+
+    On a broken stream, closing our socket alone does not prove that happened.
+    Never follow an uncertain listener with camera writes until this returns.
+    """
+    try:
+        with socket.socket(socket.AF_UNIX) as conn:
+            conn.settimeout(timeout_ms / 1000 + 30)
+            conn.connect(SOCK)
+            conn.sendall(b'STATUS\n')
+            if not read_line(conn).startswith('OK name=fpshd '):
+                raise ConnectionError('STATUS did not identify fpshd')
+    except Exception as exc:
+        raise ListenerUnsettled('LISTEN83 did not settle: no camera cleanup is safe yet') from exc
+
+
 def listen(out, max_bytes, idle_ms, deadline_ms, quiet_ms=1000, trigger=None, raw_copy=True):
-    """Run one LISTEN83; returns (END83 fields, REPLY or None, splitter stats)."""
+    """Run LISTEN83 and honor its quiet period before returning or raising.
+
+    Returns (END83 fields, REPLY or None, splitter stats).  ListenerUnsettled
+    means its host-only completion barrier failed; do not send camera cleanup.
+    """
+    if quiet_ms < 0:
+        raise ValueError('quiet_ms must be nonnegative')
     out.mkdir(parents=True, exist_ok=True)
-    sp = Splitter(file_sink(out))
+    sink = file_sink(out)
+    sp = Splitter(sink)
     raw = open(out / 'stream.raw', 'ab') if raw_copy else None
     cmd = f'LISTEN83 {max_bytes} {idle_ms} {deadline_ms} q={quiet_ms}' + (f' {trigger}' if trigger else '')
-    with socket.socket(socket.AF_UNIX) as conn:
-        conn.settimeout(deadline_ms / 1000 + 30)
-        conn.connect(SOCK)
-        conn.sendall(cmd.encode() + b'\n')
-        first = read_line(conn)
-        if not first.startswith('OK83L'):
-            raise RuntimeError(first)
-        while True:
-            n, = struct.unpack('<I', read_exact(conn, 4))
-            if not n:
-                break
-            data = read_exact(conn, n)
-            if raw:
-                raw.write(data)
-            sp.feed(data)
-        end = read_line(conn).split()
-        reply = read_line(conn) if trigger else None
-    if raw:
-        raw.close()
+    submitted = completed = False
+    try:
+        with socket.socket(socket.AF_UNIX) as conn:
+            conn.settimeout(deadline_ms / 1000 + 30)
+            conn.connect(SOCK)
+            submitted = True
+            conn.sendall(cmd.encode() + b'\n')
+            first = read_line(conn)
+            if not first.startswith('OK83L'):
+                raise RuntimeError(first)
+            while True:
+                n, = struct.unpack('<I', read_exact(conn, 4))
+                if not n:
+                    break
+                data = read_exact(conn, n)
+                if raw:
+                    raw.write(data)
+                sp.feed(data)
+            end = read_line(conn).split()
+            if len(end) != 6 or end[0] != 'END83':
+                raise RuntimeError(f'malformed END83: {end!r}')
+            reply = read_line(conn) if trigger else None
+            completed = True
+    finally:
+        if raw:
+            raw.close()
+        sink.close()
+        if submitted:
+            if not completed:
+                listener_barrier(deadline_ms)
+            # fpshd starts the quiet interval BEFORE writing END83.  Waiting
+            # from its receipt (or STATUS after an error) is conservative.
+            time.sleep(quiet_ms / 1000)
     fields = dict(zip(('tag', 'bytes', 'reason', 'rc', 'trigger', 'reply_len'), end))
     stats = sp.stats()
     (out / 'listen.json').write_text(json.dumps({'cmd': cmd, 'end': fields, 'reply': reply, 'stats': stats}, indent=1))
@@ -194,8 +237,12 @@ def main():
     p = sub.add_parser('parse'); p.add_argument('stream', type=pathlib.Path); p.add_argument('out', type=pathlib.Path)
     a = ap.parse_args()
     if a.cmd == 'parse':
-        sp = Splitter(file_sink(a.out))
-        sp.feed(a.stream.read_bytes())
+        sink = file_sink(a.out)
+        sp = Splitter(sink)
+        try:
+            sp.feed(a.stream.read_bytes())
+        finally:
+            sink.close()
         print(json.dumps(sp.stats()))
         return
     end, reply, stats = listen(a.out, a.max, a.idle, a.deadline, a.quiet, a.trigger)

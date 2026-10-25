@@ -493,7 +493,9 @@ static void ix_lv_step(wr_t *w, uint32_t now) {
     q.seg[0].addr = addr; q.seg[0].len = wd * ht * 2u;
     q.seg[1].addr = q.seg[1].len = q.seg[2].addr = q.seg[2].len = q.seg[3].addr = q.seg[3].len = 0;
     c->lv_last_addr = addr;
-    uint32_t r = ((uint32_t (*)(volatile ix_push_req *))c->lv_push)(&q);
+    uint32_t r = c->lv_push == IX_LV_ENGINE
+        ? ix_push(w, &q, 0)                                    /* this sup's own engine, mode 0 */
+        : ((uint32_t (*)(volatile ix_push_req *))c->lv_push)(&q);
     if (r == IX_PUSH_SENT) c->lv_n_sent++;
     else if (r == IX_PUSH_SKIPPED) c->lv_n_skip++;
     else c->lv_n_err++;
@@ -503,6 +505,11 @@ void ix_ctl_step(wr_t *w) {
     ix_cap *c = &w->cap;
     uint32_t now = w->fw.tick_us();
     ix_lv_step(w, now);
+    /* CDNG after the stop: on the host's word (a manual take), or cd_after_ms
+     * after our own take's stop.  Once per arm: cd_state leaves IDLE. */
+    if (c->cd_go) { c->cd_go = 0; ix_cdng_run(w); }
+    else if (c->ctl == IX_CTL_DONE && c->cd_after_ms && c->cd_state == IX_CD_IDLE &&
+             now - c->t_stop >= c->cd_after_ms * 1000u) ix_cdng_run(w);
     switch (c->ctl) {
     case IX_CTL_ARMED:
         if (!c->t_arm) { c->t_arm = now | 1u; c->install_at_arm = w->n_install; break; }

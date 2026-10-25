@@ -85,6 +85,8 @@ typedef struct {
     uint32_t recstate;                                          /* C3757F30 */
     void     (*dly)(uint32_t ms);
     uint32_t (*tick_us)(void);                                  /* C002B6E0 */
+    int      (*start_xfer)(uint32_t phys);                      /* C01E6B80: 0 = started, -2 = deaf */
+    void     (*end_xfer)(uint32_t ctx);                         /* C01E6D48 */
 } wr_fw;
 
 /* ---- the sink.  The host fills mode/nchunk/chunk while the camera is not
@@ -101,7 +103,7 @@ enum { IX_SD = 0, IX_CAPTURE = 1, IX_DISCARD = 2 };
 #define IX_MAX_CHUNK  32u
 #define IX_REC_MAGIC  0x31525849u        /* "IXR1" */
 #define IX_CAP_MAGIC  0x4C505349u        /* "ISPL": the host finds the sink by it */
-#define IX_CAP_VERSION 3u
+#define IX_CAP_VERSION 4u
 
 /* ctl: the host writes start_ms/rec_ms, then ctl = IX_CTL_ARMED (last).  The
  * control task stamps t_arm and, start_ms later, runs the firmware's own
@@ -120,6 +122,7 @@ enum { IX_CTL_IDLE = 0, IX_CTL_ARMED = 1, IX_CTL_REC = 2, IX_CTL_DONE = 3,
  * notes/PUSH_CALLERS.md §1. */
 #define IX_LV_DESC     0xC30255B4u       /* LCD descriptor: [3] w [4] h [8] n [9..] handles */
 #define IX_LV_CHSEL    0xC31DF8D8u       /* channel = this + 2 (>= 7: 8), FUN_c01d7638 */
+#define IX_LV_ENGINE   1u                /* lv_push = 1: the built-in engine (ix_push.c) */
 #define IX_LV_MAX_N    8u
 #define IX_LV_MAX_BYTES ((16u << 20) - 1024u)   /* one TRB */
 enum { IX_PUSH_SENT = 0, IX_PUSH_SKIPPED = 1 };
@@ -128,6 +131,15 @@ typedef struct {
     uint32_t mode, source, frame_no, w, h, fmt, stride, flags, aux0, aux1, nseg;
     ix_seg   seg[4];
 } ix_push_req;                           /* what the engine is handed (header fields) */
+
+/* CDNG after the stop (notes/PUSH_CALLERS.md §3, validation/20261025-rawpool-01):
+ * the RAW class arena keeps the last frames of a take after it is freed. */
+#define IX_CD_CLASS_TBL 0xC30739DCu      /* [ + 4*class] = the class object (FUN_c001cf78) */
+#define IX_CD_RAW_CLASS 10u
+#define IX_CD_BLOCK     0xDEADBEEFu      /* chain block header (FUN_c00104a8) */
+#define IX_CD_STEP      0x400u           /* DNG starts seen 10-25: all 0x400-aligned */
+#define IX_CD_DNG_MAX   (64u << 20)
+enum { IX_CD_IDLE = 0, IX_CD_DONE = 1, IX_CD_NO_ARENA = 2, IX_CD_BUSY = 3 };
 
 /* one per block the writer took, kept or not */
 typedef struct { uint32_t seq, t_us, ncookie, bytes; } ix_logline;
@@ -164,7 +176,7 @@ typedef struct {
     uint32_t rs_started, rs_saved;       /* recstate +6 / +7 when checked        */
     uint32_t install_at_arm;             /* n_install when the arm was seen      */
     /* LV sampler: host-written */
-    uint32_t lv_push;                    /* engine entry, ix_push_req * -> IX_PUSH_* */
+    uint32_t lv_push;                    /* 1: built-in engine; else an entry, ix_push_req * -> IX_PUSH_* */
     uint32_t lv_every_us;                /* one push per this interval (0: off)  */
     uint32_t lv_lag;                     /* 1 = the last slot finished, 2 = one older (0: 1) */
     uint32_t lv_max;                     /* stop after this many sent (0: no cap) */
@@ -173,7 +185,49 @@ typedef struct {
     uint32_t lv_n_sent, lv_n_skip, lv_n_bad, lv_n_err;
     uint32_t lv_last_reg;                /* raw slot index read                  */
     uint32_t lv_last_addr;               /* the slot pushed                      */
+    /* CDNG after the stop (layout 4, ix_cdng.c): host-written */
+    uint32_t cd_go;                      /* 1: scan now (a manual take); the camera clears it */
+    uint32_t cd_after_ms;                /* our own take: scan this long after t_stop (0: never) */
+    uint32_t cd_max;                     /* push at most this many (0: all of the newest take) */
+    /* camera-written */
+    uint32_t cd_state;                   /* IX_CD_*                              */
+    uint32_t cd_lo, cd_hi;               /* the RAW arena scanned (uncached)     */
+    uint32_t cd_found, cd_newest_n;      /* DNG headers seen / of the newest take */
+    uint32_t cd_sent, cd_skip;           /* pushes that went / did not            */
+    uint32_t cd_us;                      /* the whole scan + push, microseconds   */
+    uint8_t  cd_newest[20];              /* that take's DateTime, "YYYY:MM:DD HH:MM:SS" */
 } ix_cap;
+
+/* ---- the push engine (FPP1 over EP 0x83, notes/PUSH_PROTOCOL.md; ix_push.c).
+ * The header and the TRB chain live here and are written through the uncached
+ * alias, so the controller reads them with no cache maintenance.  TRB buffer
+ * addresses are DMA = uncached CPU - 0x40000000 (the firmware's own convention). */
+#define PX_CTX        3u                 /* EP 0x83 (memory push-endpoint-is-ep83) */
+#define PX_PHYS       7u
+#define PX_TRB_DMA    0xC31E3238u        /* [ctx]: TRB DMA address StartTransfer hands the controller */
+#define PX_TRB_CPU    0xC31E3264u        /* [ctx]: the same TRB, CPU address (= DMA + 0x40000000) */
+#define PX_DEAF       0xC31E38FCu        /* 1 after a PTP Cancel/Reset: StartTransfer -> -2 (handover F2) */
+#define PX_MAX_TRB    64u
+#define PX_MAX_SEG    4u
+#define PX_TRB_MAX_LEN 0xFFFC00u         /* 16 MiB - 1 KiB */
+#define PX_HDR        256u
+#define PX_MAGIC      0x31505046u        /* "FPP1" */
+#define PX_TRB_MID    0x15u              /* HWO | CHN | normal */
+#define PX_TRB_LAST   0x813u             /* HWO | LST | normal | IOC (the firmware's) */
+enum { PX_SENT = 0, PX_SKIPPED = 1, PX_ERR_BAD = 2, PX_ERR_TIMEOUT = 3, PX_ERR_START = 4 };
+
+typedef struct { uint32_t lo, hi, size, ctrl; } px_trb;
+typedef struct {
+    uint8_t  hdr[PX_HDR];                /* 16-aligned: first in the struct          */
+    px_trb   trb[PX_MAX_TRB];
+    uint32_t armed;                      /* a transfer was started and not yet seen done */
+    uint32_t last_trb;                   /* index of the armed chain's last TRB      */
+    uint32_t saved_dma, saved_cpu;       /* ctx 3's table entries before we took them */
+    uint32_t owns;                       /* 1 while the tables point at our chain    */
+    uint32_t seq[8], n_skip[8];          /* per source                               */
+    uint32_t n_sent, n_bad, n_timeout, n_start_err, n_deaf, last_rc;
+    uint64_t bytes;
+} ix_px_t;
 
 /* Recognising the volume's driver by its saved acquire pointer. */
 #define WR_SD_ACQ     0xC065F021u
@@ -202,6 +256,7 @@ typedef struct {
     uint32_t ended_vol;                  /* the vol our stop restored; 0 at take start */
     ix_cap   cap;                        /* before q: a fixed offset for the host */
     bq_t     q;
+    ix_px_t  px;                         /* the push engine (ix_push.c); last, 16-aligned */
 } wr_t;
 
 void     wr_init(wr_t *w, const wr_fw *fw, int flag, const uint32_t veneer[6],
@@ -222,5 +277,10 @@ int      wr_late_frame(wr_t *w, uint32_t mgr, uint32_t node);
 /* The control task: one step (test_card.py calls it), and the loop. */
 void     ix_ctl_step(wr_t *w);
 void     ix_ctl_task(wr_t *w);
+/* The push engine: build header + TRBs for q, start EP 0x83.  IX_PUSH_* / PX_ERR_*. */
+uint32_t ix_push(wr_t *w, const volatile ix_push_req *q, uint32_t timeout_ms);
+void     ix_push_release(wr_t *w);
+/* CDNG after the stop: scan the RAW arena, push the newest take's DNGs (task only). */
+void     ix_cdng_run(wr_t *w);
 
 #endif

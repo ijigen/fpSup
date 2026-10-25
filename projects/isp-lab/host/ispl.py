@@ -83,27 +83,13 @@ def cap_addr(block, info):
     return uncached + info['state_at'] + info['cap_off']
 
 
-CALLFN_CLAIM = ('ispl.callfn.code', 160)
-
-
-def own_callfn_block(callfn):
-    """callfn in a cave block nothing else writes (IMX410_RULES §71): in the shared
-    putfile.CODE it takes turns with getfile/putfile/heapalloc, the echo runs with no
-    I-cache maintenance, and the CPU can execute the other one's stale words."""
-    if getattr(callfn, '_own_code', False):           # imx410-lab's fastsweep may have moved it already
-        return
-    import cave
-    callfn.CODE = cave.claim(*CALLFN_CLAIM)
-    callfn.CODE_END = callfn.CODE + CALLFN_CLAIM[1]
-    callfn._own_code = True
-
-
 def flush():
     """Clean+invalidate the camera's caches: the sup's counters reach memory
     before we read them; our writes are not hidden behind its stale lines."""
     sys.path.insert(0, str(SHELL))
     import callfn
-    own_callfn_block(callfn)
+    # The maintained callfn owns 'callfn.code' (IMX410_RULES §71).  Reuse it:
+    # a second ISP-specific claim wastes cave space and rewrites a fresh stub.
     ok, _ = callfn.call(F_DCACHE)
     if not ok:
         raise SystemExit('cache flush did not return')
@@ -236,7 +222,7 @@ def cmd_take(a, api=None, heap=None, sleep=time.sleep):
     info = build()
     at = cap_addr(block_addr(), info)
     cap = read_cap(api, at)
-    if cap['mode'] != R.MODES['sd'] or ALLOC_KEEP.exists():
+    if cap['mode'] != R.MODES['sd'] or (SUP_FILE != 'ISPC.BIN' and ALLOC_KEEP.exists()):
         raise SystemExit('already armed: pull and/or disarm first')
     if a.focus:                                             # half press: AF (S2 would toggle REC in CINE)
         api.sh('key S1ON'); sleep(a.focus_ms / 1000); api.sh('key S1OFF')

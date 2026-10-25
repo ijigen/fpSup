@@ -1,0 +1,35 @@
+{
+ "version": 1,
+ "format": "tar+zstd",
+ "archive": {
+  "bytes": 15675,
+  "sha256": "94a3b4abde64690a8ee19e0207573e428fd335cc8f267f30fd0861c4a73b1218"
+ },
+ "original_bytes": 30463,
+ "files": {
+  "ISPC.BIN": {
+   "bytes": 11244,
+   "sha256": "87558560117f5d8c398ff81a258dd663b8c7de60d59f8da2b343c3e49a872c7b"
+  },
+  "LOAD.LOG": {
+   "bytes": 8192,
+   "sha256": "daa288ecc741a37695d05c3c6b6f276ff3bcc736797c98786288158c24c95f9c"
+  },
+  "RESULTS.md": {
+   "bytes": 6361,
+   "sha256": "18a4dd75f54012bd34b2550b5b9a49b70977619592efeff63bd210d4df9e7a64"
+  },
+  "final-state.json": {
+   "bytes": 3336,
+   "sha256": "72960601d23718e64a79ef692da54ff277875eefd6d59caa7529265a5a3a50b3"
+  },
+  "host-runtime-stale-allocation.json": {
+   "bytes": 362,
+   "sha256": "957e1146bfad2d532406100021c38a5d51ec45798ba9cb0dde67604abb2516bd"
+  },
+  "verification.json": {
+   "bytes": 968,
+   "sha256": "2803625328328e5f0ce9b9e7fab94045b09598935c5c7e94efe34c83fd31a571"
+  }
+ }
+}

@@ -22,6 +22,8 @@
 #define SHELL_EXEC   0xC03D9C20u    /* (ctx, line): tokenises and runs a shell line */
 #define SHELL_CTX    0xC3756904u    /* the console context C03D9D18 passes         */
 #define RECSTATE     0xC3757F30u    /* ShellRecOb's flags (FUN_c0407828)            */
+#define START_XFER   0xC01E6B81u    /* C01E6B80 StartTransfer(phys), Thumb             */
+#define END_XFER     0xC01E6D49u    /* C01E6D48 EndTransfer(ctx), Thumb                */
 
 #define WR_PRI       6u             /* SRecFile's: the device semaphore and the */
                                     /* FS lock have no priority inheritance     */
@@ -79,6 +81,8 @@ int wr_card_init(wr_t *w, uint32_t task_entry, uint32_t veneers, uint32_t ctl_en
     fw.shell_exec = (uint32_t (*)(uint32_t, char *))SHELL_EXEC;
     fw.shell_ctx = SHELL_CTX;
     fw.recstate = RECSTATE;
+    fw.start_xfer = (int (*)(uint32_t))START_XFER;
+    fw.end_xfer = (void (*)(uint32_t))END_XFER;
     uint32_t ven[6];
     for (uint32_t i = 0; i < 6; i++) ven[i] = veneers + 16u * i;
     int flag = flag_create();

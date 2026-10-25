@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline tests for push_rx.py.  python3 -B -m unittest test_push_rx"""
-import json, os, pathlib, random, socket, struct, tempfile, threading, unittest
+import json, os, pathlib, random, socket, struct, tempfile, threading, time, unittest
+from unittest import mock
 
 import push_rx as P
 
@@ -119,6 +120,47 @@ class Listen(unittest.TestCase):
         self.assertEqual(srv.request, 'LISTEN83 100 10 1000 q=1000\n')
         self.assertIsNone(reply)
         self.assertEqual(stats['images'], 1)
+
+    def test_return_waits_until_camera_commands_are_allowed(self):
+        srv = FakeFpshd(self.sock, image(1, 1, [10])[0])
+        srv.start()
+        started = time.monotonic()
+        P.listen(self.tmp / 'quiet', 1000, 10, 1000, quiet_ms=200)
+        srv.join(5)
+        # A caller can issue its first camera cleanup write after return.
+        # The old receiver returned immediately into fpshd's ERR quiet gate.
+        self.assertGreaterEqual(time.monotonic() - started, .2)
+
+    def test_broken_stream_waits_for_host_barrier_and_quiet(self):
+        requests = []
+        srv = socket.socket(socket.AF_UNIX)
+        srv.bind(self.sock); srv.listen(2)
+        def serve():
+            with srv:
+                conn, _ = srv.accept()
+                with conn:
+                    requests.append(conn.recv(4096))
+                    conn.sendall(b'OK83L 0\n' + struct.pack('<I', 100) + b'partial')
+                conn, _ = srv.accept()
+                with conn:
+                    requests.append(conn.recv(4096))
+                    conn.sendall(b'OK name=fpshd version=3.3.0\n')
+        thread = threading.Thread(target=serve, daemon=True)
+        thread.start()
+        started = time.monotonic()
+        with self.assertRaises(ConnectionError):
+            P.listen(self.tmp / 'broken', 1000, 10, 1000, quiet_ms=100)
+        thread.join(5)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(requests[1], b'STATUS\n')
+        self.assertGreaterEqual(time.monotonic() - started, .1)
+
+    def test_missing_barrier_is_explicitly_unsettled(self):
+        with mock.patch.object(P.socket, 'socket') as sock, \
+             mock.patch.object(P, 'read_line', return_value='ERR unavailable'):
+            with self.assertRaises(P.ListenerUnsettled):
+                P.listener_barrier(1000)
+        sock.return_value.__enter__.return_value.sendall.assert_called_once_with(b'STATUS\n')
 
 
 if __name__ == '__main__':

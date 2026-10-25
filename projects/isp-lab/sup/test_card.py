@@ -53,8 +53,10 @@ MAXDESC = 0xC2F2E750
 STUBS = {'VOL_LOOKUP': 0xC0644B68, 'DEV_WRITE': 0xC01EB790, 'STOCK_CB': 0xC03A55D0,
          'FLG_CREATE': 0xC00169EC, 'FLG_SET': 0xC0016B9C, 'FLG_WAIT': 0xC0016C08,
          'REC_STATE': 0xC03A52D0, 'LOG_A': 0xC0019DC0, 'LOG_B': 0xC001A048,
-         'SHELL_EXEC': 0xC03D9C20, 'PUSH': 0x438F0000}     # PUSH: the engine stand-in (another sup's)
-THUMB_STUBS = {'VOL_LOOKUP', 'DEV_WRITE'}
+         'SHELL_EXEC': 0xC03D9C20, 'PUSH': 0x438F0000,     # PUSH: the engine stand-in (another sup's)
+         'START_XFER': 0xC01E6B80, 'END_XFER': 0xC01E6D48}
+THUMB_STUBS = {'VOL_LOOKUP', 'DEV_WRITE', 'START_XFER', 'END_XFER'}
+PX_DMA_TBL, PX_CPU_TBL, PX_DEAF = 0xC31E3238, 0xC31E3264, 0xC31E38FC
 SD = dict(acq=0xC065F021, add=0xC065F061, ckpt=0xC065EFE1, rb=0xC065F001, rel=0xC065F269)
 SLOT = dict(cb=0x4834, acq=0x4838, add=0x483C, ckpt=0x4840, rb=0x4844, rel=0x4848)
 DONE = V3.DONE
@@ -88,6 +90,8 @@ class Cam(V4.Camera):
         self.disk, self.writes, self.cookies, self.shell = {}, 0, [], []
         self.switch = self.on_cookie = self.on_shell = None
         self.pushes, self.push_ret = [], 0
+        self.xfers, self.ends, self.start_rc, self.complete = [], [], 0, True
+        self.last_chain = None
 
     def _hook(self, mu, addr, size, _):
         name = self.by_addr.get(addr)
@@ -118,6 +122,11 @@ class Cam(V4.Camera):
             self.shell.append((line, self.now))
             if self.on_shell: self.on_shell(line)
             return self._ret(0)
+        if name == 'START_XFER':
+            return self._ret(self.start_xfer(r0))
+        if name == 'END_XFER':
+            self.ends.append(r0)
+            return self._ret(0)
         if name == 'PUSH':
             f = struct.unpack('<19I', self.mu.mem_read(r0, 76))
             self.pushes.append(dict(zip(('mode', 'source', 'frame_no', 'w', 'h', 'fmt', 'stride', 'flags',
@@ -127,6 +136,34 @@ class Cam(V4.Camera):
             return self._ret(0)
         if name == 'DEV_WRITE':
             return self._ret(self.dev_write(r0, r1, r2, r3, self.w(self.r(UC_ARM_REG_SP))))
+
+    def start_xfer(self, phys):
+        """The controller, as far as the engine can tell: walk the chain from the
+        DMA table entry StartTransfer would hand it and gather the bytes."""
+        ctx = phys >> 1
+        dma = self.w(PX_DMA_TBL + 4 * ctx)
+        assert self.w(PX_CPU_TBL + 4 * ctx) == dma + 0x40000000, 'tables disagree'
+        if self.start_rc:
+            self.xfers.append({'phys': phys, 'refused': True})
+            return self.start_rc & 0xFFFFFFFF
+        trbs, at = [], dma + 0x40000000
+        for _ in range(80):
+            lo, hi, size, ctrl = struct.unpack('<4I', self.mu.mem_read(at, 16))
+            trbs.append((lo, hi, size, ctrl, at))
+            if ctrl & 2:
+                break
+            assert ctrl & 4, f'TRB {len(trbs)} neither chained nor last: {ctrl:#x}'
+            at += 16
+        data = b''.join(bytes(self.mu.mem_read(lo + 0x40000000, size)) for lo, _, size, _, _ in trbs)
+        self.xfers.append({'phys': phys, 'trbs': [t[:4] for t in trbs], 'data': data})
+        self.last_chain = trbs
+        if self.complete:
+            self.finish()
+        return 0
+
+    def finish(self):
+        lo, hi, size, ctrl, at = self.last_chain[-1]
+        self.mu.mem_write(at + 12, struct.pack('<I', ctrl & ~1))
 
     def dev_write(self, dev, lo, hi, n, buf):
         assert dev == 0xE, dev
@@ -646,6 +683,215 @@ class LvTests(unittest.TestCase):
         self.assertEqual(t.cam.shell, [], 'the sampler pressed something')
 
 
+class PushEngineTests(unittest.TestCase):
+    """ix_push.c: header + chain built in the sup's state, ctx 3's tables taken and
+    given back, EP 0x83 started; mode 0 skips while busy; the bytes parse as FPP1."""
+    Q = CAP + 0x1000000                    # where the tests put an ix_push_req (lent memory, uncached)
+    SRC = CAP + 0x1100000
+
+    def setUp(self):
+        sys.path.insert(0, str(HERE.parent / 'host'))
+        import push_rx
+        self.rx = push_rx
+        self.t = Take(0, frames=1)
+        c = self.t.cam
+        c.put(PX_DMA_TBL + 12, 0x0BAD0000); c.put(PX_CPU_TBL + 12, 0x4BAD0000)
+        c.put(PX_DEAF, 0)
+
+    def req(self, mode=0, source=1, segs=((SRC, 4096),), w=1620, h=911, fmt=1, frame_no=7, flags=1):
+        c = self.t.cam
+        words = [mode, source, frame_no, w, h, fmt, w * 2, flags, 0x11, 0x22, len(segs)]
+        for i in range(4):
+            a, n = segs[i] if i < len(segs) else (0, 0)
+            words += [a, n]
+        c.mu.mem_write(self.Q, struct.pack(f'<{len(words)}I', *words))
+
+    def push(self, timeout_ms=0, **kw):
+        self.req(**kw)
+        c = self.t.cam
+        r = c.call(c.entry['ix_push'], r0=c.state_addr, r1=self.Q, r2=timeout_ms, thumb=True, sp=V3.STACK - 0x9004)
+        return r[0] if isinstance(r, tuple) else r
+
+    def test_one_image_parses_and_matches(self):
+        c = self.t.cam
+        payload = bytes(random.Random(1).randbytes(4096))
+        c.mu.mem_write(self.SRC, payload)
+        self.assertEqual(self.push(), 0)
+        x = c.xfers[-1]
+        self.assertEqual(x['phys'], 7)
+        got = []
+        sp = self.rx.Splitter(lambda h, p: got.append((h, p)))
+        sp.feed(x['data'])
+        self.assertEqual(len(got), 1, sp.stats())
+        h, p = got[0]
+        self.assertTrue(h['crc'])
+        self.assertEqual((h['source'], h['seq'], h['w'], h['h'], h['fmt'], h['frame_no'], h['flags'], h['aux']),
+                         ('lv', 0, 1620, 911, 'yuyv8', 7, 1, [0x11, 0x22]))
+        self.assertEqual(p, payload)
+        self.assertEqual(x['trbs'][0][2], 256)
+        self.assertEqual(x['trbs'][-1][3], 0x813)
+        self.assertTrue(all(t[0] < 0x40000000 for t in x['trbs']), 'TRBs must carry DMA addresses')
+
+    def test_big_segment_is_cut_into_trbs(self):
+        c = self.t.cam
+        n = 0xFFFC00 + 5000                                    # one TRB max + a bit
+        self.assertEqual(self.push(segs=((CAP, n),)), 0)
+        sizes = [t[2] for t in c.xfers[-1]['trbs']]
+        self.assertEqual(sizes, [256, 0xFFFC00, 5000])
+        self.assertTrue(all(t[3] == 0x15 for t in c.xfers[-1]['trbs'][:-1]))
+
+    def test_mode0_skips_while_busy_and_leaves_a_seq_gap(self):
+        c = self.t.cam
+        c.complete = False
+        self.assertEqual(self.push(), 0)
+        self.assertEqual(self.push(), 1)                       # still owned by the controller
+        self.assertEqual(len(c.xfers), 1)
+        c.finish()
+        self.assertEqual(self.push(), 0)
+        seqs = []
+        for x in c.xfers:
+            sp = self.rx.Splitter(lambda h, p: seqs.append(h['seq'])); sp.feed(x['data'])
+        self.assertEqual(seqs, [0, 2])                         # the skip shows as a gap
+        hdr = self.rx.parse_header(c.xfers[-1]['data'][:256])
+        self.assertEqual(hdr['n_skip'], 1)
+
+    def test_mode1_times_out_and_ends_the_transfer(self):
+        c = self.t.cam
+        c.complete = False
+        self.assertEqual(self.push(mode=1, timeout_ms=5), 0)   # sent, then waited 5 ms in vain
+        self.assertEqual(c.ends, [3])
+
+    def test_refused_start_counts_deaf(self):
+        c = self.t.cam
+        c.start_rc, = struct.unpack('<I', struct.pack('<i', -2))
+        c.put(PX_DEAF, 1)
+        self.assertEqual(self.push(), 4)
+        self.push()
+        c.start_rc = 0; c.put(PX_DEAF, 0)
+        self.assertEqual(self.push(), 0)
+        hdr = self.rx.parse_header(c.xfers[-1]['data'][:256])
+        self.assertEqual((hdr['seq'], hdr['n_skip']), (2, 2))
+
+    def test_bad_requests_send_nothing(self):
+        c = self.t.cam
+        for segs in ((), ((0x30000000, 16),), ((CAP, 0),), ((0x7FFFFF00, 0x200),)):
+            self.assertEqual(self.push(segs=segs), 2, segs)
+        self.assertEqual(c.xfers, [])
+
+    def test_release_restores_the_tables(self):
+        c = self.t.cam
+        self.push()
+        self.assertNotEqual(c.w(PX_DMA_TBL + 12), 0x0BAD0000)
+        c.call(c.entry['ix_push_release'], r0=c.state_addr, thumb=True, sp=V3.STACK - 0x9004)
+        self.assertEqual((c.w(PX_DMA_TBL + 12), c.w(PX_CPU_TBL + 12)), (0x0BAD0000, 0x4BAD0000))
+
+    def test_lv_sampler_uses_the_engine(self):
+        t = LvTests.setup(self, push=False)
+        c = t.cam
+        c.put(PX_DMA_TBL + 12, 0); c.put(PX_CPU_TBL + 12, 0x40000000); c.put(PX_DEAF, 0)
+        c.put(t.cap_at + R.OFF['lv_push'], 1)
+        c.mu.mem_map(LV_SLOT[0], 0x1000000)                    # the display ring, for the bytes
+        LvTests.step(self, t, 1_000_000)
+        self.assertEqual(len(c.xfers), 1)
+        hdr = self.rx.parse_header(c.xfers[0]['data'][:256])
+        self.assertEqual((hdr['source'], hdr['w'], hdr['h'], hdr['total']), ('lv', LV_W, LV_H, 2 * LV_W * LV_H))
+        self.assertEqual(t.cap()['lv_n_sent'], 1)
+
+
+def make_dng(w, h, dt, payload):
+    """Little-endian DNG: IFD0 with width/length/DateTime/one strip (what cd_parse reads)."""
+    n = 6
+    ifd = 8
+    dt_at = ifd + 2 + 12 * n + 4
+    data_at = dt_at + 20
+    tags = [(256, 4, 1, w), (257, 4, 1, h), (258, 3, 1, 12), (273, 4, 1, data_at),
+            (279, 4, 1, len(payload)), (306, 2, 20, dt_at)]
+    b = b'II*\0' + struct.pack('<I', ifd) + struct.pack('<H', n)
+    for tg in tags:
+        b += struct.pack('<HHII', *tg)
+    return b + b'\0\0\0\0' + dt.encode() + b'\0' + payload
+
+
+class CdngTests(unittest.TestCase):
+    """ix_cdng.c: the RAW arena after a take -> the newest take's DNGs, pushed as
+    FPP1 source 4 / fmt 5 through the engine, nothing else."""
+    LO, HI = 0x53B00900, 0x54AFFF00
+    NEW, OLD = '2026:10:25 07:43:07', '2026:10:24 03:06:21'
+
+    def setUp(self):
+        sys.path.insert(0, str(HERE.parent / 'host'))
+        import push_rx
+        self.rx = push_rx
+        self.t = Take(0, frames=1)
+        c = self.t.cam
+        c.mu.mem_map(0x54000000, 0x01000000)                    # DATA already covers up to 0x54000000
+        obj = 0xC3073C3C
+        c.put(0xC30739DC + 40, obj)
+        c.put(obj + 0xC, self.LO)
+        c.mu.mem_write(self.LO, struct.pack('<4I', 0xDEADBEEF, 0x40, 0, self.HI))
+        c.mu.mem_write(self.HI, struct.pack('<4I', 0xDEADBEEF, 0x40, self.LO, 0))
+        c.put(PX_DMA_TBL + 12, 0); c.put(PX_CPU_TBL + 12, 0x40000000); c.put(PX_DEAF, 0)
+        rnd = random.Random(5)
+        self.new = [(0x53B18400 + k * 0x31A400, make_dng(1936, 1090, self.NEW, rnd.randbytes(20000 + k))) for k in range(3)]
+        self.old = [(0x54200000 + k * 0x8C7800, make_dng(3024, 2010, self.OLD, rnd.randbytes(30000))) for k in range(2)]
+        for a, b in self.new + self.old:
+            c.mu.mem_write(a, b)
+        c.mu.mem_write(0x54600000, b'II*\0' + struct.pack('<I', 8) + bytes(64))   # a header with no IFD
+        c.mu.mem_write(0x54700200, self.new[0][1])                                  # not 0x400-aligned
+
+    def run_cd(self, cd_max=0):
+        c = self.t.cam
+        c.put(self.t.cap_at + R.OFF['cd_max'], cd_max)
+        c.call(c.entry['ix_cdng_run'], r0=c.state_addr, thumb=True, sp=V3.STACK - 0x9004)
+        return self.t.cap()
+
+    def images(self):
+        got = []
+        for x in self.t.cam.xfers:
+            sp = self.rx.Splitter(lambda h, p: got.append((h, p))); sp.feed(x['data'])
+        return got
+
+    def test_pushes_only_the_newest_take_whole(self):
+        cap = self.run_cd()
+        self.assertEqual((cap['cd_state'], cap['cd_found'], cap['cd_newest_n'], cap['cd_sent']), (1, 5, 3, 3))
+        self.assertEqual((cap['cd_lo'], cap['cd_hi']), (self.LO, self.HI + 0x40))
+        got = self.images()
+        self.assertEqual([p for _, p in got], [b for _, b in self.new])
+        for (h, _), (a, _) in zip(got, self.new):
+            self.assertEqual((h['source'], h['fmt'], h['w'], h['h'], h['aux'][0]), ('cdng', 'dng', 1936, 1090, a))
+        self.assertEqual([h['seq'] for h, _ in got], [0, 1, 2])
+        self.assertEqual(self.t.cam.w(PX_CPU_TBL + 12), 0x40000000, 'tables not given back')
+
+    def test_cap_on_count(self):
+        cap = self.run_cd(cd_max=2)
+        self.assertEqual((cap['cd_newest_n'], cap['cd_sent']), (3, 2))
+        self.assertEqual(len(self.images()), 2)
+
+    def test_no_arena_pushes_nothing(self):
+        self.t.cam.put(0xC30739DC + 40, 0)
+        cap = self.run_cd()
+        self.assertEqual(cap['cd_state'], 2)
+        self.assertEqual(self.t.cam.xfers, [])
+
+    def test_triggers(self):
+        c, t = self.t.cam, self.t
+        c.put(t.cap_at + R.OFF['cd_go'], 1)
+        LvTests.step(self, t, 1_000_000)
+        self.assertEqual((t.cap()['cd_go'], t.cap()['cd_sent']), (0, 3))
+        c.xfers.clear()
+        for k in ('cd_state', 'cd_sent'):
+            c.put(t.cap_at + R.OFF[k], 0)
+        c.put(t.cap_at + R.OFF['ctl'], R.CTL['done'])
+        c.put(t.cap_at + R.OFF['t_stop'], 2_000_001)
+        c.put(t.cap_at + R.OFF['cd_after_ms'], 10_000)
+        LvTests.step(self, t, 11_000_000)
+        self.assertEqual(c.xfers, [], 'ran before cd_after_ms')
+        LvTests.step(self, t, 12_100_000)
+        self.assertEqual(len(self.images()), 3)
+        LvTests.step(self, t, 20_000_000)
+        self.assertEqual(len(self.images()), 3, 'ran twice for one take')
+
+
 class CtlOnlyTests(unittest.TestCase):
     """ISPC.BIN: the control task alone (RESEARCH_PLAN §7 step 1)."""
     def test_loads_without_touching_the_writer(self):
@@ -697,6 +943,12 @@ class MutationTests(unittest.TestCase):
 
     def test_no_start_check_is_caught(self):
         self.assertTrue(self.failing('IX_MUTANT_NO_START_CHECK', 'test_no_start_no_second_press', ControlTests))
+
+    def test_no_crc_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_NO_CRC', 'test_one_image_parses_and_matches', PushEngineTests))
+
+    def test_cd_all_takes_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_CD_ALL', 'test_pushes_only_the_newest_take_whole', CdngTests))
 
     def test_lv_current_slot_is_caught(self):
         self.assertTrue(self.failing('IX_MUTANT_LV_CURRENT', 'test_pushes_the_slot_before_the_current_one', LvTests))

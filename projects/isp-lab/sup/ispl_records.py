@@ -12,11 +12,11 @@ import struct
 
 REC_MAGIC = 0x31525849          # "IXR1"
 CAP_MAGIC = 0x4C505349          # "ISPL"
-CAP_VERSION = 3
+CAP_VERSION = 4
 REC = struct.Struct('<8I')
 FIELDS = ('magic', 'seq', 'cl', 'bytes', 'ncookie', 't_us', 'copy_us', 'nseg')
 
-# ix_cap, mirrored from ix_wr.h (version 3: + the LV sampler)
+# ix_cap, mirrored from ix_wr.h (version 4: + the LV sampler, + CDNG after the stop)
 CAP_HEAD = ('magic', 'version', 'mode', 'nchunk')
 MAX_CHUNK = 32
 HOST = ('keep_first', 'every_us', 'log_addr', 'log_max', 'ctl', 'start_ms', 'rec_ms')
@@ -25,7 +25,10 @@ CAP_TAIL = ('ci', 'coff', 'used', 'n_rec', 'n_full', 'n_discard', 'n_sd',
             'n_skip', 'log_n', 't_arm', 't_rec', 't_stop', 'n_press',
             'ctl_line', 'rs_started', 'rs_saved', 'install_at_arm',
             'lv_push', 'lv_every_us', 'lv_lag', 'lv_max',               # host-written
-            'lv_t_last', 'lv_n_sent', 'lv_n_skip', 'lv_n_bad', 'lv_n_err', 'lv_last_reg', 'lv_last_addr')
+            'lv_t_last', 'lv_n_sent', 'lv_n_skip', 'lv_n_bad', 'lv_n_err', 'lv_last_reg', 'lv_last_addr',
+            'cd_go', 'cd_after_ms', 'cd_max',                          # host-written
+            'cd_state', 'cd_lo', 'cd_hi', 'cd_found', 'cd_newest_n', 'cd_sent', 'cd_skip', 'cd_us',
+            'cd_newest0', 'cd_newest1', 'cd_newest2', 'cd_newest3', 'cd_newest4')   # 20 bytes of DateTime
 O_CHUNK = 16
 O_HOST = O_CHUNK + 8 * MAX_CHUNK
 O_TAIL = O_HOST + 4 * len(HOST)

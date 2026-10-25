@@ -16,7 +16,7 @@
  * §71 -- no code or parameter block shared with another echo tool).
  *
  * Parameter block (host fills +0x00..+0x10, reads the rest):
- *      +0x00  addr        source, DMA address (0x4.......)
+ *      +0x00  addr        source, DMA address = uncached CPU address - 0x40000000
  *      +0x04  len         bytes, 1 .. 16 MiB - 1 KiB
  *      +0x08  ctx         3 = EP 0x83
  *      +0x0C  phys        7 = EP 0x83

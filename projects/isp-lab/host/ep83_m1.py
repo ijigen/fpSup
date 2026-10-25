@@ -83,7 +83,9 @@ def main():
     data = pattern(a.bytes)
     p.put(buf, data + bytes(-len(data) % 4), 'payld ', fast=True)
 
-    want = {0x00: buf, 0x04: a.bytes, 0x08: CTX, 0x0C: PHYS, 0x10: a.wait_ms}
+    # TRBs carry DMA addresses = CPU (uncached alias) - 0x40000000: the firmware arms its own
+    # TRBs as `[0xC3025744] - 0x40000000` (blk_c01.c ~135322), and 0xC31E3264[ctx] = 0xC31E3238[ctx] + 0x40000000
+    want = {0x00: buf - 0x40000000, 0x04: a.bytes, 0x08: CTX, 0x0C: PHYS, 0x10: a.wait_ms}
     for _ in range(8):
         for off, v in want.items():
             p.mem_set(parm + off, v)

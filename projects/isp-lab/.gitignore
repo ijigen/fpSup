@@ -1,0 +1,10 @@
+__pycache__/
+/host/.LOAD.LOG
+/host/.ispl_alloc.json
+
+# Keep working captures locally; version the verified, lossless per-run archive.
+/validation/**
+!/validation/**/
+!/validation/**/RESULTS.md
+!/validation/**/ARCHIVE.json
+!/validation/**/evidence.tar.zst
