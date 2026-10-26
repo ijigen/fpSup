@@ -1,12 +1,158 @@
 {
+ "fpsup-res-custom-v0.1.5": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "The list of format files opens from the RES-CUSTOM row on the fpSup page. Each row is named as in the resolution list with its size, e.g. “OG3K (3008x2000)”, with the camera's own On / Off on the right; the title shows enabled / total, e.g. “RES-CUSTOM (5/6)”. A change that needs a restart shows “Unload on restart” / “Load on restart”.",
+   "The card file is renamed; the format files stay in \\fpSup\\RESCUS\\. Formats unchanged: OG2K, OG3K, OG3.5K, OG4K, S16.",
+   "On the camera with Loader v4 so far: menus and page changes only; recording, and keeping the selection across power-off, not yet tested."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "格式檔案清單從 fpSup 頁的 RES-CUSTOM 列進入。每列名稱同解析度清單並加上尺寸，例如「OG3K (3008x2000)」,右欄用原廠的開啟／關閉;標題顯示啟用數／總數，例如「RES-CUSTOM (5/6)」。要重開才生效的改動會顯示「Unload on restart」／「Load on restart」。",
+   "卡上檔名改了,格式檔仍放在 \\fpSup\\RESCUS\\。格式不變:OG2K、OG3K、OG3.5K、OG4K、S16。",
+   "Loader v4 上機目前只看過選單與換頁;錄影、選擇跨關機保留尚未上機測。"
+  ]
+ },
+ "fpsup-lossless-v0.3.1": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "The on/off switch moves to the fpSup page, named “Lossless” (was “Lossless-CDNG”). On by default after a fresh install.",
+   "Compression is the same as v0.3.0test.",
+   "On the camera with Loader v4 so far: menus and page changes only; compressed recording not yet tested."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "開關搬到 fpSup 頁，列名從「Lossless-CDNG」改成「Lossless」。全新安裝預設開啟。",
+   "壓縮本身與 v0.3.0test 相同。",
+   "Loader v4 上機目前只看過選單與換頁;壓縮錄影尚未上機測。"
+  ]
+ },
+ "fpsup-gyro2-v0.2.1": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "A new on/off switch on the fpSup page (the camera's own On / Off); the setting is kept in Gyro2's own file.",
+   "Recording is the same as v0.2.0 (the Gyroflow (fpSup) plugin v0.1.10 or later).",
+   "On the camera with Loader v4 so far: menus and page changes only; recording not yet tested."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "fpSup 頁多一個開關(原廠的開啟／關閉),設定存在 Gyro2 自己的檔案裡。",
+   "錄影部分與 v0.2.0 相同(需要 Gyroflow (fpSup) 插件 v0.1.10 以上)。",
+   "Loader v4 上機目前只看過選單與換頁;錄影尚未上機測。"
+  ]
+ },
+ "fpsup-raw-view-v0.3.1": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "The RAW row in the COLOR menu is unchanged.",
+   "Known issue (also in v0.3.0test): cancelling the COLOR list with MENU while the cursor is on RAW leaves RAW selected; choose OFF to leave it.",
+   "On the camera with Loader v4 so far: menus and page changes only; the RAW view itself not yet tested."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "COLOR 選單的 RAW 列不變。",
+   "已知問題(v0.3.0test 也有):游標停在 RAW 時按 MENU 取消，仍會停在 RAW;要選 OFF 才會關掉。",
+   "Loader v4 上機目前只看過選單與換頁;RAW 監看本身尚未上機測。"
+  ]
+ },
+ "fpsup-screenflip-v0.1.1": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "Shown as “Screen Flip”; still row 5 of TOOLS.",
+   "On the camera with Loader v4 so far: menus and page changes only; flipping not yet tested."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "顯示名改成「Screen Flip」;仍在 TOOLS 第 5 列。",
+   "Loader v4 上機目前只看過選單與換頁;翻轉本身尚未上機測。"
+  ]
+ },
+ "fpsup-desqueeze-v0.1.5": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "The row stays on SHOOT 2.",
+   "On the camera with Loader v4 so far: menus and page changes only; desqueezing not yet tested."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "列仍在 SHOOT 2。",
+   "Loader v4 上機目前只看過選單與換頁;還原變形本身尚未上機測。"
+  ]
+ },
+ "fpsup-tap-to-zoom-v0.1.1": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "Shown as “Tap To Zoom”; the row stays on SHOOT 4.",
+   "On the camera with Loader v4 so far: menus and page changes only; zooming not yet tested."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "顯示名改成「Tap To Zoom」;列仍在 SHOOT 4。",
+   "Loader v4 上機目前只看過選單與換頁;放大本身尚未上機測。"
+  ]
+ },
+ "fpsup-usbshell-v3.4.0": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "The program is byte-identical to the released v3.4.0test; only the Loader v4 header is new."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "程式本體與已發行的 v3.4.0test 逐位元組相同，只換成 Loader v4 檔頭。"
+  ]
+ },
+ "fpsup-stopfx-v0.1.0": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "The program is byte-identical to the released Stop-FX; only the Loader v4 header is new."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "程式本體與已發行的 Stop-FX 逐位元組相同，只換成 Loader v4 檔頭。"
+  ]
+ },
+ "fpsup-fcap-v0.1.0": {
+  "en": [
+   "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",
+   "Faster key presses on the fpSup, SupManager and RES-Custom pages are no longer dropped. SupManager shows each sup's version, e.g. “Gyro2 (0.2.1)”; with two versions of one sup on the card the newer one loads. Loader v3 sups do not load under v4. Sups that cannot run together are all installed; the one switched off can be switched on in SupManager on the camera.",
+   "Renamed Early Flush (was FCAP); it works the same.",
+   "The program is byte-identical to the released FCAP; only the Loader v4 header is new."
+  ],
+  "zh": [
+   "為 Loader v4 重建：一個 sup 一個檔，檔名帶版本。更新卡片前請先刪掉整個舊的 fpSup 資料夾。",
+   "fpSup 頁、SupManager、RES-Custom 頁快速連按不再掉鍵。SupManager 列名後面顯示版本，例如「Gyro2 (0.2.1)」;同一個 sup 新舊兩版都在卡上時自動載入新版。v3 格式的 sup 在 v4 不載入。合併頁上不相容的 sup 也都會裝進卡片，被關掉的那個可以在相機的 SupManager 打開。",
+   "改名 Early Flush(原名 FCAP),功能不變。",
+   "程式本體與已發行的 FCAP 逐位元組相同，只換成 Loader v4 檔頭。"
+  ]
+ },
  "fpsup-unlocked-writer-v0.1.0test": {
   "en": [
    "First release.",
-   "Test build: the code ran on the camera as a development build; these exact files have not yet."
+   "Test build: the code ran on the camera as a development build; these exact files have not yet.",
+   "Loader v4: the same program under a v4 header; shown as “Unlock Writer”."
   ],
   "zh": [
    "首次發布。",
-   "測試版：程式碼以開發版上機驗證過，這份檔案本身尚未上機。"
+   "測試版：程式碼以開發版上機驗證過，這份檔案本身尚未上機。",
+   "Loader v4:程式本體相同，只換成 v4 檔頭;顯示名「Unlock Writer」。"
   ]
  },
  "fpsup-res-custom-v0.1.4test": {

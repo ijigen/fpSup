@@ -1,10 +1,10 @@
 {
- "date": "2026-10-25",
+ "date": "2026-10-27",
  "source_sha256": {
   "fpSup/loader-v4/ports.py": "a66114a188c327cf4b06b1c825694d5f8238f2420f05f20a7043d9529dd4135b",
   "fpSup/loader-v4/ports_jose.py": "d6584705d8f285e1f5b70dd98b555db58cf34d50e7c1401ec858b6cf7b1de0c2",
-  "fpSup/loader-v4/build_v4.py": "ed836563f4df920d0f4ceb951a498251e7f1d4b9d09357fba68b1cb743b879de",
-  "fpSup/loader-v4/names_v4.py": "4125c793653de10a77aa711b6d49c79c5b733ae3af726742a5b98b336364ef00",
+  "fpSup/loader-v4/build_v4.py": "b6f2cbc8e17f3fefb1d376e07cc5bcf9b9eb9e8c1cc0f137dcfdb01c9d98e1d8",
+  "fpSup/loader-v4/names_v4.py": "6f95bb9a4acf6ff805842b80d4c76f3a28ebd8ab623d1013457bfd05a8016f78",
   "fpSup/fpsup-ui/fpui_stock.c": "2f53ac1f206d87dfa0a95e027ec981b6e6ba570296e6ae7b952b2a2333d5a1c4",
   "fpSup/fpsup-ui/fpsup_ui.c": "72132b0a057464c0cf34fc21fddc4839672e3f3d7bf3c7296983b74b10777953",
   "fpSup/fpsup-ui/build_stock_section.py": "95e2440da119e751d9778d953eb4857f8eb309d3fbe08212dfeedfdcb11c55b9",
@@ -60,7 +60,7 @@
    "size": 340,
    "sha256": "253536cabe0afeb8855485ba83b9a7b39606dfd3ede50d4605f13af773a05fc5"
   },
-  "Gyro2_v0.1.1.BIN": {
+  "Gyro2_v0.2.1.BIN": {
    "size": 5336,
    "sha256": "52d5cf7576f8bb6c2585b6634b0f3a50f65dc93a2130e6199ae0a3babe4a157b"
   },
@@ -144,10 +144,10 @@
    }
   },
   "gyro2": {
-   "file": "Gyro2_v0.1.1.BIN",
-   "version": "0.1.1",
+   "file": "Gyro2_v0.2.1.BIN",
+   "version": "0.2.1",
    "name": "Gyro2",
-   "release": "fpsup-gyro2-v0.1.1",
+   "release": "fpsup-gyro2-v0.2.1",
    "build_label": {
     "en": "Loader v4 test build",
     "zh": "Loader v4 測試版"

@@ -11,7 +11,7 @@ python3 -B -m unittest discover -s tools/merge-v4 -p test_version_history.py
 ```
 
 和 v3 頁的差別：
-- **產品全部來自一份快照** `inputs/v4-20261025/`(2026-10-25:選單掉鍵修正、頁尾固定、sup 檔名帶版本):`build_inputs_v4.py` 跑各產品自己的 v4 builder
+- **產品全部來自一份快照** `inputs/v4-20261027/`(2026-10-27:Gyro2 版號改 0.2.1;10-25 那份起：選單掉鍵修正、頁尾固定、sup 檔名帶版本):`build_inputs_v4.py` 跑各產品自己的 v4 builder
   (`loader-v4/ports.py`、`ports_jose.py`、`lossless/build_v4_lossless.py`、`screenflip/build_v4_flip.py`、
   `projects/rawview/build/build_v4_rawview.py`、`projects/open-gate/build/res-custom-v4/build_v4_rescustom.py`),
   manifest 記每個檔的 size/sha256 與 builder 原始碼雜湊。v3 的 release 只當版本紀錄，不讀產品。

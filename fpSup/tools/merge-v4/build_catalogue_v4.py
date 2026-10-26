@@ -29,7 +29,7 @@ RELEASES = FPSUP / 'releases'
 TEMPLATE = HERE / 'template.html'
 GUIDE = FPSUP / 'guide'
 OUT = HERE / 'index.html'
-INPUTS = [HERE / 'inputs' / 'v4-20261025']
+INPUTS = [HERE / 'inputs' / 'v4-20261027']
 sys.path.insert(0, str(FPSUP / 'fp_usb_shell'))
 from v3 import build_v3 as V3
 sys.path.insert(0, str(FPSUP / 'loader-v4'))

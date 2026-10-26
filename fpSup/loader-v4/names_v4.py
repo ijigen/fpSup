@@ -16,7 +16,7 @@ SUPS = {
     'LOSS': ('Lossless', 'Lossless', '0.3.1'),
     'ULWR': ('Unlock Writer', 'UnlockWriter', '0.1.0test'),
     'STFX': ('Stop-FX', 'Stop-FX', '0.1.0'),
-    'GYR2': ('Gyro2', 'Gyro2', '0.1.1'),
+    'GYR2': ('Gyro2', 'Gyro2', '0.2.1'),   # last release v0.2.0 (build 6, on main's releases/)
     'RAWV': ('RAW-View', 'RAW-View', '0.3.1'),
     'FLIP': ('Screen Flip', 'ScreenFlip', '0.1.1'),
     'DSQZ': ('Desqueeze', 'Desqueeze', '0.1.5'),
