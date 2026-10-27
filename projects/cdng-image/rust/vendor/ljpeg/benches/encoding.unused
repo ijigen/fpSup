@@ -1,0 +1,25 @@
+//! Currently unused because of many iterations taking a long time when benchmarking.
+#![feature(test)]
+extern crate test;
+
+use ljpeg::*;
+use test::{black_box, Bencher};
+
+
+#[bench]
+fn encode_image(b: &mut Bencher) {
+    let h = 1084;
+    let w = 1626;
+    let input = include_bytes!("../tests/2comp.raw");
+    let image: Vec<u16> = input.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    let enc = Encoder::new(
+        w as u16,
+        h as u16,
+        Components::C2,
+        Bitdepth::B14,
+        Predictor::P7,
+        0,
+        0,
+    );
+    b.iter(|| black_box(enc.encode(&image)))
+}

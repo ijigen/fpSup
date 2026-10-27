@@ -1,0 +1,12 @@
+[package]
+name = "ljpeg"
+version = "0.1.2"
+edition = "2021"
+description = "Fast, no dependency lossless JPEG decoder and encoder"
+categories = ["multimedia::images"]
+keywords = ["ljpeg", "lossless", "jpeg", "lj92"]
+readme = "README.md"
+repository = "https://git.sr.ht/~grego/ljpeg-rust"
+license = "LGPL-2.1"
+authors = ["Maroš Grego <maros@grego.site>"]
+exclude = ["/tests/*", "!/tests/*.rs"]

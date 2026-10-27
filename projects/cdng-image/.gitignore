@@ -1,0 +1,16 @@
+# build output and local environments
+rust/target/
+build/
+dist/
+release/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+# test material and results (multi-GB, not source)
+validation/
+*.iso
+*.dmg
+*.cdngj
+*.cdngt
+*.partial

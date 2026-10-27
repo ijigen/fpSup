@@ -1,0 +1,33 @@
+CDNG Image local modifications, 2026-10-24
+
+Based on ljpeg 0.1.2. Original license and copyright notices are retained.
+Changes introduced in CDNG Image 0.1.2:
+src/encoder.rs: use a 64-bit accumulator for JPEG bit output; combine each
+Huffman code with its amplitude before writing. Encoded bytes are required to
+match the upstream implementation, including 0xff stuffing and final padding.
+Additional local regression tests compare output to a scalar reference.
+
+This modified source is used through the application's Cargo path dependency
+and included in the distributed application source archive.
+
+CDNG Image 0.1.3 changes:
+Use integer histogram counts, with frequency one for the reserved pseudo-symbol,
+when building length-limited canonical Huffman tables (T.81 Annex K). The upstream
+normalization gave that symbol a weight equal to a full component. Resulting
+encoded bytes can change; all RAW values must remain exactly equal.
+Use count-leading-zero category selection and specialize two-component loops
+to avoid a runtime integer remainder for every sample.
+Tests exercise prefix-free code tables, the 16-bit length bound, reserved all-ones
+codes, and decoding with the unmodified upstream decoder across 420 settings.
+
+The 0.1.3 bit writer flushes complete 64-bit words, using bulk byte writes
+when no JPEG byte stuffing is needed. Scalar reference tests cover word
+boundaries, 0xff stuffing and final padding.
+
+CDNG Image 0.1.4 changes:
+Add Encoder::plan_entropy to build JPEG prefixes and packed canonical codes
+from externally counted DC categories, allowing the Metal entropy writer to
+produce byte-identical JPEG streams. The CPU encoder remains available.
+Specialize the two-component lossless JPEG decoder loop without changing its
+predictors or full RAW verification. Other component counts keep the generic
+path. Both directions are checked against the upstream decoder/encoder.

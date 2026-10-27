@@ -1,0 +1,40 @@
+[package]
+name = "cdng-image"
+version = "0.2.11"
+edition = "2024"
+build = "build.rs"
+
+[features]
+default = ["gui"]
+gui = ["dep:eframe", "dep:rfd"]
+cuda = []
+
+[dependencies]
+anyhow = "1.0"
+ljpeg = { version = "=0.1.2", path = "vendor/ljpeg" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+rayon = "1.11"
+memmap2 = "0.9"
+crc32fast = "1.5"
+eframe = { version = "0.33", optional = true, default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
+rfd = { version = "0.17", optional = true }
+
+[target.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# JPEG XL encoder and decoder on Metal (sibling project, projects/jxl-metal)
+jxl-metal = { path = "../../jxl-metal" }
+
+[build-dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+ljpeg-reference = { package = "ljpeg", version = "=0.1.2" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
