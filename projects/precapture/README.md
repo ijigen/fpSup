@@ -7,9 +7,9 @@ v4 card and it loads on the next boot, next to the other sups.
 
 In the high-speed continuous drive mode, holding the half press pre-records
 into a four-frame ring instead of letting the frames through. Pressing the
-shutter all the way hands the newest four (≈0.5 s before the press) to the
-firmware, which writes them ahead of the frames taken after the press. Letting
-the half press go throws the ring away.
+shutter all the way hands the newest four (≈0.67 s at 6 fps, measured back from
+the press) to the firmware, which writes them ahead of the frames taken after
+the press. Letting the half press go throws the ring away.
 
 The shutter sound is muted while the ring fills. Other drive modes are
 untouched: the key hook only engages when the firmware reports drive kind 9.
@@ -64,11 +64,11 @@ which is why the four veneers live in the loader's cave instead.
 
 ## Two things that bite when writing a loader v4 sup
 
-Both were hit while making this one; the second is still a live bug in
-`fpSup/fp_usb_shell/armasm.py`.
-
 1. `SL_KEEP` is **0** and `SL_RELEASE` is **1**. Returning `SL_RELEASE` frees
    the block — and the fpSup-page row points into it.
-2. `ldr reg, =expr` produces a literal pool that is **not filled** for
-   expression operands, so it assembles and then reads back 0. Use
-   `movw`/`movt`, or `mov rX, pc` plus a symbol offset as the stubs here do.
+2. `armasm.py` applies only `R_ARM_CALL` and `R_ARM_LDR_PC_G0`. `ldr reg,
+   =0xC03817D4` is fine (clang inlines it or fills the pool), but `ldr reg,
+   =label` leaves an `R_ARM_ABS32` and is **refused at assemble time** — not
+   silently wrong. The stubs here reach their own symbols with `mov rX, pc`
+   plus an offset, which needs no relocation at all.
+   `fpSup/fp_usb_shell/check_armasm.py` pins what is and is not accepted.
