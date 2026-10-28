@@ -1,0 +1,11 @@
+### ping
+pong seq=1
+rc=0
+### menu SetStillDNGQuality
+1
+
+rc=0
+### still lvinfo 1
+ERR shl frame0 rc=-7(LIBUSB_ERROR_TIMEOUT) moved=0/64
+rc=1
+STOP at: still lvinfo 1

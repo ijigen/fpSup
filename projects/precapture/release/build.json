@@ -1,0 +1,18 @@
+{
+ "product": "fpSup-PreCap, Loader v4 sup",
+ "file": "PreCap_v0.1.0.BIN",
+ "sup_id": "PCAP",
+ "version": 1,
+ "sha256": "794a2b0eb65a3f8e41e17547fca4b71658c9e9082e3299f838b7012c35849ce0",
+ "facts": {
+  "code": 2616,
+  "row": 224,
+  "file": 2664,
+  "block": 2800
+ },
+ "sources": {
+  "projects/precapture/precap.S": "f0663af76c4f90662d7464f73b1df2977273ea1308daccddb02d39b50f2fa14b",
+  "projects/precapture/precap_row.c": "705300a1fcfdb2670f875c77ab2c06677b935c85fbf773a803df49b6a3f9c830",
+  "projects/precapture/build/build_precap_sup.py": "9f2dcdee6d9b5d2a44fae69b41854f0bc1dfc432f2718ef13be70ff81d3ae9ee"
+ }
+}

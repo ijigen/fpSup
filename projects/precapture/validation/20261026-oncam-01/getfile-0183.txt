@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/opt/sigma/fpSup/fp_usb_shell/getfile.py", line 183, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/opt/sigma/fpSup/fp_usb_shell/getfile.py", line 51, in main
+    from putfile import CODE, CODE_END, P
+  File "/opt/sigma/fpSup/fp_usb_shell/putfile.py", line 72, in __getattr__
+    _claims()
+  File "/opt/sigma/fpSup/fp_usb_shell/putfile.py", line 83, in _claims
+    globals()[nm] = cave.claim(key, n)
+                    ^^^^^^^^^^^^^^^^^^
+  File "/opt/sigma/fpSup/fp_usb_shell/cave.py", line 193, in claim
+    at = _bump(size)
+         ^^^^^^^^^^^
+  File "/opt/sigma/fpSup/fp_usb_shell/cave.py", line 156, in _bump
+    raise CaveError('the bump pointer did not read back')
+cave.CaveError: the bump pointer did not read back
