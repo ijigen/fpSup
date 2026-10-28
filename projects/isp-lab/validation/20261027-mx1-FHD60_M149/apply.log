@@ -1,0 +1,92 @@
+{"experiment": "FHD60:M149", "route": "FHD60", "row": 120, "profile_id": 173, "want": {"window": [4048, 4040], "rec": [2688, 2682], "act": [2672, 2672], "zoom": [1542, 1542], "bits": 14, "hirate": false, "scale": [1.0, 1.0], "bin": [1, 1]}}
+  +0x000  0xc0be3cbc  0x00000790 -> 0x00000a80
+  +0x004  0xc0be4184  0x00000442 -> 0x00000a7a
+  +0x00c  0xc0bdc534  0x00000790 -> 0x00000540
+  +0x010  0xc0bdc9fc  0x00000442 -> 0x0000053f
+  +0x020  0xc0bdb6dc  0x00000780 -> 0x00000530
+  +0x024  0xc0be299c  0x00000780 -> 0x00000a70
+  +0x028  0xc0bdbba4  0x00000438 -> 0x00000535
+  +0x02c  0xc0be2e64  0x00000438 -> 0x00000a70
+  +0x038  0xc0be0824  0x00000001 -> 0x00000010
+  +0x058  0xc0bd909c  0x00000000 -> 0x00000001
+  +0x060  0xc0bd9a2c  0x00000640 -> 0x000003ff
+  +0x064  0xc0be167c  0x00000640 -> 0x00000606
+  +0x084  0xc0be11b4  0x00000007 -> 0x00000008
+  +0x0c4  0xc0bd9564  0x00000000 -> 0x00000001
+  +0x0d0  0xc0bd9ef4  0x00000640 -> 0x000003ff
+  +0x0d4  0xc0be1b44  0x00000640 -> 0x00000606
+  +0x0d8  0xc0bda3bc  0x00000790 -> 0x00000540
+  +0x0dc  0xc0be332c  0x00000790 -> 0x00000a80
+  +0x0e0  0xc0bda884  0x00000442 -> 0x0000053f
+  +0x0e4  0xc0be37f4  0x00000442 -> 0x00000a7a
+  +0x0f4  0xc0bdcec4  0x00000bd8 -> 0x00000fd0
+  +0x0f8  0xc0bdd38c  0x000006ac -> 0x00000fc8
+  +0x0fc  0xc0bd870c  0x40000000 -> 0x3f800000
+  +0x100  0xc0bd8bd4  0x40000000 -> 0x3f800000
+24 words change
+  call 0xC000E91C  ->  0x20000013 (536870931)
+virtual rows under mode 27 (14:4040x4040>4040x4040@0); tables at 0x4521C380, 70592 B
+applied FHD60:M149: 24 words
+  TIM    MEM1 refused (TIM   : ERR mem refused at=0x4521C380 done=0 cmd6 refused code=4); using the checked path
+
+  TIM    2240/2240 B  22.5 KiB/s 
+  verify 2240/2240 B  1007 KiB/s 
+  verify 2240 bytes in 0.0s (705 KiB/s)      
+
+  TIM    2240 bytes in 0.2s (12.7 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  META   MEM1 refused (META  : ERR mem refused at=0x4521CC40 done=0 cmd6 refused code=4); using the checked path
+
+  META   7000/7000 B  334.4 KiB/s 
+  verify 7000/7000 B  1666 KiB/s 
+  verify 7000 bytes in 0.0s (1346 KiB/s)      
+
+  META   7000 bytes in 0.0s (259.0 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R10    MEM1 refused (R10   : ERR mem refused at=0x4521E7A0 done=0 cmd6 refused code=4); using the checked path
+
+  R10    560/560 B  109.0 KiB/s 
+  verify 560/560 B  879 KiB/s 
+  verify 560 bytes in 0.0s (491 KiB/s)      
+
+  R10    560 bytes in 0.0s (77.4 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R28    MEM1 refused (R28   : ERR mem refused at=0x4521E9D0 done=0 cmd6 refused code=4); using the checked path
+
+  R28    2800/2800 B  243.8 KiB/s 
+  verify 2800/2800 B  1363 KiB/s 
+  verify 2800 bytes in 0.0s (1075 KiB/s)      
+
+  R28    2800 bytes in 0.0s (166.9 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R38    MEM1 refused (R38   : ERR mem refused at=0x4521F4C0 done=0 cmd6 refused code=4); using the checked path
+
+  R38    3920/3920 B  31.9 KiB/s 
+  verify 3920/3920 B  2645 KiB/s 
+  verify 3920 bytes in 0.0s (914 KiB/s)      
+
+  R38    3920 bytes in 0.1s (30.6 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R14    MEM1 refused (R14   : ERR mem refused at=0x45220410 done=0 cmd6 refused code=4); using the checked path
+
+  R14    1400/1400 B  178.6 KiB/s 
+  verify 1400/1400 B  1544 KiB/s 
+  verify 1400 bytes in 0.0s (862 KiB/s)      
+
+  R14    1400 bytes in 0.0s (134.3 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R68    MEM1 refused (R68   : ERR mem refused at=0x45220990 done=0 cmd6 refused code=4); using the checked path
+
+  R68    7280/7280 B  264.6 KiB/s 
+  verify 7280/7280 B  2230 KiB/s 
+  verify 7280 bytes in 0.0s (1858 KiB/s)      
+
+  R68    7280 bytes in 0.0s (222.6 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  REG    MEM1 refused (REG   : ERR mem refused at=0x45222600 done=0 cmd6 refused code=4); using the checked path
+
+  REG    7680/45360 B  283.4 KiB/s 
+  REG    15360/45360 B  293.8 KiB/s 
+  REG    23040/45360 B  303.8 KiB/s 
+  REG    30720/45360 B  314.9 KiB/s 
+  REG    38400/45360 B  321.5 KiB/s 
+  REG    45360/45360 B  178.4 KiB/s 
+  verify 16380/45360 B  3486 KiB/s 
+  verify 32760/45360 B  2777 KiB/s 
+  verify 45360/45360 B  2506 KiB/s 
+  verify 45360 bytes in 0.0s (2413 KiB/s)      
+
+  REG    45360 bytes in 0.3s (164.8 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          

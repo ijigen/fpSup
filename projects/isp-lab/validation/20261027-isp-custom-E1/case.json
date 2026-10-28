@@ -1,0 +1,162 @@
+{
+ "run": "20261027-isp-custom-E1",
+ "counts": {
+  "lv": 20,
+  "cdng": 9,
+  "report": 3
+ },
+ "checkpoints": {
+  "standby_lv": {
+   "shot": "shots/standby_lv.jpg",
+   "w": 1620,
+   "h": 911,
+   "y_std_cb_cr": [
+    156.6,
+    38.9,
+    123.0,
+    132.1
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_000078.bin"
+  },
+  "focus_lv": null,
+  "mag_lv": null,
+  "rec_lv": {
+   "shot": "shots/rec_lv.jpg",
+   "w": 1920,
+   "h": 1080,
+   "y_std_cb_cr": [
+    107.0,
+    24.7,
+    125.1,
+    129.7
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_000081.bin"
+  },
+  "cdng": {
+   "w": 1008,
+   "h": 568,
+   "bits": 12,
+   "crop_origin": [
+    8,
+    5
+   ],
+   "crop_size": [
+    992,
+    558
+   ],
+   "g_median": 343.0,
+   "g_p999": 484.0,
+   "cfa_means": [
+    309.2,
+    356.4,
+    356.3,
+    307.3
+   ],
+   "cfa_ok": true,
+   "file": "push/cdng_000018.bin",
+   "shot": "shots/cdng.jpg",
+   "cfa_frames": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "frame_r": [
+    0.113,
+    0.113,
+    0.112,
+    0.113,
+    0.113,
+    0.113,
+    0.113,
+    0.112,
+    0.113
+   ],
+   "bad_shot": "shots/cdng_bad.jpg",
+   "frames_ok": false,
+   "fov_r": 0.113,
+   "fov_scale": 1.0,
+   "fov_scale_r": 0.11,
+   "rec_fov_scale": 0.98,
+   "rec_fov_r": 0.951
+  }
+ },
+ "experiment": {
+  "experiment": "E1",
+  "route": "FHD30",
+  "row": 122,
+  "profile_id": 175,
+  "want": {
+   "window": [
+    3032,
+    1708
+   ],
+   "rec": [
+    1008,
+    568
+   ],
+   "act": [
+    992,
+    558
+   ],
+   "zoom": [
+    1023,
+    1023
+   ],
+   "bits": 12,
+   "hirate": false,
+   "scale": [
+    2.0,
+    2.0
+   ],
+   "bin": [
+    3,
+    3
+   ]
+  },
+  "words_changed": 21
+ },
+ "predicted": {
+  "rec": [
+   1008,
+   568
+  ],
+  "act": [
+   992,
+   558
+  ]
+ },
+ "measured": {
+  "rec": [
+   1008,
+   568
+  ],
+  "act": [
+   992,
+   558
+  ]
+ },
+ "checks": {
+  "size": true,
+  "bits": true,
+  "fov_r": 0.113,
+  "fov_scale": 1.0,
+  "rec_fov_scale": 0.98,
+  "fov": false,
+  "rec_lv": true,
+  "lv_colour": true,
+  "aspect_dng": 1.775,
+  "aspect": true,
+  "cfa": true,
+  "frames": false
+ },
+ "verdict": "fail",
+ "results_md": "RESULTS.md"
+}

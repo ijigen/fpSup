@@ -1,0 +1,49 @@
+  remote  \fpSup\LOAD.LOG  8192 bytes, mode 0x1
+  buffer  from the firmware, file object 0x45072FC0
+  reply   getfile: read
+  buffer  0x53B00980 (12288 bytes asked for)
+  status  2 — read
+  open    1   read 1   actual 8192 of 8192
+  buffer  handed back
+  saved   /Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/.LOAD.LOG
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+armed (control only): REC in 0 ms for 1000 ms, nothing reaches the card (discard). Silent for 21 s.
+listened: {'tag': 'END83', 'bytes': '74506048', 'reason': 'idle', 'rc': '-7', 'trigger': '0', 'reply_len': '0'} {'images': 28, 'skipped_bytes': 0, 'resyncs': 0, 'torn': 0, 'seq_gaps': {'lv': 1}, 'leftover': 0}
+  report +      0 ms  rec        ctl 2  presses 1  discard 0  lv 18  cdng 0
+  report +   1417 ms  stopped    ctl 3  presses 2  discard 5  lv 22  cdng 0
+  report +   3948 ms  cdng       ctl 3  presses 2  discard 5  lv 22  cdng 3
+mode discard  ctl done  lent 0 MiB in 0 chunks  used 0.0 MiB
+kept 0  skipped 0  full 0  discard 5  sd 0  log 0  presses 2
+last shell line: recstate disa  recstate started 1 saved 1
+REC pressed at +5715 ms, stopped 1417 ms later
+
+  code   412/412 B  1.4 KiB/s 
+  verify 412/412 B  721 KiB/s 
+  verify 412 bytes in 0.0s (348 KiB/s)      
+
+  code   412 bytes in 0.4s (1.1 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+
+  direct 8192 bytes in 0.000s (21.8 MB/s)      
+
+  sink   548 bytes in 0.001s (0.9 MB/s)      
+
+  lvoff  4 bytes in 0.000s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      
+
+  sink   528 bytes in 0.001s (0.9 MB/s)      
+
+  verify 528 bytes in 0.000s (2.1 MB/s)      
+
+  mode   4 bytes in 0.001s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      
+
+  ctl    4 bytes in 0.001s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      

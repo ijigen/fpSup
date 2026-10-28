@@ -1,0 +1,177 @@
+{
+ "run": "20261028-p6r14-FHD60_C4e7b4418",
+ "counts": {
+  "lv": 21,
+  "cdng": 3,
+  "report": 3
+ },
+ "checkpoints": {
+  "standby_lv": {
+   "shot": "shots/standby_lv.jpg",
+   "w": 1620,
+   "h": 956,
+   "y_std_cb_cr": [
+    154.8,
+    31.3,
+    121.8,
+    133.5
+   ],
+   "aspect": 1.695,
+   "file": "push/lv_016413.bin"
+  },
+  "focus_lv": {
+   "shot": "shots/focus_lv.jpg",
+   "w": 1620,
+   "h": 956,
+   "y_std_cb_cr": [
+    155.2,
+    31.1,
+    121.8,
+    133.5
+   ],
+   "aspect": 1.695,
+   "file": "push/lv_016406.bin"
+  },
+  "mag_lv": {
+   "shot": "shots/mag_lv.jpg",
+   "w": 1620,
+   "h": 1080,
+   "y_std_cb_cr": [
+    182.0,
+    7.6,
+    121.8,
+    132.9
+   ],
+   "aspect": 1.5,
+   "file": "push/lv_016410.bin"
+  },
+  "rec_lv": {
+   "shot": "shots/rec_lv.jpg",
+   "w": 1620,
+   "h": 956,
+   "y_std_cb_cr": [
+    155.2,
+    31.5,
+    121.5,
+    133.3
+   ],
+   "aspect": 1.695,
+   "file": "push/lv_016418.bin"
+  },
+  "cdng": {
+   "w": 1040,
+   "h": 614,
+   "bits": 14,
+   "crop_origin": [
+    8,
+    5
+   ],
+   "crop_size": [
+    1024,
+    604
+   ],
+   "g_median": 538.0,
+   "g_p999": 675.0,
+   "cfa_means": [
+    1639.2,
+    2061.9,
+    2062.7,
+    1538.4
+   ],
+   "cfa_ok": true,
+   "file": "push/cdng_002319.bin",
+   "shot": "shots/cdng.jpg",
+   "cfa_frames": [
+    true,
+    true,
+    true
+   ],
+   "frame_r": [
+    0.993,
+    0.993,
+    0.993
+   ],
+   "bad_shot": null,
+   "frames_ok": true,
+   "fov_r": 0.993,
+   "fov_scale": 0.98,
+   "fov_scale_r": 0.997,
+   "rec_fov_scale": 0.985,
+   "rec_fov_r": 0.998
+  }
+ },
+ "experiment": {
+  "experiment": "FHD60:C4e7b4418",
+  "route": "FHD60",
+  "row": 120,
+  "profile_id": 173,
+  "want": {
+   "window": [
+    2112,
+    1248
+   ],
+   "rec": [
+    1040,
+    614
+   ],
+   "act": [
+    1024,
+    604
+   ],
+   "zoom": [
+    2079,
+    2081
+   ],
+   "bits": 14,
+   "hirate": false,
+   "scale": [
+    1.0,
+    1.0
+   ],
+   "bin": [
+    1,
+    1
+   ]
+  },
+  "name": "S16 1040x614 · 1x1 · 14b · h1v1 · 59.927p",
+  "fps": 59.927,
+  "words_changed": 37
+ },
+ "predicted": {
+  "rec": [
+   1040,
+   614
+  ],
+  "act": [
+   1024,
+   604
+  ]
+ },
+ "measured": {
+  "rec": [
+   1040,
+   614
+  ],
+  "act": [
+   1024,
+   604
+  ],
+  "fps": null
+ },
+ "checks": {
+  "size": true,
+  "bits": true,
+  "fov_r": 0.993,
+  "fov_scale": 0.98,
+  "rec_fov_scale": 0.985,
+  "fov": true,
+  "rec_lv": true,
+  "lv_colour": true,
+  "aspect_dng": 1.692,
+  "aspect": true,
+  "cfa": true,
+  "frames": true,
+  "fps": null
+ },
+ "verdict": "pass"
+}

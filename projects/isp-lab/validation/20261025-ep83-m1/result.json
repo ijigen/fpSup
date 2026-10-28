@@ -1,0 +1,24 @@
+{
+ "date_utc": "2026-10-25T05:19:48.579378+00:00",
+ "bytes": 16384,
+ "src": 1166086336,
+ "code_at": 3228756576,
+ "parm": 3228756512,
+ "daemon": "ERR ep83 requires iface0 alt0 bulk EP01/82/83 MPS64/512/1024 quarantine=0",
+ "tail": "",
+ "got": 0,
+ "match": false,
+ "sender": {
+  "start_rc": 0,
+  "wait_rc": 0,
+  "trb_ctrl": 0,
+  "trb_size": 0,
+  "ended": 0,
+  "done": 0
+ },
+ "first_diff": null,
+ "sha_sent": "128b992a39403f60dd3edde497a15b9217bb217e8ff22e1c547232c062408ebc",
+ "sha_got": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+ "tool_sha256": "448f0f6b0e395486001089662a8ef56c32b2851c46370e15fc74295aa9286d98",
+ "sender_sha256": "9f57575f1ce5019ee92f68f10e98e2317ea1edc7665cb1a688517c897ffaef03"
+}

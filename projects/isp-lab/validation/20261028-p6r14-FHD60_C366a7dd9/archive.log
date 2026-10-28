@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/archive_validation.py", line 114, in <module>
+    main()
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/archive_validation.py", line 108, in main
+    report = pack(a.run) if a.command == 'pack' else verify(a.run)
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/archive_validation.py", line 91, in pack
+    verify(run, manifest, archive)
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/archive_validation.py", line 55, in verify
+    raise ValueError('zstd could not decode the archive')
+ValueError: zstd could not decode the archive

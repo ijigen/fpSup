@@ -1,0 +1,45 @@
+{
+ "class_obj": 3272031292,
+ "obj_words": [
+  10,
+  3272031532,
+  742520320,
+  1404045568,
+  2146565824,
+  0,
+  0,
+  65149312,
+  3272031484,
+  3272030748,
+  3272031376,
+  3200170682,
+  11,
+  3272031532,
+  256,
+  1400899328
+ ],
+ "first_block": 1404045568,
+ "chain": [
+  {
+   "at": 1404045568,
+   "size": 64,
+   "w2": 0,
+   "next": 2146565824
+  },
+  {
+   "at": 2146565824,
+   "size": 64,
+   "w2": 1404045568,
+   "next": 0
+  }
+ ],
+ "bufuse": {
+  "text": "mem mode = MOVIE_REC_DNG (3) \nUSER         (00): [total:  31457536][used:  22670144][used(max):  22671104][remaining:   8787392][link:            ]\nOSD          (01): [total:  56623360][used:  53622080][used(max):  53622336][remaining:   3001280][link:            ]\nIMAGE        (02): [total:  17826048][used:  17822528][used(max):  17822464][remaining:      3520][link:            ]\nLVIEW        (03): [total:  50331904][used:  12515584][used(max):  13704960][remaining:  37816320][link:            ]\nMOVAUDIO     (06): [total:  13631744][used:     32960][used(max):   8405120][remaining:  13598784][link:            ]\nYUV          (09): [total:       256][used:         0][used(max):         0][remaining:       256][link:RAW         ]\nRAW          (10): [total: 742520320][used:         0][used(max):  65149312][remaining: 742520320][link:RAW_SUB     ]\nJPEG         (11): [total:       256][used:         0][used(max):         0][remaining:       256][link:RAW         ]\nFILEINF      (12): [total:   3145984][used:         0][used(max):    119872][remaining:   3145984][link:            ]\nRAW_SUB      (14): [total:  85983488][used:         0][used(max):         0][remaining:  85983488][link:            ]\n",
+  "mode": "MOVIE_REC_DNG",
+  "raw": {
+   "total": 742520320,
+   "used": 0,
+   "used_max": 65149312
+  }
+ }
+}

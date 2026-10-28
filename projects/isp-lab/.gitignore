@@ -8,3 +8,10 @@ __pycache__/
 !/validation/**/RESULTS.md
 !/validation/**/ARCHIVE.json
 !/validation/**/evidence.tar.zst
+# The published page (site/publish_fpsup.py) links the full-size pictures here; the text records go with them.
+!/validation/**/shots/full/*.jpg
+!/validation/**/*.json
+!/validation/**/*.jsonl
+!/validation/**/*.log
+!/validation/**/*.LOG
+!/validation/**/*.txt

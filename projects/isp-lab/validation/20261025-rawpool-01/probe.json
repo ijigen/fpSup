@@ -1,0 +1,45 @@
+{
+ "class_obj": 3272031292,
+ "obj_words": [
+  10,
+  3272031532,
+  543290880,
+  1603275008,
+  2146565824,
+  0,
+  0,
+  428938240,
+  3272031484,
+  3272030748,
+  3272031376,
+  3200170682,
+  11,
+  3272031532,
+  37748992,
+  1565526016
+ ],
+ "first_block": 1603275008,
+ "chain": [
+  {
+   "at": 1603275008,
+   "size": 64,
+   "w2": 0,
+   "next": 2146565824
+  },
+  {
+   "at": 2146565824,
+   "size": 64,
+   "w2": 1603275008,
+   "next": 0
+  }
+ ],
+ "bufuse": {
+  "text": "mem mode = STILL_REC (0) \nUSER         (00): [total:  31457536][used:  22407936][used(max):  22493248][remaining:   9049600][link:            ]\nOSD          (01): [total:  56623360][used:  53622080][used(max):  53622336][remaining:   3001280][link:            ]\nIMAGE        (02): [total:  17826048][used:  17822528][used(max):  17822464][remaining:      3520][link:            ]\nLVIEW        (03): [total:  50331904][used:  12515584][used(max):  12515520][remaining:  37816320][link:            ]\nMOVAUDIO     (06): [total:  13631744][used:     32960][used(max):     32896][remaining:  13598784][link:            ]\nYUV          (09): [total: 162529536][used:         0][used(max):         0][remaining: 162529536][link:            ]\nRAW          (10): [total: 543290880][used:         0][used(max): 428938240][remaining: 543290880][link:RAW_SUB     ]\nJPEG         (11): [total:  37748992][used:         0][used(max):         0][remaining:  37748992][link:            ]\nFILEINF      (12): [total:   2097408][used:         0][used(max):         0][remaining:   2097408][link:            ]\nRAW_SUB      (14): [total:  85983488][used:         0][used(max):         0][remaining:  85983488][link:            ]\n",
+  "mode": "STILL_REC",
+  "raw": {
+   "total": 543290880,
+   "used": 0,
+   "used_max": 428938240
+  }
+ }
+}

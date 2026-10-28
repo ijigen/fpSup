@@ -1,0 +1,50 @@
+  remote  \fpSup\LOAD.LOG  8192 bytes, mode 0x1
+  buffer  from the firmware, file object 0x45013500
+  reply   getfile: read
+  buffer  0x53B00980 (12288 bytes asked for)
+  status  2 — read
+  open    1   read 1   actual 8192 of 8192
+  buffer  handed back
+  saved   /Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/.LOAD.LOG
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+armed (control only): REC in 0 ms for 1000 ms, nothing reaches the card (discard). Silent for 20 s.
+listened: {'tag': 'END83', 'bytes': '59436512', 'reason': 'idle', 'rc': '-7', 'trigger': '0', 'reply_len': '0'} {'images': 29, 'skipped_bytes': 0, 'resyncs': 0, 'torn': 0, 'seq_gaps': {}, 'leftover': 0}
+  report +      0 ms  rec        ctl 2  presses 1  discard 0  lv 19  burst 0  cdng 0
+  report +   1415 ms  stopped    ctl 3  presses 2  discard 3  lv 23  burst 0  cdng 0
+  report +   2913 ms  cdng       ctl 3  presses 2  discard 3  lv 23  burst 0  cdng 3
+mode discard  ctl done  lent 0 MiB in 0 chunks  used 0.0 MiB
+kept 0  skipped 0  full 0  discard 3  sd 0  log 0  presses 2
+last shell line: recstate disa  recstate started 1 saved 1
+REC pressed at +4687 ms, stopped 1415 ms later
+REC seen 1004 ms after our MOVON
+
+  code   412/412 B  5.1 KiB/s 
+  verify 412/412 B  562 KiB/s 
+  verify 412 bytes in 0.0s (313 KiB/s)      
+
+  code   412 bytes in 0.3s (1.5 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+
+  direct 8192 bytes in 0.000s (21.0 MB/s)      
+
+  sink   4576 bytes in 0.001s (7.6 MB/s)      
+
+  lvoff  4 bytes in 0.000s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      
+
+  sink   532 bytes in 0.001s (0.7 MB/s)      
+
+  verify 532 bytes in 0.000s (1.3 MB/s)      
+
+  mode   4 bytes in 0.000s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      
+
+  ctl    4 bytes in 0.000s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      

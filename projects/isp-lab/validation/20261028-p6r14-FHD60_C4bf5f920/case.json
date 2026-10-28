@@ -1,0 +1,177 @@
+{
+ "run": "20261028-p6r14-FHD60_C4bf5f920",
+ "counts": {
+  "lv": 21,
+  "cdng": 3,
+  "report": 3
+ },
+ "checkpoints": {
+  "standby_lv": {
+   "shot": "shots/standby_lv.jpg",
+   "w": 1620,
+   "h": 1072,
+   "y_std_cb_cr": [
+    144.6,
+    34.2,
+    123.5,
+    132.3
+   ],
+   "aspect": 1.511,
+   "file": "push/lv_015757.bin"
+  },
+  "focus_lv": {
+   "shot": "shots/focus_lv.jpg",
+   "w": 1620,
+   "h": 1072,
+   "y_std_cb_cr": [
+    144.0,
+    34.4,
+    123.4,
+    132.2
+   ],
+   "aspect": 1.511,
+   "file": "push/lv_015751.bin"
+  },
+  "mag_lv": {
+   "shot": "shots/mag_lv.jpg",
+   "w": 1620,
+   "h": 1080,
+   "y_std_cb_cr": [
+    178.8,
+    7.3,
+    122.1,
+    133.0
+   ],
+   "aspect": 1.5,
+   "file": "push/lv_015754.bin"
+  },
+  "rec_lv": {
+   "shot": "shots/rec_lv.jpg",
+   "w": 1620,
+   "h": 1072,
+   "y_std_cb_cr": [
+    142.6,
+    34.2,
+    123.1,
+    132.1
+   ],
+   "aspect": 1.511,
+   "file": "push/lv_015762.bin"
+  },
+  "cdng": {
+   "w": 1968,
+   "h": 1306,
+   "bits": 12,
+   "crop_origin": [
+    8,
+    5
+   ],
+   "crop_size": [
+    1952,
+    1296
+   ],
+   "g_median": 474.0,
+   "g_p999": 687.0,
+   "cfa_means": [
+    378.3,
+    468.0,
+    468.0,
+    364.8
+   ],
+   "cfa_ok": true,
+   "file": "push/cdng_002226.bin",
+   "shot": "shots/cdng.jpg",
+   "cfa_frames": [
+    true,
+    true,
+    true
+   ],
+   "frame_r": [
+    0.988,
+    0.989,
+    0.988
+   ],
+   "bad_shot": null,
+   "frames_ok": true,
+   "fov_r": 0.988,
+   "fov_scale": 0.99,
+   "fov_scale_r": 0.993,
+   "rec_fov_scale": 0.99,
+   "rec_fov_r": 0.993
+  }
+ },
+ "experiment": {
+  "experiment": "FHD60:C4bf5f920",
+  "route": "FHD60",
+  "row": 120,
+  "profile_id": 173,
+  "want": {
+   "window": [
+    1984,
+    2628
+   ],
+   "rec": [
+    1968,
+    1306
+   ],
+   "act": [
+    1952,
+    1296
+   ],
+   "zoom": [
+    1032,
+    2060
+   ],
+   "bits": 12,
+   "hirate": false,
+   "scale": [
+    2.0,
+    1.0
+   ],
+   "bin": [
+    1,
+    1
+   ]
+  },
+  "name": "APSC 1968x1306 · 2x1 · 12b · h1v1 · 58.538p",
+  "fps": 58.538,
+  "words_changed": 35
+ },
+ "predicted": {
+  "rec": [
+   1968,
+   1306
+  ],
+  "act": [
+   1952,
+   1296
+  ]
+ },
+ "measured": {
+  "rec": [
+   1968,
+   1306
+  ],
+  "act": [
+   1952,
+   1296
+  ],
+  "fps": null
+ },
+ "checks": {
+  "size": true,
+  "bits": true,
+  "fov_r": 0.988,
+  "fov_scale": 0.99,
+  "rec_fov_scale": 0.99,
+  "fov": true,
+  "rec_lv": true,
+  "lv_colour": true,
+  "aspect_dng": 1.51,
+  "aspect": true,
+  "cfa": true,
+  "frames": true,
+  "fps": null
+ },
+ "verdict": "pass"
+}

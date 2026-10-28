@@ -1,0 +1,33 @@
+  remote  \fpSup\LOAD.LOG  8192 bytes, mode 0x1
+  buffer  from the firmware, file object 0x45013500
+  reply   getfile: read
+  buffer  0x53B00980 (12288 bytes asked for)
+  status  2 — read
+  open    1   read 1   actual 8192 of 8192
+  buffer  handed back
+  saved   /Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/.LOAD.LOG
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+disarmed: the next take writes the card
+
+  code   412/412 B  2.2 KiB/s 
+  verify 412/412 B  614 KiB/s 
+  verify 412 bytes in 0.0s (330 KiB/s)      
+
+  code   412 bytes in 0.3s (1.5 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+
+  direct 8192 bytes in 0.001s (12.1 MB/s)      
+
+  lvoff  4 bytes in 0.001s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      
+
+  sink   532 bytes in 0.001s (0.8 MB/s)      
+
+  verify 532 bytes in 0.000s (1.7 MB/s)      
+
+  mode   4 bytes in 0.000s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      

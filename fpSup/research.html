@@ -98,6 +98,11 @@
     <small><span class="en">Pick the AD (14 / 12 / 11-bit), the horizontal and vertical merge, the sensor-side width preset, the crop, the output size and the frame rate; the page runs the imx410-lab generator's own planning rules and shows line time, frame length, rolling shutter and every sensor write. Each combination is checked against the camera validation database, with the frames the validator actually captured.</span><span class="zh">選 AD（14 / 12 / 11-bit）、水平與垂直合併、感光元件端寬度預設、裁切、輸出大小與幀率，頁面照 imx410-lab 生成器自己的規劃規則算出線時間、幀長、捲簾與每一筆感光元件寫入。每個組合都對照實機驗證庫，附上驗證時實際拍到的畫面。</span></small>
     <span class="m"><span class="en">interactive &middot; validated on the camera &middot; 繁中</span><span class="zh">互動 &middot; 實機驗證 &middot; 繁中</span></span>
   </a>
+  <a class="row" href="explainers/isp-custom.html">
+    <b><span class="en">SensorLab-IMX410: ISP custom verification</span><span class="zh">SensorLab-IMX410:ISP custom 驗證</span></b>
+    <small><span class="en">Every case comes from one formula: target size &rarr; sensor and ISP profile, installed in RAM, then a real take. Each card checks the DNG size against the formula, the field of view against standby live view, the Bayer phase of every frame, and shows the four checkpoints (standby, focus, recording live view, CDNG); the full-size pictures open on GitHub. 633 of the 639 current cases pass.</span><span class="zh">每個案例都由同一條公式產生:目標尺寸 &rarr; 感光元件與 ISP 設定，裝進 RAM 後實際錄影。每張卡片比對 DNG 尺寸與公式、視野與待機 LV、每一幀的 Bayer 相位，並附四個檢查點(待機、對焦、錄影中 LV、CDNG);原圖在 GitHub 上開。現行 639 組有 633 組通過。</span></small>
+    <span class="m"><span class="en">validated on the camera &middot; 1,445 runs &middot; 繁中</span><span class="zh">實機驗證 &middot; 1,445 次執行 &middot; 繁中</span></span>
+  </a>
   <a class="row" href="explainers/imx410-binning.html">
     <b><span class="en">What the IMX410&rsquo;s binning actually does</span><span class="zh">IMX410 的像素合併到底做了什麼</span></b>
     <small><span class="en">The menu calls the two open-gate modes 2&times;2 and 3&times;3. Seven frames

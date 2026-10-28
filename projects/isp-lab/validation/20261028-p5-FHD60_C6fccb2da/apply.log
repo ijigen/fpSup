@@ -1,0 +1,102 @@
+{"experiment": "FHD60:C6fccb2da", "route": "FHD60", "row": 120, "profile_id": 173, "want": {"window": [3024, 3402], "rec": [1920, 1080], "act": [1904, 1070], "zoom": [1612, 1075], "bits": 12, "hirate": false, "scale": [2.0, 1.0], "bin": [1, 3]}}
+  +0x000  0xc0be3cbc  0x00000790 -> 0x00000780
+  +0x004  0xc0be4184  0x00000442 -> 0x00000438
+  +0x00c  0xc0bdc534  0x00000790 -> 0x00000780
+  +0x010  0xc0bdc9fc  0x00000442 -> 0x00000438
+  +0x020  0xc0bdb6dc  0x00000780 -> 0x00000770
+  +0x024  0xc0be299c  0x00000780 -> 0x00000770
+  +0x028  0xc0bdbba4  0x00000438 -> 0x0000042e
+  +0x02c  0xc0be2e64  0x00000438 -> 0x0000042e
+  +0x060  0xc0bd9a2c  0x00000640 -> 0x0000064c
+  +0x064  0xc0be167c  0x00000640 -> 0x0000064c
+  +0x0c4  0xc0bd9564  0x00000000 -> 0x00000001
+  +0x0c8  0xc0be24d4  0x00000000 -> 0x00000001
+  +0x0d0  0xc0bd9ef4  0x00000640 -> 0x00000433
+  +0x0d4  0xc0be1b44  0x00000640 -> 0x00000433
+  +0x0d8  0xc0bda3bc  0x00000790 -> 0x00000780
+  +0x0dc  0xc0be332c  0x00000790 -> 0x00000780
+  +0x0e0  0xc0bda884  0x00000442 -> 0x00000438
+  +0x0e4  0xc0be37f4  0x00000442 -> 0x00000438
+  +0x0f4  0xc0bdcec4  0x00000bd8 -> 0x00000bd0
+  +0x0f8  0xc0bdd38c  0x000006ac -> 0x00000d4a
+  +0x100  0xc0bd8bd4  0x40000000 -> 0x3f800000
+  +0x1020  0xc0bdb504  0x000007d0 -> 0x000007ce
+  +0x1028  0xc0bdb9cc  0x00000465 -> 0x00000463
+  +0x1020  0xc0bdb760  0x000007d0 -> 0x000007ce
+  +0x1028  0xc0bdbc28  0x00000465 -> 0x00000463
+  +0x1020  0xc0bdb798  0x000007d0 -> 0x000007ce
+  +0x1028  0xc0bdbc60  0x00000465 -> 0x00000463
+  +0x1020  0xc0bdb7c4  0x000007d0 -> 0x000007ce
+  +0x1028  0xc0bdbc8c  0x00000465 -> 0x00000463
+  +0x1020  0xc0bdb7c8  0x000007d0 -> 0x000007ce
+  +0x1028  0xc0bdbc90  0x00000465 -> 0x00000463
+  +0x1020  0xc0bdb7cc  0x000007d0 -> 0x000007ce
+  +0x1028  0xc0bdbc94  0x00000465 -> 0x00000463
+33 words change
+  call 0xC000E91C  ->  0x20000013 (536870931)
+virtual rows under mode 27 (f12h2:6048x3402>3024x3402@59.94); tables at 0x451DE4C0, 70592 B
+lv reload: True
+applied FHD60:C6fccb2da: 33 words
+  TIM    MEM1 refused (TIM   : ERR mem refused at=0x451DE4C0 done=0 cmd6 refused code=4); using the checked path
+
+  TIM    2240/2240 B  7.1 KiB/s 
+  verify 2240/2240 B  1917 KiB/s 
+  verify 2240 bytes in 0.0s (1257 KiB/s)      
+
+  TIM    2240 bytes in 0.5s (4.4 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  META   MEM1 refused (META  : ERR mem refused at=0x451DED80 done=0 cmd6 refused code=4); using the checked path
+
+  META   7000/7000 B  312.8 KiB/s 
+  verify 7000/7000 B  1984 KiB/s 
+  verify 7000 bytes in 0.0s (1525 KiB/s)      
+
+  META   7000 bytes in 0.0s (230.2 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R10    MEM1 refused (R10   : ERR mem refused at=0x451E08E0 done=0 cmd6 refused code=4); using the checked path
+
+  R10    560/560 B  132.0 KiB/s 
+  verify 560/560 B  732 KiB/s 
+  verify 560 bytes in 0.0s (281 KiB/s)      
+
+  R10    560 bytes in 0.0s (78.8 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R28    MEM1 refused (R28   : ERR mem refused at=0x451E0B10 done=0 cmd6 refused code=4); using the checked path
+
+  R28    2800/2800 B  188.4 KiB/s 
+  verify 2800/2800 B  2126 KiB/s 
+  verify 2800 bytes in 0.0s (1545 KiB/s)      
+
+  R28    2800 bytes in 0.0s (158.6 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R38    MEM1 refused (R38   : ERR mem refused at=0x451E1600 done=0 cmd6 refused code=4); using the checked path
+
+  R38    3920/3920 B  271.1 KiB/s 
+  verify 3920/3920 B  2651 KiB/s 
+  verify 3920 bytes in 0.0s (1934 KiB/s)      
+
+  R38    3920 bytes in 0.0s (223.4 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R14    MEM1 refused (R14   : ERR mem refused at=0x451E2550 done=0 cmd6 refused code=4); using the checked path
+
+  R14    1400/1400 B  160.7 KiB/s 
+  verify 1400/1400 B  1248 KiB/s 
+  verify 1400 bytes in 0.0s (827 KiB/s)      
+
+  R14    1400 bytes in 0.0s (122.5 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R68    MEM1 refused (R68   : ERR mem refused at=0x451E2AD0 done=0 cmd6 refused code=4); using the checked path
+
+  R68    7280/7280 B  312.8 KiB/s 
+  verify 7280/7280 B  2376 KiB/s 
+  verify 7280 bytes in 0.0s (1943 KiB/s)      
+
+  R68    7280 bytes in 0.1s (52.7 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  REG    MEM1 refused (REG   : ERR mem refused at=0x451E4740 done=0 cmd6 refused code=4); using the checked path
+
+  REG    7680/45360 B  287.7 KiB/s 
+  REG    15360/45360 B  57.4 KiB/s 
+  REG    23040/45360 B  79.3 KiB/s 
+  REG    30720/45360 B  98.3 KiB/s 
+  REG    38400/45360 B  113.7 KiB/s 
+  REG    45360/45360 B  126.2 KiB/s 
+  verify 16380/45360 B  2320 KiB/s 
+  verify 32760/45360 B  2315 KiB/s 
+  verify 45360/45360 B  2578 KiB/s 
+  verify 45360 bytes in 0.0s (2490 KiB/s)      
+
+  REG    45360 bytes in 0.4s (119.4 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          

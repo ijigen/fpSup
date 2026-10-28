@@ -1,0 +1,81 @@
+{"experiment": "FHD60:V33-z1600", "route": "FHD60", "row": 120, "profile_id": 173, "want": {"window": [3032, 2014], "rec": [1936, 1288], "act": [1920, 1278], "zoom": [1600, 1600], "bits": 12, "hirate": false, "scale": [2.0, 2.0], "bin": [1, 1]}}
+  +0x004  0xc0be4184  0x00000442 -> 0x00000508
+  +0x010  0xc0bdc9fc  0x00000442 -> 0x00000508
+  +0x028  0xc0bdbba4  0x00000438 -> 0x000004fe
+  +0x02c  0xc0be2e64  0x00000438 -> 0x000004fe
+  +0x0e0  0xc0bda884  0x00000442 -> 0x00000508
+  +0x0e4  0xc0be37f4  0x00000442 -> 0x00000508
+  +0x0f8  0xc0bdd38c  0x000006ac -> 0x000007de
+  +0x1028  0xc0bdb9cc  0x00000465 -> 0x00000533
+  +0x1028  0xc0bdbc28  0x00000465 -> 0x00000533
+  +0x1028  0xc0bdbc60  0x00000465 -> 0x00000533
+  +0x1028  0xc0bdbc8c  0x00000465 -> 0x00000533
+  +0x1028  0xc0bdbc90  0x00000465 -> 0x00000533
+  +0x1028  0xc0bdbc94  0x00000465 -> 0x00000533
+13 words change
+  call 0xC000E91C  ->  0x20000013 (536870931)
+virtual rows under mode 27 (verified 33 2x2:6064x4040>3024x2014@59.94); tables at 0x4521C380, 70592 B
+applied FHD60:V33-z1600: 13 words
+  TIM    MEM1 refused (TIM   : ERR mem refused at=0x4521C380 done=0 cmd6 refused code=4); using the checked path
+
+  TIM    2240/2240 B  21.1 KiB/s 
+  verify 2240/2240 B  2117 KiB/s 
+  verify 2240 bytes in 0.0s (529 KiB/s)      
+
+  TIM    2240 bytes in 0.3s (7.5 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  META   MEM1 refused (META  : ERR mem refused at=0x4521CC40 done=0 cmd6 refused code=4); using the checked path
+
+  META   7000/7000 B  284.8 KiB/s 
+  verify 7000/7000 B  2800 KiB/s 
+  verify 7000 bytes in 0.0s (2212 KiB/s)      
+
+  META   7000 bytes in 0.0s (243.1 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R10    MEM1 refused (R10   : ERR mem refused at=0x4521E7A0 done=0 cmd6 refused code=4); using the checked path
+
+  R10    560/560 B  77.2 KiB/s 
+  verify 560/560 B  584 KiB/s 
+  verify 560 bytes in 0.0s (349 KiB/s)      
+
+  R10    560 bytes in 0.0s (56.0 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R28    MEM1 refused (R28   : ERR mem refused at=0x4521E9D0 done=0 cmd6 refused code=4); using the checked path
+
+  R28    2800/2800 B  215.1 KiB/s 
+  verify 2800/2800 B  1414 KiB/s 
+  verify 2800 bytes in 0.0s (1050 KiB/s)      
+
+  R28    2800 bytes in 0.0s (162.2 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R38    MEM1 refused (R38   : ERR mem refused at=0x4521F4C0 done=0 cmd6 refused code=4); using the checked path
+
+  R38    3920/3920 B  234.8 KiB/s 
+  verify 3920/3920 B  2134 KiB/s 
+  verify 3920 bytes in 0.0s (1563 KiB/s)      
+
+  R38    3920 bytes in 0.0s (193.4 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R14    MEM1 refused (R14   : ERR mem refused at=0x45220410 done=0 cmd6 refused code=4); using the checked path
+
+  R14    1400/1400 B  236.0 KiB/s 
+  verify 1400/1400 B  1571 KiB/s 
+  verify 1400 bytes in 0.0s (682 KiB/s)      
+
+  R14    1400 bytes in 0.0s (128.4 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  R68    MEM1 refused (R68   : ERR mem refused at=0x45220990 done=0 cmd6 refused code=4); using the checked path
+
+  R68    7280/7280 B  269.2 KiB/s 
+  verify 7280/7280 B  1631 KiB/s 
+  verify 7280 bytes in 0.0s (1427 KiB/s)      
+
+  R68    7280 bytes in 0.0s (219.6 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+  REG    MEM1 refused (REG   : ERR mem refused at=0x45222600 done=0 cmd6 refused code=4); using the checked path
+
+  REG    7680/45360 B  306.8 KiB/s 
+  REG    15360/45360 B  326.6 KiB/s 
+  REG    23040/45360 B  319.4 KiB/s 
+  REG    30720/45360 B  319.9 KiB/s 
+  REG    38400/45360 B  319.2 KiB/s 
+  REG    45360/45360 B  318.2 KiB/s 
+  verify 16380/45360 B  3402 KiB/s 
+  verify 32760/45360 B  2503 KiB/s 
+  verify 45360/45360 B  2523 KiB/s 
+  verify 45360 bytes in 0.0s (2417 KiB/s)      
+
+  REG    45360 bytes in 0.2s (277.7 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          

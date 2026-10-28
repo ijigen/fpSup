@@ -1,0 +1,177 @@
+{
+ "run": "20261028-p6r14-FHD60_C601adee9",
+ "counts": {
+  "lv": 23,
+  "cdng": 3,
+  "report": 3
+ },
+ "checkpoints": {
+  "standby_lv": {
+   "shot": "shots/standby_lv.jpg",
+   "w": 1620,
+   "h": 911,
+   "y_std_cb_cr": [
+    146.9,
+    35.3,
+    123.4,
+    132.1
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_015514.bin"
+  },
+  "focus_lv": {
+   "shot": "shots/focus_lv.jpg",
+   "w": 1620,
+   "h": 911,
+   "y_std_cb_cr": [
+    147.0,
+    35.3,
+    123.4,
+    132.1
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_015508.bin"
+  },
+  "mag_lv": {
+   "shot": "shots/mag_lv.jpg",
+   "w": 1620,
+   "h": 1080,
+   "y_std_cb_cr": [
+    181.8,
+    7.6,
+    121.8,
+    132.9
+   ],
+   "aspect": 1.5,
+   "file": "push/lv_015512.bin"
+  },
+  "rec_lv": {
+   "shot": "shots/rec_lv.jpg",
+   "w": 1920,
+   "h": 1080,
+   "y_std_cb_cr": [
+    144.0,
+    35.4,
+    123.3,
+    131.7
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_015521.bin"
+  },
+  "cdng": {
+   "w": 688,
+   "h": 386,
+   "bits": 12,
+   "crop_origin": [
+    8,
+    5
+   ],
+   "crop_size": [
+    672,
+    376
+   ],
+   "g_median": 478.0,
+   "g_p999": 696.0,
+   "cfa_means": [
+    379.1,
+    471.8,
+    471.8,
+    366.6
+   ],
+   "cfa_ok": true,
+   "file": "push/cdng_002193.bin",
+   "shot": "shots/cdng.jpg",
+   "cfa_frames": [
+    true,
+    true,
+    true
+   ],
+   "frame_r": [
+    0.968,
+    0.968,
+    0.969
+   ],
+   "bad_shot": null,
+   "frames_ok": true,
+   "fov_r": 0.969,
+   "fov_scale": 0.97,
+   "fov_scale_r": 0.992,
+   "rec_fov_scale": 0.97,
+   "rec_fov_r": 0.992
+  }
+ },
+ "experiment": {
+  "experiment": "FHD60:C601adee9",
+  "route": "FHD60",
+  "row": 120,
+  "profile_id": 173,
+  "want": {
+   "window": [
+    2096,
+    2358
+   ],
+   "rec": [
+    688,
+    386
+   ],
+   "act": [
+    672,
+    376
+   ],
+   "zoom": [
+    3119,
+    6255
+   ],
+   "bits": 12,
+   "hirate": false,
+   "scale": [
+    2.0,
+    1.0
+   ],
+   "bin": [
+    1,
+    1
+   ]
+  },
+  "name": "S35 688x386 · 2x1 · 12b · h1v1 · 59.947p",
+  "fps": 59.947,
+  "words_changed": 31
+ },
+ "predicted": {
+  "rec": [
+   688,
+   386
+  ],
+  "act": [
+   672,
+   376
+  ]
+ },
+ "measured": {
+  "rec": [
+   688,
+   386
+  ],
+  "act": [
+   672,
+   376
+  ],
+  "fps": null
+ },
+ "checks": {
+  "size": true,
+  "bits": true,
+  "fov_r": 0.969,
+  "fov_scale": 0.97,
+  "rec_fov_scale": 0.97,
+  "fov": true,
+  "rec_lv": true,
+  "lv_colour": true,
+  "aspect_dng": 1.778,
+  "aspect": true,
+  "cfa": true,
+  "frames": true,
+  "fps": null
+ },
+ "verdict": "pass"
+}

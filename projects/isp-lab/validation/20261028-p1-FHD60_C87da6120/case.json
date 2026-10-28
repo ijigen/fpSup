@@ -1,0 +1,177 @@
+{
+ "run": "20261028-p1-FHD60_C87da6120",
+ "counts": {
+  "lv": 23,
+  "cdng": 3,
+  "report": 3
+ },
+ "checkpoints": {
+  "standby_lv": {
+   "shot": "shots/standby_lv.jpg",
+   "w": 1620,
+   "h": 911,
+   "y_std_cb_cr": [
+    149.3,
+    37.1,
+    124.0,
+    131.5
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_000340.bin"
+  },
+  "focus_lv": {
+   "shot": "shots/focus_lv.jpg",
+   "w": 1620,
+   "h": 911,
+   "y_std_cb_cr": [
+    149.3,
+    37.1,
+    124.0,
+    131.5
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_000331.bin"
+  },
+  "mag_lv": {
+   "shot": "shots/mag_lv.jpg",
+   "w": 1620,
+   "h": 1080,
+   "y_std_cb_cr": [
+    178.8,
+    18.3,
+    123.2,
+    132.0
+   ],
+   "aspect": 1.5,
+   "file": "push/lv_000337.bin"
+  },
+  "rec_lv": {
+   "shot": "shots/rec_lv.jpg",
+   "w": 1920,
+   "h": 1080,
+   "y_std_cb_cr": [
+    148.6,
+    37.6,
+    123.9,
+    131.2
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_000343.bin"
+  },
+  "cdng": {
+   "w": 3024,
+   "h": 1700,
+   "bits": 14,
+   "crop_origin": [
+    8,
+    5
+   ],
+   "crop_size": [
+    3008,
+    1690
+   ],
+   "g_median": 461.0,
+   "g_p999": 767.0,
+   "cfa_means": [
+    1489.6,
+    1864.5,
+    1864.3,
+    1465.4
+   ],
+   "cfa_ok": true,
+   "file": "push/cdng_000044.bin",
+   "shot": "shots/cdng.jpg",
+   "cfa_frames": [
+    true,
+    true,
+    true
+   ],
+   "frame_r": [
+    0.952,
+    0.952,
+    0.952
+   ],
+   "bad_shot": null,
+   "frames_ok": true,
+   "fov_r": 0.952,
+   "fov_scale": 0.98,
+   "fov_scale_r": 0.974,
+   "rec_fov_scale": 0.98,
+   "rec_fov_r": 0.975
+  }
+ },
+ "experiment": {
+  "experiment": "FHD60:C87da6120",
+  "route": "FHD60",
+  "row": 120,
+  "profile_id": 173,
+  "want": {
+   "window": [
+    6048,
+    1702
+   ],
+   "rec": [
+    3024,
+    1700
+   ],
+   "act": [
+    3008,
+    1690
+   ],
+   "zoom": [
+    2048,
+    1024
+   ],
+   "bits": 14,
+   "hirate": false,
+   "scale": [
+    1.0,
+    2.0
+   ],
+   "bin": [
+    1,
+    1
+   ]
+  },
+  "name": "HD 3024x1700 · 1x2 · 14b · h1v1 · 45.723p",
+  "fps": 45.723,
+  "words_changed": 35
+ },
+ "predicted": {
+  "rec": [
+   3024,
+   1700
+  ],
+  "act": [
+   3008,
+   1690
+  ]
+ },
+ "measured": {
+  "rec": [
+   3024,
+   1700
+  ],
+  "act": [
+   3008,
+   1690
+  ],
+  "fps": null
+ },
+ "checks": {
+  "size": true,
+  "bits": true,
+  "fov_r": 0.952,
+  "fov_scale": 0.98,
+  "rec_fov_scale": 0.98,
+  "fov": true,
+  "rec_lv": true,
+  "lv_colour": true,
+  "aspect_dng": 1.779,
+  "aspect": true,
+  "cfa": true,
+  "frames": true,
+  "fps": null
+ },
+ "verdict": "pass"
+}

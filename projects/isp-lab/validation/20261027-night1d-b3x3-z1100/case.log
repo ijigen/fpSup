@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/case.py", line 151, in <module>
+    c = build(sys.argv[1])
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/case.py", line 122, in build
+    view, geo = dng_green((push / cd[-1]['file']).read_bytes())
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/case.py", line 67, in dng_green
+    geo = {'w': w, 'h': h, 'bits': bps, 'crop_origin': pair(b, t, 0xC61F), 'crop_size': pair(b, t, 0xC620),
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/case.py", line 48, in pair
+    return tuple(struct.unpack_from('<2I', b, val)) if cnt == 2 else (val,)
+struct.error: unpack_from requires a buffer of at least 4044489746 bytes for unpacking 8 bytes at offset 4044489738 (actual buffer size is 459872)

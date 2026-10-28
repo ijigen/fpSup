@@ -1,0 +1,173 @@
+{
+ "run": "20261027-bin2-FHD60_b3x1-z1536",
+ "counts": {
+  "lv": 23,
+  "cdng": 3,
+  "report": 3
+ },
+ "checkpoints": {
+  "standby_lv": {
+   "shot": "shots/standby_lv.jpg",
+   "w": 1620,
+   "h": 911,
+   "y_std_cb_cr": [
+    115.8,
+    29.2,
+    124.1,
+    131.1
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_007601.bin"
+  },
+  "focus_lv": {
+   "shot": "shots/focus_lv.jpg",
+   "w": 1620,
+   "h": 911,
+   "y_std_cb_cr": [
+    115.8,
+    29.2,
+    124.1,
+    131.1
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_007592.bin"
+  },
+  "mag_lv": {
+   "shot": "shots/mag_lv.jpg",
+   "w": 1620,
+   "h": 1080,
+   "y_std_cb_cr": [
+    139.1,
+    14.0,
+    123.3,
+    131.6
+   ],
+   "aspect": 1.5,
+   "file": "push/lv_007598.bin"
+  },
+  "rec_lv": {
+   "shot": "shots/rec_lv.jpg",
+   "w": 1920,
+   "h": 1080,
+   "y_std_cb_cr": [
+    115.0,
+    29.3,
+    124.3,
+    131.6
+   ],
+   "aspect": 1.778,
+   "file": "push/lv_007604.bin"
+  },
+  "cdng": {
+   "w": 672,
+   "h": 1138,
+   "bits": 12,
+   "crop_origin": [
+    8,
+    5
+   ],
+   "crop_size": [
+    656,
+    1128
+   ],
+   "g_median": 374.0,
+   "g_p999": 542.0,
+   "cfa_means": [
+    322.7,
+    375.4,
+    375.2,
+    316.7
+   ],
+   "cfa_ok": true,
+   "file": "push/cdng_000889.bin",
+   "shot": "shots/cdng.jpg",
+   "cfa_frames": [
+    true,
+    true,
+    true
+   ],
+   "frame_r": [
+    0.944,
+    0.945,
+    0.945
+   ],
+   "bad_shot": null,
+   "frames_ok": true,
+   "fov_r": 0.945,
+   "fov_scale": 0.975,
+   "fov_scale_r": 0.969,
+   "rec_fov_scale": 0.97,
+   "rec_fov_r": 0.971
+  }
+ },
+ "experiment": {
+  "experiment": "FHD60:b3x1-z1536",
+  "route": "FHD60",
+  "row": 120,
+  "profile_id": 173,
+  "want": {
+   "window": [
+    3032,
+    1708
+   ],
+   "rec": [
+    672,
+    1138
+   ],
+   "act": [
+    656,
+    1128
+   ],
+   "zoom": [
+    1536,
+    1536
+   ],
+   "bits": 12,
+   "hirate": false,
+   "scale": [
+    2.0,
+    2.0
+   ],
+   "bin": [
+    3,
+    1
+   ]
+  },
+  "words_changed": 30
+ },
+ "predicted": {
+  "rec": [
+   672,
+   1138
+  ],
+  "act": [
+   656,
+   1128
+  ]
+ },
+ "measured": {
+  "rec": [
+   672,
+   1138
+  ],
+  "act": [
+   656,
+   1128
+  ]
+ },
+ "checks": {
+  "size": true,
+  "bits": true,
+  "fov_r": 0.945,
+  "fov_scale": 0.975,
+  "rec_fov_scale": 0.97,
+  "fov": true,
+  "rec_lv": true,
+  "lv_colour": true,
+  "aspect_dng": 1.772,
+  "aspect": true,
+  "cfa": true,
+  "frames": true
+ },
+ "verdict": "pass"
+}

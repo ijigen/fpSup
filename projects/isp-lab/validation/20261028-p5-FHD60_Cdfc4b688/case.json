@@ -1,0 +1,177 @@
+{
+ "run": "20261028-p5-FHD60_Cdfc4b688",
+ "counts": {
+  "lv": 21,
+  "cdng": 3,
+  "report": 3
+ },
+ "checkpoints": {
+  "standby_lv": {
+   "shot": "shots/standby_lv.jpg",
+   "w": 1620,
+   "h": 1068,
+   "y_std_cb_cr": [
+    140.4,
+    37.9,
+    124.2,
+    131.2
+   ],
+   "aspect": 1.517,
+   "file": "push/lv_007708.bin"
+  },
+  "focus_lv": {
+   "shot": "shots/focus_lv.jpg",
+   "w": 1620,
+   "h": 1068,
+   "y_std_cb_cr": [
+    140.5,
+    37.9,
+    124.2,
+    131.2
+   ],
+   "aspect": 1.517,
+   "file": "push/lv_007702.bin"
+  },
+  "mag_lv": {
+   "shot": "shots/mag_lv.jpg",
+   "w": 1620,
+   "h": 1080,
+   "y_std_cb_cr": [
+    179.4,
+    7.7,
+    122.0,
+    133.0
+   ],
+   "aspect": 1.5,
+   "file": "push/lv_007706.bin"
+  },
+  "rec_lv": {
+   "shot": "shots/rec_lv.jpg",
+   "w": 1620,
+   "h": 1068,
+   "y_std_cb_cr": [
+    139.8,
+    38.1,
+    124.2,
+    131.0
+   ],
+   "aspect": 1.517,
+   "file": "push/lv_007713.bin"
+  },
+  "cdng": {
+   "w": 1008,
+   "h": 672,
+   "bits": 12,
+   "crop_origin": [
+    8,
+    5
+   ],
+   "crop_size": [
+    992,
+    662
+   ],
+   "g_median": 435.0,
+   "g_p999": 700.0,
+   "cfa_means": [
+    357.4,
+    438.5,
+    438.5,
+    352.0
+   ],
+   "cfa_ok": true,
+   "file": "push/cdng_001092.bin",
+   "shot": "shots/cdng.jpg",
+   "cfa_frames": [
+    true,
+    true,
+    true
+   ],
+   "frame_r": [
+    0.952,
+    0.952,
+    0.953
+   ],
+   "bad_shot": null,
+   "frames_ok": true,
+   "fov_r": 0.953,
+   "fov_scale": 0.975,
+   "fov_scale_r": 0.965,
+   "rec_fov_scale": 0.975,
+   "rec_fov_r": 0.976
+  }
+ },
+ "experiment": {
+  "experiment": "FHD60:Cdfc4b688",
+  "route": "FHD60",
+  "row": 120,
+  "profile_id": 173,
+  "want": {
+   "window": [
+    6048,
+    1330
+   ],
+   "rec": [
+    1008,
+    672
+   ],
+   "act": [
+    992,
+    662
+   ],
+   "zoom": [
+    6144,
+    2026
+   ],
+   "bits": 12,
+   "hirate": false,
+   "scale": [
+    1.0,
+    3.0
+   ],
+   "bin": [
+    1,
+    1
+   ]
+  },
+  "name": "OG 1008x672 · 1x3 · 11b · h1v1 · 59.933p",
+  "fps": 59.933,
+  "words_changed": 39
+ },
+ "predicted": {
+  "rec": [
+   1008,
+   672
+  ],
+  "act": [
+   992,
+   662
+  ]
+ },
+ "measured": {
+  "rec": [
+   1008,
+   672
+  ],
+  "act": [
+   992,
+   662
+  ],
+  "fps": null
+ },
+ "checks": {
+  "size": true,
+  "bits": true,
+  "fov_r": 0.953,
+  "fov_scale": 0.975,
+  "rec_fov_scale": 0.975,
+  "fov": true,
+  "rec_lv": true,
+  "lv_colour": true,
+  "aspect_dng": 1.516,
+  "aspect": true,
+  "cfa": true,
+  "frames": true,
+  "fps": null
+ },
+ "verdict": "pass"
+}
