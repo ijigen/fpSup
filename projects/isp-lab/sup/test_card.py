@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """ISPL under unicorn (fork of projects/imx410-lab/sup/test_card.py, sha256
 2a7b7dfa...): IMXL's tests unchanged in substance, plus the keep policy, the
-block log and the control task (KeepTests, LogTests, ControlTests).
+block log and the control task (KeepTests, LogTests, ControlTests), and (layout 10) the non-blocking
+start with the LV burst across it (BurstTests).
 
 IMXL under unicorn: the real loader v4 loads build.py's IMXL.BIN into the real
 firmware image, then takes run through the firmware's own code as in
@@ -57,6 +58,7 @@ STUBS = {'VOL_LOOKUP': 0xC0644B68, 'DEV_WRITE': 0xC01EB790, 'STOCK_CB': 0xC03A55
          'START_XFER': 0xC01E6B80, 'END_XFER': 0xC01E6D48}
 THUMB_STUBS = {'VOL_LOOKUP', 'DEV_WRITE', 'START_XFER', 'END_XFER'}
 PX_DMA_TBL, PX_CPU_TBL, PX_DEAF = 0xC31E3238, 0xC31E3264, 0xC31E38FC
+PX_DEPCMD = 0x2100C87C                 # DWC3 DEPCMD, phys 7
 SD = dict(acq=0xC065F021, add=0xC065F061, ckpt=0xC065EFE1, rb=0xC065F001, rel=0xC065F269)
 SLOT = dict(cb=0x4834, acq=0x4838, add=0x483C, ckpt=0x4840, rb=0x4844, rel=0x4848)
 DONE = V3.DONE
@@ -81,6 +83,8 @@ class Cam(V4.Camera):
         mu.mem_map_ptr(DATA + CACHED, DATA_SIZE, UC_PROT_ALL, self._stale)
         mu.mem_map(CAP, CAP_SIZE)
         mu.mem_map(0x30180000, 0x10000)                       # display DMA channel registers
+        mu.mem_map(0x30100000, 0x1000)                        # receiver registers (v8: frame counter 0x30100588)
+        mu.mem_map(0x2100C000, 0x1000)                        # DWC3 device registers
         mu.mem_write(CAP, bytes([GUARD]) * CAP_SIZE)
         for k, a in STUBS.items():
             self.by_addr[a] = k
@@ -142,6 +146,7 @@ class Cam(V4.Camera):
         DMA table entry StartTransfer would hand it and gather the bytes."""
         ctx = phys >> 1
         dma = self.w(PX_DMA_TBL + 4 * ctx)
+        assert dma % 16 == 0, f'TRB chain at DMA {dma:#x}: DWC3 needs 16-aligned TRBs (10-27 live failure)'
         assert self.w(PX_CPU_TBL + 4 * ctx) == dma + 0x40000000, 'tables disagree'
         if self.start_rc:
             self.xfers.append({'phys': phys, 'refused': True})
@@ -157,6 +162,7 @@ class Cam(V4.Camera):
         data = b''.join(bytes(self.mu.mem_read(lo + 0x40000000, size)) for lo, _, size, _, _ in trbs)
         self.xfers.append({'phys': phys, 'trbs': [t[:4] for t in trbs], 'data': data})
         self.last_chain = trbs
+        self.put(0x2100C80C + 0x10 * phys, 0x10006)             # DEPCMD reads back StartTransfer, resource 1
         if self.complete:
             self.finish()
         return 0
@@ -232,7 +238,7 @@ class Take:
 
     def arm(self, mode, chunks=(), keep_first=1 << 30, every_us=0, log=(0, 0)):
         c = self.cam
-        for o in range(R.O_HOST, R.CAP_BYTES, 4): c.put(self.cap_at + o, 0)
+        for o in range(R.O_HOST, R.HOST_END, 4): c.put(self.cap_at + o, 0)      # as ispl.cap_image
         c.put(self.cap_at + R.OFF['keep_first'], keep_first)
         c.put(self.cap_at + R.OFF['every_us'], every_us)
         c.put(self.cap_at + R.OFF['log_addr'], log[0]); c.put(self.cap_at + R.OFF['log_max'], log[1])
@@ -488,7 +494,7 @@ class LogTests(unittest.TestCase):
 
 
 RECSTATE = 0xC3757F30
-START = ['recstate ena', 'recstate init', 'key MOVON', 'recstate movrecstwai']
+START = ['recstate ena', 'recstate init', 'key MOVON']          # layout 10: +6 polled per step, no movrecstwai
 STOP = ['key MOVON', 'recstate movsavewai']
 
 
@@ -524,6 +530,26 @@ class ControlTests(unittest.TestCase):
     def lines(self, t):
         return [l for l, _ in t.cam.shell]
 
+    def test_frame_clock(self):
+        """v8: the receiver counter (0x30100588 & 0x7FF) during the take -> fc_frames over fc_t_first..fc_t_last.
+        One step sees two frames (gap 2) and the counter wraps past 0x7FF; the upper bits are not the counter."""
+        t = self.setup(start_ms=100, rec_ms=60_000)
+        now = 5_000_000
+        self.step(t, now)
+        while self.step(t, now)['ctl'] != R.CTL['rec']:
+            now += 50_000
+        v, seen = 0x7E0, []
+        for i in range(40):
+            now += 20_000
+            v = (v + (2 if i == 20 else 1)) & 0x7FF
+            t.cam.put(0x30100588, 0x5A000 | v)
+            seen.append((now, v))
+            cap = self.step(t, now)
+        (t1, v1), (tn, vn) = seen[1], seen[-1]               # seen[0] is the first sample, seen[1] the first edge
+        self.assertEqual(cap['fc_frames'], (vn - v1) & 0x7FF)
+        self.assertEqual((cap['fc_t_last'] | 1) - (cap['fc_t_first'] | 1), tn - t1)    # the stub clock runs ahead by a fixed 1 ms
+        self.assertEqual((cap['fc_gap_max'], cap['fc_steps']), (2, 40))
+
     def test_the_firmware_script_on_time(self):
         t = self.setup(start_ms=100, rec_ms=1000)
         base = 5_000_000
@@ -531,6 +557,9 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(self.step(t, base + 50_000)['ctl'], R.CTL['armed'])
         self.assertEqual(t.cam.shell, [])
         cap = self.step(t, base + 120_000)
+        self.assertEqual(cap['ctl'], R.CTL['starting'])
+        self.assertEqual(self.lines(t), START)
+        cap = self.step(t, base + 140_000)                            # the next step sees +6
         self.assertEqual(cap['ctl'], R.CTL['rec'])
         self.assertEqual(self.lines(t), START)
         self.assertNotIn('key MOVOFF', self.lines(t))                 # the firmware's script never sends it
@@ -541,29 +570,49 @@ class ControlTests(unittest.TestCase):
         self.assertEqual((cap['n_press'], cap['rs_started'], cap['rs_saved']), (2, 1, 1))
         self.assertGreaterEqual(cap['t_stop'] - cap['t_rec'], 1_000_000)
         self.step(t, base + 9_000_000)
-        self.assertEqual(len(t.cam.shell), 7, 'ran again after done')
+        self.assertEqual(len(t.cam.shell), len(START + STOP) + 1, 'ran again after done')
 
     def test_no_start_no_second_press(self):
         t = self.setup(starts=False, saves_on=None)
         self.step(t, 1_000_000); cap = self.step(t, 2_000_000)
+        self.assertEqual(cap['ctl'], R.CTL['starting'])
+        for now in range(4_000_000, 61_900_001, 2_000_000):            # movrecstwai's 60 s from the MOVON
+            self.assertEqual(self.step(t, now)['ctl'], R.CTL['starting'], now)
+        self.assertEqual(self.lines(t), START)
+        cap = self.step(t, 62_100_000)
         self.assertEqual(cap['ctl'], R.CTL['fail_start'])
         self.assertEqual(self.lines(t), START + ['recstate disa'])
-        for now in (5_000_000, 60_000_000):
+        for now in (65_000_000, 160_000_000):
             self.step(t, now)
+        self.assertEqual(self.lines(t), START + ['recstate disa'])
         self.assertEqual(self.lines(t).count('key MOVON'), 1, 'pressed REC on a camera that never started')
 
-    def test_stop_is_retried(self):
-        t = self.setup(saves_on=3)
-        self.step(t, 1_000_000); self.step(t, 2_000_000); cap = self.step(t, 9_000_000)
-        self.assertEqual(cap['ctl'], R.CTL['done'])
-        self.assertEqual(self.lines(t), START + STOP * 2 + ['recstate disa'])
+    def test_a_cancel_cannot_abandon_a_pressed_start(self):
+        t = self.setup(start_ms=100, rec_ms=1000, starts=False)
+        self.step(t, 1_000_000); self.step(t, 1_200_000)                # MOVON: starting
+        t.cam.put(t.cap_at + R.OFF['ctl'], R.CTL['idle'])               # a host write over ctl meanwhile
+        self.assertEqual(self.step(t, 1_400_000)['ctl'], R.CTL['starting'])
+        t.cam.mu.mem_write(RECSTATE + 6, b'\1')
+        self.assertEqual(self.step(t, 1_600_000)['ctl'], R.CTL['rec'])
+        cap = self.step(t, 2_700_000)
+        self.assertEqual(cap['ctl'], R.CTL['done'], 'the take that started was left running')
+        self.assertEqual(self.lines(t), START + STOP + ['recstate disa'])
 
-    def test_stop_gives_up_after_three(self):
-        t = self.setup(saves_on=None)
-        self.step(t, 1_000_000); self.step(t, 2_000_000); cap = self.step(t, 9_000_000)
+    def test_missing_save_ack_does_not_press_again(self):
+        t = self.setup(saves_on=3)
+        self.step(t, 1_000_000); self.step(t, 2_000_000); self.step(t, 2_020_000); cap = self.step(t, 9_000_000)
         self.assertEqual(cap['ctl'], R.CTL['fail_stop'])
-        self.assertEqual(self.lines(t), START + STOP * 3 + ['recstate disa'])
+        self.assertEqual(self.lines(t), START + STOP + ['recstate disa'])
+        self.assertEqual(cap['n_press'], 2, 'uncertain stop must not start another take')
+
+    def test_stop_failure_is_terminal(self):
+        t = self.setup(saves_on=None)
+        self.step(t, 1_000_000); self.step(t, 2_000_000); self.step(t, 2_020_000); cap = self.step(t, 9_000_000)
+        self.assertEqual(cap['ctl'], R.CTL['fail_stop'])
+        self.assertEqual(self.lines(t), START + STOP + ['recstate disa'])
         self.assertEqual(cap['ctl_line'], 6)
+        self.step(t, 90_000_000)
+        self.assertEqual(self.lines(t), START + STOP + ['recstate disa'])
 
     def test_cancel_before_start(self):
         t = self.setup(start_ms=100)
@@ -583,6 +632,7 @@ class ControlTests(unittest.TestCase):
         base = 0xFFFFFFFF - 50_000
         self.step(t, base)
         self.step(t, (base + 150_000) & 0xFFFFFFFF)
+        self.step(t, (base + 170_000) & 0xFFFFFFFF)
         self.assertEqual(t.cap()['ctl'], R.CTL['rec'])
 
 
@@ -609,6 +659,9 @@ class LvTests(unittest.TestCase):
         for k, v in (('lv_every_us', every_us), ('lv_lag', lag), ('lv_max', lv_max),
                      ('lv_push', STUBS['PUSH'] if push else 0)):
             c.put(t.cap_at + R.OFF[k], v)
+        c.mu.mem_write(RECSTATE, bytes(8))
+        c.put(t.cap_at + R.OFF['start_ms'], 1_000_000)        # armed, REC far away: the sampler runs, nobody presses
+        c.put(t.cap_at + R.OFF['ctl'], R.CTL['armed'])
         return t
 
     step = ControlTests.step
@@ -673,6 +726,15 @@ class LvTests(unittest.TestCase):
             self.assertEqual(t.cam.pushes, [], kw)
             self.assertEqual(cap['lv_n_bad'], 1, kw)
 
+    def test_a_finished_take_samples_nothing(self):
+        t = self.setup()
+        t.cam.put(t.cap_at + R.OFF['ctl'], R.CTL['done'])
+        before = t.cap()['lv_t_last']
+        for now in (1_000_000, 2_000_000):
+            self.step(t, now)
+        self.assertEqual((t.cam.pushes, t.cap()['lv_t_last']), ([], before),
+                         'the sampler wrote the cap after the take: the host arm races it')
+
     def test_recording_flag(self):
         t = self.setup()
         t.cam.put(t.cap_at + R.OFF['rec_ms'], 3_000_000)   # 50 min; x1000 still fits u32
@@ -681,6 +743,165 @@ class LvTests(unittest.TestCase):
         self.step(t, 1_000_000)
         self.assertEqual(t.cam.pushes[0]['flags'] & 1, 1)
         self.assertEqual(t.cam.shell, [], 'the sampler pressed something')
+
+
+WT_ADDRS = [0xC30255C0, 0xC30255C4, 0xC3025640, 0xC3025644, 0xC30256C0, 0xC30256C4, 0xC31E10F8, 0xC31E10FC,
+            0xC31DF594, 0xC31DF598, 0xC31DF59C, 0xC31DF5A0, 0xC31DF744, 0xC31DF748, 0xC31DF74C, 0xC31DF750]   # IX_WT_ADDRS
+
+
+def ring_reg(done):
+    """The slot register with `done` the last slot finished (byte1), done + 1 being written and on screen."""
+    nxt = (done + 1) % LV_N
+    return (nxt << 16) | (done << 8) | nxt
+
+
+class BurstTests(unittest.TestCase):
+    """Layout 10: the start no longer blocks in movrecstwai (LV goes on while recstate +6 is pending), and with
+    lv_burst_ms every newly finished ring slot is pushed from our MOVON until lv_burst_ms after the start was
+    seen, each with a bu entry holding the display watch at that moment."""
+    step = ControlTests.step
+    STEP = 20_000
+
+    def setup(self, burst_ms=300, every_us=250_000, lv_max=0):
+        t = LvTests.setup(self, every_us=every_us, lv_max=lv_max)
+        c = t.cam
+        c.put(t.cap_at + R.OFF['lv_burst_ms'], burst_ms)
+        c.put(t.cap_at + R.OFF['start_ms'], 100)
+        c.put(t.cap_at + R.OFF['rec_ms'], 1000)
+        presses = [0]
+
+        def on_shell(line):                    # +6 comes later, from run(); the second MOVON saves
+            if line == 'recstate init':
+                c.mu.mem_write(RECSTATE + 5, bytes(3))
+            if line == 'key MOVON':
+                presses[0] += 1
+                if presses[0] == 2:
+                    c.mu.mem_write(RECSTATE + 7, b'\1')
+        c.on_shell = on_shell
+        return t
+
+    def run_take(self, t, start_after_us=600_000, frames=lambda i: i * 3 // 4, busy=lambda i: False,
+                 t0=1_000_000, steps=150):
+        """20 ms control steps; the display finishes frames(i) frames by step i (so the slot is frames(i) % 4);
+        recstate +6 is set start_after_us after the step that pressed MOVON; busy(i): the engine skips at step i.
+        -> [{now (the sup's tick), ctl_before, ctl, slot, reg, wt, ret, pushes}]"""
+        c = t.cam
+        log, ctl, movon = [], R.CTL['armed'], None
+        for i in range(steps):
+            now = t0 + i * self.STEP
+            slot = frames(i) % LV_N
+            reg = ring_reg(slot)
+            c.put(LV_REG[0], reg)
+            wt = [LV_W, LV_H] + [0x5A000000 | (i << 8) | k for k in range(2, 16)]   # 0, 1 are the LV descriptor's w/h
+            for a, v in zip(WT_ADDRS, wt):
+                c.put(a, v)
+            if movon is not None and now - movon >= start_after_us:
+                c.mu.mem_write(RECSTATE + 6, b'\1')
+            c.push_ret = 1 if busy(i) else 0
+            n0 = len(c.pushes)
+            cap = self.step(t, now)
+            if movon is None and 'key MOVON' in ControlTests.lines(self, t):
+                movon = now
+            log.append(dict(now=now + 1000, ctl_before=ctl, ctl=cap['ctl'], slot=slot, reg=reg, wt=wt,
+                            ret=c.push_ret, pushes=c.pushes[n0:]))
+            ctl = cap['ctl']
+        return log, t.cap()
+
+    def expect(self, log, cap, burst_us, every_us=250_000):
+        """What the sampler must do, step by step: (now, slot, burst)."""
+        out, last_slot, last_t = [], None, 0
+        for e in log:
+            cb, now = e['ctl_before'], e['now']
+            if cb not in (R.CTL['armed'], R.CTL['starting'], R.CTL['rec']):
+                continue
+            burst = burst_us and (cb == R.CTL['starting'] or
+                                  (cb == R.CTL['rec'] and now - cap['t_rec'] < burst_us))
+            if burst:
+                if e['slot'] == last_slot:
+                    continue
+                out.append((now, e['slot'], True))
+                last_t = now
+                if not e['ret']:
+                    last_slot = e['slot']
+            elif not last_t or now - last_t >= every_us:
+                out.append((now, e['slot'], False))
+                last_t = now
+        return out
+
+    @staticmethod
+    def got(log):
+        return [(e['now'], p['frame_no'], bool(p['flags'] & 8)) for e in log for p in e['pushes']]
+
+    def test_lv_flows_while_the_start_is_pending(self):
+        t = self.setup(burst_ms=0)
+        log, cap = self.run_take(t)
+        starting = [e for e in log if e['ctl_before'] == R.CTL['starting']]
+        self.assertGreaterEqual(len(starting), 29, 'the control task blocked in the start')
+        pending = [p for e in starting for p in e['pushes']]
+        self.assertGreaterEqual(len(pending), 2, 'no LV between MOVON and the start')
+        self.assertTrue(all(p['flags'] & 16 and not p['flags'] & 1 for p in pending))
+        self.assertEqual(cap['ctl'], R.CTL['done'])
+        self.assertEqual([l for l, _ in t.cam.shell], START + STOP + ['recstate disa'])
+        self.assertGreaterEqual(cap['t_rec'] - cap['t_movon'], 600_000)
+        self.assertLess(cap['t_rec'] - cap['t_movon'], 600_000 + 2 * self.STEP)
+
+    def test_burst_off_is_the_cadence(self):
+        t = self.setup(burst_ms=0)
+        log, cap = self.run_take(t)
+        self.assertEqual(self.got(log), self.expect(log, cap, 0))
+        for e in log:
+            for p in e['pushes']:
+                self.assertEqual((p['aux0'], p['aux1'], p['flags'] & 8), (e['reg'], 2, 0))
+        self.assertEqual((cap['bu_sent'], cap['bu_n'], cap['bursts']), (0, 0, []))
+
+    def test_every_new_slot_once_with_its_watch(self):
+        t = self.setup(burst_ms=300)
+        log, cap = self.run_take(t)
+        want = self.expect(log, cap, 300_000)
+        self.assertEqual(self.got(log), want)
+        bursts = [(e, p) for e in log for p in e['pushes'] if p['flags'] & 8]
+        self.assertGreater(len(bursts), 25)
+        for k, (e, p) in enumerate(bursts):
+            self.assertEqual((p['frame_no'], p['segs'][0][0]), (e['slot'], LV_SLOT[e['slot']]))
+            self.assertEqual((p['aux0'], p['aux1']), (e['now'], k), 'tick / bu index not in the header')
+            self.assertEqual(bool(p['flags'] & 16), e['ctl_before'] == R.CTL['starting'])
+            self.assertEqual(bool(p['flags'] & 1), e['ctl_before'] == R.CTL['rec'])
+        slots = [e['slot'] for e, _ in bursts]
+        self.assertTrue(all(a != b for a, b in zip(slots, slots[1:])), 'a slot pushed twice in a row')
+        self.assertEqual((cap['bu_sent'], cap['bu_n'], cap['bu_skip']), (len(bursts), len(bursts), 0))
+        for b, (e, p) in zip(cap['bursts'], bursts):
+            self.assertEqual((b['tick_us'], b['slot'], b['flags'], b['reg']), (e['now'], e['slot'], p['flags'], e['reg']))
+            self.assertEqual(list(b['wt'].values()), e['wt'], 'the watch is not the one at the push')
+
+    def test_window_ends_lv_burst_ms_after_the_start(self):
+        t = self.setup(burst_ms=300)
+        log, cap = self.run_take(t)
+        bursts = [e['now'] - cap['t_rec'] for e in log for p in e['pushes'] if p['flags'] & 8]
+        self.assertLess(max(bursts), 300_000)
+        self.assertGreaterEqual(max(bursts), 300_000 - 3 * self.STEP, 'the window closed early')
+        after = [e['now'] for e in log for p in e['pushes'] if not p['flags'] & 8 and e['now'] > cap['t_rec']]
+        self.assertTrue(after, 'the cadence did not come back after the window')
+        self.assertTrue(all(b - a >= 250_000 for a, b in zip(after, after[1:])))
+        self.assertGreaterEqual(min(after) - cap['t_rec'], 300_000)
+
+    def test_a_busy_engine_retries_the_slot_and_counts(self):
+        t = self.setup(burst_ms=300)
+        log, cap = self.run_take(t, busy=lambda i: i % 3 == 0)
+        self.assertEqual(self.got(log), self.expect(log, cap, 300_000))
+        sent = [(e['slot'], p['aux1']) for e in log for p in e['pushes'] if p['flags'] & 8 and not e['ret']]
+        skipped = [p for e in log for p in e['pushes'] if p['flags'] & 8 and e['ret']]
+        self.assertGreater(len(skipped), 3)
+        self.assertEqual((cap['bu_sent'], cap['bu_skip']), (len(sent), len(skipped)))
+        self.assertEqual([k for _, k in sent], list(range(len(sent))), 'a skip used up a bu index')
+
+    def test_entries_stop_at_the_array_pushes_go_on_and_lv_max_caps(self):
+        t = self.setup(burst_ms=3000)
+        log, cap = self.run_take(t, frames=lambda i: i, steps=200)
+        self.assertGreater(cap['bu_sent'], R.BU_N)
+        self.assertEqual((cap['bu_n'], len(cap['bursts'])), (R.BU_N, R.BU_N))
+        t = self.setup(burst_ms=3000, lv_max=10)
+        log, cap = self.run_take(t, frames=lambda i: i)
+        self.assertEqual((len(self.got(log)), cap['lv_n_sent']), (10, 10))
 
 
 class PushEngineTests(unittest.TestCase):
@@ -740,6 +961,16 @@ class PushEngineTests(unittest.TestCase):
         self.assertEqual(sizes, [256, 0xFFFC00, 5000])
         self.assertTrue(all(t[3] == 0x15 for t in c.xfers[-1]['trbs'][:-1]))
 
+    def test_a_reconfigured_endpoint_drops_the_chain_instead_of_skipping_forever(self):
+        c = self.t.cam
+        c.complete = False
+        self.assertEqual(self.push(), 0)
+        self.assertEqual(self.push(), 1)                        # still the controller's: skipped
+        c.put(PX_DEPCMD, 0x50002)                               # the host reopened: XferConfig (10-27 live)
+        self.assertEqual(self.push(), 0, 'a lost chain still blocked the engine')
+        self.assertEqual(len([x for x in c.xfers if not x.get('refused')]), 2)
+        self.assertEqual(self.push(), 1)                        # the new chain is in flight again
+
     def test_mode0_skips_while_busy_and_leaves_a_seq_gap(self):
         c = self.t.cam
         c.complete = False
@@ -755,11 +986,17 @@ class PushEngineTests(unittest.TestCase):
         hdr = self.rx.parse_header(c.xfers[-1]['data'][:256])
         self.assertEqual(hdr['n_skip'], 1)
 
-    def test_mode1_times_out_and_ends_the_transfer(self):
+    def test_mode1_timeout_leaves_the_transfer_armed(self):
         c = self.t.cam
         c.complete = False
-        self.assertEqual(self.push(mode=1, timeout_ms=5), 0)   # sent, then waited 5 ms in vain
-        self.assertEqual(c.ends, [3])
+        self.assertEqual(self.push(mode=1, timeout_ms=5), 3)   # started but NOT completed
+        self.assertEqual(c.ends, [], 'EndTransfer on a timeout killed EP83 live (report-take-01/02)')
+        self.assertEqual(self.push(mode=0), 1)                 # still armed: skipped, nothing stacked
+        c.complete = True
+        c.finish()                                              # the host read it
+        self.assertEqual(self.push(mode=1, timeout_ms=5), 0)
+        hdr = self.rx.parse_header(c.xfers[-1]['data'][:256])
+        self.assertEqual((hdr['seq'], hdr['n_skip']), (2, 2))
 
     def test_refused_start_counts_deaf(self):
         c = self.t.cam
@@ -873,6 +1110,13 @@ class CdngTests(unittest.TestCase):
         self.assertEqual(cap['cd_state'], 2)
         self.assertEqual(self.t.cam.xfers, [])
 
+    def test_uncompleted_transfers_are_not_counted_as_delivered_dngs(self):
+        self.t.cam.complete = False
+        cap = self.run_cd()
+        self.assertEqual(cap['cd_state'], 1)
+        self.assertEqual((cap['cd_sent'], cap['cd_skip']), (0, 3))
+        self.assertEqual(self.t.cam.ends, [])                  # never end a transfer the host may still read
+
     def test_triggers(self):
         c, t = self.t.cam, self.t
         c.put(t.cap_at + R.OFF['cd_go'], 1)
@@ -892,6 +1136,96 @@ class CdngTests(unittest.TestCase):
         self.assertEqual(len(self.images()), 3, 'ran twice for one take')
 
 
+class ReportTests(unittest.TestCase):
+    """Reports (FPP1 source 5): a snapshot of ix_cap at every control event, and a heartbeat; the host
+    parses them with the same parse_cap it uses on a shell read."""
+    def setUp(self):
+        sys.path.insert(0, str(HERE.parent / 'host'))
+        import push_rx
+        self.rx = push_rx
+
+    def run_take(self, rp_on=1, every_us=0):
+        t = ControlTests.setup(self, start_ms=100, rec_ms=1000)
+        c = t.cam
+        c.put(PX_DMA_TBL + 12, 0); c.put(PX_CPU_TBL + 12, 0x40000000); c.put(PX_DEAF, 0)
+        c.put(t.cap_at + R.OFF['rp_on'], rp_on); c.put(t.cap_at + R.OFF['rp_every_us'], every_us)
+        for now in range(1_000_000, 3_000_000, 20_000):
+            ControlTests.step(self, t, now)
+        reps = []
+        for x in c.xfers:
+            sp = self.rx.Splitter(lambda h, p: reps.append((h, R.parse_cap(p))))
+            sp.feed(x['data'])
+        return t, reps
+
+    def test_one_report_per_event_with_the_matching_state(self):
+        t, reps = self.run_take()
+        evs = [(h['frame_no'], c['ctl']) for h, c in reps]
+        self.assertEqual(evs, [(1, R.CTL['armed']), (2, R.CTL['rec']), (3, R.CTL['done'])])
+        h, last = reps[-1]
+        self.assertEqual((h['source'], h['fmt'], h['w'], last['magic'], last['version']),
+                         ('report', 'report', R.CAP_VERSION, R.CAP_MAGIC, R.CAP_VERSION))
+        self.assertEqual((last['n_press'], last['rs_started'], last['rs_saved']), (2, 1, 1))
+        self.assertEqual(t.cap()['rp_n_sent'], 3)
+
+    def test_heartbeat_interval(self):
+        t, reps = self.run_take(rp_on=0, every_us=500_000)
+        beats = [h for h, _ in reps if h['frame_no'] == 7]
+        self.assertEqual(len(beats), 4)                     # 2 s of steps, one per 0.5 s
+        self.assertTrue(all(b['frame_no'] == 7 for b, _ in reps))
+
+    def test_off_pushes_nothing(self):
+        t, reps = self.run_take(rp_on=0, every_us=0)
+        self.assertEqual(reps, [])
+
+
+class CheckpointTests(unittest.TestCase):
+    """The control task's own checkpoints before REC: standby -> half-press AF -> magnify -> settle (layout 6)."""
+    def take(self, standby=200, focus=500, mag=400, steps=(1_000_000, 4_000_000)):
+        t = ControlTests.setup(self, start_ms=0, rec_ms=1000)
+        c = t.cam
+        for k, v in (('cp_standby_ms', standby), ('cp_focus_ms', focus), ('cp_mag_ms', mag)):
+            c.put(t.cap_at + R.OFF[k], v)
+        for now in range(steps[0], steps[1], 20_000):
+            ControlTests.step(self, t, now)
+        return t
+
+    def test_phases_in_order_and_on_time(self):
+        t = self.take()
+        keys = [(l, now) for l, now in t.cam.shell if l.startswith('key')]
+        self.assertEqual([l for l, _ in keys][:6], ['key S1ON', 'key S1OFF', 'key OKON', 'key OKOFF', 'key OKON', 'key OKOFF'])
+        tm = {}
+        for l, now in keys[:6]:
+            tm.setdefault(l, []).append(now)
+        arm = 1_000_000
+        self.assertGreaterEqual(tm['key S1ON'][0] - arm, 200_000)
+        self.assertGreaterEqual(tm['key S1OFF'][0] - tm['key S1ON'][0], 500_000)
+        self.assertGreaterEqual(tm['key OKON'][1] - tm['key OKON'][0], 400_000)
+        first_rec = next(now for l, now in t.cam.shell if l == 'recstate ena')
+        self.assertGreaterEqual(first_rec - tm['key OKON'][1], 600_000)
+        self.assertEqual(t.cap()['ctl'], R.CTL['done'])
+
+    def test_no_checkpoints_is_the_old_take(self):
+        t = self.take(0, 0, 0)
+        self.assertFalse(any(l.startswith('key S1') or l.startswith('key OK') for l, _ in t.cam.shell))
+        self.assertEqual(t.cap()['ctl'], R.CTL['done'])
+
+    def test_lv_carries_the_phase_flags(self):
+        t = LvTests.setup(self, push=False)
+        c = t.cam
+        c.put(PX_DMA_TBL + 12, 0); c.put(PX_CPU_TBL + 12, 0x40000000); c.put(PX_DEAF, 0)
+        c.mu.mem_map(LV_SLOT[0], 0x1000000)
+        c.put(t.cap_at + R.OFF['lv_push'], 1)
+        sys.path.insert(0, str(HERE.parent / 'host'))
+        import push_rx
+        flags = []
+        for phase, now in ((1, 1_000_000), (2, 2_000_000), (4, 3_000_000)):
+            c.put(t.cap_at + R.OFF['cp_phase'], phase)
+            LvTests.step(self, t, now)
+            h = push_rx.parse_header(c.xfers[-1]['data'][:256])
+            flags.append(h['flags'] & 6)
+        self.assertEqual(flags, [2, 4, 0])
+
+
 class CtlOnlyTests(unittest.TestCase):
     """ISPC.BIN: the control task alone (RESEARCH_PLAN §7 step 1)."""
     def test_loads_without_touching_the_writer(self):
@@ -905,9 +1239,62 @@ class CtlOnlyTests(unittest.TestCase):
     def test_runs_the_firmware_script(self):
         t = ControlTests.setup(self, ctl_only=True)
         ControlTests.step(self, t, 1_000_000); ControlTests.step(self, t, 2_000_000)
+        ControlTests.step(self, t, 2_020_000)
         cap = ControlTests.step(self, t, 9_000_000)
         self.assertEqual(cap['ctl'], R.CTL['done'])
         self.assertEqual([l for l, _ in t.cam.shell], START + STOP + ['recstate disa'])
+
+
+USBFIX_AT, USBFIX_WORD = 0xC0032808, 0xE3A03B01
+
+
+class UsbReconnectTests(unittest.TestCase):
+    """Once after boot, with the dev shell's USBFIX in place: "usb off", 700 ms, "usb on" -- so the host
+    enumerates EP83 as bulk 1024 again and nobody replugs the cable at night."""
+    def step(self, t, now):
+        return ControlTests.step(self, t, now)
+
+    def lines(self, t):
+        return [l for l, _ in t.cam.shell]
+
+    def test_off_then_on_once_when_usbfix_is_in(self):
+        t = Take(0, frames=1)
+        t.cam.put(USBFIX_AT, USBFIX_WORD)
+        self.step(t, 1_000_000)                                       # first step: the clock starts
+        self.step(t, 3_900_000)
+        self.assertEqual(self.lines(t), [], 'reconnected before every sup had loaded')
+        cap = self.step(t, 4_100_000)
+        self.assertEqual((self.lines(t), cap['ur_state']), (['usb off'], 1))
+        self.step(t, 4_500_000)
+        self.assertEqual(self.lines(t), ['usb off'])
+        cap = self.step(t, 4_900_000)
+        self.assertEqual((self.lines(t), cap['ur_state']), (['usb off', 'usb on'], 2))
+        for now in (9_000_000, 90_000_000):
+            self.step(t, now)
+        self.assertEqual(self.lines(t), ['usb off', 'usb on'], 'reconnected twice')
+
+    def test_a_host_arm_after_the_reconnect_does_not_reconnect_again(self):
+        t = Take(0, frames=1)
+        t.cam.put(USBFIX_AT, USBFIX_WORD)
+        for now in (1_000_000, 4_100_000, 4_900_000):
+            self.step(t, now)
+        t.arm('discard')                                               # the host's arm/disarm image
+        for now in (9_000_000, 20_000_000):
+            self.step(t, now)
+        self.assertEqual(self.lines(t), ['usb off', 'usb on'])
+
+    def test_release_shell_never_reconnects(self):
+        t = Take(0, frames=1)                                          # stock word at 0xC0032808
+        for now in (1_000_000, 5_000_000, 32_000_000, 90_000_000):
+            cap = self.step(t, now)
+        self.assertEqual((self.lines(t), cap['ur_state']), ([], 3))
+
+    def test_waits_while_a_take_is_armed(self):
+        t = ControlTests.setup(self, start_ms=60_000)
+        t.cam.put(USBFIX_AT, USBFIX_WORD)
+        for now in (1_000_000, 5_000_000, 9_000_000):
+            self.step(t, now)
+        self.assertNotIn('usb off', self.lines(t))
 
 
 class MutationTests(unittest.TestCase):
@@ -944,11 +1331,55 @@ class MutationTests(unittest.TestCase):
     def test_no_start_check_is_caught(self):
         self.assertTrue(self.failing('IX_MUTANT_NO_START_CHECK', 'test_no_start_no_second_press', ControlTests))
 
+    def test_end_on_timeout_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_END_ON_TIMEOUT', 'test_mode1_timeout_leaves_the_transfer_armed', PushEngineTests))
+
+    def test_no_s1off_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_NO_S1OFF', 'test_phases_in_order_and_on_time', CheckpointTests))
+
     def test_no_crc_is_caught(self):
         self.assertTrue(self.failing('IX_MUTANT_NO_CRC', 'test_one_image_parses_and_matches', PushEngineTests))
 
     def test_cd_all_takes_is_caught(self):
         self.assertTrue(self.failing('IX_MUTANT_CD_ALL', 'test_pushes_only_the_newest_take_whole', CdngTests))
+
+    def test_no_stop_report_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_NO_STOP_REPORT', 'test_one_report_per_event_with_the_matching_state', ReportTests))
+
+    def test_lv_after_the_take_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_LV_ALWAYS', 'test_a_finished_take_samples_nothing', LvTests))
+
+    def test_no_lost_check_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_NO_LOST_CHECK',
+                                     'test_a_reconfigured_endpoint_drops_the_chain_instead_of_skipping_forever',
+                                     PushEngineTests))
+
+    def test_ur_without_the_fix_check_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_UR_NO_FIX_CHECK', 'test_release_shell_never_reconnects', UsbReconnectTests))
+
+    def test_start_blocking_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_START_BLOCKS', 'test_lv_flows_while_the_start_is_pending', BurstTests))
+
+    def test_start_without_timeout_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_START_NO_TIMEOUT', 'test_no_start_no_second_press', ControlTests))
+
+    def test_cancel_during_the_start_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_CANCEL_STARTING', 'test_a_cancel_cannot_abandon_a_pressed_start', ControlTests))
+
+    def test_burst_without_dedupe_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_BU_NO_DEDUPE', 'test_every_new_slot_once_with_its_watch', BurstTests))
+
+    def test_burst_without_end_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_BU_NO_END', 'test_window_ends_lv_burst_ms_after_the_start', BurstTests))
+
+    def test_burst_header_without_tick_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_BU_AUX', 'test_every_new_slot_once_with_its_watch', BurstTests))
+
+    def test_burst_without_watch_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_BU_NO_WT', 'test_every_new_slot_once_with_its_watch', BurstTests))
+
+    def test_burst_when_off_is_caught(self):
+        self.assertTrue(self.failing('IX_MUTANT_BU_ALWAYS', 'test_burst_off_is_the_cadence', BurstTests))
 
     def test_lv_current_slot_is_caught(self):
         self.assertTrue(self.failing('IX_MUTANT_LV_CURRENT', 'test_pushes_the_slot_before_the_current_one', LvTests))

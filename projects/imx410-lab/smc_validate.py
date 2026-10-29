@@ -14,7 +14,7 @@ import numpy as np
 import readout_cfg as C
 import smc
 
-R10 = {16: 2, 17: 3, 18: 6, 19: 7, 20: 4, 21: 5, 22: 4, 23: 5}
+R10 = smc.R10_OF_CLS          # one table: smc.create writes R10 itself since 2026-10-27 (isp-lab); kept for callers
 DB = HERE / 'captures' / 'smc_validated.json'
 VREG = 0x30100020
 # image-minus-OB black of stock modes per readout class, dark, AE gain (captures/smc_r1/stock*): 8 -> 5.95, 11 -> 6.81, 58 -> 8.03, 12 -> 2.30;

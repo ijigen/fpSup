@@ -1,4 +1,5 @@
 # isp-lab — ISP 路徑研究（2026-10-23 起）
+> **2026-10-27 退版**：10-26 接手的工作已整包封存在 [`archive/handoff-20261026/`](archive/handoff-20261026/REVERT.md)；現行版本 = 交接時的狀態＋3 處核對過的 sup 修正。
 
 研究工具，不是產品。和 imx410-lab 一起作為 RES-Custom2 的依據。
 先讀：[notes/RESEARCH_PLAN.md](notes/RESEARCH_PLAN.md)（目標、檢查點、階段、分工）、

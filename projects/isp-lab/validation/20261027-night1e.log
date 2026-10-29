@@ -1,0 +1,26 @@
+07:50:28 z8192: start
+07:50:54 restore rc=0 restored z8192: 19 words
+07:51:01 z8192: fail  {'size': True, 'fov_r': 0.428, 'fov': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:51:01 z12288: start
+07:51:27 restore rc=0 restored z12288: 19 words
+07:51:34 z12288: fail  {'size': True, 'fov_r': 0.087, 'fov': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:51:34 z16384: start
+07:52:01 restore rc=0 restored z16384: 19 words
+07:52:08 z16384: fail  {'size': True, 'fov_r': 0.293, 'fov': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:52:08 d10: start
+07:52:11 restore rc=0 restored d10: 2 words
+07:52:11 d10: FAIL take  None  None
+07:52:11 d8: start
+07:52:37 restore rc=0 restored d8: 2 words
+07:52:45 d8: fail  {'size': False, 'fov_r': None, 'fov': False}  ['focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:52:47 page rebuilt
+07:54:14 d10: start
+07:54:40 restore rc=0 restored d10: 2 words
+07:54:47 d10: pass  {'size': True, 'fov_r': 0.961, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:54:48 z7168: start
+07:55:14 restore rc=0 restored z7168: 19 words
+07:55:22 z7168: pass  {'size': True, 'fov_r': 0.961, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:55:22 z8191: start
+07:55:48 restore rc=0 restored z8191: 19 words
+07:55:56 z8191: pass  {'size': True, 'fov_r': 0.96, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:55:58 page rebuilt

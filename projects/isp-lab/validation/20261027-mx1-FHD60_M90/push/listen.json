@@ -1,0 +1,20 @@
+{
+ "cmd": "LISTEN83 1073741824 4000 21600 q=1000",
+ "end": {
+  "tag": "END83",
+  "bytes": "101930148",
+  "reason": "idle",
+  "rc": "-7",
+  "trigger": "0",
+  "reply_len": "0"
+ },
+ "reply": null,
+ "stats": {
+  "images": 33,
+  "skipped_bytes": 0,
+  "resyncs": 0,
+  "torn": 0,
+  "seq_gaps": {},
+  "leftover": 0
+ }
+}

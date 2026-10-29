@@ -1,0 +1,71 @@
+08:01:37 UHD30:E0: start
+08:02:03 restore rc=0 restored UHD30:E0: 0 words
+08:02:12 UHD30:E0: pass  {'size': True, 'fov_r': 0.953, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:02:15 page rebuilt
+08:02:28 UHD30:z6144: start
+08:02:54 restore rc=0 restored UHD30:z6144: 14 words
+08:03:02 UHD30:z6144: fail  {'size': False, 'fov_r': 0.953, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:03:02 UHD30:z4096: start
+08:03:28 restore rc=0 restored UHD30:z4096: 14 words
+08:03:37 UHD30:z4096: fail  {'size': False, 'fov_r': 0.952, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:03:37 UHD30:z3072: start
+08:04:03 restore rc=0 restored UHD30:z3072: 8 words
+08:04:11 UHD30:z3072: fail  {'size': False, 'fov_r': 0.953, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:04:11 UHD30:b1x3-z4096x1365: start
+08:04:37 restore rc=0 restored UHD30:b1x3-z4096x1365: 19 words
+08:04:45 UHD30:b1x3-z4096x1365: fail  {'size': False, 'fov_r': 0.952, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:04:45 UHD30:z2048: start
+08:05:47 UHD25:z6144: start
+08:06:13 restore rc=0 restored UHD25:z6144: 14 words
+08:06:22 UHD25:z6144: fail  {'size': False, 'fov_r': 0.952, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:06:22 UHD25:z4096: start
+08:06:49 restore rc=0 restored UHD25:z4096: 14 words
+08:06:57 UHD25:z4096: fail  {'size': False, 'fov_r': 0.952, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:06:57 UHD25:z3072: start
+08:07:23 restore rc=0 restored UHD25:z3072: 8 words
+08:07:31 UHD25:z3072: fail  {'size': False, 'fov_r': 0.953, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:07:32 UHD25:b1x3-z4096x1365: start
+08:07:58 restore rc=0 restored UHD25:b1x3-z4096x1365: 19 words
+08:08:07 UHD25:b1x3-z4096x1365: fail  {'size': False, 'fov_r': 0.953, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:08:07 UHD25:z2048: start
+08:08:33 restore rc=0 restored UHD25:z2048: 8 words
+08:08:41 UHD25:z2048: fail  {'size': False, 'fov_r': 0.952, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:08:42 UHD25:d10: start
+08:10:30 UHD25@8:E0: start
+08:10:57 restore rc=0 restored UHD25@8:E0: 0 words
+08:11:05 UHD25@8:E0: pass  {'size': True, 'bits': True, 'fov_r': 0.952, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:11:05 UHD25@8:z6144: start
+08:11:32 restore rc=0 restored UHD25@8:z6144: 14 words
+08:11:39 UHD25@8:z6144: pass  {'size': True, 'bits': True, 'fov_r': 0.949, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:11:39 UHD25@8:z4096: start
+08:12:06 restore rc=0 restored UHD25@8:z4096: 14 words
+08:12:13 UHD25@8:z4096: pass  {'size': True, 'bits': True, 'fov_r': 0.952, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:12:13 UHD25@8:z3072: start
+08:12:39 restore rc=0 restored UHD25@8:z3072: 8 words
+08:12:47 UHD25@8:z3072: pass  {'size': True, 'bits': True, 'fov_r': 0.947, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:12:47 UHD25@8:b1x3-z4096x1365: start
+08:13:14 restore rc=0 restored UHD25@8:b1x3-z4096x1365: 19 words
+08:13:21 UHD25@8:b1x3-z4096x1365: pass  {'size': True, 'bits': True, 'fov_r': 0.952, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:13:21 UHD25@8:z2048: start
+08:13:47 restore rc=0 restored UHD25@8:z2048: 8 words
+08:13:55 UHD25@8:z2048: pass  {'size': True, 'bits': True, 'fov_r': 0.947, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:13:55 UHD25@8:z1536: start
+08:13:59 restore rc=0 restored UHD25@8:z1536: 8 words
+08:13:59 UHD25@8:z1536: FAIL take  None  None
+08:13:59 UHD25@8:z1200: start
+08:14:26 restore rc=0 restored UHD25@8:z1200: 8 words
+08:14:35 UHD25@8:z1200: pass  {'size': True, 'bits': True, 'fov_r': 0.946, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:14:35 UHD25@8:z1024: start
+08:15:02 restore rc=0 restored UHD25@8:z1024: 8 words
+08:15:10 UHD25@8:z1024: pass  {'size': True, 'bits': True, 'fov_r': 0.943, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:15:10 UHD25@8:d10: start
+08:15:36 restore rc=0 restored UHD25@8:d10: 1 words
+08:15:45 UHD25@8:d10: pass  {'size': True, 'bits': True, 'fov_r': 0.967, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:15:45 UHD25@8:d12: start
+08:16:11 restore rc=0 restored UHD25@8:d12: 2 words
+08:16:20 UHD25@8:d12: pass  {'size': True, 'bits': True, 'fov_r': 0.966, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:16:23 page rebuilt
+08:26:38 UHD25@8:z1536: start
+08:27:05 restore rc=0 restored UHD25@8:z1536: 8 words
+08:27:09 UHD25@8:z1536: pass  {'size': True, 'bits': True, 'fov_r': 0.937, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+08:27:12 page rebuilt

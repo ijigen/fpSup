@@ -79,7 +79,9 @@ def layout(tree):
     probe = tree / 'probe.c'
     probe.write_text('#include <stddef.h>\n#include "ix_wr.h"\n'
                      'char ix_probe_size[sizeof(wr_t)];\nchar ix_probe_cap[offsetof(wr_t, cap)];\n'
-                     'char ix_probe_capsz[sizeof(ix_cap)];\n')
+                     'char ix_probe_capsz[sizeof(ix_cap)];\n'
+                     'char ix_probe_trb[offsetof(wr_t, px.trb) + 1];\n'
+                     'char ix_probe_hdr[offsetof(wr_t, px.hdr) + 1];\n')
     d = compile_c(tree, probe).read_bytes()
     shoff, = struct.unpack_from('<I', d, 0x20)
     _, shnum, _ = struct.unpack_from('<HHH', d, 0x2E)
@@ -90,6 +92,9 @@ def layout(tree):
     for i in range(sym[5] // 16):
         n, _v, size, *_ = struct.unpack_from('<IIIBBH', d, sym[4] + 16 * i)
         got[d[strs[4] + n:d.index(b'\0', strs[4] + n)]] = size
+    for k in (b'ix_probe_trb', b'ix_probe_hdr'):            # the USB controller reads these by DMA
+        if (got[k] - 1) % 16:
+            raise BuildError(f'{k.decode()[9:]} at state +{got[k] - 1}: not 16-aligned (DWC3 TRBs must be)')
     try:
         return got[b'ix_probe_size'], got[b'ix_probe_cap'], got[b'ix_probe_capsz']
     except KeyError:

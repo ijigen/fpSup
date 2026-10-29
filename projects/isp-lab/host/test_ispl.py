@@ -76,7 +76,8 @@ class Image(Base):
     def test_cap_image_roundtrip(self):
         body = ispl.cap_image('capture', [(0x46000000, 16 << 20)], keep_first=4, every_us=500_000,
                               log=(0x47000000, 65536), start_ms=1500, rec_ms=3000)
-        cap = R.parse_cap(struct.pack('<II', R.CAP_MAGIC, R.CAP_VERSION) + body)
+        self.assertEqual(len(body), R.HOST_END - 8, 'the host image must stop before the camera-only ur_*')
+        cap = R.parse_cap(struct.pack('<II', R.CAP_MAGIC, R.CAP_VERSION) + body + bytes(R.CAP_BYTES - R.HOST_END))
         self.assertEqual((cap['mode'], cap['nchunk'], cap['chunks'][0]), (1, 1, (0x46000000, 16 << 20)))
         self.assertEqual((cap['keep_first'], cap['every_us'], cap['log_addr'], cap['log_max']),
                          (4, 500_000, 0x47000000, 65536))
@@ -104,7 +105,9 @@ class Take(Base):
         api = FakeApi()
         slept, _ = self.run_take(api)
         writes = [c for c in api.calls if c[0] == 'w']
-        # body with mode sd, then the mode word, then ctl armed: the last write
+        # the LV sampler off first, then body with mode sd, then the mode word, then ctl armed: the last write
+        self.assertEqual((writes[0][1], writes[0][2]), (AT + R.OFF['lv_push'], struct.pack('<I', 0)))
+        writes = writes[1:]
         self.assertEqual(struct.unpack_from('<I', writes[0][2])[0], R.MODES['sd'])
         self.assertEqual((writes[1][1], writes[1][2]), (AT + 8, struct.pack('<I', R.MODES['capture'])))
         self.assertEqual((writes[2][1], writes[2][2]), (AT + R.OFF['ctl'], struct.pack('<I', R.CTL['armed'])))
@@ -164,6 +167,68 @@ class Take(Base):
         self.assertEqual((cap['mode'], cap['nchunk'], cap['ctl'], cap['start_ms'], cap['rec_ms']),
                          (R.MODES['sd'], 0, R.CTL['armed'], 3000, 2000))
         self.assertFalse(ispl.ALLOC_KEEP.exists())
+
+    def test_discard_take_lends_nothing_and_arms_the_discard_sink(self):
+        api = FakeApi()
+        def heap(*a):
+            raise AssertionError('a discard take must not touch the allocator')
+        a = types.SimpleNamespace(mb=32, keep_first=4, every_ms=500, start_ms=3000, rec_ms=2000,
+                                  focus=False, focus_ms=0, discard=True)
+        ispl.cmd_take(a, api, heap, lambda s: None)
+        cap = R.parse_cap(api.get(AT, R.CAP_BYTES))
+        self.assertEqual((cap['mode'], cap['nchunk'], cap['ctl'], cap['log_max']),
+                         (R.MODES['discard'], 0, R.CTL['armed'], 0))
+        self.assertFalse(ispl.ALLOC_KEEP.exists())
+
+    def test_discard_take_can_arm_the_lv_sampler_before_the_ctl_word(self):
+        api = FakeApi()
+        a = types.SimpleNamespace(start_ms=3000, rec_ms=2000, focus=False, discard=True, lv_every_ms=250, lv_max=20)
+        ispl.cmd_take(a, api, None, lambda s: None)
+        cap = R.parse_cap(api.get(AT, R.CAP_BYTES))
+        self.assertEqual((cap['lv_push'], cap['lv_every_us'], cap['lv_max'], cap['ctl']), (1, 250000, 20, R.CTL['armed']))
+
+    def test_discard_take_can_arm_the_lv_burst(self):
+        api = FakeApi()
+        a = types.SimpleNamespace(start_ms=3000, rec_ms=2000, focus=False, discard=True, lv_burst_ms=1500, lv_max=120)
+        ispl.cmd_take(a, api, None, lambda s: None)
+        cap = R.parse_cap(api.get(AT, R.CAP_BYTES))
+        self.assertEqual((cap['lv_push'], cap['lv_every_us'], cap['lv_burst_ms'], cap['lv_max'], cap['ctl']),
+                         (1, 0, 1500, 120, R.CTL['armed']))
+        self.assertLess(R.OFF['lv_burst_ms'], R.HOST_END, 'lv_burst_ms must be inside the arm image')
+
+    def test_discard_take_can_ask_for_cdng_after_the_stop(self):
+        api = FakeApi()
+        a = types.SimpleNamespace(start_ms=3000, rec_ms=2000, focus=False, discard=True, cd_after_ms=2000, cd_max=5)
+        ispl.cmd_take(a, api, None, lambda s: None)
+        cap = R.parse_cap(api.get(AT, R.CAP_BYTES))
+        self.assertEqual((cap['cd_after_ms'], cap['cd_max'], cap['cd_state'], cap['lv_push']), (2000, 5, 0, 0))
+
+    def test_reports_replace_the_shell_read(self):
+        import push_rx, tempfile, pathlib
+        api = FakeApi()
+        out = pathlib.Path(tempfile.mkdtemp())
+        a = types.SimpleNamespace(start_ms=3000, rec_ms=2000, focus=False, discard=True, report=True,
+                                  heartbeat_ms=1000, listen=str(out))
+        cap = bytearray(api.get(AT, R.CAP_BYTES))
+        struct.pack_into('<I', cap, R.OFF['ctl'], R.CTL['done']); struct.pack_into('<I', cap, R.OFF['n_press'], 2)
+        def fake_listen(path, *args, **kw):
+            sink = push_rx.file_sink(path)
+            for seq, ev in enumerate((1, 2, 3)):
+                h = push_rx.parse_header(push_rx.make_header(5, seq, [len(cap)], t_us=1000 * seq, frame_no=ev, fmt=6))
+                sink(h, bytes(cap))
+            return {'reason': 'idle'}, None, {}
+        saved_listen, saved_read = push_rx.listen, ispl.read_cap
+        push_rx.listen = fake_listen
+        reads = []
+        ispl.read_cap = lambda api, at: reads.append(at) or R.parse_cap(api.get(at, R.CAP_BYTES))
+        try:
+            ispl.cmd_take(a, api, None, lambda s: None)
+        finally:
+            push_rx.listen, ispl.read_cap = saved_listen, saved_read
+        armed = R.parse_cap(api.get(AT, R.CAP_BYTES))
+        self.assertEqual((armed['rp_on'], armed['rp_every_us']), (1, 1_000_000))
+        self.assertEqual(reads[1:], [], 'the summary read the sink over the shell although reports came')
+        self.assertEqual([e for _, e, _ in ispl.reports(out)], ['armed', 'rec', 'stopped'])
 
     def test_ctl_only_does_not_free_an_old_sink_allocation(self):
         ispl.ALLOC_KEEP.write_text('old sink allocation: do not free after a reboot')

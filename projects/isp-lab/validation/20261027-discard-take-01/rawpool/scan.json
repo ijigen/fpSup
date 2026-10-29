@@ -1,0 +1,67 @@
+{
+ "date_utc": "2026-10-26T20:37:34.224821+00:00",
+ "arena": [
+  1404045568,
+  2146565888
+ ],
+ "bufuse_before": {
+  "text": "mem mode = MOVIE_REC_DNG (3) \nUSER         (00): [total:  31457536][used:  14720576][used(max):  19704384][remaining:  16736960][link:            ]\nOSD          (01): [total:  56623360][used:  53622080][used(max):  53622336][remaining:   3001280][link:            ]\nIMAGE        (02): [total:  17826048][used:  17822528][used(max):  17822464][remaining:      3520][link:            ]\nLVIEW        (03): [total:  50331904][used:  12515584][used(max):  13704960][remaining:  37816320][link:            ]\nMOVAUDIO     (06): [total:  13631744][used:     32960][used(max):   8405120][remaining:  13598784][link:            ]\nYUV          (09): [total:       256][used:         0][used(max):         0][remaining:       256][link:RAW         ]\nRAW          (10): [total: 742520320][used:         0][used(max):  16264000][remaining: 742520320][link:RAW_SUB     ]\nJPEG         (11): [total:       256][used:         0][used(max):         0][remaining:       256][link:RAW         ]\nFILEINF      (12): [total:   3145984][used:         0][used(max):    119872][remaining:   3145984][link:            ]\nRAW_SUB      (14): [total:  85983488][used:         0][used(max):         0][remaining:  85983488][link:            ]\n",
+  "mode": "MOVIE_REC_DNG",
+  "raw": {
+   "total": 742520320,
+   "used": 0,
+   "used_max": 16264000
+  }
+ },
+ "found": [
+  {
+   "at": 1404045696,
+   "size": 1000448,
+   "file": "dng_53b00980.dng",
+   "sha256": "833659f53685846a17f82e18d089b4cd7280d4cdc902caee26b03ef4cb23dcd4"
+  },
+  {
+   "at": 1405094272,
+   "size": 999424,
+   "file": "dng_53c00980.dng",
+   "sha256": "a53a6ef1794f47f0a5425d1ecf86962a02216fbf7a577e348566bee3ce849c91"
+  },
+  {
+   "at": 1406142848,
+   "size": 1000448,
+   "file": "dng_53d00980.dng",
+   "sha256": "6082c70e67dab638021e0b0de48e7ab5f340ca2f28c6dcda7020d71d79381277"
+  },
+  {
+   "at": 1407191424,
+   "size": 1000448,
+   "file": "dng_53e00980.dng",
+   "sha256": "a1f2d539681888dfdd9041d18fbe1bfbf3a07f6e77391235984093d08e3d26ad"
+  },
+  {
+   "at": 1407307776,
+   "size": 3244220,
+   "file": "dng_53e1d000.dng",
+   "sha256": "5a0b1c8a441ce1e414f04126d5d0e5fdb24894500f7a21c9fae5481bfbb210e5"
+  },
+  {
+   "at": 1410561024,
+   "size": 3244220,
+   "file": "dng_54137400.dng",
+   "sha256": "336a6e69adde4ae8e79589a2139379a806463f1247cc2829756699a0cf7fcfb9"
+  },
+  {
+   "at": 1413814272,
+   "size": 3244220,
+   "file": "dng_54451800.dng",
+   "sha256": "e685d2f62122462f52e7982c4fb1423e9e2eebbf6bf375039d27943cde7a66c9"
+  },
+  {
+   "at": 1417067520,
+   "size": 3244220,
+   "file": "dng_5476bc00.dng",
+   "sha256": "709829cbc4e4edff8f12bf4567d819650577f77f9426cc3609ff91d079e43e24"
+  }
+ ],
+ "tool_sha256": "94e81751fb7fbb66b1456eb7eb56c49e6dc3891c5969d84ee48b21b0db5c5ad1"
+}

@@ -1,0 +1,10 @@
+02:02:11 FHD60:C5096955f: start
+02:02:37 restore rc=0 restored FHD60:C5096955f: 44 words
+02:02:37 FHD60:Ce69ea6b7: start
+02:03:02 restore rc=0 restored FHD60:Ce69ea6b7: 44 words
+02:03:02 FHD60:C5096955f: fail  {'size': True, 'bits': True, 'fov_r': 0.944, 'fov_scale': 0.97, 'rec_fov_scale': 0.97, 'fov': False, 'rec_lv': False, 'lv_colour': True, 'aspect_dng': 1.006, 'aspect': False, 'cfa': True, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+02:03:02 FHD60:C6a9d64a7: start
+02:03:28 restore rc=0 restored FHD60:C6a9d64a7: 40 words, binfilt hits (path, kernel) [2, 14]
+02:03:40 FHD60:Ce69ea6b7: fail  {'size': True, 'bits': True, 'fov_r': 0.944, 'fov_scale': 0.97, 'rec_fov_scale': 0.97, 'fov': False, 'rec_lv': False, 'lv_colour': True, 'aspect_dng': 1.006, 'aspect': False, 'cfa': True, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+02:03:43 FHD60:C6a9d64a7: fail  {'size': True, 'bits': True, 'fov_r': 0.951, 'fov_scale': 0.975, 'rec_fov_scale': 0.975, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.502, 'aspect': False, 'cfa': True, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+02:04:07 page rebuilt

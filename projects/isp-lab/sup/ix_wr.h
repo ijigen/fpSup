@@ -103,16 +103,22 @@ enum { IX_SD = 0, IX_CAPTURE = 1, IX_DISCARD = 2 };
 #define IX_MAX_CHUNK  32u
 #define IX_REC_MAGIC  0x31525849u        /* "IXR1" */
 #define IX_CAP_MAGIC  0x4C505349u        /* "ISPL": the host finds the sink by it */
-#define IX_CAP_VERSION 4u
+#define IX_CAP_VERSION 10u
 
 /* ctl: the host writes start_ms/rec_ms, then ctl = IX_CTL_ARMED (last).  The
  * control task stamps t_arm and, start_ms later, runs the firmware's own
- * record script (FUN_c0405ba0): recstate ena/init, key MOVON, recstate
- * movrecstwai; rec_ms after that key MOVON + recstate movsavewai (up to three
- * times), recstate disa.  Writing 0 before the start cancels. */
+ * record script (FUN_c0405ba0): recstate ena/init, key MOVON, then (layout 10)
+ * polls recstate +6 itself every step instead of the blocking movrecstwai, so
+ * LV goes on across the start; rec_ms after that ONE key MOVON + recstate
+ * movsavewai, recstate disa. Uncertain start/stop is never retried. Writing 0
+ * before the MOVON cancels; after it nothing does. After our disa, reset its
+ * stale registration byte. */
 enum { IX_CTL_IDLE = 0, IX_CTL_ARMED = 1, IX_CTL_REC = 2, IX_CTL_DONE = 3,
        IX_CTL_FAIL_START = 4,            /* no sign the take started: no second press */
-       IX_CTL_FAIL_STOP = 5 };           /* three stop presses, no "saved"            */
+       IX_CTL_FAIL_STOP = 5,             /* stop attempted once, no "saved"            */
+       IX_CTL_STARTING = 6 };            /* MOVON pressed, recstate +6 not yet seen    */
+/* movrecstwai's own bound (FUN_c0407ab8(.., 3)): 600 polls of +6, 100 ms apart */
+#define IX_START_WAIT_MS 60000u
 
 /* LV sampler (layout 3): the control task reads the LCD output descriptor
  * (0xC30255B4) and the display DMA channel's slot register, and hands the slot
@@ -122,10 +128,24 @@ enum { IX_CTL_IDLE = 0, IX_CTL_ARMED = 1, IX_CTL_REC = 2, IX_CTL_DONE = 3,
  * notes/PUSH_CALLERS.md §1. */
 #define IX_LV_DESC     0xC30255B4u       /* LCD descriptor: [3] w [4] h [8] n [9..] handles */
 #define IX_LV_CHSEL    0xC31DF8D8u       /* channel = this + 2 (>= 7: 8), FUN_c01d7638 */
-#define IX_LV_ENGINE   1u                /* lv_push = 1: the built-in engine (ix_push.c) */
+#define IX_LV_ENGINE   1u
+/* the display watch: three LCD output descriptors' w/h, the engine's output size, the exported preview config of
+ * the first two channels (visible w/h, source w/h; open-gate LIVE_VIEW_DISPLAY_CHAIN §1) */
+#define IX_FC_REG      0x30100588u       /* receiver frame counter, & 0x7FF (FUN_c0125870 reads it twice) */
+#define IX_WT_N        16u
+#define IX_WT_ADDRS    { 0xC30255C0u, 0xC30255C4u, 0xC3025640u, 0xC3025644u, 0xC30256C0u, 0xC30256C4u, \
+                         0xC31E10F8u, 0xC31E10FCu, 0xC31DF594u, 0xC31DF598u, 0xC31DF59Cu, 0xC31DF5A0u, \
+                         0xC31DF744u, 0xC31DF748u, 0xC31DF74Cu, 0xC31DF750u }                /* lv_push = 1: the built-in engine (ix_push.c) */
 #define IX_LV_MAX_N    8u
 #define IX_LV_MAX_BYTES ((16u << 20) - 1024u)   /* one TRB */
 enum { IX_PUSH_SENT = 0, IX_PUSH_SKIPPED = 1 };
+/* LV push flags (FPP1 header +0x2C): bit0 recording, bit1 half-press, bit2 magnify, and (layout 10) */
+#define IX_LV_F_BURST    8u              /* a burst push: frame_no = slot, aux0 = the step's tick_us, aux1 = bu index */
+#define IX_LV_F_STARTING 16u             /* sampled between our MOVON and recstate +6 */
+/* the burst (layout 10): every newly finished ring slot from our MOVON until lv_burst_ms after the start was
+ * seen, one bu entry per burst push sent (the first IX_BU_N), with the display watch at that moment */
+#define IX_BU_N        48u
+typedef struct { uint32_t tick_us, slot, flags, reg, wt[IX_WT_N]; } ix_burst;
 typedef struct { uint32_t addr, len; } ix_seg;
 typedef struct {
     uint32_t mode, source, frame_no, w, h, fmt, stride, flags, aux0, aux1, nseg;
@@ -140,6 +160,20 @@ typedef struct {
 #define IX_CD_STEP      0x400u           /* DNG starts seen 10-25: all 0x400-aligned */
 #define IX_CD_DNG_MAX   (64u << 20)
 enum { IX_CD_IDLE = 0, IX_CD_DONE = 1, IX_CD_NO_ARENA = 2, IX_CD_BUSY = 3 };
+enum { IX_CP_STANDBY = 0, IX_CP_FOCUS = 1, IX_CP_MAG = 2, IX_CP_SETTLE = 3, IX_CP_DONE = 4 };
+#define IX_CP_SETTLE_MS 600u
+enum { IX_UR_WAIT = 0, IX_UR_OFF = 1, IX_UR_DONE = 2, IX_UR_NOFIX = 3 };
+#define IX_USBFIX_AT    0xC0032808u      /* the dev shell's first USBFIX word (cards/build_devshell.py) */
+#define IX_USBFIX_WORD  0xE3A03B01u      /* mov r3, #0x400: EP83 MPS 1024 */
+#define IX_UR_AFTER_MS  3000u            /* after the control task's first step: every sup has loaded */
+#define IX_UR_OFF_MS    700u             /* "usb off" .. "usb on" */
+#define IX_UR_GIVEUP_MS 30000u           /* no USBFIX by then: a release shell, never reconnect */             /* after leaving magnify: the readout mode switches back */
+/* report events (FPP1 source 5, header frame_no and aux0; payload = the ix_cap snapshot, w = IX_CAP_VERSION) */
+enum { IX_EV_ARMED = 1, IX_EV_REC = 2, IX_EV_STOPPED = 3, IX_EV_FAIL_START = 4, IX_EV_FAIL_STOP = 5,
+       IX_EV_CDNG = 6, IX_EV_HEARTBEAT = 7 };
+#define IX_RP_SOURCE  5u
+#define IX_RP_FMT     6u
+#define IX_RP_BUF     4608u              /* >= sizeof(ix_cap); checked at compile time in ix_wr.c */
 
 /* one per block the writer took, kept or not */
 typedef struct { uint32_t seq, t_us, ncookie, bytes; } ix_logline;
@@ -196,6 +230,35 @@ typedef struct {
     uint32_t cd_sent, cd_skip;           /* pushes that went / did not            */
     uint32_t cd_us;                      /* the whole scan + push, microseconds   */
     uint8_t  cd_newest[20];              /* that take's DateTime, "YYYY:MM:DD HH:MM:SS" */
+    /* reports (layout 5): a snapshot of this whole struct pushed as FPP1 source 5 -- host-written */
+    uint32_t rp_on;                      /* 1: push one at every control event (mode 1, short wait) */
+    uint32_t rp_every_us;                /* heartbeat: one per this interval, mode 0 (0: none) */
+    /* camera-written */
+    uint32_t rp_t_last, rp_n_sent, rp_n_skip, rp_last_ev;
+    /* checkpoints before the take (layout 6): standby -> half-press AF -> magnify -> settle -> REC, all by the
+     * control task, so the LV pushed in each phase carries its flag (bit1 half-press, bit2 magnify) -- host-written */
+    uint32_t cp_standby_ms, cp_focus_ms, cp_mag_ms;   /* 0: skip that phase */
+    /* camera-written */
+    uint32_t cp_phase, cp_t;             /* IX_CP_*, tick_us the phase began */
+    /* LV burst across the start (layout 10) -- host-written, inside the arm image */
+    uint32_t lv_burst_ms;                /* 0: off (the lv_every_us cadence only) */
+    /* USB reconnect once after boot (layout 7): the host enumerated PTP before the dev shell's USBFIX
+     * patched FUN_c00327b8, so EP83 is still interrupt/64 until the next connect -- camera-written */
+    uint32_t ur_state, ur_t0, ur_t;      /* IX_UR_*, first step / "usb off" tick_us */
+    /* display watch (layout 8): the words of IX_WT_ADDRS, sampled with every LV step -- the last value seen in
+     * standby and the last while recording (the recording LV ring is 1920x1080 on every route: which layer the LCD
+     * shows from, and how it is fitted, is read here, never over USB during the take) -- camera-written */
+    uint32_t wt_n_sby, wt_n_rec;
+    uint32_t wt_sby[IX_WT_N], wt_rec[IX_WT_N];
+    /* sensor frame clock while recording (layout 8): the receiver's frame counter IX_FC_REG & 0x7FF, sampled every
+     * control step; fps = fc_frames / (fc_t_last - fc_t_first) us -- camera-written */
+    uint32_t fc_prev, fc_frames, fc_t_first, fc_t_last, fc_steps, fc_gap_max;
+    /* LV burst (layout 10), past the arm image: zeroed by the control task when it sees the arm -- camera-written */
+    uint32_t t_movon;                    /* tick_us | 1 right after our start MOVON returned */
+    uint32_t bu_last;                    /* the slot the last burst push sent (0xFFFFFFFF: none yet) */
+    uint32_t bu_sent, bu_skip, bu_err;   /* burst pushes: sent / engine busy / refused or bad */
+    uint32_t bu_n;                       /* entries in bu (= min(bu_sent, IX_BU_N)) */
+    ix_burst bu[IX_BU_N];
 } ix_cap;
 
 /* ---- the push engine (FPP1 over EP 0x83, notes/PUSH_PROTOCOL.md; ix_push.c).
@@ -206,7 +269,10 @@ typedef struct {
 #define PX_PHYS       7u
 #define PX_TRB_DMA    0xC31E3238u        /* [ctx]: TRB DMA address StartTransfer hands the controller */
 #define PX_TRB_CPU    0xC31E3264u        /* [ctx]: the same TRB, CPU address (= DMA + 0x40000000) */
-#define PX_DEAF       0xC31E38FCu        /* 1 after a PTP Cancel/Reset: StartTransfer -> -2 (handover F2) */
+#define PX_DEAF       0xC31E38FCu
+#define PX_DEPCMD     (0x2100C80Cu + 0x10u * PX_PHYS)   /* DWC3 DEPCMD of phys 7: reads back the last endpoint command */
+#define PX_CMD_START  6u
+#define PX_CMD_UPDATE 7u        /* 1 after a PTP Cancel/Reset: StartTransfer -> -2 (handover F2) */
 #define PX_MAX_TRB    64u
 #define PX_MAX_SEG    4u
 #define PX_TRB_MAX_LEN 0xFFFC00u         /* 16 MiB - 1 KiB */
@@ -226,8 +292,10 @@ typedef struct {
     uint32_t owns;                       /* 1 while the tables point at our chain    */
     uint32_t seq[8], n_skip[8];          /* per source                               */
     uint32_t n_sent, n_bad, n_timeout, n_start_err, n_deaf, last_rc;
+    uint32_t n_lost;                     /* chains dropped by an endpoint reconfigure (host reopen, reconnect) */
     uint64_t bytes;
-} ix_px_t;
+} __attribute__((aligned(64))) ix_px_t;  /* DWC3 TRBs must be 16-aligned: a misaligned chain is read 8 bytes
+                                          * early, its write-back lands in lo/hi and HWO never clears (10-27) */
 
 /* Recognising the volume's driver by its saved acquire pointer. */
 #define WR_SD_ACQ     0xC065F021u
@@ -257,6 +325,9 @@ typedef struct {
     ix_cap   cap;                        /* before q: a fixed offset for the host */
     bq_t     q;
     ix_px_t  px;                         /* the push engine (ix_push.c); last, 16-aligned */
+    uint8_t  rp_buf[IX_RP_BUF];          /* report snapshot, written through the uncached alias */
+    uint32_t starting;                   /* our start MOVON is unconfirmed: outside the cap, so no host
+                                          * write can cancel a pressed start (layout 10) */
 } wr_t;
 
 void     wr_init(wr_t *w, const wr_fw *fw, int flag, const uint32_t veneer[6],

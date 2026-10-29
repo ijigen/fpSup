@@ -415,7 +415,8 @@ void wr_task(wr_t *w) {
 
 /* One line through the stock shell executor, as FUN_c0405ba0 (the firmware's
  * own "record N movies" script) does: no .rodata in a sup, so word stores. */
-enum { IX_SH_ENA = 1, IX_SH_INIT, IX_SH_MOVON, IX_SH_RECWAI, IX_SH_SAVEWAI, IX_SH_DISA };
+enum { IX_SH_ENA = 1, IX_SH_INIT, IX_SH_MOVON, IX_SH_RECWAI, IX_SH_SAVEWAI, IX_SH_DISA,
+       IX_SH_S1ON, IX_SH_S1OFF, IX_SH_OKON, IX_SH_OKOFF, IX_SH_USBOFF, IX_SH_USBON };
 static void ix_sh(wr_t *w, uint32_t id) {
     volatile uint32_t b[6];
     b[0] = b[1] = b[2] = b[3] = b[4] = b[5] = 0;
@@ -426,10 +427,23 @@ static void ix_sh(wr_t *w, uint32_t id) {
     case IX_SH_RECWAI: b[0] = 0x73636572u; b[1] = 0x65746174u; b[2] = 0x766F6D20u; b[3] = 0x73636572u; b[4] = 0x69617774u; b[5] = 0x00000000u; break;   /* "recstate movrecstwai" */
     case IX_SH_SAVEWAI: b[0] = 0x73636572u; b[1] = 0x65746174u; b[2] = 0x766F6D20u; b[3] = 0x65766173u; b[4] = 0x00696177u; break;   /* "recstate movsavewai" */
     case IX_SH_DISA: b[0] = 0x73636572u; b[1] = 0x65746174u; b[2] = 0x73696420u; b[3] = 0x00000061u; break;   /* "recstate disa" */
+    case IX_SH_S1ON: b[0] = 0x2079656Bu; b[1] = 0x4E4F3153u; break;   /* "key S1ON" */
+    case IX_SH_S1OFF: b[0] = 0x2079656Bu; b[1] = 0x464F3153u; b[2] = 0x00000046u; break;   /* "key S1OFF" */
+    case IX_SH_OKON: b[0] = 0x2079656Bu; b[1] = 0x4E4F4B4Fu; break;   /* "key OKON" */
+    case IX_SH_OKOFF: b[0] = 0x2079656Bu; b[1] = 0x464F4B4Fu; b[2] = 0x00000046u; break;   /* "key OKOFF" */
+    case IX_SH_USBOFF: b[0] = 0x20627375u; b[1] = 0x0066666Fu; break;   /* "usb off" */
+    case IX_SH_USBON: b[0] = 0x20627375u; b[1] = 0x00006E6Fu; break;   /* "usb on" */
     default: return;
     }
     w->cap.ctl_line = id;                       /* the last line started: a hang shows here */
     w->fw.shell_exec(w->fw.shell_ctx, (char *)b);
+    if (id == IX_SH_DISA) {
+        /* fp 5.02 C0407948 unregisters ShellRecOb but leaves its +4 byte
+         * set. The next C0407908 then skips registration, so a second take
+         * records without receiving started/saved notifications. Only after
+         * OUR disa returned, make that byte match the completed unregister. */
+        *(volatile uint8_t *)(w->fw.recstate + 4u) = 0;
+    }
     if (id == IX_SH_MOVON) w->cap.n_press++;
 }
 
@@ -458,14 +472,48 @@ static uint32_t ix_lv_reg(uint32_t ch) {
     }
 }
 
-/* One LV sample, at most every lv_every_us.  Never waits: the engine's mode 0
- * skips when the previous push has not finished. */
+/* The display watch words now: into the standby or the recording copy, and into `out`. */
+static void ix_wt_sample(ix_cap *c, uint32_t *out) {
+    static const uint32_t wt[IX_WT_N] = IX_WT_ADDRS;
+    int rec = c->ctl == IX_CTL_REC;
+    uint32_t *dst = rec ? c->wt_rec : c->wt_sby;
+    for (uint32_t i = 0; i < IX_WT_N; i++) dst[i] = out[i] = *(volatile uint32_t *)wt[i];
+    if (rec) c->wt_n_rec++; else c->wt_n_sby++;
+}
+
+/* The burst window (layout 10): from our start MOVON until lv_burst_ms after recstate +6 was seen. */
+static int ix_bu_on(const ix_cap *c, uint32_t now) {
+#ifndef IX_MUTANT_BU_ALWAYS
+    if (!c->lv_burst_ms) return 0;
+#endif
+    if (c->ctl == IX_CTL_STARTING) return 1;
+#ifdef IX_MUTANT_BU_NO_END
+    return c->ctl == IX_CTL_REC;
+#endif
+    return c->ctl == IX_CTL_REC && now - c->t_rec < c->lv_burst_ms * 1000u;
+}
+
+/* One LV sample, at most every lv_every_us -- or, inside the burst window, one per newly finished ring slot
+ * (the slot changed since the last burst push; time does not matter).  Never waits: the engine's mode 0 skips
+ * when the previous push has not finished, and a skipped slot is still new at the next step.  A whole ring
+ * wrap between two steps (n frames, 67 ms at 60 fps with 4 slots) looks like no new frame. */
 static void ix_lv_step(wr_t *w, uint32_t now) {
     ix_cap *c = &w->cap;
-    if (!c->lv_push || !c->lv_every_us) return;
+    int burst = ix_bu_on(c, now);
+    if (!c->lv_push || !(c->lv_every_us || burst)) return;
+#ifndef IX_MUTANT_LV_ALWAYS
+    /* Only while a take is armed, starting or recording.  After it the sampler wrote lv_t_last into the line
+     * the host's next arm rewrites, and the host's cache clean then put the sup's stale lv_push back over its 0
+     * (10-27 night1e-d10 / night2 z1536: "readback differs from offset 392"). */
+    if (c->ctl != IX_CTL_ARMED && c->ctl != IX_CTL_STARTING && c->ctl != IX_CTL_REC) return;
+#endif
     if (c->lv_max && c->lv_n_sent >= c->lv_max) return;
-    if (c->lv_t_last && now - c->lv_t_last < c->lv_every_us) return;
-    c->lv_t_last = now;                         /* 0 = never: costs one early push per 71 min */
+    uint32_t wv[IX_WT_N];
+    if (!burst) {
+        if (c->lv_t_last && now - c->lv_t_last < c->lv_every_us) return;
+        c->lv_t_last = now;                     /* 0 = never: costs one early push per 71 min */
+        ix_wt_sample(c, wv);
+    }
     volatile uint32_t *d = (volatile uint32_t *)IX_LV_DESC;
     uint32_t wd = d[3], ht = d[4], n = d[8];
     uint32_t ch = *(volatile uint32_t *)IX_LV_CHSEL + 2u;
@@ -485,11 +533,25 @@ static void ix_lv_step(wr_t *w, uint32_t now) {
     uint32_t h = d[9u + slot];
     uint32_t addr = 0x40000000u + 4u * h;
     if (!h || addr < 0x40000000u || addr + wd * ht * 2u > 0x80000000u) { c->lv_n_bad++; return; }
+    if (burst) {
+#ifndef IX_MUTANT_BU_NO_DEDUPE
+        if (slot == c->bu_last) return;          /* nothing finished since the last burst push */
+#endif
+        c->lv_t_last = now;                      /* the cadence goes on from here after the window */
+        ix_wt_sample(c, wv);
+    }
+    uint32_t flags = (c->ctl == IX_CTL_REC ? 1u : 0u) | (c->cp_phase == IX_CP_FOCUS ? 2u : 0u) |
+                     (c->cp_phase == IX_CP_MAG ? 4u : 0u) | (burst ? IX_LV_F_BURST : 0u) |
+                     (c->ctl == IX_CTL_STARTING ? IX_LV_F_STARTING : 0u);
     volatile ix_push_req q;
     q.mode = 0; q.source = 1; q.frame_no = slot; q.w = wd; q.h = ht;
     q.fmt = 1; q.stride = wd * 2u;
-    q.flags = c->ctl == IX_CTL_REC ? 1u : 0u;
-    q.aux0 = reg; q.aux1 = ch; q.nseg = 1;
+    q.flags = flags;
+    /* a burst push carries the bu entry's join keys: its tick_us and index (the raw register is in the entry) */
+    q.aux0 = burst ? now : reg; q.aux1 = burst ? c->bu_sent : ch; q.nseg = 1;
+#ifdef IX_MUTANT_BU_AUX
+    q.aux0 = reg;
+#endif
     q.seg[0].addr = addr; q.seg[0].len = wd * ht * 2u;
     q.seg[1].addr = q.seg[1].len = q.seg[2].addr = q.seg[2].len = q.seg[3].addr = q.seg[3].len = 0;
     c->lv_last_addr = addr;
@@ -499,49 +561,199 @@ static void ix_lv_step(wr_t *w, uint32_t now) {
     if (r == IX_PUSH_SENT) c->lv_n_sent++;
     else if (r == IX_PUSH_SKIPPED) c->lv_n_skip++;
     else c->lv_n_err++;
+    if (!burst) return;
+    if (r != IX_PUSH_SENT) {                     /* not sent: the slot stays new for the next step */
+        if (r == IX_PUSH_SKIPPED) c->bu_skip++; else c->bu_err++;
+        return;
+    }
+    c->bu_last = slot;
+    if (c->bu_n < IX_BU_N) {
+        ix_burst *e = &c->bu[c->bu_n++];
+        e->tick_us = now; e->slot = slot; e->flags = flags; e->reg = reg;
+#ifndef IX_MUTANT_BU_NO_WT
+        for (uint32_t i = 0; i < IX_WT_N; i++) e->wt[i] = wv[i];
+#endif
+    }
+    c->bu_sent++;
+}
+
+typedef char ix_rp_fits[(sizeof(ix_cap) <= IX_RP_BUF) ? 1 : -1];
+
+/* Push a snapshot of the whole ix_cap as FPP1 source 5.  The copy goes through the uncached alias, so the
+ * controller reads exactly what the task saw without a cache flush.  Events wait briefly (mode 1); the
+ * heartbeat never waits (mode 0). */
+static void ix_report(wr_t *w, uint32_t ev, uint32_t mode) {
+    ix_cap *c = &w->cap;
+    if (!(ev == IX_EV_HEARTBEAT ? c->rp_every_us : c->rp_on)) return;
+    c->rp_last_ev = ev;
+    volatile uint8_t *dst = px_uc8(w->rp_buf);
+    const uint8_t *src = (const uint8_t *)c;
+    for (uint32_t i = 0; i < sizeof(ix_cap); i++) dst[i] = src[i];
+    volatile ix_push_req q;
+    q.mode = mode; q.source = IX_RP_SOURCE; q.frame_no = ev; q.w = IX_CAP_VERSION; q.h = sizeof(ix_cap);
+    q.fmt = IX_RP_FMT; q.stride = 0; q.flags = c->ctl == IX_CTL_REC ? 1u : 0u; q.aux0 = ev; q.aux1 = c->ctl;
+    q.nseg = 1; q.seg[0].addr = (uint32_t)dst; q.seg[0].len = sizeof(ix_cap);
+    q.seg[1].addr = q.seg[1].len = q.seg[2].addr = q.seg[2].len = q.seg[3].addr = q.seg[3].len = 0;
+    if (ix_push(w, &q, 500u) == PX_SENT) c->rp_n_sent++;
+    else c->rp_n_skip++;
+}
+
+/* The checkpoints before the take, one phase per call; leaves cp_phase = IX_CP_DONE when all are through. */
+static void ix_cp_step(wr_t *w, uint32_t now) {
+    ix_cap *c = &w->cap;
+    uint32_t el = now - c->cp_t;
+    switch (c->cp_phase) {
+    case IX_CP_STANDBY:
+        if (now - c->t_arm < c->cp_standby_ms * 1000u) return;
+        if (c->cp_focus_ms) { ix_sh(w, IX_SH_S1ON); c->cp_phase = IX_CP_FOCUS; c->cp_t = now; return; }
+        goto magnify;
+    case IX_CP_FOCUS:
+        if (el < c->cp_focus_ms * 1000u) return;
+#ifndef IX_MUTANT_NO_S1OFF
+        ix_sh(w, IX_SH_S1OFF);
+#endif
+    magnify:
+        if (c->cp_mag_ms) { ix_sh(w, IX_SH_OKON); ix_sh(w, IX_SH_OKOFF); c->cp_phase = IX_CP_MAG; c->cp_t = now; }
+        else c->cp_phase = IX_CP_DONE;
+        return;
+    case IX_CP_MAG:
+        if (el < c->cp_mag_ms * 1000u) return;
+        ix_sh(w, IX_SH_OKON); ix_sh(w, IX_SH_OKOFF);          /* the centre button toggles magnify back off */
+        c->cp_phase = IX_CP_SETTLE; c->cp_t = now;
+        return;
+    case IX_CP_SETTLE:
+        if (el >= IX_CP_SETTLE_MS * 1000u) c->cp_phase = IX_CP_DONE;
+        return;
+    default:
+        return;
+    }
+}
+
+/* The stock "usb off" / "usb on" (FUN_c0419028 -> FUN_c002c420(obj, 0/1): an
+ * asynchronous connect-state request to the USB task), once, so the host
+ * enumerates again with the patched descriptor and nobody has to replug. */
+static void ix_ur_step(wr_t *w, uint32_t now) {
+    ix_cap *c = &w->cap;
+    if (c->ur_state >= IX_UR_DONE) return;
+    if (!c->ur_t0) { c->ur_t0 = now | 1u; return; }
+    if (c->ur_state == IX_UR_WAIT) {
+        uint32_t el = now - c->ur_t0;
+        if (el < IX_UR_AFTER_MS * 1000u || c->ctl != IX_CTL_IDLE) return;
+#ifndef IX_MUTANT_UR_NO_FIX_CHECK
+        if (*(volatile uint32_t *)IX_USBFIX_AT != IX_USBFIX_WORD) {
+            if (el >= IX_UR_GIVEUP_MS * 1000u) c->ur_state = IX_UR_NOFIX;
+            return;
+        }
+#endif
+        ix_sh(w, IX_SH_USBOFF);
+        c->ur_state = IX_UR_OFF; c->ur_t = now;
+        return;
+    }
+    if (now - c->ur_t < IX_UR_OFF_MS * 1000u) return;
+    ix_sh(w, IX_SH_USBON);
+    c->ur_state = IX_UR_DONE;
+}
+
+/* The sensor's real frame rate during the take: each change of the receiver counter is a frame edge seen within
+ * one control step; the first and last edges bound fc_frames frame periods. */
+static void ix_fc_step(ix_cap *c, uint32_t now) {
+    if (c->ctl != IX_CTL_REC) return;
+    volatile uint32_t *r = (volatile uint32_t *)IX_FC_REG;
+    uint32_t v = *r & 0x7FFu, v2 = *r & 0x7FFu;
+    if (v != v2) return;                         /* read in the middle of an update */
+    c->fc_steps++;
+    if (!c->fc_t_first) { c->fc_prev = v; c->fc_t_first = now | 1u; c->fc_t_last = 0; return; }
+    if (v == c->fc_prev) return;
+    uint32_t d = (v - c->fc_prev) & 0x7FFu;
+    if (!c->fc_t_last) { c->fc_t_first = now | 1u; c->fc_frames = 0; }   /* the first edge starts the clock */
+    else { c->fc_frames += d; if (d > c->fc_gap_max) c->fc_gap_max = d; }
+    c->fc_t_last = now | 1u;
+    c->fc_prev = v;
 }
 
 void ix_ctl_step(wr_t *w) {
     ix_cap *c = &w->cap;
     uint32_t now = w->fw.tick_us();
+#ifndef IX_MUTANT_CANCEL_STARTING
+    /* A pressed start is never abandoned: a host write over ctl (a cancel, a new arm) during it would leave a take
+     * that may be starting with nobody to stop it.  movrecstwai made this hold by blocking. */
+    if (w->starting) c->ctl = IX_CTL_STARTING;
+#endif
+    ix_fc_step(c, now);
+    ix_ur_step(w, now);
     ix_lv_step(w, now);
     /* CDNG after the stop: on the host's word (a manual take), or cd_after_ms
      * after our own take's stop.  Once per arm: cd_state leaves IDLE. */
-    if (c->cd_go) { c->cd_go = 0; ix_cdng_run(w); }
+    if (c->cd_go) { c->cd_go = 0; ix_cdng_run(w); ix_report(w, IX_EV_CDNG, 1); }
     else if (c->ctl == IX_CTL_DONE && c->cd_after_ms && c->cd_state == IX_CD_IDLE &&
-             now - c->t_stop >= c->cd_after_ms * 1000u) ix_cdng_run(w);
+             now - c->t_stop >= c->cd_after_ms * 1000u) { ix_cdng_run(w); ix_report(w, IX_EV_CDNG, 1); }
+    if (c->rp_every_us && now - c->rp_t_last >= c->rp_every_us) {
+        c->rp_t_last = now;
+        ix_report(w, IX_EV_HEARTBEAT, 0);
+    }
     switch (c->ctl) {
     case IX_CTL_ARMED:
-        if (!c->t_arm) { c->t_arm = now | 1u; c->install_at_arm = w->n_install; break; }
+        if (!c->t_arm) {
+            c->t_arm = now | 1u; c->install_at_arm = w->n_install;
+            /* layout 10 lives past the host's arm image: this take's burst starts empty */
+            c->t_movon = c->bu_sent = c->bu_skip = c->bu_err = c->bu_n = 0;
+            c->bu_last = 0xFFFFFFFFu;
+            ix_report(w, IX_EV_ARMED, 0);           /* mode 0: the host is not reading yet at the arm */
+            break;
+        }
+        if (c->cp_phase != IX_CP_DONE) {
+            ix_cp_step(w, now);
+            if (c->cp_phase != IX_CP_DONE) break;    /* all done in this step: go on to the take now */
+        }
         if (now - c->t_arm < c->start_ms * 1000u) break;
         ix_sh(w, IX_SH_ENA);
         ix_sh(w, IX_SH_INIT);
         ix_sh(w, IX_SH_MOVON);
+        c->t_movon = w->starting = w->fw.tick_us() | 1u;
+        c->ctl = IX_CTL_STARTING;
+#ifndef IX_MUTANT_START_BLOCKS
+        /* movrecstwai would block here until +6 (~600 ms live), with no LV pushed across the start: poll +6
+         * from the next step on instead, with movrecstwai's own bound */
+        break;
+#else
         ix_sh(w, IX_SH_RECWAI);
+#endif
+    case IX_CTL_STARTING:
+#if !defined(IX_MUTANT_START_BLOCKS) && !defined(IX_MUTANT_START_NO_TIMEOUT)
+        if (!ix_rs(w, RS_STARTED) && now - c->t_movon < IX_START_WAIT_MS * 1000u) break;
+#elif defined(IX_MUTANT_START_NO_TIMEOUT)
+        if (!ix_rs(w, RS_STARTED)) break;
+#endif
+        /* +6 seen, or movrecstwai's 60 s are over: decide exactly as after it */
+        w->starting = 0;
         c->t_rec = w->fw.tick_us() | 1u;
+        /* layout 8 lives past the host's arm image: this take starts its own frame clock and REC watch */
+        c->fc_t_first = c->fc_t_last = c->fc_frames = c->fc_steps = c->fc_gap_max = 0;
+        c->wt_n_rec = 0;
         c->rs_started = ix_rs(w, RS_STARTED);
         /* Only a take that really started may get the second press: a press
          * on a camera that did not start would START one, with nobody to stop it. */
 #ifdef IX_MUTANT_NO_START_CHECK
         c->rs_started = 1;
 #endif
-        if (c->rs_started || w->n_install != c->install_at_arm) c->ctl = IX_CTL_REC;
-        else { ix_sh(w, IX_SH_DISA); c->ctl = IX_CTL_FAIL_START; }
+        if (c->rs_started || w->n_install != c->install_at_arm) { c->ctl = IX_CTL_REC; ix_report(w, IX_EV_REC, 1); }
+        else { ix_sh(w, IX_SH_DISA); c->ctl = IX_CTL_FAIL_START; ix_report(w, IX_EV_FAIL_START, 1); }
         break;
     case IX_CTL_REC:
         if (now - c->t_rec < c->rec_ms * 1000u) break;
-        for (uint32_t i = 0; i < 3; i++) {
-#ifdef IX_MUTANT_NO_STOP
-            break;
+#ifndef IX_MUTANT_NO_STOP
+        ix_sh(w, IX_SH_MOVON);
+        ix_sh(w, IX_SH_SAVEWAI);
+        c->rs_saved = ix_rs(w, RS_SAVED);
 #endif
-            ix_sh(w, IX_SH_MOVON);
-            ix_sh(w, IX_SH_SAVEWAI);
-            c->rs_saved = ix_rs(w, RS_SAVED);
-            if (c->rs_saved) break;
-        }
+        /* A missing saved notification does not prove that recording still
+         * runs. Another toggle could start a new take. Fail without retry. */
         c->t_stop = w->fw.tick_us() | 1u;
         ix_sh(w, IX_SH_DISA);
         c->ctl = c->rs_saved ? IX_CTL_DONE : IX_CTL_FAIL_STOP;
+#ifndef IX_MUTANT_NO_STOP_REPORT
+        ix_report(w, c->rs_saved ? IX_EV_STOPPED : IX_EV_FAIL_STOP, 1);
+#endif
         break;
     default:
         break;

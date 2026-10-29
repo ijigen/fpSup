@@ -104,12 +104,15 @@ def heap(op, size=0, desc=None):
     want = [op, HEAP_CLASS, size, 0] + list(desc or [])
     try:
         p.mem_set(p.ECHO_SLOT, at)
-        for off, val in ((0x00, op), (0x04, HEAP_CLASS), (0x08, size), (0x0C, 0)):
-            p.mem_set(p.P + off, val)
-        for i, val in enumerate(desc or []):
-            p.mem_set(p.P + 0xE0 + 4 * i, val)
-        got = p.mem_get(p.P, 4) + (p.mem_get(p.P + 0xE0, 4) if desc else [])
-        if got != want:
+        for _ in range(5):                      # mem set drops writes now and then (memory: shell-mem-set-drops-writes)
+            for off, val in ((0x00, op), (0x04, HEAP_CLASS), (0x08, size), (0x0C, 0)):
+                p.mem_set(p.P + off, val)
+            for i, val in enumerate(desc or []):
+                p.mem_set(p.P + 0xE0 + 4 * i, val)
+            got = p.mem_get(p.P, 4) + (p.mem_get(p.P + 0xE0, 4) if desc else [])
+            if got == want:
+                break
+        else:
             raise SystemExit(f'heap parameters did not land: {got}')
         p.sh('echo', retries=1)
         if op:

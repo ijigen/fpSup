@@ -1,0 +1,29 @@
+07:31:36 E0: start
+07:32:01 restore rc=0 restored E0: 0 words
+07:32:09 E0: pass  {'size': True, 'fov_r': 0.955, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:32:09 page rebuilt
+07:32:40 z6144: start
+07:33:05 restore rc=0 restored z6144: 19 words
+07:33:12 z6144: fail  {'size': True, 'fov_r': 0.324, 'fov': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:33:12 z4096: start
+07:33:37 restore rc=0 restored z4096: 19 words
+07:33:44 z4096: fail  {'size': True, 'fov_r': 0.149, 'fov': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:33:44 z3072: start
+07:34:10 restore rc=0 restored z3072: 19 words
+07:34:17 z3072: pass  {'size': True, 'fov_r': 0.962, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:34:17 z2048: start
+07:34:43 restore rc=0 restored z2048: 16 words
+07:34:50 z2048: pass  {'size': True, 'fov_r': 0.966, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:34:50 z2048x1024: start
+07:35:16 restore rc=0 restored z2048x1024: 16 words
+07:35:24 z2048x1024: pass  {'size': True, 'fov_r': 0.966, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:35:24 z1536: start
+07:35:49 restore rc=0 restored z1536: 16 words
+07:35:57 z1536: pass  {'size': True, 'fov_r': 0.961, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:35:57 z1200: start
+07:36:22 restore rc=0 restored z1200: 16 words
+07:36:30 z1200: pass  {'size': True, 'fov_r': 0.964, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:36:30 z1024: start
+07:36:56 restore rc=0 restored z1024: 16 words
+07:37:04 z1024: pass  {'size': True, 'fov_r': 0.961, 'fov': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+07:37:04 page rebuilt

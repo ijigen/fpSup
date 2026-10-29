@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SensorLab QS 手感</title>
+<style>
+:root { --bg:#111417; --tile:rgba(28,30,33,.86); --line:rgba(255,255,255,.14); --fg:#fff; --mute:#9aa3ab;
+  --focus:#45b8e3; --approx:#f0b44c; --lock:#ff5a4f; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:"Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  display:flex; flex-wrap:wrap; gap:20px; padding:20px; align-items:flex-start; justify-content:center; }
+#cam { width:min(1024px,100%); aspect-ratio:1024/682; position:relative; overflow:hidden; border-radius:6px;
+  background:radial-gradient(ellipse at 40% 45%,#8d8a83 0,#5d5a55 45%,#2b2a28 100%); user-select:none; }
+#cam.closed #qs { display:none; }
+#qs { position:absolute; inset:0; display:grid; grid-template-rows:4.5% 21% 21% 7.3% 7.5% 1fr; }
+.row { display:grid; grid-template-columns:repeat(4,1fr); background:var(--tile); border-top:1px solid var(--line); }
+.tile { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  border-left:1px solid var(--line); gap:2%; cursor:pointer; }
+.tile:first-child { border-left:0; }
+.tile .t { font-size:clamp(10px,2.1vw,22px); color:#e8e8e8; letter-spacing:.02em; height:1.3em; display:flex; align-items:center; gap:.3em; }
+.tile .icon { border:2px solid #e8e8e8; border-radius:2px; padding:0 .15em; font-size:.8em; font-weight:700; line-height:1.1; }
+.tile .v { font-size:clamp(14px,3.2vw,34px); font-weight:700; height:1.25em; white-space:nowrap; }
+.tile .s { font-size:clamp(9px,1.7vw,18px); color:var(--mute); height:1.2em; white-space:nowrap; font-weight:500; }
+.tile .s.approx { color:var(--approx); }
+.tile.f { outline:3px solid var(--focus); outline-offset:-3px; background:rgba(0,0,0,.45); }
+.tile.f.adj::before, .tile.f.adj::after { content:""; position:absolute; top:50%; border:7px solid transparent; transform:translateY(-50%); }
+.tile.f.adj::before { left:4px; border-right-color:var(--focus); border-left:0; }
+.tile.f.adj::after { right:4px; border-left-color:var(--focus); border-right:0; }
+.tile.blank { cursor:default; }
+.lockred { color:var(--lock); }
+#hintbar { display:flex; justify-content:flex-end; align-items:stretch; }
+#ael { background:var(--tile); display:flex; align-items:center; gap:.5em; padding:0 1.2em; font-size:clamp(11px,2.3vw,24px); }
+#ael b { background:#bbb; color:#111; border-radius:99px; padding:0 .5em; font-size:.8em; }
+#footer { background:#000; display:flex; align-items:center; justify-content:center; gap:0; overflow:hidden; padding:0 2%; }
+#footer .o { padding:.35em .6em; font-size:clamp(10px,1.9vw,20px); border:2px solid transparent; white-space:nowrap; cursor:pointer; text-align:center; line-height:1.15; }
+#footer .o small { display:block; font-size:.62em; color:var(--mute); }
+#footer .o.approx small { color:var(--approx); }
+#footer .o.sel { border-color:var(--focus); }
+#footer .o.mk { text-decoration:underline dotted var(--focus) 3px; text-underline-offset:5px; }
+#footer .o.cu { color:#ffd66b; }
+#footer .o.na { color:#55595e; cursor:default; }
+#footer .o.na small { color:#8a6f3a; }
+#footer .arrow { color:var(--focus); padding:0 .4em; }
+#footer .arrow.sp { color:#fff; padding:0 1.6em; cursor:pointer; font-size:clamp(10px,1.6vw,18px); }
+#footer .o.big { font-size:clamp(14px,3vw,32px); font-weight:500; min-width:5em; }
+#side { width:300px; max-width:100%; display:flex; flex-direction:column; gap:14px; font-size:14px; }
+.pad { display:grid; grid-template-columns:repeat(3,64px); grid-template-rows:repeat(3,48px); gap:6px; justify-content:center; }
+button { background:#2a2f35; color:#fff; border:1px solid #444b53; border-radius:8px; font:inherit; cursor:pointer; }
+button:active { background:#45b8e3; color:#000; }
+.dials { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.dials div { display:flex; gap:6px; align-items:center; } .dials button { flex:1; height:40px; }
+.wide { height:40px; }
+.keys { color:var(--mute); line-height:1.7; } .keys kbd { background:#2a2f35; border-radius:4px; padding:0 5px; color:#fff; font-size:12px; }
+#state { font-family:ui-monospace,monospace; font-size:12px; color:var(--mute); white-space:pre-wrap; background:#181b1f; padding:10px; border-radius:8px; }
+</style></head><body>
+<div id="cam"><div id="qs">
+  <div></div>
+  <div class="row" id="r0"></div>
+  <div class="row" id="r1"></div>
+  <div id="hintbar"><div id="ael"><b>AEL</b>更多選項</div></div>
+  <div id="footer"></div>
+  <div></div>
+</div></div>
+<div id="side">
+  <div class="pad">
+    <span></span><button data-k="up">▲</button><span></span>
+    <button data-k="left">◀</button><button data-k="ok">OK</button><button data-k="right">▶</button>
+    <span></span><button data-k="down">▼</button><span></span>
+  </div>
+  <div class="dials">
+    <div>前<button data-k="f-">−</button><button data-k="f+">+</button></div>
+    <div>後<button data-k="r-">−</button><button data-k="r+">+</button></div>
+  </div>
+  <div class="dials"><button class="wide" data-k="ael">AEL</button><button class="wide" data-k="qs">QS</button></div>
+  <div class="dials"><button class="wide" data-k="menu">MENU</button><span></span></div>
+  <div class="keys">
+    <kbd>←↑↓→</kbd> 移動　<kbd>Q</kbd>/<kbd>E</kbd> 前轉盤（細）　<kbd>Z</kbd>/<kbd>C</kbd> 後轉盤（粗）<br>
+    滾輪 = 前轉盤，<kbd>Shift</kbd>+滾輪 = 後轉盤<br>
+    <kbd>A</kbd> AEL（更多選項／返回）　<kbd>M</kbd>/<kbd>Esc</kbd> MENU（子 QS 回上層）　<kbd>Space</kbd> QS 開關<br>
+    點格子 = 選取，點下方選項 = 直接套用
+  </div>
+  <div id="state"></div>
+</div>
+<script src="fps_data.js"></script>
+<script>
+// ---- geometry (matrix.json presets; width aligned 16, height even) -----------------------------------
+const PX_MM = 35.9 / 6048, WMAX = 6048, HMAX = 4040, WMIN = 256, HMIN = 144;
+const DCS = [['OG',6048,4040],['HD',6048,3402],['S35',4192,2358],['APS-C',3952,2624],['S16',2096,1240],['SQ',4032,4032]];
+const RATIOS = [[1,'×1'],[2/3,'÷1.5'],[1/2,'÷2'],[1/3,'÷3'],[1/6,'÷6']];
+const KS = [1,2,3,3.5,4,5,6];
+const a16 = w => Math.floor(w / 16) * 16, ev = h => Math.floor(h / 2) * 2;
+const kLabel = w => { const x = w / 1024;            // nearest .5 from 1K up; below 1K one decimal so ÷3/÷6 differ
+  return (x < 0.75 ? (Math.round(x * 10) / 10).toFixed(1) : String(Math.round(x * 2) / 2)) + 'K'; };
+const mm = px => (px * PX_MM).toFixed(1);
+
+function divText(W, H, w, h) {                   // "3x2" when each axis is an integer bin plus < 1 alignment unit of crop (Bei 10-29 B)
+  const n = [1,2,3,4,5,6,8,12].find(k => a16(W / k) === w), m = [1,2,3,4,5,6,8,12].find(k => ev(H / k) === h);
+  return n || m ? (n || '') + 'x' + (m || '') : '';        // one axis only: "2x" / "x3" (Bei 10-29)
+}
+function resList(W, H, dcName) {                 // presets for this DC: clean ratios ∪ 1K–6K, FHD/UHD on HD
+  const items = [];
+  for (const [r, n] of RATIOS) {                 // integer bins take H/k for the height (exact bin), ÷1.5 keeps the aspect
+    const w = a16(W * r), h = Number.isInteger(1 / r) ? ev(H * r) : ev(w * H / W);
+    if (w >= WMIN && h >= HMIN) items.push({w, h, ratio: true, div: divText(W, H, w, h), label: kLabel(w)});
+  }
+  for (const K of KS) {
+    const w = a16(K * 1024); if (w > W || ev(w * H / W) < HMIN) continue;
+    if (items.some(i => i.ratio && i.label === K + 'K')) continue;           // that K is already a clean ratio
+    items.push({w, h: ev(w * H / W), exact: false, div: divText(W, H, w, ev(w * H / W)), label: K + 'K'});
+  }
+  if (dcName === 'HD') for (const [n, w, h] of [['UHD',3840,2160],['FHD',1920,1080]])
+    items.push({w, h, exact: false, div: divText(W, H, w, h), label: n});
+  const seen = new Set();
+  items.forEach(i => { i.exact = i.div !== ''; });               // exact = both axes divide by an integer
+  return items.filter(i => !seen.has(i.w + 'x' + i.h) && seen.add(i.w + 'x' + i.h)).sort((a, b) => a.w - b.w);     // small → large (Bei 10-29)
+}
+
+// ---- state -----------------------------------------------------------------------------------------------
+const S = { dcW: 6048, dcH: 3402, dcLock: true, resRatio: 1/3, resCustom: null, resLock: true,
+  dcAsp: 6048 / 3402, resAsp: 6048 / 3402, resK: null,
+  memory: {}, sub: null, focus: 1, open: true, fps: 59.94, fpsCustom: null, fine: false, recipe: null, recipeD: null, kh: 1, kv: 1, km: 0 };        // memory[dcKey] = {w,h} custom RES per crop
+const dcName = () => (DCS.find(d => d[1] === S.dcW && d[2] === S.dcH) || ['Custom'])[0];
+const dcKey = () => dcName() === 'Custom' ? `C${S.dcW}x${S.dcH}` : dcName();
+function res() {
+  if (S.resCustom) return S.resCustom;
+  if (S.resK) {                                   // a fixed K / FHD / UHD pick: same label on any DC that has it
+    const it = resList(S.dcW, S.dcH, dcName()).find(i => i.label === S.resK);
+    if (it) return {w: it.w, h: it.h};
+  }
+  let r = S.resRatio;
+  if (a16(S.dcW * r) < WMIN || ev(S.dcH * r) < HMIN) r = 1;     // too small on this DC: ×1, without forgetting the user's ratio
+  const w = a16(S.dcW * r);
+  return {w, h: Number.isInteger(+(1 / r).toFixed(6)) ? ev(S.dcH * r) : ev(w * S.dcH / S.dcW)};
+}
+function resInfo() {
+  const r = res(), list = resList(S.dcW, S.dcH, dcName());
+  const hit = list.find(i => i.w === r.w && i.h === r.h);
+  const exact = divText(S.dcW, S.dcH, r.w, r.h) !== '';
+  return {r, list, hit, label: hit ? hit.label : 'Custom', div: hit ? hit.div : divText(S.dcW, S.dcH, r.w, r.h), exact};
+}
+function setDC(w, h) { setDC0(w, h); fixFps(); }
+function setDC0(w, h) {
+  if (S.resCustom) S.memory[dcKey()] = S.resCustom;    // remember this crop's custom RES
+  S.dcW = Math.max(WMIN, Math.min(WMAX, a16(w))); S.dcH = Math.max(HMIN, Math.min(HMAX, ev(h)));
+  S.resCustom = S.memory[dcKey()] || null;
+  if (S.resCustom && (S.resCustom.w > S.dcW || S.resCustom.h > S.dcH)) S.resCustom = null;
+  S.resAsp = res().w / res().h;
+}
+function setRes(w, h) { setRes0(w, h); fixFps(); }
+function setRes0(w, h) {
+  w = Math.max(WMIN, Math.min(S.dcW, a16(w))); h = Math.max(HMIN, Math.min(S.dcH, ev(h)));
+  const hit = resList(S.dcW, S.dcH, dcName()).find(i => i.w === w && i.h === h);
+  const q = hit && hit.ratio && RATIOS.find(([r]) => a16(S.dcW * r) === w);
+  if (q) { S.resRatio = q[0]; S.resK = null; S.resCustom = null; delete S.memory[dcKey()]; }
+  else if (hit) { S.resK = hit.label; S.resCustom = null; delete S.memory[dcKey()]; }
+  else { S.resK = null; S.resCustom = {w, h}; }
+}
+
+// ---- functions (tiles) ----------------------------------------------------------------------------------
+const stock = (t, vals, i = 0, sub = '') => ({t, vals, i, sub,
+  v() { return this.vals[this.i]; }, s() { return typeof this.sub === 'function' ? this.sub() : this.sub; },
+  opts() { return this.vals.map(v => ({l: v})); }, sel() { return this.i; },
+  adj(d) { this.i = (this.i + d + this.vals.length) % this.vals.length; }, pick(k) { this.i = k; }});
+const FORMAT = { t: 'FORMAT',                      // DNG only (MOV grey); the bit depth follows the recipe's ADC (Bei 10-29)
+  v: () => 'DNG', s: () => { const c = curRecipe(); return c ? (c.d.ad === 14 ? 14 : 12) + 'bit' : ''; },   // 11-bit AD records a 12-bit DNG
+  opts: () => [{l: 'DNG'}, {l: 'MOV', na: true}], sel: () => 0, adj() {}, pick() {} };
+// ---- FPS: preset DC x RES only (fps_data.js from quality.py); fps = CLK / (HMAX x VMAX), VMAX >= the quality's floor
+const STD = [23.976, 24, 25, 29.97, 30, 47.952, 48, 50, 59.94, 60, 72, 90, 96, 100, 119.88, 120, 144, 150, 180, 200,
+  239.76, 240, 300, 360, 400, 480, 500, 600, 1000];
+const f3 = f => f.toFixed(3), same = (a, b) => Math.abs(a - b) < 5e-4;
+function quals() { const Q = allQuals(); return Q && Q.filter(q => q.d.hbin === 1 && q.d.vbin === 1); }
+function allQuals() {
+  const r = res(), c = FPSDATA.cases[`${dcName()}:${r.w}x${r.h}`];
+  return Array.isArray(c) ? c.map(([hm, lo, q, d]) => ({hm, lo, q, d, max: FPSDATA.clk / (hm * lo)})) : null;
+}
+const fpsMax = Q => Math.min(1000, Math.max(...Q.map(q => q.max)));
+const avail = (Q, f) => Q.filter(q => q.max >= f - 5e-4);
+function fpsList() {                              // common rates ≤ max ∪ each quality's max (marked) ∪ the one fine-tuned rate
+  const Q = quals(); if (!Q) return [];
+  const M = fpsMax(Q), out = STD.map(f => ({f, std: true, na: f > M + 5e-4}));     // every common rate; above max = grey (Bei 10-29)
+  for (const q of Q) if (q.max <= 1000 && !out.some(o => same(o.f, q.max))) out.push({f: q.max, mark: true});
+  out.forEach(o => { o.mark = Q.some(q => same(q.max, o.f)); });
+  if (S.fpsCustom && S.fpsCustom <= M + 5e-4 && !out.some(o => same(o.f, S.fpsCustom))) out.push({f: S.fpsCustom, custom: true,
+    mark: Q.some(q => same(q.max, S.fpsCustom))});
+  return out.sort((a, b) => a.f - b.f);
+}
+const fmtF = o => o.std ? String(o.f) : f3(o.f);
+function fineStep(f, d, big) {                    // next / previous rate any quality reaches (VMAX ± 1 on its own grid)
+  const Q = quals(); if (!Q) return f;
+  for (let n = 0; n < (big ? 10 : 1); n++) {
+    let best = null;
+    for (const q of Q) {
+      const v = FPSDATA.clk / (q.hm * f);
+      const V = d > 0 ? Math.ceil(v - 1e-9) - 1 : Math.floor(v + 1e-9) + 1;
+      if (V < q.lo || V > FPSDATA.vmax_max) continue;
+      const g = FPSDATA.clk / (q.hm * V);
+      if (g > 1000 + 5e-4) continue;
+      if (d > 0 ? g > f + 5e-4 && (best === null || g < best) : g < f - 5e-4 && (best === null || g > best)) best = g;
+    }
+    if (best === null) break;
+    if (f3(best) === f3(f)) { f = best; n--; continue; }   // same 3 decimals: keep going (the user sees every step move)
+    f = best;
+  }
+  return f;
+}
+const FPS = { t: 'FPS', more: 'fine',
+  v() { const Q = quals(); if (!Q) return '—'; const o = fpsList().find(o => same(o.f, S.fps)); return S.fine || !o ? f3(S.fps) : fmtF(o); },
+  s() { const Q = quals(); if (!Q) return 'on camera';
+    const a = avail(Q, S.fps), top = Q.find(q => same(q.max, S.fps));
+    return [(top ? '• ' : '') + a.length + ' recipes', false]; },     // no quality names: which is best is unknown (Bei 10-29)
+  opts() { return fpsList().map(o => ({l: fmtF(o), mark: o.mark, custom: o.custom, na: o.na})); },
+  sel() { return fpsList().findIndex(o => same(o.f, S.fps)); },
+  adj(d, big) {
+    if (!quals()) return;
+    if (S.fine) { S.fps = fineStep(S.fps, d, big); return; }
+    const L = fpsList(); let k = this.sel();
+    if (k < 0) k = d > 0 ? L.findIndex(o => o.f > S.fps) - 1 : L.findIndex(o => o.f >= S.fps);
+    let j = k + d; while (j >= 0 && j < L.length && L[j].na) j += d;            // the dial skips greyed rates
+    if (j >= 0 && j < L.length) S.fps = L[j].f;
+  },
+  pick(k) { const o = fpsList()[k]; if (!o.na) S.fps = o.f; } };
+function fixFps() {                               // after DC / RES change: keep the rate when it is still reachable
+  const Q = quals(); if (!Q) return;
+  const M = fpsMax(Q); if (S.fps > M + 5e-4) S.fps = (fpsList().filter(o => o.std && !o.na).pop() || {f: M}).f;
+}
+function fineExit() {                             // the tuned rate joins the list (only one); a common rate needs no slot
+  S.fine = false;
+  const L = fpsList().filter(o => !o.custom);
+  S.fpsCustom = L.some(o => same(o.f, S.fps)) ? null : S.fps;
+}
+const ES = stock('ES', ['OFF','ON']), ISO = stock('ISO', ['800','1600','2500','3200','6400'], 2), WB = stock('WB', ['3200K','4300K','5550K','6500K'], 2);
+const COLOR = stock('COLOR', ['OFF','TEAL','MONO'], 0);
+
+const DC = { t: '<span class="icon">DC</span>',
+  v: () => dcName(), s: () => `${mm(S.dcW)} × ${mm(S.dcH)} mm`,
+  opts: () => DCS.map(d => ({l: d[0], s: `${d[1]}×${d[2]}`})), sel: () => DCS.findIndex(d => d[0] === dcName()),
+  adj(d) { let k = this.sel(); k = k < 0 ? DCS.reduce((b, x, i) => Math.abs(x[1] - S.dcW) < Math.abs(DCS[b][1] - S.dcW) ? i : b, 0)
+    : Math.max(0, Math.min(DCS.length - 1, k + d)); this.pick(k); },
+  pick(k) { setDC(DCS[k][1], DCS[k][2]); S.dcAsp = DCS[k][1] / DCS[k][2]; }, more: 'dc' };
+const RES = { t: '<span class="icon">RES.</span>',
+  v: () => resInfo().label, s: () => { const i = resInfo(), v = visible();       // visible size; the remembered RES stays the raster
+    return [`${v.w}×${v.h}` + (i.div ? ` · ${i.div}` : ''), v.short]; },
+  opts: () => resInfo().list.map(i => ({l: i.label, s: i.div})), sel: () => { const i = resInfo(); return i.list.indexOf(i.hit); },
+  adj(d) { const i = resInfo(), L = i.list; let k = L.indexOf(i.hit);
+    if (k < 0) { k = L.findIndex(x => x.w > i.r.w); k = k < 0 ? L.length - 1 : d > 0 ? k : k - 1; }
+    else k += d;
+    this.pick(Math.max(0, Math.min(L.length - 1, k))); },
+  pick(k) { const i = resInfo().list[k]; setRes(i.w, i.h); S.resAsp = i.w / i.h; }, more: 'res' };
+
+function dimTile(axis, which) {                  // WIDTH / HEIGHT for DC or RES; front = 1 step, rear = 10 steps
+  const isDC = which === 'dc', step = axis === 'w' ? 16 : 2;
+  return { t: axis === 'w' ? 'WIDTH' : 'HEIGHT',
+    v() { const r = isDC ? {w: S.dcW, h: S.dcH} : visible(); return String(axis === 'w' ? r.w : r.h); },
+    s() { const r = isDC ? {w: S.dcW, h: S.dcH} : res();
+      return isDC ? mm(axis === 'w' ? r.w : r.h) + ' mm' : divText(S.dcW, S.dcH, r.w, r.h); },
+    opts: () => [], sel: () => -1, spin: true,
+    adj(d, big) {
+      const lock = isDC ? S.dcLock : S.resLock, r = isDC ? {w: S.dcW, h: S.dcH} : res(), asp = isDC ? S.dcAsp : S.resAsp;
+      const W = isDC ? WMAX : S.dcW, H = isDC ? HMAX : S.dcH, rw = x => Math.round(x / 16) * 16, rh = x => Math.round(x / 2) * 2;
+      let {w, h} = r;
+      if (axis === 'w') { w += d * step * (big ? 10 : 1); if (lock) h = rh(w / asp); }
+      else { h += d * step * (big ? 10 : 1); if (lock) w = rw(h * asp); }
+      if (w > W || h > H) {                       // at the limit: scale both back inside, keeping the ratio when locked
+        if (lock) return;                         // locked: the ratio can't grow past the sensor, so the step stops
+        w = Math.min(w, W); h = Math.min(h, H);
+      }
+      if (w < WMIN || h < HMIN) return;
+      const near = (isDC ? DCS.map(x => ({w: x[1], h: x[2]})) : resInfo().list)       // snap onto a preset within one step
+        .find(p => Math.abs(p.w - w) <= 16 && Math.abs(p.h - h) <= 2 && (lock ? Math.abs(p.w / p.h - asp) < 0.002 : true));
+      if (near && lock) ({w, h} = near);
+      if (isDC) setDC(w, h); else setRes(w, h);
+    } };
+}
+function lockTile(which) {
+  const key = which === 'dc' ? 'dcLock' : 'resLock';
+  return { t: 'RATIO', v: () => S[key] ? '🔒' : '🔓',
+    s() { const r = which === 'dc' ? {w: S.dcW, h: S.dcH} : res(); return (r.w / r.h).toFixed(3) + ' : 1'; },
+    opts: () => [{l: '🔒 固定'}, {l: '🔓 自由'}], sel: () => S[key] ? 0 : 1,
+    adj() { this.pick(S[key] ? 1 : 0); },
+    pick(k) { S[key] = k === 0;                     // locking takes the current ratio
+      if (S[key]) { const r = which === 'dc' ? {w: S.dcW, h: S.dcH} : res(); S[which === 'dc' ? 'dcAsp' : 'resAsp'] = r.w / r.h; } } };
+}
+
+// ---- RECIPE: one of the qualities of this DC x RES; usable when its max fps reaches the current fps
+const PARAMS = [['ad','ADC'],['scw','SENSOR HDC'],['sch','SENSOR VDC'],['mh','SENSOR HBIN'],['mv','SENSOR VBIN'],
+  ['hbin','ISP HBIN'],['vbin','ISP VBIN']];     // ADC second (Bei 10-29)
+const usable = q => q.max >= S.fps - 5e-4;
+function recipes() { const Q = allQuals(); return Q ? Q : []; }     // presets and ISP-bin variants
+const isPreset = q => q.d.hbin === 1 && q.d.vbin === 1;     // ISP bins only from the sub-QS (Bei 10-29)
+const presets = () => recipes().filter(isPreset);
+function curRecipe() {                            // the user's choice while usable; otherwise the closest usable one,
+  const R = recipes(); if (!R.length) return null;  // without forgetting the choice (it comes back when FPS allows)
+  return R.find(q => q.q === S.recipe && usable(q))
+    || nearest(R.filter(q => usable(q) && isPreset(q)), S.recipeD) || nearest(R.filter(usable), S.recipeD) || null;
+}
+function nearest(R, d) {                          // fewest parameters changed, then highest max fps
+  if (!d || !R.length) return R[0];
+  const diff = q => PARAMS.filter(([k]) => q.d[k] !== d[k]).length;
+  return R.slice().sort((a, b) => diff(a) - diff(b) || b.max - a.max)[0];
+}
+function visible() {                             // what the DNG shows: the recipe's own crop (<= 2 % short), else nominal
+  const r = res(), c = curRecipe();
+  if (c && c.d.vis) return {w: c.d.vis[0], h: c.d.vis[1], short: c.d.vis[1] < r.h - 10 || c.d.vis[0] < r.w - 16};
+  return {w: r.w - 16, h: r.h - 10, short: false};
+}
+const RECIPE = { t: 'RECIPE', more: 'recipe',
+  v() { const c = curRecipe(); return !c ? '—' : isPreset(c) ? `${c.d.ad}b ${c.d.mh}x${c.d.mv}` : 'CUSTOM'; },
+  s() { const c = curRecipe(); if (!c) return 'on camera';
+    const v = visible();
+    return [(isPreset(c) ? '' : `${c.d.ad}b ${c.d.mh}x${c.d.mv} ISP ${c.d.hbin}x${c.d.vbin} · `) + `RS ${c.d.rs_ms.toFixed(2)} ms` + (v.short ? ` · ${v.w}×${v.h}` : ''), v.short]; },   // kernels in the sub-QS
+  opts() { const r = res(); return presets().map(q => ({l: `${q.d.ad}b ${q.d.mh}x${q.d.mv}`,
+    s: `RS ${q.d.rs_ms.toFixed(2)}` + (q.d.vis && q.d.vis[1] < r.h - 10 ? ` · H${q.d.vis[1]}` : ''), na: !usable(q), approx: q.d.vis && q.d.vis[1] < r.h - 10})); },
+  sel() { const c = curRecipe(); return c ? presets().findIndex(q => q.q === c.q) : -1; },   // by name: quals() builds new objects
+  adj(d) { const R = presets(), c = curRecipe(); let j = this.sel();
+    if (j < 0 && c) j = Math.max(0, R.findIndex(q => q.d.ad === c.d.ad && q.d.mh === c.d.mh && q.d.mv === c.d.mv));     // from CUSTOM the dial lands on the same recipe without ISP bin
+    else j += d;
+    while (j >= 0 && j < R.length && !usable(R[j])) j += d;
+    if (j >= 0 && j < R.length) { S.recipe = R[j].q; S.recipeD = R[j].d; } },
+  pick(k) { const q = presets()[k]; if (q && usable(q)) { S.recipe = q.q; S.recipeD = q.d; } } };
+const CHOICE = ['ad', 'mh', 'mv', 'hbin', 'vbin'];   // what the user sets; the sensor crop follows from these
+const MODES_HW = ['1x1','1x2','1x3','2x1','2x2','2x3','3x2','3x3','3x6'];   // sensor merges readout_cfg offers (3x1 has no R/B, IMX410_RULES §72)
+const SHORT = {ad: v => v + 'bit', mh: v => 'SENSOR H' + v, mv: v => 'SENSOR V' + v, hbin: v => 'ISP H' + v, vbin: v => 'ISP V' + v};
+function whyNot(key, v) {                         // short reason a value is grey: what it would need instead
+  const c = curRecipe(); if (!c) return '';
+  if (key === 'mh' || key === 'mv') {
+    const mh = key === 'mh' ? v : c.d.mh, mv = key === 'mv' ? v : c.d.mv;
+    if (!MODES_HW.includes(mh + 'x' + mv)) return `no ${mh}x${mv}`;
+  }
+  const R = recipes().filter(q => q.d[key] === v);
+  if (!R.length) return 'not at this RES';
+  const diff = q => CHOICE.filter(k => k !== key && q.d[k] !== c.d[k]);
+  const best = R.slice().sort((a, b) => diff(a).length - diff(b).length)[0];
+  return 'needs ' + diff(best).map(k => SHORT[k](best.d[k])).join(' ');
+}
+function combo(key, v) {                          // the recipe with key = v and every other choice unchanged (fps ignored)
+  const c = curRecipe(); if (!c) return null;
+  const R = recipes().filter(q => q.d[key] === v && CHOICE.every(k => k === key || q.d[k] === c.d[k]));
+  if (key === 'scw' || key === 'sch') return R[0] || null;
+  return R.sort((a, b) => b.max - a.max)[0] || null;
+}
+function useRecipe(q) {                           // a chosen combination wins; FPS comes down to what it reaches
+  S.recipe = q.q; S.recipeD = q.d;
+  if (q.max < S.fps - 5e-4) S.fps = q.max;
+}
+function paramTile([key, title]) {                // one recipe parameter; choosing a value jumps to the closest recipe with it
+  const vals = () => [...new Set(recipes().map(q => q.d[key]))].sort((a, b) => a - b);
+  const ok = v => !!combo(key, v);                // grey = no such combination at all
+  const pickV = v => { const n = combo(key, v); if (n) useRecipe(n); };
+  return { t: title,
+    v() { const c = curRecipe(); return c ? String(c.d[key]) + (key === 'ad' ? 'bit' : '') : '—'; },
+    s() { const c = curRecipe(); if (!c) return '';
+      if (key === 'scw') return `read → ${c.d.sw}`; if (key === 'sch') return `read → ${c.d.sh}`;     // sensor output after its bin
+      const rz = z => z < 1029 ? 'RWZM 1:1' : `RWZM 1/${(z / 1024).toFixed(2)}`;     // the ISP resize after the bins
+      if (key === 'hbin') return rz(c.d.zoom[0]); if (key === 'vbin') return rz(c.d.zoom[1]);
+      return ''; },
+    opts() { return vals().map(v => ({l: String(v) + (key === 'ad' ? 'bit' : ''), na: !ok(v), s: ok(v) ? '' : whyNot(key, v)})); },
+    sel() { const c = curRecipe(); return c ? vals().indexOf(c.d[key]) : -1; },
+    adj(d) { const V = vals(); let j = this.sel() + d; while (j >= 0 && j < V.length && !ok(V[j])) j += d; if (j >= 0 && j < V.length) pickV(V[j]); },
+    pick(k) { pickV(vals()[k]); } };
+}
+// ISP bin x3 has a kernel per axis (open-gate/build/imx410_binfilt.py KERNELS; default 1,2,1 = stock record 0)
+const MODES = ['SOFT', 'STD'];                  // BINFILT bit 8: 0 soft, 1 std (open-gate archive VIRTUAL_RCD.md); one mode for both axes
+const KERNELS = ['1,1,1', '1,2,1', '1,4,1', '1,6,1', '1,14,1', '0,1,0'];
+function ispBinTile(key, title) {                 // options: 1, then 3 with each kernel
+  const kk = key === 'hbin' ? 'kh' : 'kv', zi = key === 'hbin' ? 0 : 1;
+  const OPTS = [[1, null, null], ...[0, 1].flatMap(m => KERNELS.map((k, i) => [3, i, m]))];   // mode (record 0/1) is shared by both axes
+  const ok = b => !!combo(key, b);
+  const cur = () => { const c = curRecipe(); return c ? (c.d[key] === 3 ? 1 + S.km * KERNELS.length + S[kk] : 0) : -1; };
+  const pickO = ([b, ki, m]) => { const n = combo(key, b); if (!n) return; if (m !== null) S.km = m; useRecipe(n);
+    if (ki !== null) S[kk] = ki; };
+  return { t: title,
+    v() { const c = curRecipe(); return c ? String(c.d[key]) : '—'; },
+    s() { const c = curRecipe(); if (!c) return ''; const z = c.d.zoom[zi];
+      return (c.d[key] === 3 ? `(${KERNELS[S[kk]]}) ${MODES[S.km]} · ` : '') + (z < 1029 ? 'RWZM 1:1' : `RWZM 1/${(z / 1024).toFixed(2)}`); },
+    opts: () => OPTS.map(([b, ki, m]) => ({l: b === 1 ? '1' : '3', s: (ki === null ? '' : `(${KERNELS[ki]}) ${MODES[m]}`) + (ok(b) ? '' : ' · ' + whyNot(key, b)), na: !ok(b)})),
+    sel: cur,
+    adj(d) { const c = curRecipe(); if (!c) return;
+      const ring = [0, ...KERNELS.map((k, i) => 1 + S.km * KERNELS.length + i)];     // 1, then this mode's kernels
+      let j = c.d[key] === 3 ? 1 + S[kk] + d : (d > 0 ? 1 + S[kk] : -1);     // from 1 the dial lands on this axis' kernel
+      if (j < 0 || j >= ring.length) return;
+      const [b, ki] = OPTS[ring[j]]; const n = combo(key, b); if (!n) return; useRecipe(n); if (ki !== null) S[kk] = ki; },
+    pick(k) { pickO(OPTS[k]); } };
+}
+const MAIN = [FORMAT, DC, RES, FPS, RECIPE, ISO, COLOR, WB];
+const SUBS = { dc: [null, DC, dimTile('w','dc'), dimTile('h','dc'), lockTile('dc')],
+               recipe: [RECIPE, ...PARAMS.map(p => p[0] === 'hbin' || p[0] === 'vbin' ? ispBinTile(...p) : paramTile(p))],
+  res: [null, null, RES, dimTile('w','res'), dimTile('h','res'), lockTile('res')] };
+const OWN = {dc: 1, res: 2, recipe: 4};
+function layout() {                               // sub-QS: the main function moves to tile 1, its sub-items follow
+  if (!S.sub) return MAIN;
+  const own = OWN[S.sub], items = SUBS[S.sub].filter(Boolean).filter(f => f !== MAIN[own]);
+  const out = Array(8).fill(null); out[0] = MAIN[own];
+  items.forEach((f, k) => { out[k + 1] = f; });
+  return out;
+}
+
+// ---- render ---------------------------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+function render() {
+  $('cam').classList.toggle('closed', !S.open);
+  const L = layout();
+  [0, 1].forEach(r => {
+    $('r' + r).innerHTML = L.slice(r * 4, r * 4 + 4).map((f, j) => {
+      const i = r * 4 + j; if (!f) return `<div class="tile blank" data-i="${i}"></div>`;
+      let s = f.s(), approx = false; if (Array.isArray(s)) [s, approx] = s;
+      return `<div class="tile ${i === S.focus ? 'f adj' : ''}" data-i="${i}"><div class="t">${f.t}</div>
+        <div class="v">${f.v()}</div><div class="s ${approx ? 'approx' : ''}">${s || ''}</div></div>`;
+    }).join('');
+  });
+  const f = L[S.focus];
+  $('ael').style.visibility = f && f.more && !S.sub ? 'visible' : (S.sub ? 'visible' : 'hidden');
+  $('ael').innerHTML = S.fine || S.sub ? '<b>MENU</b>退回' : '<b>AEL</b>更多選項';     // stock strings only (Bei 10-29)
+  if (f === FPS && S.fine) {                       // fine fps: K-style spinner; • where the set of qualities changes
+    const Q = quals(), top = Q.find(q => same(q.max, S.fps));
+    $('footer').innerHTML = `<span class="arrow sp" data-d="-1">◀</span><div class="o big ${top ? 'mk' : ''}">${f3(S.fps)}</div><span class="arrow sp" data-d="1">▶</span>`;
+  } else if (f && f.spin) {                                // numeric footer like the stock K tile: ◀ value ▶
+    $('footer').innerHTML = `<span class="arrow sp" data-d="-1">◀</span><div class="o big">${f.v()}</div><span class="arrow sp" data-d="1">▶</span>`;
+  } else {
+  const o = f ? f.opts() : [], sel = f ? f.sel() : -1;
+  for (let n = 9; n >= 1; n--) {                  // as many options as fit, centred on the selection
+    const lo = Math.max(0, Math.min(o.length - n, sel - (n >> 1))), view = o.slice(lo, lo + n);
+    $('footer').innerHTML = (lo > 0 ? '<span class="arrow sp" data-d="-1">◀</span>' : '') +
+      view.map((x, k) => `<div class="o ${lo + k === sel ? 'sel' : ''} ${x.approx ? 'approx' : ''} ${x.mark ? 'mk' : ''} ${x.custom ? 'cu' : ''} ${x.na ? 'na' : ''}" data-k="${lo + k}">${x.l}${x.s ? `<small>${x.s}</small>` : ''}</div>`).join('') +
+      (lo + n < o.length ? '<span class="arrow sp" data-d="1">▶</span>' : '');
+    if ($('footer').scrollWidth <= $('footer').clientWidth) break;
+  }
+  }
+  const ri = resInfo();
+  $('state').textContent = `DC   ${dcName()}  ${S.dcW}×${S.dcH}  (${mm(S.dcW)}×${mm(S.dcH)} mm)  ${S.dcLock ? 'lock' : 'free'}\n` +
+    `RES  ${ri.label}  看到 ${visible().w}×${visible().h}  記住的底 ${ri.r.w}×${ri.r.h}  ${ri.div}  ${S.resCustom ? 'custom' : 'ratio ' + (+S.resRatio.toFixed(4))}\n` +
+    `RECIPE ${(curRecipe() || {}).q || '—'}  RS ${curRecipe() ? curRecipe().d.rs_ms + ' ms' : '—'}\n` +
+    `FPS  ${f3(S.fps)}${S.fine ? '  (細調中)' : ''}  外部細調：${S.fpsCustom ? f3(S.fpsCustom) : '無'}\n` +
+    `記住的自訂 RES：${Object.entries(S.memory).map(([k, v]) => `${k}=${v.w}×${v.h}`).join('  ') || '（無）'}`;
+}
+
+// ---- input ----------------------------------------------------------------------------------------------
+function closeSub() { if (S.sub) { S.focus = OWN[S.sub]; S.sub = null; } }   // back on the function's own tile
+function moveFocus(d) {
+  const L = layout(); let i = S.focus;
+  for (let n = 0; n < 8; n++) { i = (i + d + 8) % 8; if (L[i]) break; }
+  S.focus = i;
+}
+function act(k) {
+  if (k === 'qs') { if (S.fine) fineExit(); S.open = !S.open; if (!S.open) closeSub(); return render(); }
+  if (!S.open) return;
+  const L = layout(), f = L[S.focus];
+  if (S.fine && /left|right|up|down/.test(k)) fineExit();
+  if (k === 'left' || k === 'right') moveFocus(k === 'left' ? -1 : 1);
+  else if (k === 'up' || k === 'down') { const i = (S.focus + 4) % 8; if (L[i]) S.focus = i; }
+  else if (/^[fr][+-]$/.test(k) && f) f.adj(k[1] === '+' ? 1 : -1, k[0] === 'r');
+  else if (k === 'ael') {
+    if (S.fine) fineExit();
+    else if (S.sub) { S.focus = OWN[S.sub]; S.sub = null; }
+    else if (f === FPS) { if (quals()) { S.fine = true; S.fpsCustom = null; } }   // entering fine drops the old tuned rate
+    else if (f && f.more) { S.sub = f.more; S.focus = 0; }
+  } else if ((k === 'esc' || k === 'menu') && S.fine) fineExit();
+  else if ((k === 'esc' || k === 'menu') && S.sub) { S.focus = OWN[S.sub]; S.sub = null; }
+  else if (k === 'ok') { if (S.fine) fineExit(); S.open = false; closeSub(); }
+  render();
+}
+document.querySelectorAll('[data-k]').forEach(b => b.tagName === 'BUTTON' && b.addEventListener('click', () => act(b.dataset.k)));
+const KEYS = {ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', q: 'f-', e: 'f+', z: 'r-', c: 'r+',
+  a: 'ael', ' ': 'qs', Escape: 'menu', m: 'menu', Enter: 'ok'};
+addEventListener('keydown', e => { const k = KEYS[e.key] || KEYS[e.key.toLowerCase()]; if (k) { e.preventDefault(); act(k); } });
+let wheelAcc = 0;
+$('cam').addEventListener('wheel', e => {
+  e.preventDefault(); wheelAcc += e.deltaY || e.deltaX;
+  if (Math.abs(wheelAcc) >= 40) { act((e.shiftKey ? 'r' : 'f') + (wheelAcc > 0 ? '+' : '-')); wheelAcc = 0; }
+}, {passive: false});
+$('qs').addEventListener('click', e => {
+  const t = e.target.closest('.tile'), o = e.target.closest('.o');
+  const sp = e.target.closest('.sp'); if (sp) { layout()[S.focus].adj(+sp.dataset.d); return render(); }
+  if (o && o.dataset.k !== undefined) { const f = layout()[S.focus]; f.pick(+o.dataset.k); return render(); }
+  if (t && !t.classList.contains('blank')) { if (S.fine) fineExit(); S.focus = +t.dataset.i; render(); }
+});
+if (location.hash === '#recipe') S.focus = 4;      // test hook: open with RECIPE focused
+render();
+</script>
+</body></html>

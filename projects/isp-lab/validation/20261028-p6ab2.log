@@ -1,0 +1,31 @@
+13:40:41 FHD60:C7a33b784: start
+13:41:10 restore rc=0 restored FHD60:C7a33b784: 28 words, binfilt hits (path, kernel) [2, 14]
+13:41:10 FHD60:Cca17ffd0: start
+13:41:36 restore rc=0 restored FHD60:Cca17ffd0: 28 words, binfilt hits (path, kernel) [2, 14]
+13:41:36 FHD60:C7a33b784: fail  {'size': True, 'bits': True, 'fov_r': 0.242, 'fov_scale': 0.985, 'rec_fov_scale': 0.985, 'fov': False, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': True, 'frames': False, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:41:36 FHD60:C53d253d3: start
+13:42:00 restore rc=0 restored FHD60:C53d253d3: 37 words, binfilt hits (path, kernel) [2, 16]
+13:42:00 FHD60:Cca17ffd0: pass  {'size': True, 'bits': True, 'fov_r': 0.968, 'fov_scale': 0.985, 'rec_fov_scale': 0.985, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.781, 'aspect': True, 'cfa': True, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:42:00 FHD60:Cf4d27fea: start
+13:42:24 restore rc=0 restored FHD60:Cf4d27fea: 37 words, binfilt hits (path, kernel) [2, 14]
+13:42:24 FHD60:C53d253d3: fail  {'size': True, 'bits': True, 'fov_r': 0.973, 'fov_scale': 0.985, 'rec_fov_scale': 0.985, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': False, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:42:24 FHD60:C8aa85425: start
+13:42:46 restore rc=0 restored FHD60:C8aa85425: 35 words
+13:42:58 FHD60:Cf4d27fea: pass  {'size': True, 'bits': True, 'fov_r': 0.969, 'fov_scale': 0.985, 'rec_fov_scale': 0.985, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': True, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:42:58 FHD60:Cb948e7b6: start
+13:43:21 restore rc=0 restored FHD60:Cb948e7b6: 35 words
+13:43:21 FHD60:C8aa85425: fail  {'size': True, 'bits': True, 'fov_r': 0.973, 'fov_scale': 0.985, 'rec_fov_scale': 0.985, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': False, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:43:21 FHD60:C62d17c3e: start
+13:43:44 restore rc=0 restored FHD60:C62d17c3e: 36 words
+13:43:44 FHD60:Cb948e7b6: pass  {'size': True, 'bits': True, 'fov_r': 0.969, 'fov_scale': 0.985, 'rec_fov_scale': 0.985, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': True, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:43:44 FHD60:C5cfe3a21: start
+13:44:08 restore rc=0 restored FHD60:C5cfe3a21: 36 words
+13:44:08 FHD60:C62d17c3e: fail  {'size': True, 'bits': True, 'fov_r': -0.041, 'fov_scale': 0.8, 'rec_fov_scale': 0.805, 'fov': False, 'rec_lv': False, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': False, 'frames': False, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:44:08 FHD60:C0564434c: start
+13:44:31 restore rc=0 restored FHD60:C0564434c: 29 words
+13:44:31 FHD60:C5cfe3a21: pass  {'size': True, 'bits': True, 'fov_r': 0.96, 'fov_scale': 0.975, 'rec_fov_scale': 0.98, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': True, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:44:31 FHD60:C324c820a: start
+13:44:54 restore rc=0 restored FHD60:C324c820a: 29 words
+13:45:05 FHD60:C0564434c: fail  {'size': True, 'bits': True, 'fov_r': 0.026, 'fov_scale': 1.25, 'rec_fov_scale': 1.25, 'fov': False, 'rec_lv': False, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': False, 'frames': False, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:45:10 FHD60:C324c820a: pass  {'size': True, 'bits': True, 'fov_r': 0.965, 'fov_scale': 0.985, 'rec_fov_scale': 0.985, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': True, 'frames': True, 'fps': None}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+13:45:16 page rebuilt

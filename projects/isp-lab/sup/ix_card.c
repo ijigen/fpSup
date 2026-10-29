@@ -31,9 +31,9 @@
 #define CTL_PRI      25u            /* below SRecFile (6) and the writer: it only  */
                                     /* sleeps 20 ms and presses a key twice a take */
 #define CTL_STACK    0x2000u        /* the shell executor and the key handler      */
-#define WR_BLOCK     (2u << 20)     /* ISPL: 2 MiB (ULWR's 8 MiB is for SD speed; */
-                                    /* 10-23 the allocator lent only 8 MiB in all, */
-                                    /* so a block must fit many times over)        */
+#define WR_BLOCK     (8u << 20)     /* 8 MiB = UnlockWriter's (rec-core/writer/wr_card.c): the test runs the  */
+                                    /* real writer pipeline (2026-10-27, user). The 2 MiB of 10-23 was only for */
+                                    /* the capture sink's lent 4 MiB chunks -- capture is shelved, discard lends none */
 
 /* T_CFLG {exinf, flgatr, iflgptn, dsname[8]}: TA_TPRI|TA_WMUL|TA_DSNAME as
  * XC_Thread.cpp's.  Word stores: an initialised struct would be .rodata. */

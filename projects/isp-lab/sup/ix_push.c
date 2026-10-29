@@ -38,21 +38,39 @@ static void px_put32(volatile uint8_t *h, uint32_t off, uint32_t v) {
     h[off + 2] = (uint8_t)(v >> 16); h[off + 3] = (uint8_t)(v >> 24);
 }
 
-/* 1 while the controller still owns the chain we last started. */
+/* 1 while the controller still owns the chain we last started.  A reconfigure of
+ * the endpoint (the host reopening the device, a reconnect) drops the transfer
+ * and leaves HWO set for good: EP83's last command is then a configure, not our
+ * StartTransfer, and the chain is lost -- without this every later push was
+ * skipped (validation/20261027-isp-custom-E0-cp: DEPCMD 0x50002, 3173 skips). */
 static uint32_t px_busy(wr_t *w) {
     ix_px_t *x = &w->px;
     if (!x->armed) return 0;
     volatile px_trb *t = (volatile px_trb *)px_uc8(&x->trb[x->last_trb]);
-    if (t->ctrl & 1u) return 1;
+    if (t->ctrl & 1u) {
+#ifndef IX_MUTANT_NO_LOST_CHECK
+        uint32_t cmd = *(volatile uint32_t *)PX_DEPCMD & 0xFu;
+        if (cmd == PX_CMD_START || cmd == PX_CMD_UPDATE) return 1;
+        x->n_lost++;
+#else
+        return 1;
+#endif
+    }
     x->armed = 0;
     return 0;
 }
 
+/* Wait for the controller to finish the chain in flight, at most timeout_ms.  On a timeout the transfer is
+ * LEFT ARMED: it completes whenever the host reads.  Ending it here (EndTransfer) killed EP83 for the rest
+ * of the session when the host was not reading yet (validation/20261027-report-take-01/02); only
+ * ix_push_release ends a transfer, and only when the caller knows nobody will read it. */
 static uint32_t px_wait_idle(wr_t *w, uint32_t timeout_ms) {
     for (uint32_t ms = 0; px_busy(w); ms++) {
         if (ms >= timeout_ms) {
+#ifdef IX_MUTANT_END_ON_TIMEOUT
             w->fw.end_xfer(PX_CTX);
             w->px.armed = 0;
+#endif
             w->px.n_timeout++;
             return 0;
         }
@@ -73,7 +91,9 @@ static void px_take_tables(wr_t *w) {
 
 void ix_push_release(wr_t *w) {
     ix_px_t *x = &w->px;
-    if (px_busy(w)) { w->fw.end_xfer(PX_CTX); x->armed = 0; }
+    /* A chain still in flight is left to finish: the host may be about to read it, and ending it killed EP83
+     * live. The controller already holds the TRB address; the firmware never uses ctx 3, so putting its
+     * table entries back does not touch the transfer, and px_busy() still sees our last TRB. */
     if (x->owns) {
         *(volatile uint32_t *)(PX_TRB_DMA + 4u * PX_CTX) = x->saved_dma;
         *(volatile uint32_t *)(PX_TRB_CPU + 4u * PX_CTX) = x->saved_cpu;
@@ -146,6 +166,11 @@ uint32_t ix_push(wr_t *w, const volatile ix_push_req *q, uint32_t timeout_ms) {
     x->seq[src]++;
     x->n_sent++;
     x->bytes += total;
-    if (q->mode != 0) px_wait_idle(w, timeout_ms);
+    if (q->mode != 0 && !px_wait_idle(w, timeout_ms)) {
+        /* StartTransfer acceptance is not delivery. In particular, the CDNG
+         * caller must not count an ended, uncompleted transfer as cd_sent. */
+        x->n_skip[src]++;
+        return PX_ERR_TIMEOUT;
+    }
     return PX_SENT;
 }

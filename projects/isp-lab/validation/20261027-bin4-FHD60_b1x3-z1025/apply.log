@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_custom.py", line 488, in <module>
+    main()
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_custom.py", line 484, in main
+    {'show': lambda: show(a.exp), 'apply': lambda: apply(a.exp), 'restore': restore}[a.cmd]()
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_custom.py", line 484, in <lambda>
+    {'show': lambda: show(a.exp), 'apply': lambda: apply(a.exp), 'restore': restore}[a.cmd]()
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_custom.py", line 428, in apply
+    plan_ = show(name)
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_custom.py", line 326, in show
+    p = plan(name)
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_custom.py", line 291, in plan
+    new = F.row(spec_of(w), by_id[BASE_ID])       # notes/ISP_FORMULA_V2.md
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_formula.py", line 177, in row
+    for off, v in plan(s).words.items():
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_formula.py", line 157, in plan
+    p, ph, pv = path(s, act)
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/isp_formula.py", line 95, in path
+    raise NotPossible('a CRCT bin needs the preview to equal the record, which does not fit (R6)')
+isp_formula.NotPossible: a CRCT bin needs the preview to equal the record, which does not fit (R6)

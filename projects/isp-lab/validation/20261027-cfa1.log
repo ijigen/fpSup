@@ -1,0 +1,19 @@
+20:50:09 FHD60:M116: start
+20:50:33 restore rc=0 restored FHD60:M116: 29 words
+20:50:34 FHD60:M117: start
+20:50:59 restore rc=0 restored FHD60:M117: 29 words
+20:50:59 FHD60:M116: pass  {'size': True, 'bits': True, 'fov_r': 0.996, 'fov_scale': 0.99, 'rec_fov_scale': 0.99, 'fov': True, 'rec_lv': True, 'lv_colour': True, 'aspect_dng': 1.778, 'aspect': True, 'cfa': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+20:50:59 FHD60:M160: start
+20:51:25 restore rc=0 restored FHD60:M160: 35 words
+20:51:25 FHD60:M117: fail  {'size': True, 'bits': True, 'fov_r': 0.996, 'fov_scale': 0.99, 'rec_fov_scale': 0.99, 'fov': True, 'rec_lv': True, 'lv_colour': False, 'aspect_dng': 1.778, 'aspect': True, 'cfa': True}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+20:51:25 FHD60:M133: start
+20:51:50 restore rc=0 restored FHD60:M133: 30 words, binfilt hits (path, kernel) [2, 10]
+20:51:50 FHD60:M160: fail  {'size': True, 'bits': True, 'fov_r': 0.346, 'fov_scale': 0.945, 'rec_fov_scale': 0.97, 'fov': False, 'rec_lv': False, 'lv_colour': False, 'aspect_dng': 1.778, 'aspect': True, 'cfa': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+20:51:50 FHD60:M143: start
+20:52:15 restore rc=0 restored FHD60:M143: 29 words
+20:52:30 FHD60:M133: fail  {'size': True, 'bits': True, 'fov_r': 0.988, 'fov_scale': 0.99, 'rec_fov_scale': 0.99, 'fov': True, 'rec_lv': True, 'lv_colour': False, 'aspect_dng': 1.781, 'aspect': True, 'cfa': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+20:52:30 FHD60:M131: start
+20:52:55 restore rc=0 restored FHD60:M131: 28 words
+20:53:06 FHD60:M143: fail  {'size': True, 'bits': True, 'fov_r': 0.014, 'fov_scale': 1.25, 'rec_fov_scale': 1.25, 'fov': False, 'rec_lv': False, 'lv_colour': False, 'aspect_dng': 1.778, 'aspect': True, 'cfa': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+20:53:12 FHD60:M131: fail  {'size': True, 'bits': True, 'fov_r': 0.988, 'fov_scale': 0.99, 'rec_fov_scale': 0.99, 'fov': True, 'rec_lv': True, 'lv_colour': False, 'aspect_dng': 1.778, 'aspect': True, 'cfa': False}  ['cdng', 'focus_lv', 'mag_lv', 'rec_lv', 'standby_lv']
+20:53:29 page rebuilt

@@ -1,0 +1,21 @@
+  remote  \fpSup\LOAD.LOG  8192 bytes, mode 0x1
+  buffer  from the firmware, file object 0x44FB9880
+
+  code   412/412 B  1.9 KiB/s 
+  verify 412/412 B  674 KiB/s 
+  verify 412 bytes in 0.0s (347 KiB/s)      
+
+  code   412 bytes in 0.3s (1.4 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+echo handler did not become 0xC03D99A0; stop using echo until ownership is established
+Traceback (most recent call last):
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/ispl.py", line 464, in <module>
+    main()
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/ispl.py", line 460, in main
+    a.f(a)
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/ispl.py", line 421, in cmd_disarm
+    at = cap_addr(block_addr(), build())
+  File "/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/ispl.py", line 59, in block_addr
+    subprocess.run([sys.executable, '-B', str(SHELL / 'getfile.py'), r'\fpSup\LOAD.LOG', str(out),
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 528, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/Library/Developer/CommandLineTools/usr/bin/python3', '-B', '/Users/dido/Developer.localized/SIGMAfp_re/fpSup/fp_usb_shell/getfile.py', '\\fpSup\\LOAD.LOG', '/Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/.LOAD.LOG', '--size', '0x2000', '--partial']' returned non-zero exit status 1.

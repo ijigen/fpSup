@@ -207,9 +207,13 @@ def config_id(key, cw, ch, ow, oh, fps):
     return f'{key}:{cw}x{ch}>{ow}x{oh}@{fps:g}'
 
 
-def plan(key, cw, ch, ow, oh, fps=None, v016=None, hmax=None, hdr=0):
+def plan(key, cw, ch, ow, oh, fps=None, v016=None, hmax=None, hdr=0, rows=None):
     """crop cw x ch (sensor px) -> output ow x oh at fps on readout `key`: everything needed to set it up, or
-    raise ValueError if the rules say it cannot be done."""
+    raise ValueError if the rules say it cannot be done.
+
+    rows (R16, isp-lab quality.py): a full-height plan whose TIM keeps only `rows` output rows, centred in the frame
+    the readout delivers (y0 moves down by the rows above them, even: Bayer phase). The sensor still reads and sends
+    the whole frame (same lines, same fps); the ISP raster, the record and the DNG get only these rows."""
     r = BY_KEY[key]
     sw, sh = cw / r['mh'], ch / r['mv']                 # crop on the sensor output grid
     fmt = min((w for w in r['fmt'] if line_width(r, w) >= sw - 1e-6), default=None)
@@ -235,6 +239,14 @@ def plan(key, cw, ch, ow, oh, fps=None, v016=None, hmax=None, hdr=0):
     if hm < r['hmin']:
         raise ValueError(f'HMAX {hm} below the floor {r["hmin"]}')
     rows_out = 2 * H if windowed else full_rows(key)
+    y_crop = 0
+    if rows is not None:                                # R16: a centred row crop of the full-height frame
+        if windowed:
+            raise ValueError(f'{key}: a row crop is cut from a full-height frame, not from a window')
+        if rows <= 0 or rows % 2 or rows > rows_out:
+            raise ValueError(f'{key}: row crop {rows} not even inside the {rows_out} rows delivered')
+        y_crop = (rows_out - rows) // 4 * 2
+        rows_out = rows
     if oh > rows_out:
         raise ValueError(f'{key}: {oh} output rows > {rows_out} the readout delivers')
     lines = (rows_out if windowed else int(round(full_h))) + r['over']   # the sensor still sends the empty rows below rows_full
@@ -243,6 +255,7 @@ def plan(key, cw, ch, ow, oh, fps=None, v016=None, hmax=None, hdr=0):
     # in the margin, the output keeps its planned rows and first row. Costs V3_MARGIN lines (~1 % rolling).
     y_skip = (V3_MARGIN if windowed else V3_FULL_SKIP) if r['mv'] == 3 and r.get('new') else 0
     lines += y_skip if windowed else 0
+    y_skip += y_crop                                    # R16: the TIM starts below the dropped rows (smc y0)
     b = r['v016'] if v016 is None else v016
     if b < r['v016'] and (r['v016_min'] is None or b < r['v016_min']):
         raise ValueError(f'0016={b} below the tested minimum for {key}')
@@ -290,7 +303,7 @@ def plan(key, cw, ch, ow, oh, fps=None, v016=None, hmax=None, hdr=0):
         regs = dict(sensor)
         sensor = [(a, v) for a, v in sensor if a not in (0x0242, 0x0738)]
         sensor += [(0x0242, regs.get(0x0242, 0) | 1), (0x0738, hdr)]
-    return dict(id=config_id(key, cw, ch, ow, oh, fps or 0) + (f'+hdr{hdr:02X}' if hdr else ''), key=key, hdr=hdr, name=r['name'], ev=r['ev'], donor=r['donor'], bits=r['bits'],
+    return dict(id=config_id(key, cw, ch, ow, oh, fps or 0) + (f'+hdr{hdr:02X}' if hdr else '') + (f'+rows{rows}' if rows is not None else ''), key=key, hdr=hdr, name=r['name'], ev=r['ev'], donor=r['donor'], bits=r['bits'],
                 merge=f"{r['mh']}x{r['mv']}", mv=r['mv'], new=bool(r.get('new')), crop=[cw, ch], out=[ow, oh], fmt_w=fmt, line_w=lw, raster_w=raster_w, out_h=rows_out, y_skip=y_skip, receiver_lines=lines,
                 rwzm=[sw / ow, sh / oh], sensor=sensor, fast_set=bool(r.get('fast_set')),
                 rows=dict(TIM_line=(fmt + 4) if r.get('fast_set') and fmt < 6000 else None,

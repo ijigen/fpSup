@@ -15,8 +15,8 @@ import argparse, json, os, pathlib, socket, struct, sys, time, zlib
 
 MAGIC = 0x31505046                          # b'FPP1'
 HDR = 256
-SOURCES = {1: 'lv', 2: 'bufa1', 3: 'bufa0', 4: 'cdng'}
-FMTS = {1: 'yuyv8', 2: 'bayer8', 3: 'bayer12', 4: 'bayer14', 5: 'dng'}
+SOURCES = {1: 'lv', 2: 'bufa1', 3: 'bufa0', 4: 'cdng', 5: 'report'}
+FMTS = {1: 'yuyv8', 2: 'bayer8', 3: 'bayer12', 4: 'bayer14', 5: 'dng', 6: 'report'}
 SOCK = os.environ.get('FPSHD_SOCKET', '/tmp/fpshd.sock')
 MAX_TOTAL = 1 << 30                          # one image never claims more than this
 

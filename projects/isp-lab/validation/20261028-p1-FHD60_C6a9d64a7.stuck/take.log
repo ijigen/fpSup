@@ -1,0 +1,43 @@
+  remote  \fpSup\LOAD.LOG  8192 bytes, mode 0x1
+  buffer  from the firmware, file object 0x450CD080
+  reply   getfile: read
+  buffer  0x53B00980 (12288 bytes asked for)
+  status  2 — read
+  open    1   read 1   actual 8192 of 8192
+  buffer  handed back
+  saved   /Users/dido/Developer.localized/SIGMAfp_re/projects/isp-lab/host/.LOAD.LOG
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+  call 0xC000E91C  ->  0x20000013 (536870931)
+armed (control only): REC in 0 ms for 1000 ms, nothing reaches the card (discard). Silent for 21 s.
+listened: {'tag': 'END83', 'bytes': '70553844', 'reason': 'idle', 'rc': '-7', 'trigger': '0', 'reply_len': '0'} {'images': 21, 'skipped_bytes': 0, 'resyncs': 0, 'torn': 0, 'seq_gaps': {}, 'leftover': 0}
+
+  code   412/412 B  5.0 KiB/s 
+  verify 412/412 B  732 KiB/s 
+  verify 412 bytes in 0.0s (113 KiB/s)      
+
+  code   412 bytes in 0.2s (2.3 KiB/s), 0 batches resent, 0 chunks retried, 0 words repaired          
+
+  direct 8192 bytes in 0.001s (9.5 MB/s)      
+
+  sink   708 bytes in 0.001s (0.7 MB/s)      
+
+  lvoff  4 bytes in 0.001s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      
+
+  sink   528 bytes in 0.001s (0.7 MB/s)      
+
+  verify 528 bytes in 0.000s (2.0 MB/s)      
+
+  mode   4 bytes in 0.001s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      
+
+  ctl    4 bytes in 0.001s (0.0 MB/s)      
+
+  verify 4 bytes in 0.000s (0.0 MB/s)      
+still recording after the planned stop: stop it on the camera (REC), wait 10 s, then `status`

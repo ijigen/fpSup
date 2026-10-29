@@ -1,0 +1,46 @@
+{
+ "schema": "isp-lab-automation-revert-check/v1",
+ "at": "2026-10-26T20:17:36.686622+00:00",
+ "state": "pending_user_direction_after_project_revert",
+ "active_selector_missing": true,
+ "archived_selector": "projects/isp-lab/archive/handoff-20261026/validation/20261026-native-batch-01/ACTIVE_RUN.json",
+ "archive_is_not_an_active_campaign": true,
+ "revert_source": "projects/isp-lab/archive/handoff-20261026/REVERT.md",
+ "revert_source_sha256": "a2266796e6489cbcf9d576b70867c21e59687f3a7f41a5fa872ab79c5c833581",
+ "usb_observation": {
+  "at": "2026-10-26T20:14:47.238109+00:00",
+  "sigma_usb_devices": []
+ },
+ "process_observation": {
+  "at": "2026-10-26T20:14:47.401620+00:00",
+  "daemon_pid": 49607,
+  "active_campaign_or_capture_processes": 0
+ },
+ "camera_state_not_queried": true,
+ "camera_commands": 0,
+ "new_rounds_launched": 0,
+ "source_changes": 0,
+ "frozen_artifacts_modified": false,
+ "user_question_pending": true,
+ "automation_changed": false,
+ "archives_verified": [
+  {
+   "path": "projects/isp-lab/archive/handoff-20261026/validation/20261026-native-batch-01/round-005-recovery",
+   "files": 27,
+   "archive": {
+    "bytes": 32582,
+    "sha256": "bfcfdfcdd9ccd0e5239a17f3e5ac1a2a63673634a28f04f6acd8e387ebe2f2f3"
+   },
+   "verified_by": "archive_validation.py verify (return code 0, all members decoded and hashed)"
+  },
+  {
+   "path": "projects/isp-lab/archive/handoff-20261026/validation/20261027-directory-enumeration-offline",
+   "files": 40,
+   "archive": {
+    "bytes": 84379,
+    "sha256": "f5a0737906d6222409e545cbea1b19c8e2e34738b06cec53ff59621ee91f90e5"
+   },
+   "verified_by": "archive_validation.py verify (return code 0, all members decoded and hashed)"
+  }
+ ]
+}

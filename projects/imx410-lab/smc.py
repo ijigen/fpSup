@@ -24,6 +24,10 @@ STRIDE = {t: X.ROM[t][1] for t in TABLES}
 BASE_X0 = {1: 8, 2: 4, 3: 6}
 BASE_Y0 = {16: 40, 17: 40, 18: 20, 19: 20, 20: 14, 21: 14, 22: 8, 23: 8}
 VADD = {1: 1, 2: 2, 3: 2, 6: 3}
+# R10 = the SoC readout-mode number, by readout class only (notes/MODE_TABLES.md §1). It sets the receiver for the
+# class; a virtual mode that leaves the host's R10 (vmode keeps every table it is not given) gets the host's receiver:
+# 1x1 / fast 2x2 under FHD60 (R10 6) recorded garbage (isp-lab validation/20261027-smoke, vm1 V41)
+R10_OF_CLS = {16: 2, 17: 3, 18: 6, 19: 7, 20: 4, 21: 5, 22: 4, 23: 5}
 _FIT = None
 
 
@@ -133,6 +137,7 @@ def attrs_from_plan(p):
 def create(p):
     a = attrs_from_plan(p)
     rows, how = build(a)
+    rows['R10'] = bytearray(struct.pack('<II', R10_OF_CLS[a['cls']], 0))
     # sensor writes the plan insists on (format, window, blanking) and the fast Family A set
     writes = list(p['sensor'])
     if p['fast_set']:
@@ -158,6 +163,14 @@ def selftest():
                 approx += 1
             if got != want:
                 bad.setdefault(f, []).append((m, want, got))
+    import vmode as V
+    _, rom, st, key = V.TABLES['R10']
+    img = (HERE.parents[1] / 'out' / 'MAIN_c0000000.bin').read_bytes()
+    r10 = {struct.unpack_from('<I', img, rom - 0xC0000000 + st * i + key)[0]:
+           struct.unpack_from('<I', img, rom - 0xC0000000 + st * i)[0] for i in range(V.N)}
+    for m in modes:
+        if R10_OF_CLS.get(attrs[m]['cls']) != r10.get(m):
+            bad.setdefault(('R10', 0), []).append((m, r10.get(m), R10_OF_CLS.get(attrs[m]['cls'])))
     n = len(rules) * len(modes)
     nbad = sum(len(v) for v in bad.values())
     print(f'self-test: {n - nbad}/{n} values reproduced ({100 * (n - nbad) / n:.2f} %), fields with a miss: {len(bad)}; '

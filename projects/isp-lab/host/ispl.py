@@ -3,6 +3,7 @@
 
     ispl.py status
     ispl.py take [--mb 192] [--keep-first 4] [--every-ms 500] [--start-ms 1500] [--rec-ms 3000]
+                 [--discard --lv-every-ms 250 --lv-burst-ms 1000 --lv-max 200 --report --listen DIR]
                                   lend memory, arm, then stay SILENT: the sup presses
                                   REC start-ms later and again rec-ms after that
     ispl.py pull OUT_DIR          records -> DNG files, block log -> log.json
@@ -38,6 +39,7 @@ LOG_BYTES = 256 << 10                       # 16384 block lines
 WIN_SLOT = 7
 WIN_W = 2048                                # covers +8 .. +8+1 KiB-rounded cap
 F_DCACHE = 0xC000E91C                       # whole L1+L2 clean+invalidate (CPU_GLOBAL_CONFIG.md)
+SETTLE_S = 1                                 # after the camera's own 'saved (+ CDNG pushed)' report
 QUIET_AFTER_S = 15                          # after the planned stop: movsavewai + the 10 s rule
 
 
@@ -121,14 +123,17 @@ def window(api, base, length, perm):
     api.mem_window(WIN_SLOT, base, length, perm)
 
 
-def cap_image(mode, chunks, keep_first=0, every_us=0, log=(0, 0), start_ms=0, rec_ms=0):
-    """ix_cap from +8 (mode) to the end: host fields set, counters zero, ctl idle."""
-    body = bytearray(R.CAP_BYTES - 8)
+def cap_image(mode, chunks, keep_first=0, every_us=0, log=(0, 0), start_ms=0, rec_ms=0, extra=()):
+    """ix_cap from +8 (mode) to the end: host fields set, counters zero, ctl idle.
+    `extra`: more host-written fields by name (lv_push, lv_every_us, lv_max, cd_after_ms, ...)."""
+    body = bytearray(R.HOST_END - 8)                         # never the camera's ur_* (see R.HOST_END)
     struct.pack_into('<II', body, 0, R.MODES[mode], len(chunks))
     for i, (a, n) in enumerate(chunks):
         struct.pack_into('<II', body, R.O_CHUNK - 8 + 8 * i, a, n)
     for k, v in (('keep_first', keep_first), ('every_us', every_us), ('log_addr', log[0]),
                  ('log_max', log[1]), ('ctl', R.CTL['idle']), ('start_ms', start_ms), ('rec_ms', rec_ms)):
+        struct.pack_into('<I', body, R.OFF[k] - 8, v)
+    for k, v in extra:
         struct.pack_into('<I', body, R.OFF[k] - 8, v)
     return bytes(body)
 
@@ -141,6 +146,11 @@ def write_cap(api, at, mode, chunks, ctl=False, **kw):
     flush()                                     # nothing of the sup's dirty may land on top later
     window(api, at, WIN_W, 3)                   # MEMW checks a write at its 1 KiB-rounded length
     try:
+        # The last take's LV sampler may still be running (skips do not count toward lv_max) and writes lv_t_last:
+        # stop it first, or the body's readback races it (10-27 night1e-d10: "readback differs from offset 392").
+        api.mem_write(at + R.OFF['lv_push'], struct.pack('<I', 0), label='lvoff ')
+        flush()
+        time.sleep(0.1)
         api.mem_write(at + 8, bytes(body), label='sink  ')
         flush()
         api.mem_write(at + 8, struct.pack('<I', R.MODES[mode]), label='mode  ')
@@ -209,6 +219,11 @@ def summary(cap):
     if cap['t_rec'] and cap['t_stop']:
         lines.append(f'REC pressed at +{(cap["t_rec"] - cap["t_arm"]) / 1e3:.0f} ms, '
                      f'stopped {(cap["t_stop"] - cap["t_rec"]) / 1e3:.0f} ms later')
+    if cap['t_movon'] and cap['t_rec']:
+        lines.append(f'REC seen {((cap["t_rec"] - cap["t_movon"]) & 0xFFFFFFFF) / 1e3:.0f} ms after our MOVON')
+    if cap['lv_burst_ms']:
+        lines.append(f'LV burst: {cap["bu_sent"]} sent, {cap["bu_skip"]} skipped (busy), {cap["bu_err"]} refused; '
+                     f'{cap["bu_n"]} entries with the display watch')
     if cap['n_rec']:
         lines.append(f'copy {cap["copy_us"] / 1e3:.0f} ms total, worst {cap["copy_max_us"] / 1e3:.1f} ms '
                      f'({cap["used"] / max(cap["copy_us"], 1):.1f} MB/s)')
@@ -217,26 +232,70 @@ def summary(cap):
 
 def cmd_take(a, api=None, heap=None, sleep=time.sleep):
     api = api or P()
-    heap = heap or (None if SUP_FILE == 'ISPC.BIN' else imxl_heap())
+    heap = heap or (None if SUP_FILE == 'ISPC.BIN' or getattr(a, 'discard', False) else imxl_heap())
     not_recording(api)
     info = build()
     at = cap_addr(block_addr(), info)
     cap = read_cap(api, at)
     if cap['mode'] != R.MODES['sd'] or (SUP_FILE != 'ISPC.BIN' and ALLOC_KEEP.exists()):
         raise SystemExit('already armed: pull and/or disarm first')
-    if a.focus:                                             # half press: AF (S2 would toggle REC in CINE)
+    camera_cp = (getattr(a, 'cp_focus_ms', 0) or 0) or (getattr(a, 'cp_mag_ms', 0) or 0)
+    if a.focus and not camera_cp:                           # half press: AF (S2 would toggle REC in CINE)
         api.sh('key S1ON'); sleep(a.focus_ms / 1000); api.sh('key S1OFF')
-    if SUP_FILE == 'ISPC.BIN':                              # control only: nothing lent, nothing captured
-        write_cap(api, at, 'sd', [], ctl=True, start_ms=a.start_ms, rec_ms=a.rec_ms)
-        quiet = (a.start_ms + a.rec_ms) / 1000 + QUIET_AFTER_S
-        print(f'armed (control only): REC in {a.start_ms} ms for {a.rec_ms} ms, stock writes the card. '
+    discard = getattr(a, 'discard', False)
+    if SUP_FILE == 'ISPC.BIN' or discard:                   # nothing lent: control only, or drop at the device write
+        # --discard (2026-10-27, user): the whole recording pipeline runs -- the 94-descriptor pool, the writer task,
+        # its batches and completions -- and only the device write is replaced by "done" (sink IX_DISCARD).
+        lv = getattr(a, 'lv_every_ms', 0) or 0
+        burst = getattr(a, 'lv_burst_ms', 0) or 0                 # layout 10: every new ring slot across the start
+        extra = ((('lv_push', 1), ('lv_every_us', lv * 1000),       # the built-in push engine (ix_push.c)
+                  ('lv_max', getattr(a, 'lv_max', 64))) if lv or burst else ())
+        if burst:
+            extra += (('lv_burst_ms', burst),)
+        if getattr(a, 'report', False) or getattr(a, 'heartbeat_ms', 0):   # FPP1 source 5: ix_cap snapshots
+            extra += (('rp_on', 1 if getattr(a, 'report', False) else 0),
+                      ('rp_every_us', (getattr(a, 'heartbeat_ms', 0) or 0) * 1000))
+        cp = tuple((k, getattr(a, k, 0) or 0) for k in ('cp_standby_ms', 'cp_focus_ms', 'cp_mag_ms'))
+        if any(v for _, v in cp):                           # the control task does standby / AF / magnify itself
+            extra += cp
+        cd = getattr(a, 'cd_after_ms', 0) or 0
+        if cd:                                              # ix_cdng.c: after the stop, push the take's DNGs from RAW
+            extra += (('cd_after_ms', cd), ('cd_max', getattr(a, 'cd_max', 0)))
+        write_cap(api, at, 'discard' if discard else 'sd', [], ctl=True, start_ms=a.start_ms, rec_ms=a.rec_ms,
+                  extra=extra)
+        quiet = (a.start_ms + a.rec_ms + sum(v for _, v in cp) + (600 if dict(cp)['cp_mag_ms'] else 0)) / 1000 \
+            + QUIET_AFTER_S
+        what = 'nothing reaches the card (discard)' if discard else 'stock writes the card'
+        print(f'armed (control only): REC in {a.start_ms} ms for {a.rec_ms} ms, {what}. '
               f'Silent for {quiet:.0f} s.', flush=True)
-        sleep(quiet)
+        listen_out = getattr(a, 'listen', None)
+        if listen_out:                                      # pure listen: LISTEN83 sends nothing to the camera
+            import push_rx
+            t0 = time.monotonic()
+            end, _, stats = push_rx.listen(pathlib.Path(listen_out), 1 << 30, 4000, int(quiet * 1000), quiet_ms=1000)
+            print(f'listened: {end} {stats}', flush=True)
+            # The camera says when it is done: the take saved (recstate +7) and, with cd, the CDNG event after it.
+            # Then SETTLE_S more is enough (10-27: the old fixed stop + 15 s was my own margin, not a measured need);
+            # without that report keep the whole quiet window.
+            done = [c for _, ev, c in reports(pathlib.Path(listen_out))
+                    if ev == ('cdng' if cd else 'stopped') and c['rs_saved']]
+            sleep(SETTLE_S if done else max(0.0, quiet - (time.monotonic() - t0)))
+        else:
+            sleep(quiet)
         try:
             not_recording(api)
         except SystemExit:
             raise SystemExit('still recording after the planned stop: stop it on the camera (REC), wait 10 s, then `status`')
-        print(summary(read_cap(api, at)))
+        reps = reports(pathlib.Path(listen_out)) if listen_out else []
+        if reps:                                            # the sup told us: no shell read of the sink
+            for t_ms, ev, cap in reps:
+                if ev != 'heartbeat':
+                    print(f'  report +{t_ms:7.0f} ms  {ev:10s} ctl {cap["ctl"]}  presses {cap["n_press"]}  '
+                          f'discard {cap["n_discard"]}  lv {cap["lv_n_sent"]}  burst {cap["bu_sent"]}  '
+                          f'cdng {cap["cd_sent"]}', flush=True)
+            print(summary(reps[-1][2]))
+        else:
+            print(summary(read_cap(api, at)))
         return
     held = []
     try:
@@ -264,6 +323,18 @@ def cmd_take(a, api=None, heap=None, sleep=time.sleep):
         raise SystemExit('still recording after the planned stop: stop it on the camera (REC), '
                          'wait 10 s, then `status` shows where the control task got to')
     print(summary(read_cap(api, at)))
+
+
+def reports(out):
+    """[(ms since the first, event name, parsed ix_cap)] from a push_rx directory, in arrival order."""
+    idx = out / 'index.jsonl'
+    if not idx.exists():
+        return []
+    rows = [json.loads(l) for l in idx.read_text().splitlines() if l.strip()]
+    rows = [r for r in rows if r['source'] == 'report']
+    t0 = rows[0]['t_us'] if rows else 0
+    return [((r['t_us'] - t0) / 1000, R.EVENTS.get(r['frame_no'], r['frame_no']),
+             R.parse_cap((out / r['file']).read_bytes())) for r in rows]
 
 
 def cmd_pull(a, api=None):
@@ -367,6 +438,20 @@ def main():
     s.add_argument('--rec-ms', type=int, default=3000)
     s.add_argument('--no-focus', dest='focus', action='store_false', help='skip the half-press AF before arming')
     s.add_argument('--focus-ms', type=int, default=1500)
+    s.add_argument('--discard', action='store_true', help='ISPL: drop every block at the device write; nothing lent')
+    s.add_argument('--lv-every-ms', type=int, default=0, help='push the LCD ring through EP83 this often (0: off)')
+    s.add_argument('--lv-max', type=int, default=64)
+    s.add_argument('--lv-burst-ms', type=int, default=0,
+                   help='push every new LCD ring slot from the REC press until this long after the start (0: off; '
+                        'counts toward --lv-max)')
+    s.add_argument('--cd-after-ms', type=int, default=0, help='after the stop, push the take\'s CinemaDNGs from the RAW class (0: off)')
+    s.add_argument('--cp-standby-ms', type=int, default=0, help='camera: standby LV this long after the arm')
+    s.add_argument('--cp-focus-ms', type=int, default=0, help='camera: then half-press AF this long (host does not press)')
+    s.add_argument('--cp-mag-ms', type=int, default=0, help='camera: then magnify (OK) this long, then back')
+    s.add_argument('--report', action='store_true', help='the sup pushes an ix_cap snapshot at every control event')
+    s.add_argument('--heartbeat-ms', type=int, default=0, help='and one every this many ms (0: none)')
+    s.add_argument('--cd-max', type=int, default=0, help='--cd-after-ms: at most this many (0: all of the take)')
+    s.add_argument('--listen', help='receive the pushes into this directory instead of sleeping (LISTEN83, sends nothing)')
     s = sub.add_parser('pull'); s.set_defaults(f=cmd_pull); s.add_argument('out')
     sub.add_parser('disarm').set_defaults(f=cmd_disarm)
     a = ap.parse_args()
