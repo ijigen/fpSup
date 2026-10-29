@@ -6,7 +6,7 @@ Losslessly packs CinemaDNG clips into one image (LJ92 DMG, JPEG XL DMG or Tempor
 
 ## 下載 / Download
 
-**macOS（Apple Silicon，macOS 12 以上）：[CDNG Image 0.2.11](download/CDNG%20Image-0.2.11-macOS-arm64.zip?raw=1)**
+**macOS（Apple Silicon，macOS 12 以上）：[CDNG Image 0.2.11](https://raw.githubusercontent.com/ijigen/fpSup/main/projects/cdng-image/download/CDNG%20Image-0.2.11-macOS-arm64.zip)**
 （sha256 `dde53eb81bfcd77df2ca669bbb88e6a3dc16b8bc86a4bb4f951e4045d165e1f8`）
 
 程式沒有經過 Apple 公證，第一次打開會被擋。解壓後對 app 按右鍵 →「打開」，或在終端機執行：
