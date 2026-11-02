@@ -432,6 +432,74 @@ class Behaviour(unittest.TestCase):
         self.assertEqual(self.h.field(self.P['muted']), 1)
         self.assertEqual(self.h.field(self.P['played']), 2)
 
+    def _hold(self, frames):
+        """Half press, then feed frames.  Returns how many were held."""
+        self.press(4)
+        return sum(1 for _ in range(frames) if not self.frame())
+
+    def test_the_burst_after_a_real_press_runs_normally(self):
+        self._hold(4)
+        self.press(6)
+        self.assertTrue(self.frame(job=2), 'the burst after the press must reach YUV')
+        self.assertEqual(self.h.field(self.P['dropped']), 0)
+
+    def test_a_real_full_press_does_not_leave_a_drain(self):
+        self._hold(4)
+        self.press(6)
+        self.press(5)                            # release after the full press
+        self.assertFalse(self.h.field(self.P['tmo']) & 2,
+                         'a committed burst must not have its tail eaten')
+
+    def test_a_stale_ring_is_cleared_without_any_frames(self):
+        """No frames ever arrive, so the frame-hook timeout cannot fire.  The
+        ring — and its four job ids — would otherwise be held forever.  The key
+        thread reads the tick the frame hook cached (P_NOW); it must not call
+        the firmware itself."""
+        self.press(4)
+        self.assertEqual(self.h.field(self.P['pre']), 1)
+        self.frame()                             # one frame caches P_NOW
+        self.h.tick_step = 31_000_000            # 31 s later
+        self.frame()                             # and this one refreshes it
+        self.assertEqual(self.h.field(self.P['tmof']), 1,
+                         'the second S1 must notice the stale window')
+        self.assertEqual(self.h.field(self.P['pre']), 0,
+                         'and clear it rather than ignore the press')
+
+    def test_a_reused_job_slot_is_not_touched(self):
+        """Playback tears the job database down and reuses slots.  Dropping a
+        job id that now belongs to someone else is what froze the camera."""
+        self._hold(4)
+        self.h.uc.mem_write(P4.job_addr(1) + 0x10FC, struct.pack('<I', 0x99))
+        self.press(5)                            # abandon: the drops must refuse
+        self.assertEqual(self.refunds, [], 'never refund a slot that is not ours')
+        self.assertEqual(self.job_drops, [], 'never drop a slot that is not ours')
+
+    def test_no_hook_path_leaves_the_stack_shifted(self):
+        """The v0.1.1 freeze: `stale_check` pushed six registers and popped
+        three, so the first half press popped the state pointer into PC and the
+        camera hung.  Each hook is entered with the firmware's SP and must
+        return to site+4 with the same one; press()/frame() stop there, so the
+        SP they leave behind is the check."""
+        events = [
+            ('S1 press', lambda: self.press(4)),
+            ('S1 press twice', lambda: (self.press(4), self.press(4))),
+            ('S1 release', lambda: (self.press(4), self.press(5))),
+            ('S2 on', lambda: (self.press(4), self.press(6))),
+            ('S2 off', lambda: (self.press(4), self.press(6), self.press(7))),
+            ('frame', lambda: self.frame()),
+            ('frame while held', lambda: (self.press(4), self.frame())),
+            ('S1, frames, release', lambda: (self.press(4), self.frame(),
+                                             self.frame(), self.press(5))),
+            ('mute', lambda: self.sound()),
+        ]
+        for label, run in events:
+            run()
+            sp = self.uc.reg_read(REG.UC_ARM_REG_SP)
+            # press() and frame() each start from a fixed base; nothing may move
+            # it.  Anything else means a hook returned with SP shifted.
+            self.assertIn(sp, (STACK + 0x2000, STACK + 0x4000, STACK + 0x6000),
+                          f'{label} left SP at {sp:#x}')
+
     def test_frames_pass_straight_through_when_idle(self):
         self.assertTrue(self.frame(), 'no pre-capture: the frame must reach YUV')
         self.assertEqual(self.h.field(self.P['held']), 0)

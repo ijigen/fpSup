@@ -1,6 +1,6 @@
 # PreCap — pre-capture for high-speed continuous (loader v4 sup)
 
-`release/PreCap_v0.1.0.BIN` is a regular fpSup. Put it in `\fpSup\` on a Loader
+`release/PreCap_v0.1.3.BIN` is a regular fpSup. Put it in `\fpSup\` on a Loader
 v4 card and it loads on the next boot, next to the other sups.
 
 ## What it does

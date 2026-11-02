@@ -68,7 +68,7 @@
 
 .equ VENEER_N,    4
 .equ KEEP_N,      4
-.equ TIMEOUT_US,  10000000
+.equ TIMEOUT_US,  30000000
 .equ INTERVAL,    167000
 .equ JOB_RESV,    0xFFC
 .equ JOB_ID,      0x10FC
@@ -81,6 +81,8 @@
 .equ P_RING_N,    0x4C
 .equ P_PRE,       0x50
 .equ P_T0,        0x54
+.equ P_SWALLOW,   0x54              @ the next frame is the firmware's own
+                                    @ photo from a half-press release
 .equ P_TMO,       0x58
 .equ P_INJ,       0x5C
 .equ P_S1C,       0x60
@@ -278,6 +280,18 @@ frame_common:
     add     r1, r1, #1
     str     r1, [r5, #P_SEQ]
 
+    ldr     r1, [r5, #P_SWALLOW]
+    cmp     r1, #0
+    beq     8f
+    mov     r1, #0
+    str     r1, [r5, #P_SWALLOW]
+    mov     r0, r6
+    bl      drop_one
+    ldr     r1, [r5, #P_DROPPED]
+    add     r1, r1, #1
+    str     r1, [r5, #P_DROPPED]
+    b       f_skip
+8:
     ldr     r1, [r5, #P_PRE]
     cmp     r1, #0
     beq     f_pass
@@ -458,12 +472,19 @@ drop_one:
     LDA     ip, F_JOBDB
     blx     ip
     mov     r5, r0
+    cmp     r5, #0
+    beq     d9                      @ the db is gone (playback): leave it
     mov     r1, r4
     LDA     ip, F_JOBGET
     blx     ip
     cmp     r0, #0
     beq     d9
     mov     r6, r0
+    movw    r1, #:lower16:JOB_ID    @ the slot may have been reused since we
+    movt    r1, #:upper16:JOB_ID    @ saved it: only touch our own job
+    ldr     r1, [r6, r1]
+    cmp     r1, r4
+    bne     d9
     LDA     ip, F_CAP
     blx     ip
     movw    r1, #:lower16:JOB_RESV
@@ -493,11 +514,19 @@ commit_one:
     bhs     c9
     LDA     ip, F_JOBDB
     blx     ip
+    cmp     r0, #0
+    beq     c9
     mov     r1, r5
     LDA     ip, F_JOBGET
     blx     ip
     cmp     r0, #0
     beq     c9
+    mov     r6, r0
+    movw    r1, #:lower16:JOB_ID
+    movt    r1, #:upper16:JOB_ID
+    ldr     r1, [r6, r1]
+    cmp     r1, r5
+    bne     c9
     mov     r0, r4
     mov     r1, r5
     mov     r2, #1
@@ -586,6 +615,8 @@ d_s1off:
     bl      acquire
     bl      abandon_ring
     bl      release
+    mov     r0, #1
+    str     r0, [r6, #P_SWALLOW]    @ the [7] below makes the firmware shoot
     mov     r0, r4
     mov     r1, #7
     LDA     ip, F_DISP
@@ -631,6 +662,7 @@ d_s1:
     str     r0, [r6, #P_PRE]
     mov     r0, #0
     str     r0, [r6, #P_TMO]
+    str     r0, [r6, #P_SWALLOW]
     ldr     r0, [r6, #P_INJ]
     add     r0, r0, #1
     str     r0, [r6, #P_INJ]
@@ -683,10 +715,11 @@ row_unit:
 .align 2
 row_thunk:
     ldr     ip, row_target_rel
-9:  add     ip, pc, ip
+row_thunk_here:
+    add     ip, pc, ip
     bx      ip
 row_target_rel:
-    .word   row_unit + (ROW_INSTALL | 1) - (9b + 8)   @ bit0 = Thumb
+    .word   ROW_DELTA
 
 /* ---- data, in .text so it travels with the code -------------------------- */
 .align 2

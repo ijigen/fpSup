@@ -1,5 +1,5 @@
 ================================================================
- PreCap  fpSup-PreCap v0.1.0
+ PreCap  fpSup-PreCap v0.1.3
  SIGMA fp Ver.5.02 only -- Loader v4 card
 ================================================================
 
@@ -36,7 +36,7 @@ WHAT TO EXPECT
 
 INSTALL
 
-  Copy PreCap_v0.1.0.BIN into \fpSup\ next to the other sups. To make
+  Copy PreCap_v0.1.3.BIN into \fpSup\ next to the other sups. To make
   a whole card, use fpSup-Merge and tick PreCap.
 
   Take the card out and the camera is back to normal.

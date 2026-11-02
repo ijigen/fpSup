@@ -3,7 +3,7 @@
 
     python3 -B build_precap_sup.py --out DIR
 
-Produces DIR/PreCap_v0.1.0.BIN.  The row unit (precap_row.c) is compiled and
+Produces DIR/PreCap_v0.1.3.BIN.  The row unit (precap_row.c) is compiled and
 .incbin'd into precap.S, so the sup is one flat .text with no data section.
 
 Checks before writing:
@@ -134,6 +134,12 @@ def build():
         inc = pathlib.Path(t) / 'precap_row.bin'
         inc.write_bytes(code)
         defines = [f'ROW_BIN="{inc}"', f'ROW_INSTALL=0x{fn:X}']
+        # row_target_rel needs an offset between two labels in the same section,
+        # which the assembler will not fold for a `.word`; measure it on a first
+        # pass (ROW_DELTA=0) and feed the value back in.
+        syms = symbols(SRC, defines + ['ROW_DELTA=0'])
+        delta = syms['row_unit'] + (fn | 1) - (syms['row_thunk_here'] + 8)
+        defines.append(f'ROW_DELTA={delta & 0xFFFFFFFF}')
         body = assemble(SRC, defines)
         syms = symbols(SRC, defines)
 
@@ -182,7 +188,7 @@ def main():
     out = pathlib.Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     sup, info = build()
-    path = out / 'PreCap_v0.1.0.BIN'
+    path = out / 'PreCap_v0.1.3.BIN'
     path.write_bytes(sup)
     print(f'{path}  {len(sup)} B')
     for k, v in info.items():
