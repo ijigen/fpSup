@@ -49,6 +49,17 @@
         return {key: `${preset ? preset.name : `C${dcw}x${dch}`}:${rw}x${rh}`, case: rows,
           nominal: [rw - manifest.margin[0], rh - manifest.margin[1]], clk: manifest.clk, vmax_max: manifest.vmax_max};
       },
+      // The readout plan of every recipe of a cell (same order as qualities()): what the sensor sends.
+      async readout(dcw, dch, rw, rh) {
+        const cell = await this.qualities(dcw, dch, rw, rh);
+        if (!Array.isArray(cell.case)) return {key: cell.key, readout: null, win_top: api.preview_win_top()};
+        const out = cell.case.map((_, i) => {
+          const v = new Int32Array(api.memory.buffer, api.wasm_readout(i), 10);
+          return v[0] ? null : {fmt_w: v[1], line_w: v[2], raster_w: v[3], out_h: v[4], mh: v[5], mv: v[6],
+            windowed: v[7], start: v[8], y_skip: v[9]};
+        });
+        return {key: cell.key, readout: out, win_top: api.preview_win_top()};
+      },
       async qr(code) {
         if (typeof code !== 'string' || !new RegExp(`^[A-Za-z0-9_-]{${manifest.constants.QR_CHARS}}$`).test(code))
           throw new Error('Invalid recipe code');

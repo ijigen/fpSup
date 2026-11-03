@@ -4,6 +4,18 @@
 const simulator = {info: null, state: 'connecting', cells: new Set(), requests: new Map(),
   errors: new Map(), qr: new Map(), qrRequests: new Set(), timer: null, scheduled: null, backend: null};
 const browserEngine = typeof SensorLabWasm !== 'undefined';
+// Page strings follow the EN / 简 / 繁 choice when site_page.js is loaded; English otherwise.
+const SIMULATOR_EN = {engineLoading: 'Loading the simulation engine…',
+  engineFailed: 'The simulation engine could not load. Please reload this page.',
+  presetOnly: 'Preset preview only. Open the local simulator server to use custom dimensions and QR codes.',
+  calcFailed: 'The calculation could not complete. Please reload.', calculating: 'Calculating recipes…',
+  noRecipes: 'No recipes are available for these dimensions.', upToDate: 'Dimensions and recipes are up to date',
+  qrUnavailable: 'QR code unavailable', engine: (v, b) => `SensorLab v${v} · ${b ? 'Browser' : 'Local'} simulation`};
+function simulatorText(key, ...args) {
+  if (typeof tr === 'function') return tr(key, ...args);
+  const v = SIMULATOR_EN[key];
+  return typeof v === 'function' ? v(...args) : v;
+}
 
 async function simulatorJSON(path) {
   if (browserEngine) {
@@ -13,6 +25,7 @@ async function simulatorJSON(path) {
     if (route === '/api/info') return backend.info();
     if (route === '/api/qualities') return backend.qualities(...['dcw','dch','rw','rh'].map(k => Number(params.get(k))));
     if (route === '/api/qr') return backend.qr(params.get('code'));
+    if (route === '/api/readout') return backend.readout(...['dcw','dch','rw','rh'].map(k => Number(params.get(k))));
     throw new Error('Unknown simulator operation');
   }
   const response = await fetch(path, {cache: 'no-store', signal: AbortSignal.timeout(10000)});
@@ -23,16 +36,12 @@ async function simulatorJSON(path) {
 function simulatorStatus() {
   const el = document.getElementById('connection');
   if (!simulator.info) {
-    el.textContent = simulator.state === 'connecting' ? 'Loading the simulation engine…'
-      : browserEngine ? 'The simulation engine could not load. Please reload this page.'
-      : 'Preset preview only. Open the local simulator server to use custom dimensions and QR codes.';
+    el.textContent = simulatorText(simulator.state === 'connecting' ? 'engineLoading' : browserEngine ? 'engineFailed' : 'presetOnly');
     return;
   }
   const key = qualityKey(), error = simulator.errors.get(key);
-  const detail = error ? 'The calculation could not complete. Please reload.'
-    : !simulator.cells.has(key) ? 'Calculating recipes…'
-    : !allQuals() ? 'No recipes are available for these dimensions.' : 'Dimensions and recipes are up to date';
-  el.textContent = `SensorLab v${simulator.info.version} · ${browserEngine ? 'Browser' : 'Local'} simulation\n${detail}`;
+  const detail = simulatorText(error ? 'calcFailed' : !simulator.cells.has(key) ? 'calculating' : !allQuals() ? 'noRecipes' : 'upToDate');
+  el.textContent = `${simulatorText('engine', simulator.info.version, browserEngine)}\n${detail}`;
   el.style.whiteSpace = 'pre-line';
 }
 
@@ -58,7 +67,7 @@ function simulatorDrawQR(code) {
     }).catch(() => {
       const current = document.getElementById('qr-matrix');
       if (current && current.dataset.code === code) {
-        current.textContent = 'QR code unavailable';
+        current.textContent = simulatorText('qrUnavailable');
         current.style.color = '#000';
       }
     }).finally(() => simulator.qrRequests.delete(code));
@@ -83,6 +92,12 @@ function simulatorLoadCell(key) {
     FPSDATA.nominal[key] = data.nominal;
     FPSDATA.clk = data.clk; FPSDATA.vmax_max = data.vmax_max;
     simulator.cells.add(key);
+    // What the sensor sends for each recipe (the diagram's readout stage); a later, separate request.
+    simulatorJSON(`/api/readout?${params}`).then(r => {
+      if (r.key !== key || (r.readout && r.readout.length !== (Array.isArray(data.case) ? data.case.length : 0))) return;
+      (FPSDATA.readout ||= {})[key] = r.readout; FPSDATA.win_top = r.win_top;
+      if (qualityKey() === key) render();
+    }).catch(() => {});
     // A response for an older crop is cached only. It must never lower the FPS
     // or replace the selection of the crop that the user has since moved to.
     if (qualityKey() === key) { fixFps(); render(); }
@@ -95,8 +110,6 @@ function simulatorLoadCell(key) {
 
 function simulatorRender() {
   simulatorStatus();
-  const details = document.getElementById('mode-link');
-  if (details) details.href = '../' + (qrCode() ? '#' + qrCode() : '');
   const code = qrVisible() && qrCode();
   if (code) simulatorDrawQR(code);
   if (!simulator.info) return;
@@ -118,7 +131,7 @@ async function simulatorConnect() {
     simulator.state = 'ready';
     // Presets remain a file:// fallback only; the selected C engine calculates
     // every requested cell from its exact C-source snapshot.
-    FPSDATA.cases = {}; FPSDATA.nominal = {};
+    FPSDATA.cases = {}; FPSDATA.nominal = {}; FPSDATA.readout = {};
     render();
   } catch (_) {
     simulator.info = null; simulator.state = 'offline'; simulatorRender();

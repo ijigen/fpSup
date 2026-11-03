@@ -1,86 +1,204 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>SensorLab-IMX410 Mode</title>
+<title>SensorLab-IMX410</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* fpSup palette (Bei 10-25): logo pink, K2 cyan, hair yellow; neutral grey grounds; follows the system theme */
+/* fpSup palette (Bei 10-25): logo pink, K2 cyan, hair yellow; neutral grey grounds; follows the system theme.
+   The simulated camera screen (#cam) keeps its own fixed dark colours: it is the camera's LCD. */
 :root{
   --bg:#f6f6f6; --panel:#fff; --line:#e4e4e4; --ink:#151515; --dim:#5e5e5e;
-  --sig:#d01245; --info:#00737a; --warn:#8c6a00; --sensor:#dcdcdc; --fill:rgba(208,18,69,.10); --fill2:rgba(0,115,122,.10);
-  --r:#d0394f; --g:#3c9a4f; --b:#3a6fd0;
+  --sig:#d01245; --info:#00737a; --warn:#8c6a00; --sensor:#dcdcdc; --fill:rgba(208,18,69,.10); --fill2:rgba(0,115,122,.10); --fill3:rgba(140,106,0,.12); --fill4:rgba(58,111,208,.14); --fill5:rgba(60,154,79,.12);
+  --r:#d0394f; --g:#3c9a4f; --b:#3a6fd0; --btn:#ececec; --btnline:#cfcfcf;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --sans:"IBM Plex Sans","PingFang TC","PingFang SC","Noto Sans TC","Noto Sans SC",system-ui,sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0d0d0d; --panel:#151515; --line:#252525; --ink:#ececec; --dim:#9a9a9a;
-  --sig:#fb144e; --info:#01f7fb; --warn:#fdee02; --sensor:#2c2c2c; --fill:rgba(251,20,78,.14); --fill2:rgba(1,247,251,.10);
-  --r:#ff5c70; --g:#5fd27a; --b:#6c9bff; color-scheme:dark }}
+  --sig:#fb144e; --info:#01f7fb; --warn:#fdee02; --sensor:#2c2c2c; --fill:rgba(251,20,78,.14); --fill2:rgba(1,247,251,.10); --fill3:rgba(253,238,2,.10); --fill4:rgba(108,155,255,.16); --fill5:rgba(95,210,122,.12);
+  --r:#ff5c70; --g:#5fd27a; --b:#6c9bff; --btn:#22272c; --btnline:#3a4148; color-scheme:dark }}
 :root[data-theme="dark"]{
   --bg:#0d0d0d; --panel:#151515; --line:#252525; --ink:#ececec; --dim:#9a9a9a;
-  --sig:#fb144e; --info:#01f7fb; --warn:#fdee02; --sensor:#2c2c2c; --fill:rgba(251,20,78,.14); --fill2:rgba(1,247,251,.10);
-  --r:#ff5c70; --g:#5fd27a; --b:#6c9bff; color-scheme:dark }
-*{box-sizing:border-box}
-body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55;
-  padding-block:24px 56px; padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px))}
-main{max-width:900px; margin:0 auto; display:grid; gap:18px}
-.top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap}
-h1{font-size:1.5rem; margin:0; font-weight:600; letter-spacing:-.01em; text-wrap:balance}
-h2{font-family:var(--mono); font-size:.72rem; letter-spacing:.11em; text-transform:uppercase; color:var(--dim); margin:0 0 10px; font-weight:600}
-.lede{color:var(--dim); margin:4px 0 0; max-width:62ch}
-.page-nav{margin-top:12px}
-.page-nav a{display:inline-block; border:1px solid var(--info); border-radius:999px; padding:6px 14px;
-  color:var(--info); font-weight:500; text-decoration:none}
-.page-nav a:hover{background:var(--fill2)}
-.page-nav a:focus-visible{outline:2px solid var(--info); outline-offset:3px}
-.lang{display:flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; flex:none}
-.lang button{font:500 .78rem var(--mono); background:none; border:0; color:var(--dim); padding:5px 11px; cursor:pointer}
-.lang button[aria-pressed="true"]{background:var(--sig); color:#fff}
-.card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; min-width:0}
-.chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px}
-.chip{font-family:var(--mono); font-size:.78rem; border:1px solid var(--line); border-radius:999px; padding:3px 10px; white-space:nowrap}
-.chip b{color:var(--sig); font-weight:600}
-.grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px}
-@media(max-width:680px){.grid2{grid-template-columns:1fr}}
-svg{display:block; width:100%; height:auto; max-width:100%}
-svg text{font-family:var(--mono); fill:var(--ink)}
-.cap{color:var(--dim); font-size:.86rem; margin:10px 0 0}
-.legend{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-top:12px}
-.legend div{border-left:3px solid var(--line); padding-left:10px; font-size:.85rem; color:var(--dim)}
-.legend b{display:block; color:var(--ink); font-family:var(--mono); font-size:.8rem}
-.legend .s1, .legend .s2{border-color:var(--sig)} .legend .s3, .legend .s4{border-color:var(--info)}
-.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px}
-.stat .k{font-family:var(--mono); font-size:.68rem; color:var(--dim); letter-spacing:.08em; text-transform:uppercase}
-.stat .v{font-family:var(--mono); font-size:1.4rem; font-weight:600}
-.stat .s{font-size:.8rem; color:var(--dim)}
-.bar{height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:6px}
-.bar i{display:block; height:100%; background:var(--info)}
-.bar i.hot{background:var(--warn)} .bar i.over{background:var(--sig)}
-footer{color:var(--dim); font-size:.8rem; text-align:center}
-</style>
-</head>
-<body>
-<main>
-  <header>
-    <div class="top">
-      <h1 id="title">SensorLab-IMX410</h1>
-      <div class="lang" role="group" aria-label="Language">
-        <button data-l="en">EN</button><button data-l="hans">简</button><button data-l="hant">繁</button>
-      </div>
-    </div>
-    <p class="lede" id="lede"></p>
-    <nav class="page-nav" aria-label="Page navigation"><a href="./simulator/" id="simulator-link" data-t="openSimulator">Open simulator</a></nav>
-    <div class="chips" id="chips"></div>
-  </header>
+  --sig:#fb144e; --info:#01f7fb; --warn:#fdee02; --sensor:#2c2c2c; --fill:rgba(251,20,78,.14); --fill2:rgba(1,247,251,.10); --fill3:rgba(253,238,2,.10); --fill4:rgba(108,155,255,.16); --fill5:rgba(95,210,122,.12);
+  --r:#ff5c70; --g:#5fd27a; --b:#6c9bff; --btn:#22272c; --btnline:#3a4148; color-scheme:dark }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55;
+  padding-block:20px 48px; padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); }
+main { max-width:1440px; margin:0 auto; display:grid; gap:18px 24px; min-width:0;
+  grid-template-columns:minmax(0,2fr) minmax(0,3fr); grid-template-areas:"head sim" "details sim" "foot foot"; align-items:start; }
+main > header { grid-area:head; min-width:0; } main > .sim { grid-area:sim; } main > #details { grid-area:details; min-width:0; }
+main > .page-foot { grid-area:foot; }
+@media (min-height:880px) { main > .sim { position:sticky; top:12px; } }   /* the camera stays in view while the details scroll */
+#details { display:grid; gap:18px; }
+/* Phones (the camera QR's main entry): summary, the diagram, the simulator, then the other details. */
+@media (max-width:899px) { main { grid-template-columns:minmax(0,1fr); grid-template-areas:none; }
+  main > * { grid-area:auto !important; } main > .sim { position:static; }
+  #details { display:contents; }
+  main > header { order:1; } #details > .frame-card { order:2; } main > .sim { order:3; }
+  #details > .grid2 { order:4; } #details > section:last-child { order:5; } main > .page-foot { order:6; } }
+.top { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:12px; }
+h1 { font-size:clamp(1.05rem,5vw,1.5rem); margin:0; font-weight:600; letter-spacing:-.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+h2 { font-family:var(--mono); font-size:.72rem; letter-spacing:.11em; text-transform:uppercase; color:var(--dim); margin:0 0 10px; font-weight:600; }
+.lede { color:var(--dim); margin:4px 0 0; max-width:70ch; min-height:calc(1.55em * 3); }
+@media (min-width:900px) { .lede { min-height:calc(1.55em * 2); } }
+.lang { display:flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; flex:none; }
+.lang button { font:500 .78rem var(--mono); background:none; border:0; color:var(--dim); padding:5px 11px; cursor:pointer; }
+.lang button[aria-pressed="true"] { background:var(--sig); color:#fff; }
+#notice { border:1px solid var(--warn); border-left-width:4px; border-radius:8px; padding:10px 14px; margin-top:12px; font-size:.9rem; overflow-wrap:anywhere; }
+#notice ul { margin:6px 0 0; padding-left:1.2em; font-family:var(--mono); font-size:.8rem; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; min-width:0; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.chip { font-family:var(--mono); font-size:.78rem; border:1px solid var(--line); border-radius:999px; padding:3px 10px; white-space:nowrap; text-align:center; }
+.chip b { color:var(--sig); font-weight:600; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+@media (max-width:680px) { .grid2 { grid-template-columns:1fr; } }
+.card svg { display:block; width:100%; height:auto; max-width:100%; }
+.card svg text { font-family:var(--mono); fill:var(--ink); }
+#frame { max-width:640px; margin:0 auto; }
+.cap { color:var(--dim); font-size:.86rem; margin:10px 0 0; min-height:calc(1.55em * 5); }
+.frame-card .cap { min-height:0; }
+.legend { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr)); gap:10px; margin-top:12px; }
+.legend div { border-left:3px solid var(--line); padding-left:10px; font-size:.85rem; color:var(--dim); min-height:calc(1.55em * 7); }
+@media (max-width:899px) { .legend div { min-height:calc(1.55em * 5); } }
+.legend b { display:block; color:var(--ink); font-family:var(--mono); font-size:.8rem; }
+.legend .s0 { border-color:var(--g); } .legend .s1 { border-color:var(--sig); } .legend .s2 { border-color:var(--warn); } .legend .s3 { border-color:var(--info); } .legend .s4 { border-color:var(--b); }
 
-  <section class="card">
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr)); gap:10px; }
+.stat .k { font-family:var(--mono); font-size:.68rem; color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
+.stat .v { font-family:var(--mono); font-size:1.4rem; font-weight:600; font-variant-numeric:tabular-nums; }
+.stat .s { font-size:.8rem; color:var(--dim); min-height:calc(1.55em * 2); }
+.bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:6px; }
+.bar i { display:block; height:100%; background:var(--info); }
+.bar i.hot { background:var(--warn); } .bar i.over { background:var(--sig); }
+.page-foot { color:var(--dim); font-size:.8rem; text-align:center; }
+[hidden] { display:none !important; }
+
+/* ---- the simulator: the camera's QS screen + the controls ---- */
+.sim { display:grid; gap:12px; min-width:0; }
+#cam { --tile:rgba(28,30,33,.6); --line:rgba(255,255,255,.18); --fg:#fff; --mute:#c3cad0;
+  --focus:#45b8e3; --approx:#f0b44c; --lock:#ff5a4f; color:var(--fg); font-family:"Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  width:100%; aspect-ratio:1024/682; position:relative; overflow:hidden; border-radius:6px; background:#000; user-select:none; line-height:normal; }
+.tile .t { width:100%; justify-content:center; }
+.s .qslock { height:2em; width:auto; display:block; margin:-.45em auto 0; }
+#liveview { position:absolute; display:block; background:#62645f; }
+#cam.closed #qs { display:none; }
+.tile .qrsq { width:80.078125%; aspect-ratio:1; flex:none; background:#fff; display:block; }
+.tile .qrsq svg { display:block; width:100%; height:100%; shape-rendering:crispEdges; }
+#qs { position:absolute; inset:0; }
+/* Native 1024 x 682 QS layer: 256 x 223 tiles at y=77 and y=308. */
+.row { position:absolute; width:100%; height:32.697947%; display:grid; grid-template-columns:repeat(4,1fr); background:var(--tile); border-top:1px solid var(--line); }
+#r0 { top:11.290323%; } #r1 { top:45.161290%; }
+.tile { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  border-left:1px solid var(--line); gap:2%; cursor:pointer; min-width:0; overflow:hidden; }
+.tile:first-child { border-left:0; }
+.tile .t { font-size:clamp(9px,2.1vw,22px); color:#e8e8e8; letter-spacing:.02em; height:1.3em; display:flex; align-items:center; gap:.3em; }
+.tile .icon { border:2px solid #e8e8e8; border-radius:2px; padding:0 .15em; font-size:.8em; font-weight:700; line-height:1.1; }
+.tile .v { font-size:clamp(12px,3.2vw,34px); font-weight:700; height:1.25em; white-space:nowrap; }
+.tile .s { font-size:clamp(8px,1.7vw,18px); color:var(--mute); height:1.2em; white-space:nowrap; font-weight:500; }
+/* the QS panel is lighter than the camera's so the scene (and its rolling-shutter lean) shows; a soft shadow keeps text legible */
+.tile .t, .tile .v, .tile .s, #ael { text-shadow:0 1px 2px rgba(0,0,0,.85), 0 0 6px rgba(0,0,0,.5); }
+.tile .s.approx { color:var(--approx); }
+.tile .s.ok { color:#5fc46a; } .tile .s.bad, #footer .o.bad small { color:var(--lock); } #footer .o.ok small { color:#5fc46a; }
+.tile.f { outline:3px solid var(--focus); outline-offset:-3px; background:rgba(0,0,0,.45); }
+.tile .tarr { position:absolute; top:0; bottom:0; width:22%; display:flex; align-items:center; color:var(--focus);
+  font-size:clamp(10px,1.8vw,18px); cursor:pointer; touch-action:manipulation; }
+.tile .tarr.l { left:0; justify-content:flex-start; padding-left:3%; } .tile .tarr.r { right:0; justify-content:flex-end; padding-right:3%; }
+#qsbtn { position:absolute; top:1.5%; left:1%; z-index:2; font:700 clamp(10px,1.8vw,18px) system-ui,sans-serif; color:#111; background:#bbb;
+  border:0; border-radius:99px; padding:.2em .7em; cursor:pointer; touch-action:manipulation; }
+#qsbtn[aria-pressed="false"] { background:var(--focus); }
+.tile.blank { cursor:default; }
+.lockred { color:var(--lock); }
+#hintbar { position:absolute; top:77.859238%; height:11.290323%; width:100%; display:flex; justify-content:flex-end; align-items:stretch; }
+#ael { background:var(--tile); display:flex; align-items:center; gap:.5em; padding:0 1.2em; font:inherit; font-size:clamp(10px,2.3vw,24px); color:var(--fg); border:0; cursor:pointer; touch-action:manipulation; }
+#ael b { background:#bbb; color:#111; border-radius:99px; padding:0 .5em; font-size:.8em; }
+#footer { position:absolute; bottom:0; width:100%; height:10.850440%; background:#000; display:flex; align-items:center; justify-content:center; gap:0; overflow:hidden; padding:0 2%; }
+#footer .o { padding:.35em .6em; font-size:clamp(9px,1.9vw,20px); border:2px solid transparent; white-space:nowrap; cursor:pointer; text-align:center; line-height:1.15; }
+#footer .o small { display:block; font-size:.62em; color:var(--mute); }
+#footer .o.approx small { color:var(--approx); }
+#footer .o.sel { border-color:var(--focus); }
+#footer .o.mk { text-decoration:underline dotted var(--focus) 3px; text-underline-offset:5px; }
+#footer .o.cu { color:#ffd66b; }
+#footer .o.na { color:#55595e; cursor:default; }
+#footer .o.na small { color:#8a6f3a; }
+#footer .arrow { color:var(--focus); padding:0 .4em; }
+#footer .arrow.sp { color:#fff; padding:0 1.2em; touch-action:manipulation; cursor:pointer; font-size:clamp(10px,1.6vw,18px); }
+#footer .o.big { font-size:clamp(14px,3vw,32px); font-weight:500; min-width:5em; }
+#side { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:10px 18px; font-size:14px; min-width:0; align-items:start; }
+#side p { margin:0; }
+.keys { color:var(--dim); line-height:1.6; }
+.rsbox { display:grid; gap:6px; }
+.seg { display:flex; align-items:center; border:1px solid var(--line); border-radius:999px; overflow:hidden; width:max-content; max-width:100%; }
+.seg .seglab { font:500 .74rem var(--mono); color:var(--dim); padding:4px 8px 4px 12px; }
+.seg button { font:500 .74rem var(--mono); background:none; border:0; color:var(--dim); padding:5px 10px; cursor:pointer; }
+.seg button[aria-pressed="true"] { background:var(--info); color:var(--panel); }
+#rs-now { display:block; height:calc(2 * 1.5em); line-height:1.5; white-space:pre; overflow:hidden; font:12px/1.5 var(--mono); font-variant-numeric:tabular-nums; color:var(--ink); }
+#state { font-family:var(--mono); font-size:12px; line-height:1.5; height:calc(5 * 1.5em + 22px); overflow:auto; color:var(--dim); white-space:pre; background:var(--panel); border:1px solid var(--line); padding:10px; border-radius:8px; margin:0; }
+#connection { margin:0; color:var(--dim); line-height:1.6; min-height:calc(1.6em * 3); }
+</style></head><body>
+<main>
+<header>
+  <div class="top">
+    <h1 id="title">SensorLab-IMX410</h1>
+    <div class="lang" role="group" aria-label="Language">
+      <button data-l="en">EN</button><button data-l="hans">简</button><button data-l="hant">繁</button>
+    </div>
+  </div>
+  <p class="lede" id="lede"></p>
+  <div id="notice" role="alert" hidden></div>
+  <div class="chips" id="chips"></div>
+</header>
+<section class="sim" aria-labelledby="sim-h">
+<h2 id="sim-h" data-t="hSim" style="grid-column:1/-1;margin:0">Quick Set simulator</h2>
+<div id="cam">
+<svg id="liveview" viewBox="0 319 6048 3402" preserveAspectRatio="none" role="img" aria-label="Sensor crop and output aspect ratio preview">
+  <defs>
+    <linearGradient id="scene" x2="0.8" y2="1"><stop stop-color="#577d88"/><stop offset="1" stop-color="#c09a70"/></linearGradient>
+    <pattern id="grid" width="504" height="505" patternUnits="userSpaceOnUse"><path d="M504 0H0V505" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="6"/></pattern>
+  </defs>
+  <!-- #scene-g leans for the rolling-shutter preview (site_page.js); wider than the sensor so a lean never shows a gap -->
+  <g id="scene-g">
+  <rect x="-1512" width="9072" height="4040" fill="url(#scene)"/>
+  <path d="M-1512 3100 0 3100 1100 1650 2200 2840 3700 1150 5200 2920 6048 2000 7560 2000V4040H-1512Z" fill="#324b4c" opacity=".65"/>
+  <rect x="-1512" width="9072" height="4040" fill="url(#grid)"/>
+  <g fill="none" stroke="#fff" opacity=".75" stroke-width="12">
+    <circle cx="3024" cy="2020" r="700"/><path d="M2124 2020H3924M3024 1120V2920"/>
+    <rect x="504" y="505" width="5040" height="3030" stroke-dasharray="30 30"/>
+  </g>
+  </g>
+  <!-- stock FHD at the same pan, for comparison: the same verticals and centre mark, dashed -->
+  <g id="ghost" fill="none" stroke="#45b8e3" stroke-width="14" stroke-dasharray="60 40" opacity=".95" style="display:none">
+    <path d="M1008 0V4040M2016 0V4040M3024 0V4040M4032 0V4040M5040 0V4040"/><circle cx="3024" cy="2020" r="700"/>
+  </g>
+</svg>
+<button id="qsbtn" type="button" aria-pressed="true">QS</button>
+<div id="qs">
+  <div></div>
+  <div class="row" id="r0"></div>
+  <div class="row" id="r1"></div>
+  <div id="hintbar"><button id="ael" type="button"><b>AEL</b>More options</button></div>
+  <div id="footer"></div>
+  <div></div>
+</div></div>
+<div id="side">
+  <p id="connection" role="status">Loading simulator…</p>
+  <div class="rsbox">
+    <div class="seg" role="group" aria-label="Pan speed"><span class="seglab" data-t="rsPan">Pan</span><button type="button" data-pan="off" data-t="rsOff">Off</button><button type="button" data-pan="slow" data-t="rsSlow">Slow</button><button type="button" data-pan="fast" data-t="rsFast">Fast</button></div>
+    <label class="keys"><input type="checkbox" id="rs-compare"> <span data-t="rsCompare">Compare with stock FHD</span></label>
+    <span id="rs-now"></span>
+    <p class="keys" data-t="rsLean"></p>
+  </div>
+  <p class="keys" data-t="howTo"></p>
+  <p class="keys" data-t="bgNote"></p>
+  <pre id="state"></pre>
+</div>
+</section>
+<div id="details" class="details">
+  <section class="card frame-card">
     <h2 data-t="hFrame"></h2>
     <svg id="frame" role="img"></svg>
+    <p class="cap" data-t="frameCap"></p>
     <div class="legend" id="legend"></div>
   </section>
-
   <div class="grid2">
     <section class="card">
       <h2 data-t="hMerge"></h2>
@@ -93,223 +211,558 @@ footer{color:var(--dim); font-size:.8rem; text-align:center}
       <p class="cap" id="kernelCap"></p>
     </section>
   </div>
-
   <section class="card">
     <h2 data-t="hStats"></h2>
     <div class="stats" id="stats"></div>
     <svg id="rs" viewBox="0 0 640 80" role="img" style="margin-top:14px"></svg>
     <p class="cap" data-t="rsCap"></p>
   </section>
-
-  <footer>SensorLab-IMX410 · fpSup</footer>
+</div>
+<footer class="page-foot">SensorLab-IMX410 · fpSup</footer>
 </main>
+<script src="fps_data.js"></script>
+<script src="site_page.js"></script>
 <script>
-// ---- strings --------------------------------------------------------------------------------------------
-const I18N = {
-  en: { openSimulator: 'Open simulator', lede: 'Settings encoded in this SensorLab mode.', demo: 'An example. The QR code in SensorLab’s QS opens this page with your camera’s settings.',
-    broken: 'This code could not be read (scanned partly, or another version). Showing an example.',
-    hFrame: 'Where the picture comes from', hMerge: 'Sensor binning', hKernel: 'ISP bin kernel', hStats: 'Speed and data',
-    sensor: 'Sensor', sdc: 'Sensor DC', sbin: 'Sensor bin', idc: 'ISP DC', iscale: 'ISP scale', rec: 'Recording',
-    sdcT: 'The rows and columns the sensor reads.', sbinT: (h, v) => `${h}×${v} same-colour pixels summed on the sensor.`,
-    idcT: 'The part of the binned frame the ISP keeps.', iscaleT: (b, z) => `ISP bin ${b}, RWZM ${z}, down to the recording size.`,
-    vis: (w, h) => `Visible (DNG DefaultCrop) ${w}×${h}.`, none: 'none',
-    merge1: '1×1: every pixel read as is — sharpest, most data.',
-    mergeN: (h, v) => `${h}×${v}: ${h} across and ${v} down of the same colour become one on the sensor — smaller, cleaner, faster to read.`,
-    sumUp: 'summed', toOne: '→ 1 output', kernelOn: (k, m) => `The ISP weights 3 neighbouring same-colour pixels by [${k}] (${m}). A heavier centre is sharper; flatter is softer and cleaner.`,
-    kernelOff: 'No ISP binning in this mode; only scaling.', noBin: 'no bin',
-    fps: 'Frame rate', unc: 'Uncompressed', ll: 'Lossless est.', rs: 'Rolling shutter', actual: f => `fps (exact ${f})`,
-    media: 'on SD UHS-II', rsCap: 'Rolling shutter: the time from reading the first row to the last. Shorter skews less in fast motion.',
-    thisMode: 'This mode', stockFhd: 'Stock FHD 29.97' },
-  hans: { openSimulator: '打开模拟器', lede: '这组 SensorLab 模式编码的设置。', demo: '这是示例。相机上 SensorLab QS 里的二维码会带着你的设置打开这一页。',
-    broken: '这段码读不出来（可能只扫到一半或版本不同），下面是示例。',
-    hFrame: '画面从哪里来', hMerge: '传感器像素合并', hKernel: 'ISP 合并核', hStats: '速度与数据量',
-    sensor: '传感器', sdc: 'Sensor DC', sbin: 'Sensor bin', idc: 'ISP DC', iscale: 'ISP 缩放', rec: '录像',
-    sdcT: '传感器实际读出的行列范围。', sbinT: (h, v) => `传感器内把水平 ${h}、垂直 ${v} 个同色像素相加成一个。`,
-    idcT: 'ISP 从合并后的画面里保留的部分。', iscaleT: (b, z) => `ISP 合并 ${b}、RWZM ${z}，缩到录像尺寸。`,
-    vis: (w, h) => `可见范围（DNG DefaultCrop）${w}×${h}。`, none: '无',
-    merge1: '1×1：每个像素原样读出，最锐利、数据量最大。',
-    mergeN: (h, v) => `${h}×${v}：水平 ${h}、垂直 ${v} 个同色像素在传感器里合成一个，画面变小、噪点更低、读得更快。`,
-    sumUp: '同色相加', toOne: '→ 1 个输出', kernelOn: (k, m) => `ISP 把相邻 3 个同色像素按 [${k}] 加权合成一个（${m}）。中间权重越大越锐利，越平均越柔、越干净。`,
-    kernelOff: '这个模式没有用 ISP 合并，只做缩放。', noBin: '不合并',
-    fps: '帧率', unc: '未压缩', ll: 'Lossless 预估', rs: '卷帘', actual: f => `fps（实际 ${f}）`,
-    media: '以 SD UHS-II 计', rsCap: '卷帘（rolling shutter）= 从第一行读到最后一行的时间，越短，快速运动越不歪。',
-    thisMode: '这个模式', stockFhd: '原厂 FHD 29.97' },
-  hant: { openSimulator: '開啟模擬器', lede: '這組 SensorLab 模式所編碼的設定。', demo: '這是範例。相機上 SensorLab QS 裡的 QR code 會帶著你的設定打開這一頁。',
-    broken: '這段碼讀不出來（可能只掃到一半或版本不同），下面是範例。',
-    hFrame: '畫面從哪裡來', hMerge: '感光元件像素合併', hKernel: 'ISP 合併核', hStats: '速度與資料量',
-    sensor: '感光元件', sdc: 'Sensor DC', sbin: 'Sensor bin', idc: 'ISP DC', iscale: 'ISP 縮放', rec: '錄影',
-    sdcT: '感光元件實際讀出的列與欄。', sbinT: (h, v) => `感光元件內把水平 ${h}、垂直 ${v} 個同色像素相加成一個。`,
-    idcT: 'ISP 從合併後的畫面裡留下的部分。', iscaleT: (b, z) => `ISP 合併 ${b}、RWZM ${z}，縮到錄影尺寸。`,
-    vis: (w, h) => `可見範圍（DNG DefaultCrop）${w}×${h}。`, none: '無',
-    merge1: '1×1：每個像素原樣讀出，最銳利、資料量最大。',
-    mergeN: (h, v) => `${h}×${v}：水平 ${h}、垂直 ${v} 個同色像素在感光元件裡合成一個，畫面變小、雜訊更低、讀得更快。`,
-    sumUp: '同色相加', toOne: '→ 1 個輸出', kernelOn: (k, m) => `ISP 把相鄰 3 個同色像素依 [${k}] 加權合成一個（${m}）。中間權重越大越銳利，越平均越柔、越乾淨。`,
-    kernelOff: '這個模式沒有用 ISP 合併，只做縮放。', noBin: '不合併',
-    fps: '每秒幀數', unc: '未壓縮', ll: 'Lossless 預估', rs: '捲簾', actual: f => `fps（實際 ${f}）`,
-    media: '以 SD UHS-II 計', rsCap: '捲簾（rolling shutter）= 從第一列讀到最後一列的時間，越短，快速移動越不歪。',
-    thisMode: '這個模式', stockFhd: '原廠 FHD 29.97' } };
-let LANG = '';
-try { LANG = localStorage.getItem('sl410-lang') || ''; } catch (e) { LANG = ''; }
-if (!I18N[LANG]) LANG = 'en';
-const t = k => I18N[LANG][k];
+// ---- geometry (matrix.json presets; width aligned 16, height even) -----------------------------------
+const PX_MM = 35.9 / 6048, WMAX = 6048, HMAX = 4040, WMIN = 256, HMIN = 144;
+const DCS = [['OG',6048,4040],['HD',6048,3402],['S35',4192,2358],['APS-C',3952,2624],['S16',2096,1240],['SQ',4032,4032]];
+const RATIOS = [[1,'×1'],[2/3,'÷1.5'],[1/2,'÷2'],[1/3,'÷3'],[1/6,'÷6']];
+const KS = [1,2,3,3.5,4,5,6];
+const a16 = w => Math.floor(w / 16) * 16, ev = h => Math.floor(h / 2) * 2;
+const kLabel = w => { const x = w / 1024;            // nearest .5 from 1K up; below 1K one decimal so ÷3/÷6 differ
+  return (x < 0.75 ? (Math.round(x * 10) / 10).toFixed(1) : String(Math.round(x * 2) / 2)) + 'K'; };
+const mm = px => (px * PX_MM).toFixed(1);
 
-// ---- the camera's code (notes/QR_QS_RESEARCH.md §3.1 / §3.4 + scw/sch/ww/wh): MSB first, CRC-8 0x07, base64url
-const FIELDS = [['ver', 4], ['dcw', 13], ['dch', 12], ['rw', 13], ['rh', 12], ['fsel', 5], ['vmax', 15], ['hmax', 16],
-  ['ad', 2], ['mh', 2], ['mv', 3], ['hb', 4], ['vb', 4], ['key', 6], ['kh', 3], ['kv', 3], ['km', 1], ['custom', 1],
-  ['vw', 13], ['vh', 12], ['rs', 17], ['fmt', 1], ['rescustom', 1], ['scw', 13], ['sch', 12], ['ww', 13], ['wh', 12]];
-const NBITS = FIELDS.reduce((a, f) => a + f[1], 0), NCH = Math.ceil((NBITS + 8) / 6);   // 213 + 8 -> 37 chars
-const STD = ['23.976', '24', '25', '29.97', '30', '47.952', '48', '50', '59.94', '60', '72', '90', '96', '100', '119.88',
-  '120', '144', '150', '180', '200', '239.76', '240', '300', '360', '400', '480', '500', '600', '1000'];
-const KERNS = ['1,1,1', '1,2,1', '1,4,1', '1,6,1', '1,14,1', '0,1,0'];
-const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-const SENSOR = [6048, 4040];
-const DCS = [['OG', 6048, 4040], ['HD', 6048, 3402], ['S35', 4192, 2358], ['APS-C', 3952, 2624], ['S16', 2096, 1240], ['SQ', 4032, 4032]];
-function crc8(bits) { let c = 0; for (const b of bits) { const top = (c >> 7) ^ b; c = (c << 1) & 0xFF; if (top) c ^= 0x07; } return c; }
-function decode(code) {
-  if (code.length !== NCH || /[^A-Za-z0-9_-]/.test(code)) return null;
-  const bits = [...code].flatMap(ch => { const v = B64.indexOf(ch); return [5, 4, 3, 2, 1, 0].map(i => v >> i & 1); });
-  let pos = 0; const take = n => { let v = 0; for (let i = 0; i < n; i++) v = v * 2 + bits[pos++]; return v; };
-  const f = {}; for (const [k, n] of FIELDS) f[k] = take(n);
-  const validCrc = take(8) === crc8(bits.slice(0, NBITS));
-  const canonicalPad = bits.slice(pos).every(b => b === 0);
-  const dimensions = ['dcw', 'dch', 'rw', 'rh', 'scw', 'sch', 'ww', 'wh', 'vw', 'vh'];
-  return validCrc && canonicalPad && f.ver === 1 && f.ad < 3 && f.fsel < 31 && f.kh < KERNS.length && f.kv < KERNS.length &&
-    f.hmax && f.vmax && f.mh && f.mv && f.hb && f.vb && dimensions.every(k => f[k] > 0) ? f : null;
+function divText(W, H, w, h) {                   // "3x2" when each axis is an integer bin plus < 1 alignment unit of crop (Bei 10-29 B)
+  const n = [1,2,3,4,5,6,8,12].find(k => a16(W / k) === w), m = [1,2,3,4,5,6,8,12].find(k => ev(H / k) === h);
+  return n || m ? (n || '') + 'x' + (m || '') : '';        // one axis only: "2x" / "x3" (Bei 10-29)
 }
-const DEMO = {ver: 1, dcw: 6048, dch: 3402, rw: 2016, rh: 1134, fsel: 8, vmax: 1201, hmax: 1000, ad: 1, mh: 2, mv: 3, hb: 1, vb: 1,
-  key: 5, kh: 1, kv: 1, km: 0, custom: 0, vw: 2000, vh: 1124, rs: 7370, fmt: 0, rescustom: 0, scw: 6048, sch: 3402, ww: 3024, wh: 1134};
-// v1 records the requested RES and actual ISP window, not zoom itself. Rebuild
-// core.c q_isp's visible-tolerance zoom, including its <1026 unity and bin3 rule.
-function ispZoom(f) {
-  const bw = Math.max(f.ww, Math.floor(f.dcw / f.mh));
-  const bh = Math.max(f.wh, Math.floor(f.dch / f.mv / 2) * 2);
-  const z = (src, bin, dst) => { const n = Math.floor(Math.floor(src / bin) * 1024 / dst); return n < 1026 ? 1024 : n; };
-  let h = f.hb === 3 || bw > f.rw ? z(bw, f.hb, f.rw) : 1024;
-  let v = f.vb === 3 || bh > f.rh ? z(bh, f.vb, f.rh) : 1024;
-  if ((f.hb === 3 || f.vb === 3) && h === 1024 && v === 1024) h = v = 1025;
-  return [h, v];
+function resList(W, H, dcName) {                 // presets for this DC: clean ratios ∪ 1K–6K, FHD/UHD on HD
+  const items = [];
+  for (const [r, n] of RATIOS) {                 // integer bins take H/k for the height (exact bin), ÷1.5 keeps the aspect
+    const w = a16(W * r), h = Number.isInteger(1 / r) ? ev(H * r) : ev(w * H / W);
+    if (w >= WMIN && h >= HMIN) items.push({w, h, ratio: true, div: divText(W, H, w, h), label: kLabel(w)});
+  }
+  for (const K of KS) {
+    const w = a16(K * 1024); if (w > W || ev(w * H / W) < HMIN) continue;
+    if (items.some(i => i.ratio && i.label === K + 'K')) continue;           // that K is already a clean ratio
+    items.push({w, h: ev(w * H / W), exact: false, div: divText(W, H, w, ev(w * H / W)), label: K + 'K'});
+  }
+  if (dcName === 'HD') for (const [n, w, h] of [['UHD',3840,2160],['FHD',1920,1080]])
+    items.push({w, h, exact: false, div: divText(W, H, w, h), label: n});
+  const seen = new Set();
+  items.forEach(i => { i.exact = i.div !== ''; });               // exact = both axes divide by an integer
+  return items.filter(i => !seen.has(i.w + 'x' + i.h) && seen.add(i.w + 'x' + i.h)).sort((a, b) => a.w - b.w);     // small → large (Bei 10-29)
 }
-function mode(h = location.hash.slice(1)) {
-  const f = h ? decode(h) : null;
-  const M = Object.assign({}, f || DEMO, {state: f ? 'real' : h ? 'broken' : 'demo'});
-  M.zoom = ispZoom(M);
-  M.ad = [11, 12, 14, 12][M.ad]; M.fps = M.hmax && M.vmax ? 72e6 / (M.hmax * M.vmax) : 0;
-  // This is the current SensorLab recording policy, not a claim about every ISP path.
-  M.recordBits = M.ad === 14 && M.zoom.every(z => z === 1024) && M.hb === 1 && M.vb === 1 ? 14 : 12;
-  M.recW = M.vw + 16; M.recH = M.vh + 10; // v1 carries each recipe's own DNG DefaultCrop
-  M.fpsLabel = M.fsel < 29 ? STD[M.fsel] : ''; M.k = KERNS[M.kh] || KERNS[1]; M.mode = M.km ? 'STD' : 'SOFT';
-  M.bw = Math.floor(M.scw / M.mh); M.bh = Math.floor(M.sch / M.mv);        // the binned frame (sensor output)
-  M.ww = Math.min(M.ww || M.bw, M.bw); M.wh = Math.min(M.wh || M.bh, M.bh); // the ISP window inside it
-  return M;
-}
-const dcName = M => (DCS.find(d => d[1] === M.dcw && d[2] === M.dch) || ['Custom'])[0];
-const fmtFps = M => M.fpsLabel || M.fps.toFixed(3);
-const T = (x, y, s, a = '', sz = 13) => `<text x="${x}" y="${y}" font-size="${sz}" ${a}>${s}</text>`;
-const $ = id => document.getElementById(id);
 
-function dataRates(M) { // Conservative lossless estimate; recorded depth and actual raster match QS.
-  const b = M.recordBits, px = M.recW * M.recH, fu = px * b / 8 + 79184;
-  const one = M.mh * M.mv === 1 && M.hb * M.vb === 1 && M.zoom.every(z => z <= 1028);
+// ---- state -----------------------------------------------------------------------------------------------
+const S = { dcW: 6048, dcH: 3402, dcLock: true, resRatio: 1/3, resCustom: null, resLock: true,
+  dcAsp: 6048 / 3402, resAsp: 6048 / 3402, resK: null,
+  memory: {}, sub: null, focus: 1, open: true, fps: 59.94, fpsCustom: null, fine: false, recipe: null, recipeD: null, kh: 1, kv: 1, km: 0 };        // memory[dcKey] = {w,h} custom RES per crop
+const dcName = () => (DCS.find(d => d[1] === S.dcW && d[2] === S.dcH) || ['Custom'])[0];
+const dcKey = () => dcName() === 'Custom' ? `C${S.dcW}x${S.dcH}` : dcName();
+const qualityKey = () => { const r = res(); return `${dcKey()}:${r.w}x${r.h}`; };
+function res() {
+  if (S.resCustom) return S.resCustom;
+  if (S.resK) {                                   // a fixed K / FHD / UHD pick: same label on any DC that has it
+    const it = resList(S.dcW, S.dcH, dcName()).find(i => i.label === S.resK);
+    if (it) return {w: it.w, h: it.h};
+  }
+  let r = S.resRatio;
+  if (a16(S.dcW * r) < WMIN || ev(S.dcH * r) < HMIN) r = 1;     // too small on this DC: ×1, without forgetting the user's ratio
+  const w = a16(S.dcW * r);
+  return {w, h: Number.isInteger(+(1 / r).toFixed(6)) ? ev(S.dcH * r) : ev(w * S.dcH / S.dcW)};
+}
+function resInfo() {
+  const r = res(), list = resList(S.dcW, S.dcH, dcName());
+  const hit = list.find(i => i.w === r.w && i.h === r.h);
+  const exact = divText(S.dcW, S.dcH, r.w, r.h) !== '';
+  return {r, list, hit, label: hit ? hit.label : 'Custom', div: hit ? hit.div : divText(S.dcW, S.dcH, r.w, r.h), exact};
+}
+function setDC(w, h) { setDC0(w, h); fixFps(); }
+function setDC0(w, h) {
+  if (S.resCustom) S.memory[dcKey()] = S.resCustom;    // remember this crop's custom RES
+  S.dcW = Math.max(WMIN, Math.min(WMAX, a16(w))); S.dcH = Math.max(HMIN, Math.min(HMAX, ev(h)));
+  S.resCustom = S.memory[dcKey()] || null;
+  if (S.resCustom && (S.resCustom.w > S.dcW || S.resCustom.h > S.dcH)) S.resCustom = null;
+  S.resAsp = res().w / res().h;
+}
+function setRes(w, h) { setRes0(w, h); fixFps(); }
+function setRes0(w, h) {
+  w = Math.max(WMIN, Math.min(S.dcW, a16(w))); h = Math.max(HMIN, Math.min(S.dcH, ev(h)));
+  const hit = resList(S.dcW, S.dcH, dcName()).find(i => i.w === w && i.h === h);
+  const q = hit && hit.ratio && RATIOS.find(([r]) => a16(S.dcW * r) === w);
+  if (q) { S.resRatio = q[0]; S.resK = null; S.resCustom = null; delete S.memory[dcKey()]; }
+  else if (hit) { S.resK = hit.label; S.resCustom = null; delete S.memory[dcKey()]; }
+  else { S.resK = null; S.resCustom = {w, h}; }
+}
+
+// ---- functions (tiles) ----------------------------------------------------------------------------------
+const stock = (t, vals, i = 0, sub = '') => ({t, vals, i, sub,
+  v() { return this.vals[this.i]; }, s() { return typeof this.sub === 'function' ? this.sub() : this.sub; },
+  opts() { return this.vals.map(v => ({l: v})); }, sel() { return this.i; },
+  adj(d) { this.i = (this.i + d + this.vals.length) % this.vals.length; }, pick(k) { this.i = k; }});
+// The bits a recipe RECORDS (Bei 10-30, notes/RWZM_14BIT_CHECK.md): RWZM carries 12 bits, so a 14-bit-AD recipe
+// that scales (zoom != 1024 on either axis, every CRCT bin included) records into a 12-bit DNG; only 1:1 is true 14.
+const recBits = d => d.ad === 14 && d.zoom[0] === 1024 && d.zoom[1] === 1024 && d.hbin === 1 && d.vbin === 1 ? 14 : 12;
+// The sensor's native readout widths (QS_DC_RES_SPEC native-width markers): marked on the DC WIDTH dial, not presets.
+const NATIVE_W = [6048, 5040, 4144, 3984];
+const FORMAT = { t: 'FORMAT',                      // DNG only (MOV grey); the bit depth follows the recipe's ADC (Bei 10-29)
+  v: () => 'DNG', s: () => { const c = curRecipe(); return c ? recBits(c.d) + 'bit' : ''; },   // the recorded bits (11-bit AD and scaled 14-bit AD: 12)
+  opts: () => [{l: 'DNG'}, {l: 'MOV', na: true}], sel: () => 0, adj() {}, pick() {} };
+// ---- FPS: preset fallback + current C-core cells from the local simulator server.
+const STD = [23.976, 24, 25, 29.97, 30, 47.952, 48, 50, 59.94, 60, 72, 90, 96, 100, 119.88, 120, 144, 150, 180, 200,
+  239.76, 240, 300, 360, 400, 480, 500, 600, 1000];
+const f3 = f => f.toFixed(3), same = (a, b) => Math.abs(a - b) < 5e-4;
+function quals() { const Q = allQuals(); return Q && Q.filter(q => q.d.hbin === 1 && q.d.vbin === 1); }
+function allQuals() {
+  const c = FPSDATA.cases[qualityKey()];
+  return Array.isArray(c) && c.length ? c.map(([hm, lo, q, d]) => ({hm, lo, q, d, max: FPSDATA.clk / (hm * lo)})) : null;
+}
+const fpsMax = Q => Math.min(1000, Math.max(...Q.map(q => q.max)));
+const avail = (Q, f) => Q.filter(q => q.max >= f - 5e-4);
+function fpsList() {                              // common rates ≤ max ∪ each quality's max (marked) ∪ the one fine-tuned rate
+  const Q = quals(); if (!Q) return [];
+  const M = fpsMax(Q), out = STD.map(f => ({f, std: true, na: f > M + 5e-4}));     // every common rate; above max = grey (Bei 10-29)
+  for (const q of Q) if (q.max <= 1000 && !out.some(o => same(o.f, q.max))) out.push({f: q.max, mark: true});
+  out.forEach(o => { o.mark = Q.some(q => same(q.max, o.f)); });
+  if (S.fpsCustom && S.fpsCustom <= M + 5e-4 && !out.some(o => same(o.f, S.fpsCustom))) out.push({f: S.fpsCustom, custom: true,
+    mark: Q.some(q => same(q.max, S.fpsCustom))});
+  return out.sort((a, b) => a.f - b.f);
+}
+const fmtF = o => o.std ? String(o.f) : f3(o.f);
+function fineStep(f, d, big) {                    // next / previous rate any quality reaches (VMAX ± 1 on its own grid)
+  const Q = quals(); if (!Q) return f;
+  for (let n = 0; n < (big ? 10 : 1); n++) {
+    let best = null;
+    for (const q of Q) {
+      const v = FPSDATA.clk / (q.hm * f);
+      const V = d > 0 ? Math.ceil(v - 1e-9) - 1 : Math.floor(v + 1e-9) + 1;
+      if (V < q.lo || V > FPSDATA.vmax_max) continue;
+      const g = FPSDATA.clk / (q.hm * V);
+      if (g > 1000 + 5e-4) continue;
+      if (d > 0 ? g > f + 5e-4 && (best === null || g < best) : g < f - 5e-4 && (best === null || g > best)) best = g;
+    }
+    if (best === null) break;
+    if (f3(best) === f3(f)) { f = best; n--; continue; }   // same 3 decimals: keep going (the user sees every step move)
+    f = best;
+  }
+  return f;
+}
+const FPS = { t: 'FPS', more: 'fps',               // AEL opens the FPS sub-QS: FPS list + FINE (Bei 10-30, A)
+  v() { const Q = quals(); if (!Q) return '—'; const o = fpsList().find(o => same(o.f, S.fps)); return S.fine || !o ? f3(S.fps) : fmtF(o); },
+  s() { const Q = quals(); if (!Q) return '—';
+    const a = avail(Q, S.fps), top = Q.find(q => same(q.max, S.fps));
+    return [(top ? '• ' : '') + a.length + ' recipes', false]; },     // no quality names: which is best is unknown (Bei 10-29)
+  opts() { return fpsList().map(o => ({l: fmtF(o), mark: o.mark, custom: o.custom, na: o.na})); },
+  sel() { return fpsList().findIndex(o => same(o.f, S.fps)); },
+  adj(d, big) {
+    if (!quals()) return;
+    if (S.fine) { S.fps = fineStep(S.fps, d, big); return; }
+    const L = fpsList(); let k = this.sel();
+    if (k < 0) k = d > 0 ? L.findIndex(o => o.f > S.fps) - 1 : L.findIndex(o => o.f >= S.fps);
+    let j = k + d; while (j >= 0 && j < L.length && L[j].na) j += d;            // the dial skips greyed rates
+    if (j >= 0 && j < L.length) S.fps = L[j].f;
+  },
+  pick(k) { const o = fpsList()[k]; if (!o.na) S.fps = o.f; } };
+function fixFps() {                               // after DC / RES change: keep the rate when it is still reachable
+  const Q = quals(); if (!Q) return;
+  const M = fpsMax(Q); if (S.fps > M + 5e-4) S.fps = (fpsList().filter(o => o.std && !o.na).pop() || {f: M}).f;
+}
+// FINE: the old in-place fine mode as a sub-QS tile (K-style spinner: VMAX +-1, rear +-10); the menu's CUSTOM lands here
+const FINE = { t: 'FINE', spin: true,
+  v: () => quals() ? f3(S.fps) : '—', s: () => FPS.s(),
+  mark: () => { const Q = quals(); return !!(Q && Q.some(q => same(q.max, S.fps))); },
+  opts: () => [], sel: () => -1,
+  adj(d, big) { if (!quals()) return; if (!S.fine) { S.fine = true; S.fpsCustom = null; }   // the first step drops the old tuned rate
+    S.fps = fineStep(S.fps, d, big); },
+  pick() {} };
+function fineExit() {                             // the tuned rate joins the list (only one); a common rate needs no slot
+  S.fine = false;
+  const L = fpsList().filter(o => !o.custom);
+  S.fpsCustom = L.some(o => same(o.f, S.fps)) ? null : S.fps;
+}
+const ES = stock('ES', ['OFF','ON']), ISO = stock('ISO', ['800','1600','2500','3200','6400'], 2), WB = stock('WB', ['3200K','4300K','5550K','6500K'], 2);
+const COLOR = stock('COLOR', ['OFF','TEAL','MONO'], 0);
+// ---- MB/s: uncompressed big, lossless prediction small (notes/MBPS_TILE_RESEARCH.md, conservative: never under, Bei 10-29)
+const MEDIA = [['UHS-I', 87, 131072], ['UHS-II', 240, 131072], ['SSD', 390, 524288]];   // MB/s sustained, cluster bytes (v0.4.0test: short labels, live6 overflow)
+const LL_MAX_FRAME = 16 * 2 ** 20;                // the lossless sup refuses a frame over 16 MiB (MBPS research §6.5)
+S.media = 1;
+function tileGrid(W, H) {                         // stock rule: tile w 32..512 (x32), h 16..512 (x16), <= 160 tiles; min padded + 32250/tile
+  let best = null;
+  for (let tw = 32; tw <= 512; tw += 32) for (let th = 16; th <= 512; th += 16) {
+    const nx = Math.ceil(W / tw), ny = Math.ceil(H / th), n = nx * ny; if (n > 160) continue;
+    const cost = nx * tw * ny * th + 32250 * n;
+    if (!best || cost < best.cost) best = {cost, n, nx, pw: nx * tw, ph: ny * th};
+  }
+  return best;
+}
+function rates() {                                // {u, ll} in MB/s plus each one's media duty; null without a recipe
+  const c = curRecipe(); if (!c) return null;
+  const [W, H] = c.d.rec, b = recBits(c.d), fps = S.fps;
+  const one = c.d.mh * c.d.mv === 1 && c.d.hbin * c.d.vbin === 1 && c.d.zoom[0] <= 1028 && c.d.zoom[1] <= 1028;
+  // bpp: 5.0 for 12-bit merged = above every camera recording (max 4.35, ISO 100..6400; real takes don't rise with ISO,
+  // the exposure follows it), 14-bit +2, 1x1 +1.5 (6K stills); notes/MBPS_TILE_RESEARCH.md "v2" (Bei 10-29: v1 far too high)
   const B = Math.min(b, 5.0 + 2 * (b === 14) + 1.5 * one);
-  const u = M.fps * fu / 1e6, ll = M.fps * Math.min(fu, px * B / 8 + 81000) / 1e6;
-  return {u, ll, duty: ll / 240};
+  const Fu = W * H * b / 8 + 79184, g = tileGrid(W, H);
+  const Fc = Math.min(Fu, W * H * B / 8 + 80 * g.n + 79872 + 1024);
+  const tc = 4.7 * g.pw * g.ph / 1e6 + 0.00046 * g.nx * g.ph + 2.0;
+  const praw = Math.max(0, 1 - 1000 / (fps * tc));
+  const Fl = (1 - praw) * Fc + praw * Fu;
+  const [, R, C] = MEDIA[S.media ?? 1], duty = F => fps * (Math.ceil(F / C) * C / (R * 1e6) + 0.51e-3);
+  return {u: fps * Fu / 1e6, ll: fps * Fl / 1e6, du: duty(Fu), dl: duty(Fl), no: Fc > LL_MAX_FRAME};
+}
+const tone = d => d <= 0.75 ? 'ok' : d <= 1 ? 'approx' : 'bad';
+const MBPS = { t: 'MB/s',
+  v() { const r = rates(); return r ? Math.round(r.u) : '—'; },           // the bold digits can't be tinted on camera: colour is on the small line
+  s() { const r = rates(); return !r ? '' : r.no ? ['LL —', false] : [`LL ~${Math.round(r.ll)}`, r.dl > 0.75]; },   // the camera: yellow past 75 % (its only tint); LL — = refused
+  tone() { const r = rates(); return r ? tone(r.dl) : ''; },
+  sel: () => S.media ?? 1, adj(d) { S.media = Math.max(0, Math.min(MEDIA.length - 1, (S.media ?? 1) + d)); }, pick(k) { S.media = k; } };
+MBPS.opts = function () {                         // preview only: the camera reads the media; here the dial picks it
+  return MEDIA.map(([m, R, C], i) => { const keep = S.media; S.media = i; const r = rates(); S.media = keep;
+    return {l: m, s: r ? `${Math.round(100 * r.du)}%/${r.no ? '—' : Math.round(100 * r.dl) + '%'}` : '', tone: r ? tone(r.du) : ''}; });   // RAW / LL duty
+};
+
+const DC = { t: '<span class="icon">DC</span>',
+  v: () => dcName(), s: () => `${mm(S.dcW)} × ${mm(S.dcH)} mm`,
+  opts: () => DCS.map(d => ({l: d[0], s: `${d[1]}×${d[2]}`})), sel: () => DCS.findIndex(d => d[0] === dcName()),
+  adj(d) { let k = this.sel(); k = k < 0 ? DCS.reduce((b, x, i) => Math.abs(x[1] - S.dcW) < Math.abs(DCS[b][1] - S.dcW) ? i : b, 0)
+    : Math.max(0, Math.min(DCS.length - 1, k + d)); this.pick(k); },
+  pick(k) { setDC(DCS[k][1], DCS[k][2]); S.dcAsp = DCS[k][1] / DCS[k][2]; }, more: 'dc' };
+const RES = { t: '<span class="icon">RES.</span>',
+  v: () => resInfo().label, s: () => { const i = resInfo(), v = visible();       // visible size; the remembered RES stays the raster
+    return [`${v.w}×${v.h}` + (i.div ? ` · ${i.div}` : ''), v.short]; },
+  opts: () => resInfo().list.map(i => ({l: i.label})),     // the ratio stays on the tile only (Bei 10-29)
+  sel: () => { const i = resInfo(); return i.list.indexOf(i.hit); },
+  adj(d) { const i = resInfo(), L = i.list; let k = L.indexOf(i.hit);
+    if (k < 0) { k = L.findIndex(x => x.w > i.r.w); k = k < 0 ? L.length - 1 : d > 0 ? k : k - 1; }
+    else k += d;
+    this.pick(Math.max(0, Math.min(L.length - 1, k))); },
+  pick(k) { const i = resInfo().list[k]; setRes(i.w, i.h); S.resAsp = i.w / i.h; }, more: 'res' };
+
+function dimTile(axis, which) {                  // WIDTH / HEIGHT for DC or RES; front = 1 step, rear = 10 steps
+  const isDC = which === 'dc', step = axis === 'w' ? 16 : 2;
+  return { t: axis === 'w' ? 'WIDTH' : 'HEIGHT',
+    v() { const r = isDC ? {w: S.dcW, h: S.dcH} : visible(); return String(axis === 'w' ? r.w : r.h); },
+    s() { const r = isDC ? {w: S.dcW, h: S.dcH} : res();
+      return isDC ? mm(axis === 'w' ? r.w : r.h) + ' mm' : divText(S.dcW, S.dcH, r.w, r.h); },
+    opts: () => [], sel: () => -1, spin: true,
+    mark: () => isDC && axis === 'w' && NATIVE_W.includes(S.dcW),        // a native readout width: dotted underline
+    adj(d, big) {
+      const lock = isDC ? S.dcLock : S.resLock, r = isDC ? {w: S.dcW, h: S.dcH} : res(), asp = isDC ? S.dcAsp : S.resAsp;
+      const W = isDC ? WMAX : S.dcW, H = isDC ? HMAX : S.dcH, rw = x => Math.round(x / 16) * 16, rh = x => Math.round(x / 2) * 2;
+      let {w, h} = r;
+      if (axis === 'w') {
+        w += d * step * (big ? 10 : 1);
+        if (isDC && big) for (const p of NATIVE_W)
+          if ((r.w < p && p <= w) || (w <= p && p < r.w)) w = p;
+        if (lock) h = rh(w / asp);
+      }
+      else { h += d * step * (big ? 10 : 1); if (lock) w = rw(h * asp); }
+      if (w > W || h > H) {                       // at the limit: scale both back inside, keeping the ratio when locked
+        if (lock) return;                         // locked: the ratio can't grow past the sensor, so the step stops
+        w = Math.min(w, W); h = Math.min(h, H);
+      }
+      if (w < WMIN || h < HMIN) return;
+      const near = (isDC ? DCS.map(x => ({w: x[1], h: x[2]})) : resInfo().list)       // snap onto a preset within one step
+        .find(p => Math.abs(p.w - w) <= 16 && Math.abs(p.h - h) <= 2 && (lock ? Math.abs(p.w / p.h - asp) < 0.002 : true));
+      if (near && lock) ({w, h} = near);
+      if (isDC) setDC(w, h); else setRes(w, h);
+    } };
+}
+function aspectLabel(w, h) {
+  if (!w || !h) return '-';
+  const common = [[1,1],[5,4],[4,3],[3,2],[16,9],[2,1],[4,5],[3,4],[2,3],[9,16],[1,2]];
+  const match = common.find(([n,d]) => 400 * Math.abs(w*d-h*n) <= h*n);
+  return match ? match.join(':') : (w/h).toFixed(2) + 'X';
+}
+function lockTile(which) {
+  const key = which === 'dc' ? 'dcLock' : 'resLock';
+  return { t: 'RATIO', lock: () => !!S[key],
+    v() { const r = which === 'dc' ? {w: S.dcW, h: S.dcH} : res(); return aspectLabel(r.w, r.h); },
+    s: () => S[key] ? 'LOCK' : '',
+    opts: () => [{l: 'LOCK'}, {l: 'FREE'}], sel: () => S[key] ? 0 : 1,
+    adj() { this.pick(S[key] ? 1 : 0); },
+    pick(k) { S[key] = k === 0;                     // locking takes the current ratio
+      if (S[key]) { const r = which === 'dc' ? {w: S.dcW, h: S.dcH} : res(); S[which === 'dc' ? 'dcAsp' : 'resAsp'] = r.w / r.h; } } };
 }
 
-// ---- the frame: sensor DC -> sensor bin -> ISP DC -> ISP scale, all at one pixel scale (Bei 10-29) ------------
-function drawFrame(M) {
-  const narrow = innerWidth < 700, svgEl = $('frame'), sc = (narrow ? 300 : 250) / SENSOR[0];
-  const box = (w, h) => [w * sc, h * sc];
-  const [Sw, Sh] = box(...SENSOR), [cw, ch] = box(M.scw, M.sch), [bw, bh] = box(M.bw, M.bh), [iw, ih] = box(M.ww, M.wh), [rw, rh] = box(M.recW, M.recH);
-  const gap = narrow ? 80 : 100, P = [];
-  let W, H, A, B, C;                                // panel origins: A sensor, B binned frame, C recording
-  // wide: three columns (each at least 190 wide so labels never collide), titles on one row above, sizes on rows below
-  // narrow: stacked, each label beside its own box
-  const col = w => Math.max(w, 190);
-  let top, bot;
-  if (!narrow) { A = [20, 44]; B = [A[0] + col(Sw) + gap, A[1] + (Sh - bh) / 2]; C = [B[0] + col(bw) + gap, A[1] + (Sh - rh) / 2];
-    W = C[0] + col(rw) + 10; H = A[1] + Sh + 62; top = () => 24; bot = k => A[1] + Sh + 20 + 16 * k; }
-  else { A = [20, 40]; B = [20 + (Sw - bw) / 2, A[1] + Sh + gap]; C = [20 + (Sw - rw) / 2, B[1] + bh + gap]; W = Sw + 40; H = C[1] + rh + 60;
-    top = y => y - 12; bot = (k, y) => y + 18 + 16 * k; }
-  svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svgEl.setAttribute('aria-label', `${t('sdc')} ${M.scw}×${M.sch} → ${t('sbin')} ${M.bw}×${M.bh} → ${t('idc')} ${M.ww}×${M.wh} → ${t('rec')} ${M.recW}×${M.recH}`);
-  P.push(`<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--dim)"/></marker></defs>`);
-  const link = (f, to) => [0, 1, 2, 3].map(i => {   // the four corners, dashed, arrow at the smaller frame
-    const fx = f[0] + (i & 1) * f[2], fy = f[1] + (i >> 1) * f[3], tx = to[0] + (i & 1) * to[2], ty = to[1] + (i >> 1) * to[3];
-    return `<line x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" stroke="var(--dim)" stroke-dasharray="4 4" marker-end="url(#ar)"/>`; }).join('');
-  const cx = A[0] + (Sw - cw) / 2, cy = A[1] + (Sh - ch) / 2, ix = B[0] + (bw - iw) / 2, iy = B[1] + (bh - ih) / 2;
-  P.push(`<rect x="${A[0]}" y="${A[1]}" width="${Sw}" height="${Sh}" rx="4" fill="var(--sensor)"/>`,
-    T(A[0], top(A[1]), `${t('sensor')} ${SENSOR[0]}×${SENSOR[1]}`, 'fill="var(--dim)"', 12),
-    `<rect x="${cx}" y="${cy}" width="${cw}" height="${ch}" fill="var(--fill)" stroke="var(--sig)" stroke-width="2"/>`,
-    T(A[0], bot(0, A[1] + Sh), `① ${t('sdc')} ${M.scw}×${M.sch}`, 'fill="var(--sig)" font-weight="600"', 12),
-    link([cx, cy, cw, ch], [B[0], B[1], bw, bh]),
-    `<rect x="${B[0]}" y="${B[1]}" width="${bw}" height="${bh}" fill="var(--fill)" stroke="var(--sig)" stroke-width="1.5"/>`,
-    T(B[0], top(B[1]), `② ${t('sbin')} ${M.mh}×${M.mv} → ${M.bw}×${M.bh}`, 'fill="var(--sig)" font-weight="600"', 12),
-    `<rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" fill="var(--fill2)" stroke="var(--info)" stroke-width="2"/>`,
-    T(B[0], bot(0, B[1] + bh), `③ ${t('idc')} ${M.ww}×${M.wh}`, 'fill="var(--info)" font-weight="600"', 12),
-    link([ix, iy, iw, ih], [C[0], C[1], rw, rh]),
-    `<rect x="${C[0]}" y="${C[1]}" width="${rw}" height="${rh}" fill="var(--fill2)" stroke="var(--info)" stroke-width="2"/>`,
-    T(C[0], top(C[1]), `④ ${t('iscale')}`, 'fill="var(--info)" font-weight="600"', 12),
-    T(C[0], bot(0, C[1] + rh), `${t('rec')} ${M.recW}×${M.recH}`, 'font-weight="600"', 12),
-    T(C[0], bot(1, C[1] + rh), `vis ${M.vw}×${M.vh}`, 'fill="var(--dim)"', 11));
-  svgEl.innerHTML = P.join('');
-  const [zh, zv] = M.zoom.map(z => z / 1024);
-  const zs = zh === 1 && zv === 1 ? '1:1' : `1/${zh.toFixed(3)} × 1/${zv.toFixed(3)}`;
-  const ib = M.hb * M.vb === 1 ? t('none') : `${M.hb}×${M.vb} [${M.k}] ${M.mode}`;
-  $('legend').innerHTML = [['s1', `① ${t('sdc')}`, t('sdcT')], ['s2', `② ${t('sbin')}`, t('sbinT')(M.mh, M.mv)],
-    ['s3', `③ ${t('idc')}`, t('idcT')], ['s4', `④ ${t('iscale')}`, `${t('iscaleT')(ib, zs)} ${t('vis')(M.vw, M.vh)}`]]
-    .map(([c, h, s]) => `<div class="${c}"><b>${h}</b>${s}</div>`).join('');
+// ---- RECIPE: one of the qualities of this DC x RES; usable when its max fps reaches the current fps
+const PARAMS = [['ad','ADC'],['scw','DC WIDTH'],['sch','DC HEIGHT'],['mh','SENSOR HBIN'],['mv','SENSOR VBIN'],
+  ['hbin','ISP HBIN'],['vbin','ISP VBIN']];     // ADC second (Bei 10-29)
+const usable = q => q.max >= S.fps - 5e-4;
+function recipes() { const Q = allQuals(); return Q ? Q : []; }     // presets and ISP-bin variants
+const isPreset = q => q.d.hbin === 1 && q.d.vbin === 1;     // ISP bins only from the sub-QS (Bei 10-29)
+const presets = () => recipes().filter(isPreset);
+function curRecipe() {                            // the user's choice while usable; otherwise the closest usable one,
+  const R = recipes(); if (!R.length) return null;  // without forgetting the choice (it comes back when FPS allows)
+  return R.find(q => q.q === S.recipe && usable(q))
+    || nearest(R.filter(q => usable(q) && isPreset(q)), S.recipeD) || nearest(R.filter(usable), S.recipeD) || null;
+}
+function nearest(R, d) {                          // fewest parameters changed, then highest max fps
+  if (!R.length) return undefined;
+  if (!d) return defaultPick(R);
+  const diff = q => PARAMS.filter(([k]) => q.d[k] !== d[k]).length;
+  return R.slice().sort((a, b) => diff(a) - diff(b) || b.max - a.max)[0];
+}
+// No choice yet (Bei 10-29): the vertical merge closest to the DC -> RES reduction ("x3"), then the higher RECORDED bit
+// depth (Bei 10-30: recBits, so a scaled 14-bit AD counts as 12), then the horizontal merge closest ("3x"), then the larger RS (the fp's own habit).
+// Not a picture-quality ranking: which looks best is unknown.
+function defaultPick(R) {
+  const r = res(), rx = S.dcW / r.w, ry = S.dcH / r.h, dv = q => Math.abs(ry - q.d.mv), dh = q => Math.abs(rx - q.d.mh);
+  return R.slice().sort((a, b) => dv(a) - dv(b) || recBits(b.d) - recBits(a.d) || dh(a) - dh(b) || b.d.rs_ms - a.d.rs_ms)[0];
+}
+function visible() {                             // what the DNG shows: the recipe's own crop (<= 2 % short), else nominal
+  const r = res(), c = curRecipe();
+  if (c && c.d.vis) return {w: c.d.vis[0], h: c.d.vis[1], short: c.d.vis[1] < r.h - 10 || c.d.vis[0] < r.w - 16};
+  return {w: r.w - 16, h: r.h - 10, short: false};
+}
+const RECIPE = { t: 'RECIPE', more: 'recipe',
+  v() { const c = curRecipe(); return !c ? '—' : isPreset(c) ? `${c.d.ad}b ${c.d.mh}x${c.d.mv}` : 'CUSTOM'; },
+  s() { const c = curRecipe(); if (!c) return 'on camera';
+    const v = visible();
+    return [(isPreset(c) ? '' : `${c.d.ad}b ${c.d.mh}x${c.d.mv} ISP ${c.d.hbin}x${c.d.vbin} · `) + `RS ${c.d.rs_ms.toFixed(2)} ms` + (v.short ? ` · ${v.w}×${v.h}` : ''), v.short]; },   // kernels in the sub-QS
+  opts() { const r = res(); return presets().map(q => ({l: `${q.d.ad}b ${q.d.mh}x${q.d.mv}`,
+    s: `${q.d.rs_ms.toFixed(1)}ms` + (q.d.vis && q.d.vis[1] < r.h - 10 ? ` H${q.d.vis[1]}` : ''),     // short: the footer font is ~12 px
+    na: !usable(q), approx: q.d.vis && q.d.vis[1] < r.h - 10})); },
+  sel() { const c = curRecipe(); return c ? presets().findIndex(q => q.q === c.q) : -1; },   // by name: quals() builds new objects
+  adj(d) { const R = presets(), c = curRecipe(); let j = this.sel();
+    if (j < 0 && c) j = Math.max(0, R.findIndex(q => q.d.ad === c.d.ad && q.d.mh === c.d.mh && q.d.mv === c.d.mv));     // from CUSTOM the dial lands on the same recipe without ISP bin
+    else j += d;
+    while (j >= 0 && j < R.length && !usable(R[j])) j += d;
+    if (j >= 0 && j < R.length) { S.recipe = R[j].q; S.recipeD = R[j].d; } },
+  pick(k) { const q = presets()[k]; if (q && usable(q)) { S.recipe = q.q; S.recipeD = q.d; } } };
+const CHOICE = ['ad', 'mh', 'mv', 'hbin', 'vbin'];   // what the user sets; the sensor crop follows from these
+const MODES_HW = ['1x1','1x2','1x3','2x1','2x2','2x3','3x2','3x3','3x6'];   // sensor merges readout_cfg offers (3x1 has no R/B, IMX410_RULES §72)
+const SHORT = {ad: v => v + 'bit', mh: v => 'S.HBIN' + v, mv: v => 'S.VBIN' + v, hbin: v => 'I.HBIN' + v, vbin: v => 'I.VBIN' + v};   // Bei 10-29
+function whyNot(key, v) {                         // short reason a value is grey: what it would need instead
+  const c = curRecipe(); if (!c) return '';
+  const n = combo(key, v); if (n && !usable(n)) return `<${n.max.toFixed(2)}p`;     // FPS comes first (Bei 10-29)
+  if (key === 'mh' || key === 'mv') {
+    const mh = key === 'mh' ? v : c.d.mh, mv = key === 'mv' ? v : c.d.mv;
+    if (!MODES_HW.includes(mh + 'x' + mv)) return `no ${mh}x${mv}`;
+  }
+  const R = recipes().filter(q => q.d[key] === v);
+  if (!R.length) return 'not at this RES';
+  const diff = q => CHOICE.filter(k => k !== key && q.d[k] !== c.d[k]);
+  const best = R.slice().sort((a, b) => diff(a).length - diff(b).length)[0];
+  return '→' + diff(best).map(k => SHORT[k](best.d[k])).join(' ');
+}
+function combo(key, v) {                          // the recipe with key = v and every other choice unchanged (fps ignored)
+  const c = curRecipe(); if (!c) return null;
+  const R = recipes().filter(q => q.d[key] === v && CHOICE.every(k => k === key || q.d[k] === c.d[k]));
+  if (key === 'scw' || key === 'sch') return R[0] || null;
+  return R.sort((a, b) => b.max - a.max)[0] || null;
+}
+function useRecipe(q) {                           // only usable combinations are offered: FPS is never lowered by a recipe
+  if (!usable(q)) return;
+  S.recipe = q.q; S.recipeD = q.d;
+}
+function paramTile([key, title]) {                // one recipe parameter; choosing a value jumps to the closest recipe with it
+  const crop = key === 'scw' || key === 'sch';    // crop tiles list only what the current choices reach (Bei 10-29): no grey
+  const vals = () => [...new Set(recipes().filter(q => !crop || combo(key, q.d[key])).map(q => q.d[key]))].sort((a, b) => a - b);
+  const ok = v => { const n = combo(key, v); return !!n && usable(n); };     // grey: no such combination, or it can't reach the FPS
+  const pickV = v => { const n = combo(key, v); if (n) useRecipe(n); };
+  return { t: title,
+    v() { const c = curRecipe(); if (!c) return '—';
+      if (key === 'scw' || key === 'sch') return `S ${c.d[key]}`;     // crop tiles: big = sensor, small = ISP (Bei 10-29)
+      return String(c.d[key]) + (key === 'ad' ? 'bit' : ''); },
+    s() { const c = curRecipe(); if (!c) return '';
+      if (key === 'scw') return `I ${Math.min(c.d.win[0] * c.d.mh, c.d.scw)}`; if (key === 'sch') return `I ${Math.min(c.d.win[1] * c.d.mv, c.d.sch)}`;   // never past S: an odd merged row count is read as the next even one (live5 'I 3404' under S 3402)   // big = sensor crop, small = ISP crop in sensor px (Bei 10-29)
+      const rz = z => z < 1029 ? 'RWZM 1:1' : `RWZM 1/${(z / 1024).toFixed(2)}`;     // the ISP resize after the bins
+      if (key === 'hbin') return rz(c.d.zoom[0]); if (key === 'vbin') return rz(c.d.zoom[1]);
+      return ''; },
+    opts() { return vals().map(v => ({l: String(v) + (key === 'ad' ? 'bit' : ''), na: !ok(v), s: ok(v) ? '' : whyNot(key, v)})); },
+    sel() { const c = curRecipe(); return c ? vals().indexOf(c.d[key]) : -1; },
+    adj(d) { const V = vals(); let j = this.sel() + d; while (j >= 0 && j < V.length && !ok(V[j])) j += d; if (j >= 0 && j < V.length) pickV(V[j]); },
+    pick(k) { pickV(vals()[k]); } };
+}
+// ISP bin x3 has a kernel per axis (open-gate/build/imx410_binfilt.py KERNELS; default 1,2,1 = stock record 0)
+const MODES = ['SOFT', 'STD'];                  // BINFILT bit 8: 0 soft, 1 std (open-gate archive VIRTUAL_RCD.md); one mode for both axes
+const KERNELS = ['1,1,1', '1,2,1', '1,4,1', '1,6,1', '1,14,1', '0,1,0'];
+function ispBinTile(key, title) {                 // options: 1, then 3 with each kernel
+  const kk = key === 'hbin' ? 'kh' : 'kv', zi = key === 'hbin' ? 0 : 1;
+  const OPTS = [[1, null, null], ...[0, 1].flatMap(m => KERNELS.map((k, i) => [3, i, m]))];   // mode (record 0/1) is shared by both axes
+  const ok = b => { const n = combo(key, b); return !!n && usable(n); };
+  const cur = () => { const c = curRecipe(); return c ? (c.d[key] === 3 ? 1 + S.km * KERNELS.length + S[kk] : 0) : -1; };
+  const pickO = ([b, ki, m]) => { const n = combo(key, b); if (!n) return; if (m !== null) S.km = m; useRecipe(n);
+    if (ki !== null) S[kk] = ki; };
+  return { t: title,
+    v() { const c = curRecipe(); return !c ? '—' : c.d[key] === 3 ? `3[${KERNELS[S[kk]]}]` : '1'; },     // kernel in the big text (Bei 10-29)
+    s() { const c = curRecipe(); if (!c) return ''; const z = c.d.zoom[zi];
+      return (c.d[key] === 3 ? `${MODES[S.km]} · ` : '') + (z < 1029 ? 'RWZM 1:1' : `RWZM 1/${(z / 1024).toFixed(2)}`); },
+    opts: () => OPTS.map(([b, ki, m]) => ({l: b === 1 ? '1' : `3[${KERNELS[ki]}]`, s: (ki === null ? '' : MODES[m]) + (ok(b) ? '' : (ki === null ? '' : ' ') + whyNot(key, b)), na: !ok(b)})),
+    sel: cur,
+    adj(d) { const c = curRecipe(); if (!c) return;
+      // the dial walks all 13: 1, SOFT x6, STD x6 (live5: STD was unreachable without a touch pick); from 1 it lands on this axis' kernel
+      const j = c.d[key] === 3 ? cur() + d : (d > 0 ? 1 + S.km * KERNELS.length + S[kk] : -1);
+      if (j < 0 || j >= OPTS.length) return;
+      const [b, ki, m] = OPTS[j]; const n = combo(key, b); if (!n) return; useRecipe(n);
+      if (ki !== null) { S[kk] = ki; S.km = m; } },
+    pick(k) { pickO(OPTS[k]); } };
+}
+// ---- QR (v0.4.1test): the mode as a URL, notes/QR_QS_RESEARCH.md §3.4 (the camera's payload, bit for bit).  AEL shows
+// it in the QR tile itself (on the camera: our V5-L code, 37 modules x 5 px in a white 205 px square); AEL again, the
+// focus moving away or the QS closing hide it.  Locked while recording.
+const QR_URL = 'https://ijigen.github.io/fpSup/sensor_lab_imx410/#';
+const KEY_NAMES = ['14','12','12fast','12fastW','2x2','2x2fast','3x3','3x3fast','3x6','3x6fast','12v2','12v3','12h2','12h3',
+  '12h2v3','12h3v2','f12v2','f12v3','f12h2','f12h3','f12h2v3','f12h3v2','14v2','14v3','12w18','f12w18','12w03','f12w03',
+  '12w2C','f12v2w18','f12v2w2C','f12v3w18','f12v3w2C','12v2w18','12v2w2C','12v3w18','12v3w2C','14w2B','14v2w2B','14v3w2B'];   // core_data.h cd_key_name
+const QR_FIELDS = [['ver',4],['dcw',13],['dch',12],['rw',13],['rh',12],['fps',5],['vmax',15],['hmax',16],['ad',2],['mh',2],
+  ['mv',3],['hbin',4],['vbin',4],['key',6],['kh',3],['kv',3],['km',1],['rcustom',1],['visw',13],['vish',12],['rs',17],
+  ['fmt',1],['rescustom',1],['scw',13],['sch',12],['ww',13],['wh',12]];          // 213 bits
+function qrFields() {                             // null without a recipe
+  const c = curRecipe(); if (!c) return null;
+  const r = res(), v = visible(), L = fpsList(), o = L.find(o => same(o.f, S.fps));
+  const fps = !o ? 29 : o.std ? STD.findIndex(x => same(x, o.f)) : o.mark ? 30 : 29;   // STD index / tuned / a recipe max
+  const vmax = Math.max(c.lo, Math.min(FPSDATA.vmax_max, Math.ceil(FPSDATA.clk / (c.hm * S.fps) - 1e-9)));
+  return {ver: 1, dcw: S.dcW, dch: S.dcH, rw: r.w, rh: r.h, fps, vmax, hmax: c.hm, ad: c.d.ad === 11 ? 0 : c.d.ad === 12 ? 1 : 2,
+    mh: c.d.mh, mv: c.d.mv, hbin: c.d.hbin, vbin: c.d.vbin, key: KEY_NAMES.indexOf(c.d.key), kh: S.kh, kv: S.kv, km: S.km,
+    rcustom: isPreset(c) ? 0 : 1, visw: v.w, vish: v.h, rs: Math.min(131071, Math.round(c.d.rs_ms * 1000)), fmt: 0,
+    rescustom: resInfo().hit ? 0 : 1, scw: c.d.scw, sch: c.d.sch, ww: c.d.win[0], wh: c.d.win[1]};
+}
+function qrPack(F) {                              // MSB first, CRC-8 (0x07) over the 213 bits, 1 pad bit, base64url: 37 chars
+  const bits = [];
+  for (const [k, w] of QR_FIELDS) for (let i = w - 1; i >= 0; i--) bits.push(Math.floor(F[k] / 2 ** i) % 2);
+  let crc = 0;
+  for (const b of bits) { const top = (crc >> 7 & 1) ^ b; crc = (crc << 1) & 0xFF; if (top) crc ^= 0x07; }
+  for (let i = 7; i >= 0; i--) bits.push(crc >> i & 1);
+  bits.push(0);
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  let out = '';
+  for (let i = 0; i < bits.length; i += 6) out += A[bits.slice(i, i + 6).reduce((a, b) => a * 2 + b, 0)];
+  return out;
+}
+function qrCode() { const F = qrFields(); return F ? qrPack(F) : null; }
+function qrVisible() { return S.open && !S.sub && !!qrCode(); }
+function previewGeometry() {                     // same output-shape input as apc_display: actual recording raster
+  const c = curRecipe(), r = res(), [w, h] = c && c.d.rec ? c.d.rec : [r.w, r.h];
+  const scale = Math.min(1024 / w, 682 / h);
+  return {x: (WMAX-S.dcW)/2, y: (HMAX-S.dcH)/2, cw: S.dcW, ch: S.dcH,
+    w: w*scale, h: h*scale, rw: w, rh: h};
+}
+const QR = { t: 'QR',
+  v: () => 'QR', s() { const c = qrCode(); return c ? c.slice(0, 10) + '..' : 'no recipe'; },   // 37 chars do not fit the line
+  opts: () => [], sel: () => -1, adj() {}, pick() {} };
+const MAIN = [FORMAT, DC, RES, FPS, RECIPE, QR, MBPS, WB];   // preview: QR in slot 6 (ISO's place), MB/s in slot 7 (COLOR's)
+const SUBS = { dc: [null, DC, dimTile('w','dc'), dimTile('h','dc'), lockTile('dc')],
+               recipe: [RECIPE, ...PARAMS.map(p => p[0] === 'hbin' || p[0] === 'vbin' ? ispBinTile(...p) : paramTile(p))],
+  res: [null, null, RES, dimTile('w','res'), dimTile('h','res'), lockTile('res')],
+  fps: [null, null, null, FPS, FINE] };
+const OWN = {dc: 1, res: 2, fps: 3, recipe: 4};
+function layout() {                               // sub-QS: the main function moves to tile 1, its sub-items follow
+  if (!S.sub) return MAIN;
+  const own = OWN[S.sub], items = SUBS[S.sub].filter(Boolean).filter(f => f !== MAIN[own]);
+  const out = Array(8).fill(null); out[0] = MAIN[own];
+  items.forEach((f, k) => { out[k + 1] = f; });
+  return out;
 }
 
-function drawMerge(M) {
-  const n = 6, c = 30, ox = 20, oy = 14, col = (x, y) => (y % 2 ? (x % 2 ? 'b' : 'g') : (x % 2 ? 'g' : 'r')), P = [];
-  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++)
-    P.push(`<rect x="${ox + x * c}" y="${oy + y * c}" width="${c - 2}" height="${c - 2}" rx="3" fill="var(--${col(x, y)})" opacity=".55"/>`);
-  for (let j = 0; j < M.mv; j++) for (let i = 0; i < M.mh; i++) { const x = 2 * i, y = 2 * j; if (x >= n || y >= n) continue;
-    P.push(`<rect x="${ox + x * c - 1}" y="${oy + y * c - 1}" width="${c}" height="${c}" rx="4" fill="none" stroke="var(--ink)" stroke-width="2.5"/>`); }
-  P.push(T(ox + n * c + 14, oy + 22, `${M.mh}×${M.mv}`, 'font-weight="600"', 22), T(ox + n * c + 14, oy + 44, t('sumUp'), 'fill="var(--dim)"', 12),
-    T(ox + n * c + 14, oy + 64, t('toOne'), 'fill="var(--dim)"', 12));
-  $('merge').innerHTML = P.join('');
-  $('mergeCap').textContent = M.mh * M.mv === 1 ? t('merge1') : t('mergeN')(M.mh, M.mv);
-}
-
-function drawKernel(M) {
-  if (M.hb * M.vb === 1) { $('kernel').innerHTML = T(150, 100, '1:1', 'text-anchor="middle" font-weight="600"', 34) +
-    T(150, 130, t('noBin'), 'text-anchor="middle" fill="var(--dim)"', 13); $('kernelCap').textContent = t('kernelOff'); return; }
-  const k = M.k.split(',').map(Number), s = k.reduce((a, b) => a + b, 0), mx = Math.max(...k), P = [], bw = 60, base = 170;
-  k.forEach((w, i) => { const h = 130 * w / mx, x = 40 + i * (bw + 20);
-    P.push(`<rect x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="4" fill="var(--info)" opacity=".85"/>`,
-      T(x + bw / 2, base + 20, w, 'text-anchor="middle"'), T(x + bw / 2, base - h - 8, `${Math.round(100 * w / s)}%`, 'text-anchor="middle" fill="var(--dim)"', 11)); });
-  $('kernel').innerHTML = P.join('');
-  $('kernelCap').textContent = t('kernelOn')(M.k, M.mode);
-}
-
-function drawStats(M) {             // notes/MBPS_TILE_RESEARCH.md v2, conservative
-  const {u, ll, duty} = dataRates(M);
-  const stat = (k, v, s, bar) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div>${bar || ''}</div>`;
-  const bar = `<div class="bar"><i class="${duty > 1 ? 'over' : duty > .75 ? 'hot' : ''}" style="width:${Math.min(100, duty * 100)}%"></i></div>`;
-  $('stats').innerHTML = [stat(t('fps'), fmtFps(M), M.fpsLabel ? t('actual')(M.fps.toFixed(3)) : 'fps'), stat(t('unc'), Math.round(u), 'MB/s'),
-    stat(t('ll'), `~${Math.round(ll)}`, `MB/s · ${t('media')} ${Math.round(duty * 100)}%`, bar), stat(t('rs'), (M.rs / 1000).toFixed(2), 'ms')].join('');
-  const max = 30, x0 = 150, W = 420, row = (y, lab, ms, cls) => T(0, y + 12, lab, 'fill="var(--dim)"', 12) +
-    `<rect x="${x0}" y="${y}" width="${W * Math.min(ms, max) / max}" height="16" rx="3" fill="var(${cls})"/>` + T(x0 + W * Math.min(ms, max) / max + 6, y + 13, `${ms.toFixed(1)} ms`, '', 12);
-  $('rs').innerHTML = row(18, t('thisMode'), M.rs / 1000, '--info') + row(52, t('stockFhd'), 10.556, '--sensor');   // FHD: mode 106, measured
-}
-
+// ---- render ---------------------------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const SCREEN_ORDER = [0, 1, 2, 3, 4, 7, 6, 5];      // screen cell -> MAIN slot: QR (slot 5) bottom-right, WB (7) in its cell
 function render() {
-  const M = mode();
-  document.documentElement.lang = LANG === 'en' ? 'en' : LANG === 'hans' ? 'zh-Hans' : 'zh-Hant';
-  document.querySelectorAll('[data-t]').forEach(e => { e.textContent = t(e.dataset.t); });
-  document.querySelectorAll('.lang button').forEach(b => b.setAttribute('aria-pressed', b.dataset.l === LANG));
-  $('title').textContent = `${dcName(M)} · ${M.rw}×${M.rh} · ${fmtFps(M)}p`;
-  $('lede').textContent = t(M.state === 'real' ? 'lede' : M.state === 'broken' ? 'broken' : 'demo');
-  $('chips').innerHTML = [`DC <b>${dcName(M)}</b>`, `RES <b>${M.rw}×${M.rh}</b>`, `DNG <b>${M.recordBits}</b>-bit`, `ADC <b>${M.ad}</b>-bit`, `sensor <b>${M.mh}×${M.mv}</b>`,
-    `ISP <b>${M.hb * M.vb === 1 ? '—' : M.hb + '×' + M.vb}</b>`, `RS <b>${(M.rs / 1000).toFixed(1)}</b> ms`].map(s => `<span class="chip">${s}</span>`).join('');
-  drawFrame(M); drawMerge(M); drawKernel(M); drawStats(M);
+  if (typeof pageBeforeRender === 'function') pageBeforeRender();   // site_page.js: a camera code waiting for its recipes
+  const say = typeof tr === 'function' ? tr : k => ({more: 'More options', back: 'Back', qrAria: 'QR code for the current settings'})[k];
+  $('cam').classList.toggle('closed', !S.open);
+  $('qsbtn').setAttribute('aria-pressed', String(S.open));
+  const qc = qrVisible() && qrCode();             // current camera: present on main QS, independent of focus/AEL
+  const L = layout();
+  [0, 1].forEach(r => {
+    // Website only: on the main QS the QR tile is shown bottom-right and WB takes its cell (the camera keeps its order;
+    // tiles keep their logical index in data-i, so focus, clicks and the spec logic are unchanged).
+    const order = S.sub ? [0, 1, 2, 3, 4, 5, 6, 7] : SCREEN_ORDER;
+    $('r' + r).innerHTML = order.slice(r * 4, r * 4 + 4).map(i => {
+      const f = L[i]; if (!f) return `<div class="tile blank" data-i="${i}"></div>`;
+      let s = f.s(), approx = false; if (Array.isArray(s)) [s, approx] = s;
+      if (f === QR && qc) return `<div class="tile ${i === S.focus ? 'f' : ''}" data-i="${i}"><div class="qrsq" id="qr-matrix" data-code="${qc}" role="img" aria-label="${say('qrAria')}"></div></div>`;
+      return `<div class="tile ${i === S.focus ? 'f adj' : ''}" data-i="${i}">${i === S.focus ? '<span class="tarr l" data-d="-1">◀</span><span class="tarr r" data-d="1">▶</span>' : ''}<div class="t">${f.t}</div>
+        <div class="v">${f.v()}</div><div class="s ${approx ? 'approx' : ''} ${f.tone ? f.tone() : ''}">${f.lock ? (f.lock() ? '<img class="qslock" src="assets/menu_lock_qs.png" alt="LOCK">' : '') : (s || '')}</div></div>`;
+    }).join('');
+  });
+  const f = L[S.focus];
+  $('ael').style.visibility = f && f.more && !S.sub ? 'visible' : (S.sub ? 'visible' : 'hidden');
+  $('ael').innerHTML = S.sub ? `<b>MENU</b>${say('back')}` : `<b>AEL</b>${say('more')}`;     // stock strings only (Bei 10-29), localised like the camera's
+  if (f && f.spin) {                                // numeric footer like the stock K tile: ◀ value ▶
+    $('footer').innerHTML = `<span class="arrow sp" data-d="-1" data-big="1">«</span><span class="arrow sp" data-d="-1">◀</span><div class="o big ${f.mark && f.mark() ? 'mk' : ''}">${f.v()}</div><span class="arrow sp" data-d="1">▶</span><span class="arrow sp" data-d="1" data-big="1">»</span>`;
+  } else {
+  const o = f ? f.opts() : [], sel = f ? f.sel() : -1;
+  for (let n = 9; n >= 1; n--) {                  // as many options as fit, centred on the selection
+    const lo = Math.max(0, Math.min(o.length - n, sel - (n >> 1))), view = o.slice(lo, lo + n);
+    $('footer').innerHTML = (lo > 0 ? '<span class="arrow sp" data-d="-1">◀</span>' : '') +
+      view.map((x, k) => `<div class="o ${lo + k === sel ? 'sel' : ''} ${x.approx ? 'approx' : ''} ${x.mark ? 'mk' : ''} ${x.custom ? 'cu' : ''} ${x.na ? 'na' : ''} ${x.tone || ''}" data-k="${lo + k}">${x.l}${x.s ? `<small>${x.s}</small>` : ''}</div>`).join('') +
+      (lo + n < o.length ? '<span class="arrow sp" data-d="1">▶</span>' : '');
+    if ($('footer').scrollWidth <= $('footer').clientWidth) break;
+  }
+  }
+  const ri = resInfo(), w = k => typeof tr === 'function' ? tr(k) : ({stLock: 'lock', stFree: 'free', stVisible: 'visible',
+    stTarget: 'target', stCustom: 'custom', stRatio: 'ratio', stFine: 'fine adjustment', stRate: 'custom rate', stNone: 'none',
+    stMemory: 'Remembered custom RES'})[k];
+  $('state').textContent = `DC   ${dcName()}  ${S.dcW}×${S.dcH}  (${mm(S.dcW)}×${mm(S.dcH)} mm)  ${S.dcLock ? w('stLock') : w('stFree')}\n` +
+    `RES  ${ri.label}  ${w('stVisible')} ${visible().w}×${visible().h}  ${w('stTarget')} ${ri.r.w}×${ri.r.h}  ${ri.div}  ${S.resCustom ? w('stCustom') : w('stRatio') + ' ' + (+S.resRatio.toFixed(4))}\n` +
+    `RECIPE ${(curRecipe() || {}).q || '—'}  RS ${curRecipe() ? curRecipe().d.rs_ms + ' ms' : '—'}\n` +
+    `FPS  ${f3(S.fps)}${S.fine ? '  (' + w('stFine') + ')' : ''}  ${w('stRate')}: ${S.fpsCustom ? f3(S.fpsCustom) : w('stNone')}\n` +
+    `${w('stMemory')}: ${Object.entries(S.memory).map(([k, v]) => `${k}=${v.w}×${v.h}`).join('  ') || w('stNone')}`;
+  const g = previewGeometry(), lv = $('liveview');
+  lv.setAttribute('viewBox', `${g.x} ${g.y} ${g.cw} ${g.ch}`);
+  lv.style.width = `${100*g.w/1024}%`; lv.style.height = `${100*g.h/682}%`;
+  lv.style.left = `${50-50*g.w/1024}%`; lv.style.top = `${50-50*g.h/682}%`;
+  if (typeof simulatorRender === 'function') simulatorRender();
+  if (typeof pageRender === 'function') pageRender();    // site_page.js: address, details, language
 }
-document.querySelectorAll('.lang button').forEach(b => b.addEventListener('click', () => {
-  LANG = b.dataset.l; try { localStorage.setItem('sl410-lang', LANG); } catch (e) {} render(); }));
-addEventListener('hashchange', render);
-let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
+
+// ---- input ----------------------------------------------------------------------------------------------
+function closeSub() { if (S.fine) fineExit(); if (S.sub) { S.focus = OWN[S.sub]; S.sub = null; } }   // back on the function's own tile; a tuned rate joins the list
+function moveFocus(d) {
+  const L = layout(); let i = S.focus;
+  for (let n = 0; n < 8; n++) { i = (i + d + 8) % 8; if (L[i]) break; }
+  S.focus = i;
+}
+function act(k) {
+  if (k === 'qs') { if (S.fine) fineExit(); S.open = !S.open; if (!S.open) closeSub(); return render(); }
+  if (!S.open) return;
+  const L = layout(), f = L[S.focus];
+  if (S.fine && /left|right|up|down/.test(k)) fineExit();
+  if (k === 'left' || k === 'right') moveFocus(k === 'left' ? -1 : 1);
+  else if (k === 'up' || k === 'down') { const i = (S.focus + 4) % 8; if (L[i]) S.focus = i; }
+  else if (/^[fr][+-]$/.test(k) && f) f.adj(k[1] === '+' ? 1 : -1, k[0] === 'r');
+  else if (k === 'ael') {
+    if (S.sub) closeSub();
+    else if (f && f.more) { S.sub = f.more; S.focus = 0; }
+  } else if ((k === 'esc' || k === 'menu') && S.sub) closeSub();
+  else if (k === 'ok') { if (S.fine) fineExit(); S.open = false; closeSub(); }
+  render();
+}
+document.querySelectorAll('[data-k]').forEach(b => b.tagName === 'BUTTON' && b.addEventListener('click', () => act(b.dataset.k)));
+const KEYS = {ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', q: 'f-', e: 'f+', z: 'r-', c: 'r+',
+  a: 'ael', ' ': 'qs', Escape: 'menu', m: 'menu', Enter: 'ok'};
+addEventListener('keydown', e => { const k = KEYS[e.key] || KEYS[e.key.toLowerCase()]; if (k) { e.preventDefault(); act(k); } });
+let wheelAcc = 0;
+$('cam').addEventListener('wheel', e => {
+  e.preventDefault(); wheelAcc += e.deltaY || e.deltaX;
+  if (Math.abs(wheelAcc) >= 40) { act((e.shiftKey ? 'r' : 'f') + (wheelAcc > 0 ? '+' : '-')); wheelAcc = 0; }
+}, {passive: false});
+// Click / tap / wheel only (Bei 11-04: no keypad): a tile selects, a selected tile with more options opens them, its
+// ◀ ▶ step it (= front dial), « » on a numeric footer step ten (= rear dial), an option applies, the AEL chip opens /
+// goes back, the QS chip opens / closes the Quick Set. The wheel over the screen is the front dial, Shift+wheel the rear.
+$('qs').addEventListener('click', e => {
+  const t = e.target.closest('.tile'), o = e.target.closest('.o'), ta = e.target.closest('.tarr');
+  if (ta) return act((ta.dataset.d === '1' ? 'f+' : 'f-'));
+  const sp = e.target.closest('.sp');
+  if (sp) { if (sp.dataset.big) return act(sp.dataset.d === '1' ? 'r+' : 'r-'); layout()[S.focus].adj(+sp.dataset.d); return render(); }
+  if (o && o.dataset.k !== undefined) { const f = layout()[S.focus]; f.pick(+o.dataset.k); return render(); }
+  if (e.target.closest('#ael')) return act(S.sub ? 'menu' : 'ael');
+  if (t && !t.classList.contains('blank')) {
+    const i = +t.dataset.i, f = layout()[i];
+    if (i === S.focus && f && f.more && !S.sub) return act('ael');
+    if (S.fine) fineExit(); S.focus = i; render();
+  }
+});
+$('qsbtn').addEventListener('click', () => act('qs'));
+if (typeof pageInit === 'function') { pageInit(); pageBind(); }   // site_page.js: #<camera code>, or '#recipe' (test hook)
+else if (location.hash === '#recipe') S.focus = 4;      // test hook: open with RECIPE focused
 render();
 </script>
-</body>
-</html>
+<script src="wasm_backend.js" defer></script>
+<script src="simulator.js" defer></script>
+</body></html>
