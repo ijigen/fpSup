@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SensorLab-IMX410 Mode</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* fpSup palette (Bei 10-25): logo pink, K2 cyan, hair yellow; neutral grey grounds; follows the system theme */
+:root{
+  --bg:#f6f6f6; --panel:#fff; --line:#e4e4e4; --ink:#151515; --dim:#5e5e5e;
+  --sig:#d01245; --info:#00737a; --warn:#8c6a00; --sensor:#dcdcdc; --fill:rgba(208,18,69,.10); --fill2:rgba(0,115,122,.10);
+  --r:#d0394f; --g:#3c9a4f; --b:#3a6fd0;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sans:"IBM Plex Sans","PingFang TC","PingFang SC","Noto Sans TC","Noto Sans SC",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d0d0d; --panel:#151515; --line:#252525; --ink:#ececec; --dim:#9a9a9a;
+  --sig:#fb144e; --info:#01f7fb; --warn:#fdee02; --sensor:#2c2c2c; --fill:rgba(251,20,78,.14); --fill2:rgba(1,247,251,.10);
+  --r:#ff5c70; --g:#5fd27a; --b:#6c9bff; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0d0d0d; --panel:#151515; --line:#252525; --ink:#ececec; --dim:#9a9a9a;
+  --sig:#fb144e; --info:#01f7fb; --warn:#fdee02; --sensor:#2c2c2c; --fill:rgba(251,20,78,.14); --fill2:rgba(1,247,251,.10);
+  --r:#ff5c70; --g:#5fd27a; --b:#6c9bff; color-scheme:dark }
+*{box-sizing:border-box}
+body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55;
+  padding-block:24px 56px; padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:900px; margin:0 auto; display:grid; gap:18px}
+.top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap}
+h1{font-size:1.5rem; margin:0; font-weight:600; letter-spacing:-.01em; text-wrap:balance}
+h2{font-family:var(--mono); font-size:.72rem; letter-spacing:.11em; text-transform:uppercase; color:var(--dim); margin:0 0 10px; font-weight:600}
+.lede{color:var(--dim); margin:4px 0 0; max-width:62ch}
+.page-nav{margin-top:12px}
+.page-nav a{display:inline-block; border:1px solid var(--info); border-radius:999px; padding:6px 14px;
+  color:var(--info); font-weight:500; text-decoration:none}
+.page-nav a:hover{background:var(--fill2)}
+.page-nav a:focus-visible{outline:2px solid var(--info); outline-offset:3px}
+.lang{display:flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; flex:none}
+.lang button{font:500 .78rem var(--mono); background:none; border:0; color:var(--dim); padding:5px 11px; cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--sig); color:#fff}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; min-width:0}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px}
+.chip{font-family:var(--mono); font-size:.78rem; border:1px solid var(--line); border-radius:999px; padding:3px 10px; white-space:nowrap}
+.chip b{color:var(--sig); font-weight:600}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+@media(max-width:680px){.grid2{grid-template-columns:1fr}}
+svg{display:block; width:100%; height:auto; max-width:100%}
+svg text{font-family:var(--mono); fill:var(--ink)}
+.cap{color:var(--dim); font-size:.86rem; margin:10px 0 0}
+.legend{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-top:12px}
+.legend div{border-left:3px solid var(--line); padding-left:10px; font-size:.85rem; color:var(--dim)}
+.legend b{display:block; color:var(--ink); font-family:var(--mono); font-size:.8rem}
+.legend .s1, .legend .s2{border-color:var(--sig)} .legend .s3, .legend .s4{border-color:var(--info)}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px}
+.stat .k{font-family:var(--mono); font-size:.68rem; color:var(--dim); letter-spacing:.08em; text-transform:uppercase}
+.stat .v{font-family:var(--mono); font-size:1.4rem; font-weight:600}
+.stat .s{font-size:.8rem; color:var(--dim)}
+.bar{height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:6px}
+.bar i{display:block; height:100%; background:var(--info)}
+.bar i.hot{background:var(--warn)} .bar i.over{background:var(--sig)}
+footer{color:var(--dim); font-size:.8rem; text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="top">
+      <h1 id="title">SensorLab-IMX410</h1>
+      <div class="lang" role="group" aria-label="Language">
+        <button data-l="en">EN</button><button data-l="hans">简</button><button data-l="hant">繁</button>
+      </div>
+    </div>
+    <p class="lede" id="lede"></p>
+    <nav class="page-nav" aria-label="Page navigation"><a href="./simulator/" id="simulator-link" data-t="openSimulator">Open simulator</a></nav>
+    <div class="chips" id="chips"></div>
+  </header>
+
+  <section class="card">
+    <h2 data-t="hFrame"></h2>
+    <svg id="frame" role="img"></svg>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2 data-t="hMerge"></h2>
+      <svg id="merge" viewBox="0 0 300 220" role="img"></svg>
+      <p class="cap" id="mergeCap"></p>
+    </section>
+    <section class="card">
+      <h2 data-t="hKernel"></h2>
+      <svg id="kernel" viewBox="0 0 300 220" role="img"></svg>
+      <p class="cap" id="kernelCap"></p>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2 data-t="hStats"></h2>
+    <div class="stats" id="stats"></div>
+    <svg id="rs" viewBox="0 0 640 80" role="img" style="margin-top:14px"></svg>
+    <p class="cap" data-t="rsCap"></p>
+  </section>
+
+  <footer>SensorLab-IMX410 · fpSup</footer>
+</main>
+<script>
+// ---- strings --------------------------------------------------------------------------------------------
+const I18N = {
+  en: { openSimulator: 'Open simulator', lede: 'Settings encoded in this SensorLab mode.', demo: 'An example. The QR code in SensorLab’s QS opens this page with your camera’s settings.',
+    broken: 'This code could not be read (scanned partly, or another version). Showing an example.',
+    hFrame: 'Where the picture comes from', hMerge: 'Sensor binning', hKernel: 'ISP bin kernel', hStats: 'Speed and data',
+    sensor: 'Sensor', sdc: 'Sensor DC', sbin: 'Sensor bin', idc: 'ISP DC', iscale: 'ISP scale', rec: 'Recording',
+    sdcT: 'The rows and columns the sensor reads.', sbinT: (h, v) => `${h}×${v} same-colour pixels summed on the sensor.`,
+    idcT: 'The part of the binned frame the ISP keeps.', iscaleT: (b, z) => `ISP bin ${b}, RWZM ${z}, down to the recording size.`,
+    vis: (w, h) => `Visible (DNG DefaultCrop) ${w}×${h}.`, none: 'none',
+    merge1: '1×1: every pixel read as is — sharpest, most data.',
+    mergeN: (h, v) => `${h}×${v}: ${h} across and ${v} down of the same colour become one on the sensor — smaller, cleaner, faster to read.`,
+    sumUp: 'summed', toOne: '→ 1 output', kernelOn: (k, m) => `The ISP weights 3 neighbouring same-colour pixels by [${k}] (${m}). A heavier centre is sharper; flatter is softer and cleaner.`,
+    kernelOff: 'No ISP binning in this mode; only scaling.', noBin: 'no bin',
+    fps: 'Frame rate', unc: 'Uncompressed', ll: 'Lossless est.', rs: 'Rolling shutter', actual: f => `fps (exact ${f})`,
+    media: 'on SD UHS-II', rsCap: 'Rolling shutter: the time from reading the first row to the last. Shorter skews less in fast motion.',
+    thisMode: 'This mode', stockFhd: 'Stock FHD 29.97' },
+  hans: { openSimulator: '打开模拟器', lede: '这组 SensorLab 模式编码的设置。', demo: '这是示例。相机上 SensorLab QS 里的二维码会带着你的设置打开这一页。',
+    broken: '这段码读不出来（可能只扫到一半或版本不同），下面是示例。',
+    hFrame: '画面从哪里来', hMerge: '传感器像素合并', hKernel: 'ISP 合并核', hStats: '速度与数据量',
+    sensor: '传感器', sdc: 'Sensor DC', sbin: 'Sensor bin', idc: 'ISP DC', iscale: 'ISP 缩放', rec: '录像',
+    sdcT: '传感器实际读出的行列范围。', sbinT: (h, v) => `传感器内把水平 ${h}、垂直 ${v} 个同色像素相加成一个。`,
+    idcT: 'ISP 从合并后的画面里保留的部分。', iscaleT: (b, z) => `ISP 合并 ${b}、RWZM ${z}，缩到录像尺寸。`,
+    vis: (w, h) => `可见范围（DNG DefaultCrop）${w}×${h}。`, none: '无',
+    merge1: '1×1：每个像素原样读出，最锐利、数据量最大。',
+    mergeN: (h, v) => `${h}×${v}：水平 ${h}、垂直 ${v} 个同色像素在传感器里合成一个，画面变小、噪点更低、读得更快。`,
+    sumUp: '同色相加', toOne: '→ 1 个输出', kernelOn: (k, m) => `ISP 把相邻 3 个同色像素按 [${k}] 加权合成一个（${m}）。中间权重越大越锐利，越平均越柔、越干净。`,
+    kernelOff: '这个模式没有用 ISP 合并，只做缩放。', noBin: '不合并',
+    fps: '帧率', unc: '未压缩', ll: 'Lossless 预估', rs: '卷帘', actual: f => `fps（实际 ${f}）`,
+    media: '以 SD UHS-II 计', rsCap: '卷帘（rolling shutter）= 从第一行读到最后一行的时间，越短，快速运动越不歪。',
+    thisMode: '这个模式', stockFhd: '原厂 FHD 29.97' },
+  hant: { openSimulator: '開啟模擬器', lede: '這組 SensorLab 模式所編碼的設定。', demo: '這是範例。相機上 SensorLab QS 裡的 QR code 會帶著你的設定打開這一頁。',
+    broken: '這段碼讀不出來（可能只掃到一半或版本不同），下面是範例。',
+    hFrame: '畫面從哪裡來', hMerge: '感光元件像素合併', hKernel: 'ISP 合併核', hStats: '速度與資料量',
+    sensor: '感光元件', sdc: 'Sensor DC', sbin: 'Sensor bin', idc: 'ISP DC', iscale: 'ISP 縮放', rec: '錄影',
+    sdcT: '感光元件實際讀出的列與欄。', sbinT: (h, v) => `感光元件內把水平 ${h}、垂直 ${v} 個同色像素相加成一個。`,
+    idcT: 'ISP 從合併後的畫面裡留下的部分。', iscaleT: (b, z) => `ISP 合併 ${b}、RWZM ${z}，縮到錄影尺寸。`,
+    vis: (w, h) => `可見範圍（DNG DefaultCrop）${w}×${h}。`, none: '無',
+    merge1: '1×1：每個像素原樣讀出，最銳利、資料量最大。',
+    mergeN: (h, v) => `${h}×${v}：水平 ${h}、垂直 ${v} 個同色像素在感光元件裡合成一個，畫面變小、雜訊更低、讀得更快。`,
+    sumUp: '同色相加', toOne: '→ 1 個輸出', kernelOn: (k, m) => `ISP 把相鄰 3 個同色像素依 [${k}] 加權合成一個（${m}）。中間權重越大越銳利，越平均越柔、越乾淨。`,
+    kernelOff: '這個模式沒有用 ISP 合併，只做縮放。', noBin: '不合併',
+    fps: '每秒幀數', unc: '未壓縮', ll: 'Lossless 預估', rs: '捲簾', actual: f => `fps（實際 ${f}）`,
+    media: '以 SD UHS-II 計', rsCap: '捲簾（rolling shutter）= 從第一列讀到最後一列的時間，越短，快速移動越不歪。',
+    thisMode: '這個模式', stockFhd: '原廠 FHD 29.97' } };
+let LANG = '';
+try { LANG = localStorage.getItem('sl410-lang') || ''; } catch (e) { LANG = ''; }
+if (!I18N[LANG]) LANG = 'en';
+const t = k => I18N[LANG][k];
+
+// ---- the camera's code (notes/QR_QS_RESEARCH.md §3.1 / §3.4 + scw/sch/ww/wh): MSB first, CRC-8 0x07, base64url
+const FIELDS = [['ver', 4], ['dcw', 13], ['dch', 12], ['rw', 13], ['rh', 12], ['fsel', 5], ['vmax', 15], ['hmax', 16],
+  ['ad', 2], ['mh', 2], ['mv', 3], ['hb', 4], ['vb', 4], ['key', 6], ['kh', 3], ['kv', 3], ['km', 1], ['custom', 1],
+  ['vw', 13], ['vh', 12], ['rs', 17], ['fmt', 1], ['rescustom', 1], ['scw', 13], ['sch', 12], ['ww', 13], ['wh', 12]];
+const NBITS = FIELDS.reduce((a, f) => a + f[1], 0), NCH = Math.ceil((NBITS + 8) / 6);   // 213 + 8 -> 37 chars
+const STD = ['23.976', '24', '25', '29.97', '30', '47.952', '48', '50', '59.94', '60', '72', '90', '96', '100', '119.88',
+  '120', '144', '150', '180', '200', '239.76', '240', '300', '360', '400', '480', '500', '600', '1000'];
+const KERNS = ['1,1,1', '1,2,1', '1,4,1', '1,6,1', '1,14,1', '0,1,0'];
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const SENSOR = [6048, 4040];
+const DCS = [['OG', 6048, 4040], ['HD', 6048, 3402], ['S35', 4192, 2358], ['APS-C', 3952, 2624], ['S16', 2096, 1240], ['SQ', 4032, 4032]];
+function crc8(bits) { let c = 0; for (const b of bits) { const top = (c >> 7) ^ b; c = (c << 1) & 0xFF; if (top) c ^= 0x07; } return c; }
+function decode(code) {
+  if (code.length !== NCH || /[^A-Za-z0-9_-]/.test(code)) return null;
+  const bits = [...code].flatMap(ch => { const v = B64.indexOf(ch); return [5, 4, 3, 2, 1, 0].map(i => v >> i & 1); });
+  let pos = 0; const take = n => { let v = 0; for (let i = 0; i < n; i++) v = v * 2 + bits[pos++]; return v; };
+  const f = {}; for (const [k, n] of FIELDS) f[k] = take(n);
+  const validCrc = take(8) === crc8(bits.slice(0, NBITS));
+  const canonicalPad = bits.slice(pos).every(b => b === 0);
+  const dimensions = ['dcw', 'dch', 'rw', 'rh', 'scw', 'sch', 'ww', 'wh', 'vw', 'vh'];
+  return validCrc && canonicalPad && f.ver === 1 && f.ad < 3 && f.fsel < 31 && f.kh < KERNS.length && f.kv < KERNS.length &&
+    f.hmax && f.vmax && f.mh && f.mv && f.hb && f.vb && dimensions.every(k => f[k] > 0) ? f : null;
+}
+const DEMO = {ver: 1, dcw: 6048, dch: 3402, rw: 2016, rh: 1134, fsel: 8, vmax: 1201, hmax: 1000, ad: 1, mh: 2, mv: 3, hb: 1, vb: 1,
+  key: 5, kh: 1, kv: 1, km: 0, custom: 0, vw: 2000, vh: 1124, rs: 7370, fmt: 0, rescustom: 0, scw: 6048, sch: 3402, ww: 3024, wh: 1134};
+// v1 records the requested RES and actual ISP window, not zoom itself. Rebuild
+// core.c q_isp's visible-tolerance zoom, including its <1026 unity and bin3 rule.
+function ispZoom(f) {
+  const bw = Math.max(f.ww, Math.floor(f.dcw / f.mh));
+  const bh = Math.max(f.wh, Math.floor(f.dch / f.mv / 2) * 2);
+  const z = (src, bin, dst) => { const n = Math.floor(Math.floor(src / bin) * 1024 / dst); return n < 1026 ? 1024 : n; };
+  let h = f.hb === 3 || bw > f.rw ? z(bw, f.hb, f.rw) : 1024;
+  let v = f.vb === 3 || bh > f.rh ? z(bh, f.vb, f.rh) : 1024;
+  if ((f.hb === 3 || f.vb === 3) && h === 1024 && v === 1024) h = v = 1025;
+  return [h, v];
+}
+function mode(h = location.hash.slice(1)) {
+  const f = h ? decode(h) : null;
+  const M = Object.assign({}, f || DEMO, {state: f ? 'real' : h ? 'broken' : 'demo'});
+  M.zoom = ispZoom(M);
+  M.ad = [11, 12, 14, 12][M.ad]; M.fps = M.hmax && M.vmax ? 72e6 / (M.hmax * M.vmax) : 0;
+  // This is the current SensorLab recording policy, not a claim about every ISP path.
+  M.recordBits = M.ad === 14 && M.zoom.every(z => z === 1024) && M.hb === 1 && M.vb === 1 ? 14 : 12;
+  M.recW = M.vw + 16; M.recH = M.vh + 10; // v1 carries each recipe's own DNG DefaultCrop
+  M.fpsLabel = M.fsel < 29 ? STD[M.fsel] : ''; M.k = KERNS[M.kh] || KERNS[1]; M.mode = M.km ? 'STD' : 'SOFT';
+  M.bw = Math.floor(M.scw / M.mh); M.bh = Math.floor(M.sch / M.mv);        // the binned frame (sensor output)
+  M.ww = Math.min(M.ww || M.bw, M.bw); M.wh = Math.min(M.wh || M.bh, M.bh); // the ISP window inside it
+  return M;
+}
+const dcName = M => (DCS.find(d => d[1] === M.dcw && d[2] === M.dch) || ['Custom'])[0];
+const fmtFps = M => M.fpsLabel || M.fps.toFixed(3);
+const T = (x, y, s, a = '', sz = 13) => `<text x="${x}" y="${y}" font-size="${sz}" ${a}>${s}</text>`;
+const $ = id => document.getElementById(id);
+
+function dataRates(M) { // Conservative lossless estimate; recorded depth and actual raster match QS.
+  const b = M.recordBits, px = M.recW * M.recH, fu = px * b / 8 + 79184;
+  const one = M.mh * M.mv === 1 && M.hb * M.vb === 1 && M.zoom.every(z => z <= 1028);
+  const B = Math.min(b, 5.0 + 2 * (b === 14) + 1.5 * one);
+  const u = M.fps * fu / 1e6, ll = M.fps * Math.min(fu, px * B / 8 + 81000) / 1e6;
+  return {u, ll, duty: ll / 240};
+}
+
+// ---- the frame: sensor DC -> sensor bin -> ISP DC -> ISP scale, all at one pixel scale (Bei 10-29) ------------
+function drawFrame(M) {
+  const narrow = innerWidth < 700, svgEl = $('frame'), sc = (narrow ? 300 : 250) / SENSOR[0];
+  const box = (w, h) => [w * sc, h * sc];
+  const [Sw, Sh] = box(...SENSOR), [cw, ch] = box(M.scw, M.sch), [bw, bh] = box(M.bw, M.bh), [iw, ih] = box(M.ww, M.wh), [rw, rh] = box(M.recW, M.recH);
+  const gap = narrow ? 80 : 100, P = [];
+  let W, H, A, B, C;                                // panel origins: A sensor, B binned frame, C recording
+  // wide: three columns (each at least 190 wide so labels never collide), titles on one row above, sizes on rows below
+  // narrow: stacked, each label beside its own box
+  const col = w => Math.max(w, 190);
+  let top, bot;
+  if (!narrow) { A = [20, 44]; B = [A[0] + col(Sw) + gap, A[1] + (Sh - bh) / 2]; C = [B[0] + col(bw) + gap, A[1] + (Sh - rh) / 2];
+    W = C[0] + col(rw) + 10; H = A[1] + Sh + 62; top = () => 24; bot = k => A[1] + Sh + 20 + 16 * k; }
+  else { A = [20, 40]; B = [20 + (Sw - bw) / 2, A[1] + Sh + gap]; C = [20 + (Sw - rw) / 2, B[1] + bh + gap]; W = Sw + 40; H = C[1] + rh + 60;
+    top = y => y - 12; bot = (k, y) => y + 18 + 16 * k; }
+  svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svgEl.setAttribute('aria-label', `${t('sdc')} ${M.scw}×${M.sch} → ${t('sbin')} ${M.bw}×${M.bh} → ${t('idc')} ${M.ww}×${M.wh} → ${t('rec')} ${M.recW}×${M.recH}`);
+  P.push(`<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--dim)"/></marker></defs>`);
+  const link = (f, to) => [0, 1, 2, 3].map(i => {   // the four corners, dashed, arrow at the smaller frame
+    const fx = f[0] + (i & 1) * f[2], fy = f[1] + (i >> 1) * f[3], tx = to[0] + (i & 1) * to[2], ty = to[1] + (i >> 1) * to[3];
+    return `<line x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" stroke="var(--dim)" stroke-dasharray="4 4" marker-end="url(#ar)"/>`; }).join('');
+  const cx = A[0] + (Sw - cw) / 2, cy = A[1] + (Sh - ch) / 2, ix = B[0] + (bw - iw) / 2, iy = B[1] + (bh - ih) / 2;
+  P.push(`<rect x="${A[0]}" y="${A[1]}" width="${Sw}" height="${Sh}" rx="4" fill="var(--sensor)"/>`,
+    T(A[0], top(A[1]), `${t('sensor')} ${SENSOR[0]}×${SENSOR[1]}`, 'fill="var(--dim)"', 12),
+    `<rect x="${cx}" y="${cy}" width="${cw}" height="${ch}" fill="var(--fill)" stroke="var(--sig)" stroke-width="2"/>`,
+    T(A[0], bot(0, A[1] + Sh), `① ${t('sdc')} ${M.scw}×${M.sch}`, 'fill="var(--sig)" font-weight="600"', 12),
+    link([cx, cy, cw, ch], [B[0], B[1], bw, bh]),
+    `<rect x="${B[0]}" y="${B[1]}" width="${bw}" height="${bh}" fill="var(--fill)" stroke="var(--sig)" stroke-width="1.5"/>`,
+    T(B[0], top(B[1]), `② ${t('sbin')} ${M.mh}×${M.mv} → ${M.bw}×${M.bh}`, 'fill="var(--sig)" font-weight="600"', 12),
+    `<rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" fill="var(--fill2)" stroke="var(--info)" stroke-width="2"/>`,
+    T(B[0], bot(0, B[1] + bh), `③ ${t('idc')} ${M.ww}×${M.wh}`, 'fill="var(--info)" font-weight="600"', 12),
+    link([ix, iy, iw, ih], [C[0], C[1], rw, rh]),
+    `<rect x="${C[0]}" y="${C[1]}" width="${rw}" height="${rh}" fill="var(--fill2)" stroke="var(--info)" stroke-width="2"/>`,
+    T(C[0], top(C[1]), `④ ${t('iscale')}`, 'fill="var(--info)" font-weight="600"', 12),
+    T(C[0], bot(0, C[1] + rh), `${t('rec')} ${M.recW}×${M.recH}`, 'font-weight="600"', 12),
+    T(C[0], bot(1, C[1] + rh), `vis ${M.vw}×${M.vh}`, 'fill="var(--dim)"', 11));
+  svgEl.innerHTML = P.join('');
+  const [zh, zv] = M.zoom.map(z => z / 1024);
+  const zs = zh === 1 && zv === 1 ? '1:1' : `1/${zh.toFixed(3)} × 1/${zv.toFixed(3)}`;
+  const ib = M.hb * M.vb === 1 ? t('none') : `${M.hb}×${M.vb} [${M.k}] ${M.mode}`;
+  $('legend').innerHTML = [['s1', `① ${t('sdc')}`, t('sdcT')], ['s2', `② ${t('sbin')}`, t('sbinT')(M.mh, M.mv)],
+    ['s3', `③ ${t('idc')}`, t('idcT')], ['s4', `④ ${t('iscale')}`, `${t('iscaleT')(ib, zs)} ${t('vis')(M.vw, M.vh)}`]]
+    .map(([c, h, s]) => `<div class="${c}"><b>${h}</b>${s}</div>`).join('');
+}
+
+function drawMerge(M) {
+  const n = 6, c = 30, ox = 20, oy = 14, col = (x, y) => (y % 2 ? (x % 2 ? 'b' : 'g') : (x % 2 ? 'g' : 'r')), P = [];
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++)
+    P.push(`<rect x="${ox + x * c}" y="${oy + y * c}" width="${c - 2}" height="${c - 2}" rx="3" fill="var(--${col(x, y)})" opacity=".55"/>`);
+  for (let j = 0; j < M.mv; j++) for (let i = 0; i < M.mh; i++) { const x = 2 * i, y = 2 * j; if (x >= n || y >= n) continue;
+    P.push(`<rect x="${ox + x * c - 1}" y="${oy + y * c - 1}" width="${c}" height="${c}" rx="4" fill="none" stroke="var(--ink)" stroke-width="2.5"/>`); }
+  P.push(T(ox + n * c + 14, oy + 22, `${M.mh}×${M.mv}`, 'font-weight="600"', 22), T(ox + n * c + 14, oy + 44, t('sumUp'), 'fill="var(--dim)"', 12),
+    T(ox + n * c + 14, oy + 64, t('toOne'), 'fill="var(--dim)"', 12));
+  $('merge').innerHTML = P.join('');
+  $('mergeCap').textContent = M.mh * M.mv === 1 ? t('merge1') : t('mergeN')(M.mh, M.mv);
+}
+
+function drawKernel(M) {
+  if (M.hb * M.vb === 1) { $('kernel').innerHTML = T(150, 100, '1:1', 'text-anchor="middle" font-weight="600"', 34) +
+    T(150, 130, t('noBin'), 'text-anchor="middle" fill="var(--dim)"', 13); $('kernelCap').textContent = t('kernelOff'); return; }
+  const k = M.k.split(',').map(Number), s = k.reduce((a, b) => a + b, 0), mx = Math.max(...k), P = [], bw = 60, base = 170;
+  k.forEach((w, i) => { const h = 130 * w / mx, x = 40 + i * (bw + 20);
+    P.push(`<rect x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="4" fill="var(--info)" opacity=".85"/>`,
+      T(x + bw / 2, base + 20, w, 'text-anchor="middle"'), T(x + bw / 2, base - h - 8, `${Math.round(100 * w / s)}%`, 'text-anchor="middle" fill="var(--dim)"', 11)); });
+  $('kernel').innerHTML = P.join('');
+  $('kernelCap').textContent = t('kernelOn')(M.k, M.mode);
+}
+
+function drawStats(M) {             // notes/MBPS_TILE_RESEARCH.md v2, conservative
+  const {u, ll, duty} = dataRates(M);
+  const stat = (k, v, s, bar) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div>${bar || ''}</div>`;
+  const bar = `<div class="bar"><i class="${duty > 1 ? 'over' : duty > .75 ? 'hot' : ''}" style="width:${Math.min(100, duty * 100)}%"></i></div>`;
+  $('stats').innerHTML = [stat(t('fps'), fmtFps(M), M.fpsLabel ? t('actual')(M.fps.toFixed(3)) : 'fps'), stat(t('unc'), Math.round(u), 'MB/s'),
+    stat(t('ll'), `~${Math.round(ll)}`, `MB/s · ${t('media')} ${Math.round(duty * 100)}%`, bar), stat(t('rs'), (M.rs / 1000).toFixed(2), 'ms')].join('');
+  const max = 30, x0 = 150, W = 420, row = (y, lab, ms, cls) => T(0, y + 12, lab, 'fill="var(--dim)"', 12) +
+    `<rect x="${x0}" y="${y}" width="${W * Math.min(ms, max) / max}" height="16" rx="3" fill="var(${cls})"/>` + T(x0 + W * Math.min(ms, max) / max + 6, y + 13, `${ms.toFixed(1)} ms`, '', 12);
+  $('rs').innerHTML = row(18, t('thisMode'), M.rs / 1000, '--info') + row(52, t('stockFhd'), 10.556, '--sensor');   // FHD: mode 106, measured
+}
+
+function render() {
+  const M = mode();
+  document.documentElement.lang = LANG === 'en' ? 'en' : LANG === 'hans' ? 'zh-Hans' : 'zh-Hant';
+  document.querySelectorAll('[data-t]').forEach(e => { e.textContent = t(e.dataset.t); });
+  document.querySelectorAll('.lang button').forEach(b => b.setAttribute('aria-pressed', b.dataset.l === LANG));
+  $('title').textContent = `${dcName(M)} · ${M.rw}×${M.rh} · ${fmtFps(M)}p`;
+  $('lede').textContent = t(M.state === 'real' ? 'lede' : M.state === 'broken' ? 'broken' : 'demo');
+  $('chips').innerHTML = [`DC <b>${dcName(M)}</b>`, `RES <b>${M.rw}×${M.rh}</b>`, `DNG <b>${M.recordBits}</b>-bit`, `ADC <b>${M.ad}</b>-bit`, `sensor <b>${M.mh}×${M.mv}</b>`,
+    `ISP <b>${M.hb * M.vb === 1 ? '—' : M.hb + '×' + M.vb}</b>`, `RS <b>${(M.rs / 1000).toFixed(1)}</b> ms`].map(s => `<span class="chip">${s}</span>`).join('');
+  drawFrame(M); drawMerge(M); drawKernel(M); drawStats(M);
+}
+document.querySelectorAll('.lang button').forEach(b => b.addEventListener('click', () => {
+  LANG = b.dataset.l; try { localStorage.setItem('sl410-lang', LANG); } catch (e) {} render(); }));
+addEventListener('hashchange', render);
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
+render();
+</script>
+</body>
+</html>

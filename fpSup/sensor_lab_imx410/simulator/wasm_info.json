@@ -1,0 +1,92 @@
+{
+  "info": {
+    "version": "0.7.26test",
+    "core_fingerprint": "303ba9d01ad50cf848c7d4f487849a3495d98b0133a260867a63bd2344bf2f17",
+    "fingerprint": "308217217a08770eb6c407742a2f906850366a4add6ff8fd3c777c72d3cc66d7",
+    "qr_url": "https://ijigen.github.io/fpSup/sensor_lab_imx410/#",
+    "offline": true
+  },
+  "constants": {
+    "WMIN": 256,
+    "HMIN": 144,
+    "WMAX": 6048,
+    "HMAX": 4040,
+    "MAXR": 80,
+    "TOL_NUM": 1,
+    "TOL_DEN": 50,
+    "QR_N": 37,
+    "QR_CHARS": 37
+  },
+  "fields": [
+    "mh",
+    "mv",
+    "ad",
+    "hbin",
+    "vbin",
+    "key",
+    "bits",
+    "cw",
+    "ch",
+    "sw",
+    "sh",
+    "hmax",
+    "rows",
+    "capped",
+    "hm",
+    "vmin_lo",
+    "vmin",
+    "vmax",
+    "fps_milli",
+    "win_w",
+    "win_h",
+    "zh",
+    "zv",
+    "rec_w",
+    "rec_h",
+    "path",
+    "seq",
+    "lines",
+    "vis_w",
+    "vis_h",
+    "rs_us"
+  ],
+  "margin": [
+    16,
+    10
+  ],
+  "dc_names": [
+    {
+      "w": 6048,
+      "h": 4040,
+      "name": "OG"
+    },
+    {
+      "w": 6048,
+      "h": 3402,
+      "name": "HD"
+    },
+    {
+      "w": 4192,
+      "h": 2358,
+      "name": "S35"
+    },
+    {
+      "w": 3952,
+      "h": 2624,
+      "name": "APS-C"
+    },
+    {
+      "w": 2096,
+      "h": 1240,
+      "name": "S16"
+    },
+    {
+      "w": 4032,
+      "h": 4032,
+      "name": "SQ"
+    }
+  ],
+  "clk": 72000000,
+  "vmax_max": 16384,
+  "wasm_sha256": "9ebd31ff30d7abfeeea8a8cbd984f539b7185c59a59badaec177fa5c44ec8715"
+}
