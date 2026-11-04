@@ -1,4 +1,4 @@
-//! Mounts a .cdngj or .cdngt archive as a read-only disk in Finder.
+//! Mounts an archive or this app's DMG/ISO as a read-only disk in Finder.
 //!
 //! The archive's files are laid out as a synthesised HFS+ volume (`hfs`) that a local
 //! HTTP server hands to `diskutil image attach`; the kernel reads only the byte ranges
@@ -14,7 +14,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -63,16 +63,6 @@ fn layout(archive: &Archive) -> (Vec<hfs::Dir>, Vec<hfs::File>) {
         files.push(hfs::File { dir: folder(dir, &mut dirs), name: name.to_string(), size: e.virtual_size });
     }
     (dirs, files)
-}
-
-fn volume_name(archive: &Path) -> String {
-    let stem = archive.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let name: String = stem
-        .chars()
-        .map(|c| if (c.is_ascii_graphic() || c == ' ') && c != ':' && c != '/' { c } else { '_' })
-        .take(27)
-        .collect();
-    if name.trim().is_empty() { "CDNG".into() } else { name }
 }
 
 struct Served {
@@ -159,10 +149,11 @@ fn serve(stream: TcpStream, served: &Served) -> Result<()> {
 }
 
 /// Where a running mount of the same archive records its mount point.
-fn record_path(archive: &Path) -> Result<PathBuf> {
+fn record_path(archive: &Path, correct_og3k: bool) -> Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
     let key = crate::hash(archive.as_os_str().as_encoded_bytes());
-    Ok(PathBuf::from(home).join("Library/Caches/cdng-image/mounts").join(&key[..16]))
+    let name = if correct_og3k { format!("{}-og3k", &key[..16]) } else { key[..16].to_string() };
+    Ok(PathBuf::from(home).join("Library/Caches/cdng-image/mounts").join(name))
 }
 
 fn alive(pid: u32) -> bool {
@@ -184,17 +175,42 @@ fn eject(device: &str) -> bool {
     Command::new("diskutil").args(["eject", device]).output().is_ok_and(|o| o.status.success())
 }
 
+fn attached_device(output: &[u8]) -> Result<String> {
+    let text = String::from_utf8_lossy(output);
+    let line = text.lines().rev().find(|l| l.starts_with("/dev/"))
+        .context("diskutil did not report a device")?;
+    Ok(line.split_whitespace().next().unwrap().to_string())
+}
+
+fn mount_point(device: &str) -> Result<PathBuf> {
+    // `diskutil image attach` omits its human-readable mount-path column for
+    // some Unicode volume names, even when the filesystem is already mounted.
+    // Query the device's structured plist instead of parsing that column.
+    let info = Command::new("diskutil").args(["info", "-plist", device]).output()?;
+    ensure!(info.status.success(), "Could not inspect attached disk: {}", String::from_utf8_lossy(&info.stderr));
+    let mut plist = Command::new("plutil").args(["-extract", "MountPoint", "raw", "-o", "-", "-"])
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let written = plist.stdin.take().context("Could not open plist input")?.write_all(&info.stdout);
+    let out = plist.wait_with_output()?;
+    written?;
+    ensure!(out.status.success(), "磁碟已連接但沒有掛載：{}", String::from_utf8_lossy(&out.stderr).trim());
+    let path = String::from_utf8(out.stdout)?;
+    let path = PathBuf::from(path.strip_suffix('\n').unwrap_or(&path));
+    ensure!(path.is_absolute() && mounted(&path), "磁碟已連接但沒有掛載");
+    Ok(path)
+}
+
 /// Mounts `archive` and serves it until the volume is ejected or `cancel` is set.
 /// `open_window` opens the volume in Finder, as double-clicking a DMG does.
-pub fn mount(archive_path: &Path, open_window: bool, cancel: &AtomicBool) -> Result<()> {
+pub fn mount(archive_path: &Path, open_window: bool, correct_og3k: bool, cancel: &AtomicBool) -> Result<()> {
     let archive_path = archive_path.canonicalize().context("找不到封存檔")?;
-    let record = record_path(&archive_path)?;
+    let record = record_path(&archive_path, correct_og3k)?;
     if let Ok(text) = std::fs::read_to_string(&record)
         && let Some((pid, mount_point)) = text.split_once('\t')
         && pid.parse().is_ok_and(alive)
         && mounted(Path::new(mount_point))
     {
-        progress(json!({"already_mounted": mount_point}));
+        progress(json!({"already_mounted": mount_point, "og3k_alignment": correct_og3k}));
         if open_window {
             let _ = Command::new("open").arg(mount_point).status();
         }
@@ -202,10 +218,11 @@ pub fn mount(archive_path: &Path, open_window: bool, cancel: &AtomicBool) -> Res
     }
 
     let started = std::time::Instant::now();
-    let archive = Archive::open(&archive_path, CACHE_BYTES)?;
+    let archive = Archive::open_for_mount(&archive_path, CACHE_BYTES, correct_og3k)?;
+    let corrected_frames = archive.corrected_frames();
     let (dirs, files) = layout(&archive);
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + 2_082_844_800; // HFS epoch 1904
-    let volume = hfs::Volume::build(&volume_name(&archive_path), &dirs, &files, now as u32)?;
+    let volume = hfs::Volume::build(&crate::volume::hfs_name(&archive_path)?, &dirs, &files, now as u32)?;
     let served = Arc::new(Served { archive, volume });
 
     let listener = TcpListener::bind(("127.0.0.1", 0))?;
@@ -226,14 +243,10 @@ pub fn mount(archive_path: &Path, open_window: bool, cancel: &AtomicBool) -> Res
 
     let out = Command::new("diskutil").args(["image", "attach", "--readOnly", &url]).output()?;
     ensure!(out.status.success(), "掛載失敗: {}", String::from_utf8_lossy(&out.stderr).trim());
-    // last line: "/dev/diskN<TAB>...<TAB>/Volumes/NAME"
-    let text = String::from_utf8_lossy(&out.stdout);
-    let line = text.lines().rev().find(|l| l.starts_with("/dev/")).context("diskutil did not report a device")?;
-    let device = line.split_whitespace().next().unwrap().to_string();
-    let mount_point = line.split('\t').map(str::trim).rfind(|f| f.starts_with('/') && !f.starts_with("/dev/"));
-    let Some(mount_point) = mount_point.map(PathBuf::from) else {
-        eject(&device);
-        bail!("磁碟已連接但沒有掛載");
+    let device = attached_device(&out.stdout)?;
+    let mount_point = match mount_point(&device) {
+        Ok(path) => path,
+        Err(error) => { eject(&device); return Err(error); }
     };
     let save_record = (|| -> std::io::Result<()> {
         if let Some(dir) = record.parent() {
@@ -247,7 +260,8 @@ pub fn mount(archive_path: &Path, open_window: bool, cancel: &AtomicBool) -> Res
     }
     progress(
         json!({"mounted": mount_point, "device": device, "files": files.len(), "virtual_bytes": served.volume.bytes,
-               "seconds": started.elapsed().as_secs_f64()})
+               "seconds": started.elapsed().as_secs_f64(), "corrected_frames": corrected_frames,
+               "og3k_alignment": correct_og3k})
     );
     if open_window {
         let _ = Command::new("open").arg(&mount_point).status();
@@ -274,4 +288,17 @@ pub fn mount(archive_path: &Path, open_window: bool, cancel: &AtomicBool) -> Res
     let _ = std::fs::remove_file(&record);
     progress(json!({"ejected": mount_point}));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn device_detection_does_not_require_a_printed_mount_path() {
+        assert_eq!(attached_device(b"/dev/disk7\t\t/Volumes/Film\n").unwrap(), "/dev/disk7");
+        assert_eq!(attached_device(b"/dev/disk7\n").unwrap(), "/dev/disk7");
+        assert_eq!(attached_device(b"/dev/disk7\n/dev/disk7s1\n").unwrap(), "/dev/disk7s1");
+        assert!(attached_device(b"No device\n").is_err());
+    }
 }

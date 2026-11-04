@@ -1,3 +1,23 @@
+CDNG Image 0.2.13 — OG3K 掛載時可選列對齊，2026-11-02
+勾選 Correct OG3K row alignment when mounting，支援本程式 LJ92／JPEG XL DMG、.cdngj 與 .cdngt。
+只處理 SIGMA fp OG3K：RAW 3024×2010、RGGB、裁切原點(8,5)與大小3008×2000；其他檔案原樣讀取。
+在核對儲存資料、解碼（有原RAW雜湊時也核對）後，於記憶體分別對拜耳奇偶列以Lanczos-6做相反方向的1/8同色平面步長插值。
+選項預設關閉。開啟後掛載視圖RAW像素會改變、以16-bit普通DNG呈現；保存的封存、來源與壓縮資料不變。
+沒有符合OG3K的影格時仍正常掛載並提示；選項有變更須先退出磁碟再重新掛載。
+顯示的校正幀數是符合條件的數量，實際處理發生在影格首次被讀取時；以CPU執行並快取，不預先解壓整包。
+真實掛載、逐像素數學參考與資料完整性驗證：validation/OG3KAlign-0.2.13.txt；Resolve播放效果與速度尚未實測。
+
+CDNG Image 0.2.12 — 載入、批次選取與 JPEG XL DMG 掛載，2026-11-02
+素材資料夾分批顯示，可中途切換來源；macOS 批量讀取目錄，移除預覽重繪時整份幀列表的複製。
+片段列表支援框選、Shift 範圍、Cmd/Ctrl 加選及 Include/Exclude 批次勾選；長列表只繪製可見列。
+掛載名稱改採存檔名稱；原生 ISO/Joliet DMG 最多16字，動態 HFS+ 掛載最多255個UTF-16單位。
+JPEG XL DMG 可從 Open archive…／Mount archive 動態掛載；既有 DMG 不需重新壓縮。
+讀取時用 CPU libjxl 還原普通16-bit DNG，RAW原值不縮放；保留逐幀儲存資料／RAW雜湊核對及記憶體快取。
+Finder 雙擊 DMG 仍只啟動系統原生掛載，請透過本程式取得動態解壓；目前限本程式產生的未壓縮UDIF／ISO容器。
+動態掛載的既有檔案／資料夾名稱仍限ASCII；磁碟名稱已支援中文。實測系統macOS 27.0，未宣稱其他版本已驗證。
+本次不變更壓縮強度、RAW品質或壓縮編碼流程；尚未宣稱 Resolve 實機播放測試通過。
+詳細驗證：validation/GuiMount-0.2.12.txt。
+
 CDNG Image 0.2.11 — 第三種 Temporal JXL，2026-10-27
 每組最多 8 幀沿時間重排，與單幀候選比較，保留較小者；直接輸出單一 .cdngt。
 macOS 用 Mount archive／Open archive… 按需還原掛載，保留原有兩種輸出。

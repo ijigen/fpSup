@@ -103,14 +103,20 @@ fn scalar(
 }
 fn prefix_check(d: &[u8], limit: usize, offset: usize, seen: &mut HashSet<usize>) -> Result<()> {
     ensure!(
-        offset >= 8 && offset + 2 <= limit && seen.insert(offset),
-        "Invalid or cyclic metadata IFD"
+        offset >= 8 && offset + 2 <= limit && seen.len() < 128 && seen.insert(offset),
+        "Invalid, cyclic, or excessively nested metadata IFD"
     );
     let tags = entries(d, offset)?;
     ensure!(
         offset + 6 + 12 * tags.len() <= limit,
         "Metadata IFD overlaps RAW data"
     );
+    prefix_check_entries(d, limit, &tags, seen)
+}
+
+/// Validate preserved metadata references even when a recompressor has placed
+/// the current top-level IFD after the compressed RAW payload.
+fn prefix_check_entries(d: &[u8], limit: usize, tags: &BTreeMap<u16, Entry>, seen: &mut HashSet<usize>) -> Result<()> {
     for e in tags.values() {
         let size = e
             .count
@@ -585,6 +591,114 @@ pub fn decode(d: &[u8]) -> Result<Vec<u16>> {
     Ok(read(d, false)?.pixels)
 }
 
+pub(crate) fn stored_compression(d: &[u8]) -> Result<usize> {
+    ensure!(d.starts_with(b"II*\0"), "Unsupported stored DNG byte order");
+    scalar(&entries(d, u32at(d, 4)? as usize)?, d, 259, None)
+}
+
+/// Deliberately narrow identification: mode cannot safely be inferred from
+/// dimensions alone. Other cameras, crops, and sensor modes pass unchanged.
+pub(crate) fn is_og3k(d: &[u8]) -> bool {
+    let check = || -> Result<bool> {
+        ensure!(d.starts_with(b"II*\0"), "Unsupported TIFF");
+        let t = entries(d, u32at(d, 4)? as usize)?;
+        let text = |tag: u16| -> Option<&[u8]> {
+            let e = t.get(&tag)?;
+            if e.typ != 2 || e.count == 0 || e.count > 128 { return None; }
+            if e.count <= 4 { Some(&e.raw[8..8 + e.count]) }
+            else { d.get(e.value..e.value.checked_add(e.count)?) }
+        };
+        let model = text(272).or_else(|| text(50708)).unwrap_or_default();
+        let model = model.split(|&b| b == 0).next().unwrap_or_default();
+        Ok(model == b"SIGMA fp"
+            && scalar(&t, d, 256, None)? == 3024
+            && scalar(&t, d, 257, None)? == 2010
+            && scalar(&t, d, 262, None)? == 32803
+            && scalar(&t, d, 277, Some(1))? == 1
+            && t.get(&33421).is_some_and(|e| e.values(d).ok().as_deref() == Some(&[2,2]))
+            && t.get(&33422).is_some_and(|e| e.values(d).ok().as_deref() == Some(&[0,1,1,2]))
+            && t.get(&50719).is_some_and(|e| e.values(d).ok().as_deref() == Some(&[8,5]))
+            && t.get(&50720).is_some_and(|e| e.values(d).ok().as_deref() == Some(&[3008,2000])))
+    };
+    check().unwrap_or(false)
+}
+
+/// A normal DNG can be exposed as an uncompressed 16-bit DNG without decoding
+/// the image at mount time. The original metadata prefix stays byte-addressed.
+pub(crate) struct MountedRaw { pub width: usize, pub height: usize, pub bits: usize, pub header_len: usize, prefix: usize }
+
+impl MountedRaw {
+    fn tags(d: &[u8]) -> Result<(usize, usize, usize, usize, BTreeMap<u16, [u8; 12]>)> {
+        let all = entries(d, u32at(d, 4)? as usize)?;
+        let width = scalar(&all, d, 256, None)?;
+        let height = scalar(&all, d, 257, None)?;
+        let bits = scalar(&all, d, 258, None)?;
+        ensure!(width == 3024 && height == 2010 && [8,10,12,14,16].contains(&bits)
+            && matches!(scalar(&all, d, 259, None)?, 1 | 7), "Unsupported OG3K RAW layout");
+        let offsets = all.get(&(if all.contains_key(&324) { 324 } else { 273 }))
+            .context("Missing RAW offsets")?.values(d)?;
+        let prefix = *offsets.iter().min().context("Missing RAW segment")?;
+        ensure!(prefix <= 64 << 20 && prefix <= d.len(), "Invalid RAW metadata prefix");
+        let ifd=u32at(d,4)? as usize;
+        if ifd < prefix { prefix_check(d, prefix, ifd, &mut HashSet::new())?; }
+        else { prefix_check_entries(d,prefix,&all,&mut HashSet::new())?; }
+        let mut tags: BTreeMap<_, _> = all.iter().filter(|(t,_)| !LAYOUT.contains(t))
+            .map(|(&t,e)| (t,e.raw)).collect();
+        let entry = |tag: u16, typ: u16, value: u32| {
+            let mut b=[0u8;12];
+            b[..2].copy_from_slice(&tag.to_le_bytes()); b[2..4].copy_from_slice(&typ.to_le_bytes());
+            b[4..8].copy_from_slice(&1u32.to_le_bytes()); b[8..].copy_from_slice(&value.to_le_bytes()); b
+        };
+        for (tag,typ,value) in [(258,3,16),(259,3,1),(273,4,0),(278,4,height as u32),(279,4,(width*height*2) as u32)] {
+            tags.insert(tag,entry(tag,typ,value));
+        }
+        Ok((width,height,bits,prefix,tags))
+    }
+    pub(crate) fn plan(d: &[u8]) -> Result<Self> {
+        let (width,height,bits,prefix,tags)=Self::tags(d)?;
+        let header_len=prefix + prefix%2 + 6 + tags.len()*12;
+        Ok(Self { width,height,bits,header_len,prefix })
+    }
+    pub(crate) fn header(&self,d: &[u8]) -> Result<Vec<u8>> {
+        let (w,h,b,prefix,mut tags)=Self::tags(d)?;
+        ensure!((w,h,b,prefix)==(self.width,self.height,self.bits,self.prefix), "RAW metadata changed");
+        let mut out=d[..prefix].to_vec();
+        if out.len()%2!=0 { out.push(0); }
+        let ifd=out.len() as u32;
+        out[4..8].copy_from_slice(&ifd.to_le_bytes());
+        tags.get_mut(&273).context("Missing output strip")?[8..12].copy_from_slice(&(self.header_len as u32).to_le_bytes());
+        out.extend((tags.len() as u16).to_le_bytes());
+        for e in tags.values() { out.extend(e); }
+        out.extend([0;4]);
+        ensure!(out.len()==self.header_len,"RAW header length changed");
+        Ok(out)
+    }
+}
+
+/// Corrected pixels no longer match the original RAW digest tags. Remove them
+/// from the virtual IFD without changing the virtual file's offsets or size.
+pub(crate) fn clear_raw_digests(header: &mut [u8]) -> Result<()> {
+    let at=u32at(header,4)? as usize;
+    let n=u16at(header,at)? as usize;
+    ensure!(n<=4096 && at.checked_add(6+12*n).is_some_and(|end| end<=header.len()), "Invalid virtual DNG IFD");
+    let mut kept=0;
+    for i in 0..n {
+        let from=at+2+12*i;
+        let tag=u16at(header,from)?;
+        if matches!(tag,50972|51111) { continue; }
+        header.copy_within(from..from+12,at+2+12*kept);
+        kept+=1;
+    }
+    if kept!=n {
+        let old_end=at+6+12*n;
+        let new_end=at+6+12*kept;
+        header.copy_within(at+2+12*n..old_end,at+2+12*kept);
+        header[new_end..old_end].fill(0);
+        header[at..at+2].copy_from_slice(&(kept as u16).to_le_bytes());
+    }
+    Ok(())
+}
+
 /// Keep temporal groups within one Bayer layout and sensor orientation.
 pub(crate) fn archive_layout_key(d: &[u8]) -> Result<Vec<usize>> {
     ensure!(d.get(..4) == Some(b"II*\0"), "Unsupported DNG byte order");
@@ -773,6 +887,88 @@ pub fn jxl_dng(f: &JxlFrame, payload: &[u8], effort: Option<u32>, verification: 
         backend,
     };
     (out, info)
+}
+
+/// Metadata-only description of the single-strip JXL DNG emitted by this app.
+/// Parsing this does not touch or decode the compressed RAW payload.
+pub(crate) struct MountedJxl {
+    pub width: usize,
+    pub height: usize,
+    pub bits: usize,
+    pub payload_offset: usize,
+    pub payload_len: usize,
+    pub header_len: usize,
+}
+
+pub(crate) fn mounted_jxl(d: &[u8]) -> Result<MountedJxl> {
+    Ok(mounted_jxl_tags(d)?.0)
+}
+
+fn mounted_jxl_tags(d: &[u8]) -> Result<(MountedJxl, BTreeMap<u16, [u8; 12]>)> {
+    ensure!(d.starts_with(b"II*\0"), "Unsupported JXL DNG byte order");
+    let tags = entries(d, u32at(d, 4)? as usize)?;
+    ensure!(scalar(&tags, d, 259, None)? == 52546, "Expected JPEG XL DNG");
+    ensure!(scalar(&tags, d, 262, None)? == 32803
+        && scalar(&tags, d, 277, Some(1))? == 1
+        && scalar(&tags, d, 339, Some(1))? == 1,
+        "Expected unsigned one-channel CFA JXL DNG");
+    ensure!(!tags.contains_key(&330) && !tags.contains_key(&324), "Unsupported JXL DNG image layout");
+    for tag in [266, 317, 50974] {
+        ensure!(scalar(&tags, d, tag, Some(1))? == 1, "Unsupported JXL DNG predictor");
+    }
+    ensure!(scalar(&tags, d, 50975, None)? == 2 && scalar(&tags, d, 52547, None)? == 2,
+        "JPEG XL DNG was not created with this app's Bayer layout");
+    let distance = tags.get(&52553).context("Missing lossless JXL marker")?;
+    ensure!(distance.typ == 11 && distance.count == 1 && distance.value == 0,
+        "Only lossless JPEG XL DNG is supported");
+    let width = scalar(&tags, d, 256, None)?;
+    let height = scalar(&tags, d, 257, None)?;
+    let bits = scalar(&tags, d, 258, None)?;
+    ensure!(width > 0 && height > 0 && width <= 65535 && height <= 65535
+        && width % 2 == 0 && height % 2 == 0 && width * height <= 100_000_000
+        && [8, 10, 12, 14, 16].contains(&bits), "Invalid JXL DNG dimensions/bit depth");
+    ensure!(scalar(&tags, d, 278, None)? == height, "Unsupported JXL DNG strips");
+    let payload_offset = scalar(&tags, d, 273, None)?;
+    let payload_len = scalar(&tags, d, 279, None)?;
+    ensure!(payload_offset >= 8 && payload_offset <= 64 << 20 && payload_len > 0
+        && payload_offset.checked_add(payload_len) == Some(d.len()), "Invalid JXL DNG payload range");
+    prefix_check(d, payload_offset, u32at(d, 4)? as usize, &mut HashSet::new())?;
+    let mut plain: BTreeMap<u16, [u8; 12]> = tags.iter()
+        .filter(|(tag, _)| !LAYOUT.contains(tag) && ![50975, 52547, 52553, 52554].contains(tag))
+        .map(|(&tag, e)| (tag, e.raw)).collect();
+    let version = u32::from_le_bytes([1, 4, 0, 0]);
+    for (tag, typ, count, value) in [
+        (258u16, 3u16, 1u32, 16u32), (259, 3, 1, 1), (273, 4, 1, 0),
+        (278, 4, 1, height as u32), (279, 4, 1, (width * height * 2) as u32),
+        (50706, 1, 4, version), (50707, 1, 4, version),
+    ] {
+        let mut entry = [0; 12];
+        entry[..2].copy_from_slice(&tag.to_le_bytes());
+        entry[2..4].copy_from_slice(&typ.to_le_bytes());
+        entry[4..8].copy_from_slice(&count.to_le_bytes());
+        entry[8..12].copy_from_slice(&value.to_le_bytes());
+        plain.insert(tag, entry);
+    }
+    let header_len = payload_offset + payload_offset % 2 + 6 + plain.len() * 12;
+    plain.get_mut(&273).unwrap()[8..12].copy_from_slice(&(header_len as u32).to_le_bytes());
+    Ok((MountedJxl { width, height, bits, payload_offset, payload_len, header_len }, plain))
+}
+
+impl MountedJxl {
+    pub(crate) fn header(&self, source: &[u8]) -> Result<Vec<u8>> {
+        let (layout, tags) = mounted_jxl_tags(source)?;
+        ensure!(layout.header_len == self.header_len && layout.payload_offset == self.payload_offset,
+            "Mounted DNG metadata changed");
+        let mut header = Vec::with_capacity(self.header_len);
+        header.extend_from_slice(&source[..self.payload_offset]);
+        if header.len() % 2 != 0 { header.push(0); }
+        let ifd = header.len() as u32;
+        header[4..8].copy_from_slice(&ifd.to_le_bytes());
+        header.extend_from_slice(&(tags.len() as u16).to_le_bytes());
+        for entry in tags.values() { header.extend_from_slice(entry); }
+        header.extend_from_slice(&[0; 4]);
+        Ok(header)
+    }
 }
 
 /// Lossless JPEG XL DNG with libjxl on the CPU; the stream is decoded again and compared.
@@ -1172,12 +1368,129 @@ mod geometry_prune_diagnostic;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn og3k_detection_requires_camera_geometry_and_crop() {
+        use super::*;
+        let n=9u16;
+        let start=8+2+n as usize*12+4;
+        let mut data=b"II*\0\x08\0\0\0".to_vec();
+        data.extend(n.to_le_bytes());
+        let tags=[(256u16,4u16,1u32,3024u32),(257,4,1,2010),(262,3,1,32803),
+            (272,2,11,start as u32),(277,3,1,1),(33421,3,2,0x00020002),
+            (33422,1,4,0x02010100),(50719,4,2,(start+11) as u32),(50720,4,2,(start+19) as u32)];
+        for (tag,typ,count,value) in tags {
+            data.extend(tag.to_le_bytes()); data.extend(typ.to_le_bytes());
+            data.extend(count.to_le_bytes()); data.extend(value.to_le_bytes());
+        }
+        data.extend([0;4]); data.extend(b"SIGMA fp\0\0\0");
+        for x in [8u32,5,3008,2000] { data.extend(x.to_le_bytes()); }
+        assert!(is_og3k(&data));
+        let mut different_camera=data.clone(); different_camera[start]=b'X';
+        assert!(!is_og3k(&different_camera));
+        let mut different_crop=data.clone(); different_crop[start+11]=9;
+        assert!(!is_og3k(&different_crop));
+    }
+
+    #[test]
+    fn corrected_header_drops_stale_raw_digests_without_changing_offsets() {
+        use super::*;
+        let mut h=b"II*\0\x08\0\0\0".to_vec();
+        h.extend(3u16.to_le_bytes());
+        for tag in [256u16,50972,51111] {
+            h.extend(tag.to_le_bytes()); h.extend(1u16.to_le_bytes());
+            h.extend(1u32.to_le_bytes()); h.extend(3u32.to_le_bytes());
+        }
+        h.extend([0;4]); h.extend([0x55;17]);
+        let before=h.len();
+        clear_raw_digests(&mut h).unwrap();
+        assert_eq!(h.len(),before);
+        assert_eq!(u16at(&h,8).unwrap(),1);
+        assert_eq!(entries(&h,8).unwrap().keys().copied().collect::<Vec<_>>(),vec![256]);
+        assert_eq!(&h[8+6+3*12..], &[0x55;17]);
+    }
+
+    #[test]
+    fn excessive_metadata_ifd_chain_is_rejected_without_recursing_unboundedly() {
+        let mut bytes = vec![0u8; 8 + 130 * 18];
+        for i in 0..130 {
+            let at = 8 + i * 18;
+            bytes[at..at + 2].copy_from_slice(&1u16.to_le_bytes());
+            bytes[at + 2..at + 4].copy_from_slice(&34665u16.to_le_bytes());
+            bytes[at + 4..at + 6].copy_from_slice(&4u16.to_le_bytes());
+            bytes[at + 6..at + 10].copy_from_slice(&1u32.to_le_bytes());
+            let next = if i + 1 < 130 { at + 18 } else { 0 };
+            bytes[at + 10..at + 14].copy_from_slice(&(next as u32).to_le_bytes());
+        }
+        let error = super::prefix_check(&bytes, bytes.len(), 8, &mut std::collections::HashSet::new()).unwrap_err();
+        assert!(error.to_string().contains("excessively nested"));
+    }
+
     use super::*;
+
+    /// A deterministic packed 12-bit RGGB DNG, including out-of-line metadata.
+    /// Keeping this in the test module avoids depending on disposable footage.
+    fn native_fixture() -> Vec<u8> {
+        let (width, height) = (96usize, 64usize);
+        let artist = b"CDNG regression fixture\0";
+        let model = b"Synthetic Bayer camera\0";
+        let mut tags = vec![
+            (256u16, 4u16, 1u32, width as u32), (257, 4, 1, height as u32),
+            (258, 3, 1, 12), (259, 3, 1, 1), (262, 3, 1, 32803),
+            (273, 4, 1, 0), (274, 3, 1, 1), (277, 3, 1, 1),
+            (278, 4, 1, height as u32), (279, 4, 1, (width * height * 3 / 2) as u32),
+            (315, 2, artist.len() as u32, 0),
+            (33421, 3, 2, 0x00020002), (33422, 1, 4, 0x02010100),
+            (50706, 1, 4, 0x00000401), (50707, 1, 4, 0x00000101),
+            (50708, 2, model.len() as u32, 0), (50710, 1, 3, 0x00020100),
+            (50711, 3, 1, 1), (50713, 3, 2, 0x00010001),
+            (50714, 3, 1, 64), (50717, 4, 1, 4095),
+            (50721, 10, 9, 0), (50728, 5, 3, 0), (50778, 3, 1, 21),
+            (51044, 10, 1, 0),
+        ];
+        let directory_size = 8 + 6 + tags.len() * 12;
+        let mut metadata = Vec::new();
+        for (tag, bytes) in [
+            (315, artist.to_vec()),
+            (50708, model.to_vec()),
+            (50721, (0..9).flat_map(|i| {
+                let numerator = if i % 4 == 0 { 10_000i32 } else { 0 };
+                [numerator.to_le_bytes(), 10_000i32.to_le_bytes()].concat()
+            }).collect()),
+            (50728, (0..3).flat_map(|_| [1u32.to_le_bytes(), 1u32.to_le_bytes()].concat()).collect()),
+            (51044, [24_000i32.to_le_bytes(), 1001i32.to_le_bytes()].concat()),
+        ] {
+            if (directory_size + metadata.len()) % 2 != 0 { metadata.push(0); }
+            tags.iter_mut().find(|entry| entry.0 == tag).unwrap().3 = (directory_size + metadata.len()) as u32;
+            metadata.extend(bytes);
+        }
+        if (directory_size + metadata.len()) % 2 != 0 { metadata.push(0); }
+        tags.iter_mut().find(|entry| entry.0 == 273).unwrap().3 = (directory_size + metadata.len()) as u32;
+        let mut out = b"II*\0\x08\0\0\0".to_vec();
+        out.extend_from_slice(&(tags.len() as u16).to_le_bytes());
+        for (tag, typ, count, value) in tags {
+            out.extend_from_slice(&tag.to_le_bytes());
+            out.extend_from_slice(&typ.to_le_bytes());
+            out.extend_from_slice(&count.to_le_bytes());
+            out.extend_from_slice(&value.to_le_bytes());
+        }
+        out.extend_from_slice(&[0; 4]);
+        out.extend(metadata);
+        let pixels: Vec<u16> = (0..width * height).map(|i| {
+            let (x, y) = (i % width, i / width);
+            // Smooth detail plus different Bayer phases, spanning useful levels.
+            (64 + (x / 2) * 31 + (y / 2) * 23 + (x % 2) * 113 + (y % 2) * 71) as u16
+        }).collect();
+        for pair in pixels.chunks_exact(2) {
+            out.extend_from_slice(&[(pair[0] >> 4) as u8,
+                ((pair[0] & 15) << 4) as u8 | (pair[1] >> 8) as u8, pair[1] as u8]);
+        }
+        assert_eq!(decode(&out).unwrap(), pixels, "fixture must decode to the independently generated samples");
+        out
+    }
 
     #[test]
     fn jxl_frame_reuses_samples_without_changing_hash_or_dng_metadata() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-        let source = std::fs::read(root.join("bmd_gen1/resolve_test/0_fp_original.dng")).unwrap();
+        let source = native_fixture();
         let image = read(&source, true).unwrap();
         let mut expected_planes = image.pixels.clone();
         crate::jxl::cfa_permute(&mut expected_planes, image.width, image.height, false).unwrap();
@@ -1207,8 +1520,7 @@ mod tests {
 
     #[test]
     fn deferred_hashes_preserve_source_pixels_and_public_compression_output() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-        let source = std::fs::read(root.join("bmd_gen1/resolve_test/0_fp_original.dng")).unwrap();
+        let source = native_fixture();
         let pixels = decode(&source).unwrap();
         let expected_pixels: Vec<u8> = pixels.iter().flat_map(|p| p.to_le_bytes()).collect();
         let mut modes = vec![(Backend::Cpu, Effort::Fast)];
@@ -1250,8 +1562,7 @@ mod tests {
     #[test]
     fn gpu_container_exact_payload_audit_rejects_copy_corruption() {
         if std::env::var_os("CDNG_TEST_GPU").is_none() { return; }
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-        let source = std::fs::read(root.join("bmd_gen1/resolve_test/0_fp_original.dng")).unwrap();
+        let source = native_fixture();
         let gpu = Gpu::new(Backend::Metal).unwrap();
         let image = read(&source, true).unwrap();
         let (mut output, _) = compress(&source, Effort::Max, Backend::Metal, Some(&gpu), &AtomicBool::new(false)).unwrap();
@@ -1356,11 +1667,10 @@ mod tests {
     #[test]
     fn preview_does_not_change_raw_and_handles_compressed_input() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-        for file in [
-            "bmd_gen1/resolve_test/0_fp_original.dng",
-            "research/slimRAW/captures/A001_083_FHD_f07_compressed_288x368.DNG",
+        for data in [
+            native_fixture(),
+            std::fs::read(root.join("research/slimRAW/captures/A001_083_FHD_f07_compressed_288x368.DNG")).unwrap(),
         ] {
-            let data = std::fs::read(root.join(file)).unwrap();
             let before = crate::hash(&data);
             let p = preview(&data).unwrap();
             assert_eq!(p.rgb.len(), p.width * p.height * 3);
@@ -1377,11 +1687,10 @@ mod tests {
     #[test]
     fn native_and_already_compressed_pixels() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-        for relative in [
-            "bmd_gen1/resolve_test/0_fp_original.dng",
-            "research/slimRAW/captures/A001_083_FHD_f07_compressed_288x368.DNG",
+        for data in [
+            native_fixture(),
+            std::fs::read(root.join("research/slimRAW/captures/A001_083_FHD_f07_compressed_288x368.DNG")).unwrap(),
         ] {
-            let data = std::fs::read(root.join(relative)).unwrap();
             let before = decode(&data).unwrap();
             let (out, _) = compress(
                 &data,

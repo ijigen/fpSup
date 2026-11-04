@@ -87,23 +87,28 @@ fn run() -> Result<()> {
     }
     if args[0] == "--help" {
         println!(
-            "CDNG Image\ncdng-image pack SOURCE OUTPUT.dmg [--codec lj92|jxl] [--effort fast|balanced|max]\ncdng-image pack SOURCE OUTPUT.cdngt [--codec temporal] [--effort fast|balanced|max]\n  Default effort: max (Smallest), prioritizing compression ratio. All modes are lossless; faster modes may produce larger files.\n  jxl: Metal on macOS (every frame decoded again on the GPU); --backend cpu uses libjxl.\n  temporal: compares up to 8 consecutive frames and keeps the smaller lossless representation;\n    writes an app-mounted .cdngt archive. Metal on macOS, CPU on other platforms.\n  --exclude-clip FOLDER may be repeated. Progress is printed as one JSON object per line.\n  A line \"cancel\" on stdin (or Ctrl+C) stops and removes the unfinished output. Every file is always verified.\n  expert: --backend cpu|metal|cuda (default: metal on macOS), --workers N (default: automatic), --ram-buffer-mib MiB\ncdng-image mount ARCHIVE.cdngj|ARCHIVE.cdngt [--no-open]   macOS: mount in Finder until ejected\ncdng-image inspect ARCHIVE.cdngj|ARCHIVE.cdngt\ncdng-image extract ARCHIVE.cdngj|ARCHIVE.cdngt NEW_DIRECTORY\ncdng-image read ARCHIVE.cdngj|ARCHIVE.cdngt PATH OFFSET LENGTH NEW_OUTPUT\nNo arguments opens the desktop app."
+            "CDNG Image\ncdng-image pack SOURCE OUTPUT.dmg [--codec lj92|jxl] [--effort fast|balanced|max]\ncdng-image pack SOURCE OUTPUT.cdngt [--codec temporal] [--effort fast|balanced|max]\n  Default effort: max (Smallest), prioritizing compression ratio. All modes are lossless; faster modes may produce larger files.\n  jxl: Metal on macOS (every frame decoded again on the GPU); --backend cpu uses libjxl.\n  temporal: compares up to 8 consecutive frames and keeps the smaller lossless representation;\n    writes an app-mounted .cdngt archive. Metal on macOS, CPU on other platforms.\n  --exclude-clip FOLDER may be repeated. Progress is printed as one JSON object per line.\n  A line \"cancel\" on stdin (or Ctrl+C) stops and removes the unfinished output. Every file is always verified.\n  expert: --backend cpu|metal|cuda (default: metal on macOS), --workers N (default: automatic), --ram-buffer-mib MiB\ncdng-image mount ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso [--no-open]   macOS: mount as ordinary DNG in Finder until ejected\ncdng-image inspect ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso\ncdng-image extract ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso NEW_DIRECTORY\ncdng-image read ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso PATH OFFSET LENGTH NEW_OUTPUT\nNo arguments opens the desktop app."
         );
+        println!("  mount --correct-og3k: interpolate supported SIGMA fp OG3K rows in the mounted view; the archive stays unchanged.");
+        println!("  The same --correct-og3k option is available for inspect, read and extract.");
         return Ok(());
     }
     #[cfg(target_os = "macos")]
     if args[0] == "mount" {
         listen_for_cancel();
         let path = PathBuf::from(args.get(1).context("Missing archive")?);
-        return cdng_image::mount::mount(&path, !args.iter().any(|a| a == "--no-open"), &CANCEL);
+        return cdng_image::mount::mount(&path, !args.iter().any(|a| a == "--no-open"),
+            args.iter().any(|a| a == "--correct-og3k"), &CANCEL);
     }
     if matches!(
         args[0].as_str(),
         "inspect" | "extract" | "read" | "materialize" | "sector-read"
     ) {
-        let archive = cdng_image::archive::Archive::open(
+        let archive = cdng_image::archive::Archive::open_for_mount(
             std::path::Path::new(args.get(1).context("Missing archive")?),
             256 << 20,
+            args.iter().skip(match args[0].as_str() { "inspect" => 2, "extract" | "materialize" => 3, "sector-read" => 5, _ => 6 })
+                .any(|a| a == "--correct-og3k"),
         )?;
         match args[0].as_str() {
             "inspect" => println!(

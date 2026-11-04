@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
@@ -558,6 +559,8 @@ struct Cache {
 pub struct Archive {
     pub index: Index,
     data: Mmap,
+    image: Option<crate::image_archive::ImageBacking>,
+    corrected: Vec<bool>,
     codec: Mutex<Option<Arc<jxl::Codec>>>,
     gates: Vec<Mutex<()>>,
     verified: Vec<AtomicBool>,
@@ -584,8 +587,29 @@ impl Drop for Lease<'_> {
 }
 impl Archive {
     pub fn open(path: &Path, budget: usize) -> Result<Self> {
+        Self::open_for_mount(path, budget, false)
+    }
+
+    /// Enable correction only for the explicitly requested read-only mount.
+    pub fn open_for_mount(path: &Path, budget: usize, correct_og3k: bool) -> Result<Self> {
         let file = File::open(path)?;
         let data = map(&file)?;
+        if !data.starts_with(MAGIC)
+            && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("dmg") || e.eq_ignore_ascii_case("iso"))
+        {
+            let (index, image) = crate::image_archive::open(&data, budget, correct_og3k)?;
+            let n = index.entries.len();
+            let corrected = index.entries.iter().map(|e| correct_og3k && e.frame.as_ref().is_some_and(|f|
+                image.headers.get(&f.header_offset).is_some_and(|(source,_)| dng::is_og3k(source.bytes(&data))))).collect();
+            return Ok(Self {
+                index, data, image: Some(image), corrected, codec: Mutex::new(None),
+                gates: (0..n).map(|_| Mutex::new(())).collect(),
+                verified: (0..n).map(|_| AtomicBool::new(false)).collect(),
+                cache: Mutex::new(Cache::default()), changed: Condvar::new(), budget,
+                hits: AtomicUsize::new(0), misses: AtomicUsize::new(0),
+                cache_keys: (0..n).collect(), groups: HashMap::new(),
+            });
+        }
         ensure!(
             data.len() >= HEADER && &data[..8] == MAGIC,
             "不是 CDNG JXL 封存檔"
@@ -730,9 +754,13 @@ impl Archive {
             }
         }
         let n = index.entries.len();
+        let corrected = index.entries.iter().map(|e| correct_og3k && e.frame.as_ref().is_some_and(|f|
+            f.width == 3024 && f.height == 2010 && dng::is_og3k(&data[f.header_offset as usize..f.header_offset as usize+f.header_len]))).collect();
         Ok(Self {
             index,
             data,
+            image: None,
+            corrected,
             codec: Mutex::new(None),
             gates: (0..n).map(|_| Mutex::new(())).collect(),
             verified: (0..n).map(|_| AtomicBool::new(false)).collect(),
@@ -745,22 +773,28 @@ impl Archive {
             groups,
         })
     }
+    pub fn corrected_frames(&self) -> usize { self.corrected.iter().filter(|&&v| v).count() }
     fn payload(&self, e: &Entry) -> &[u8] {
         &self.data[e.offset as usize..e.offset as usize + e.length]
     }
-    fn header<'a>(&'a self, f: &Frame) -> &'a [u8] {
-        &self.data[f.header_offset as usize..f.header_offset as usize + f.header_len]
+    fn header<'a>(&'a self, f: &Frame) -> Result<Cow<'a, [u8]>> {
+        if let Some(image) = &self.image {
+            let (source, layout) = &image.headers[&f.header_offset];
+            Ok(Cow::Owned(layout.header(source.bytes(&self.data))?))
+        } else {
+            Ok(Cow::Borrowed(&self.data[f.header_offset as usize..f.header_offset as usize + f.header_len]))
+        }
     }
     pub fn verify_entry(&self, i: usize) -> Result<()> {
         let e = self.index.entries.get(i).context("Missing archive entry")?;
         ensure!(
-            hash(self.payload(e)) == e.sha256,
+            hash(self.image.as_ref().map_or_else(|| self.payload(e), |image| image.sources[i].bytes(&self.data))) == e.sha256,
             "Payload checksum mismatch: {}",
             e.path
         );
-        if let Some(f) = &e.frame {
+        if let Some(f) = &e.frame && self.image.is_none() {
             ensure!(
-                hash(self.header(f)) == f.header_sha256,
+                hash(&self.header(f)?) == f.header_sha256,
                 "DNG header checksum mismatch: {}",
                 e.path
             );
@@ -862,6 +896,17 @@ impl Archive {
             } else if !self.verified[i].load(Ordering::Acquire) {
                 self.verify_entry(i)?;
             }
+            let raw_source = self.image.as_ref().and_then(|image| image.headers.get(&f.header_offset))
+                .is_some_and(|(_, header)| header.is_raw());
+            if raw_source {
+                let mut pixels = dng::decode(self.payload(e))?;
+                ensure!(pixels.len()==len, "RAW dimensions changed");
+                if !f.raw_sha256.is_empty() {
+                    ensure!(dng::pixel_hash(&pixels)==f.raw_sha256, "RAW checksum mismatch: {}",e.path);
+                }
+                if self.corrected[i] { crate::row_align::correct(&mut pixels,f.width,f.height,f.original_bits)?; }
+                return Ok(pixels);
+            }
             let codec = {
                 let mut slot = self
                     .codec
@@ -873,12 +918,15 @@ impl Archive {
                 slot.as_ref().unwrap().clone()
             };
             let pixels = if let Some(t) = &f.temporal {
-                let pixels = crate::temporal::decode_cube(&codec, self.payload(e), f.width, f.height, t.count, f.original_bits as u32)?;
+                let mut pixels = crate::temporal::decode_cube(&codec, self.payload(e), f.width, f.height, t.count, f.original_bits as u32)?;
                 ensure!(pixels.len() == len * t.count, "Temporal RAW length changed");
                 for (&member, raw) in self.groups[&key].iter().zip(pixels.chunks_exact(len)) {
                     let entry = &self.index.entries[member];
                     ensure!(dng::pixel_hash(raw) == entry.frame.as_ref().unwrap().raw_sha256,
                         "RAW checksum mismatch: {}", entry.path);
+                }
+                for (&member, raw) in self.groups[&key].iter().zip(pixels.chunks_exact_mut(len)) {
+                    if self.corrected[member] { crate::row_align::correct(raw,f.width,f.height,f.original_bits)?; }
                 }
                 pixels
             } else {
@@ -889,6 +937,7 @@ impl Archive {
                 };
                 jxl::cfa_permute(&mut pixels, f.width, f.height, true)?;
                 ensure!(dng::pixel_hash(&pixels) == f.raw_sha256, "RAW checksum mismatch: {}", e.path);
+                if self.corrected[i] { crate::row_align::correct(&mut pixels,f.width,f.height,f.original_bits)?; }
                 pixels
             };
             Ok(pixels)
@@ -932,12 +981,14 @@ impl Archive {
                 "Big-endian host is unsupported"
             );
             if at < f.header_len {
-                ensure!(
-                    hash(self.header(f)) == f.header_sha256,
-                    "DNG header checksum mismatch"
-                );
+                if self.image.is_some() && !self.verified[i].load(Ordering::Acquire) { self.verify_entry(i)?; }
+                let mut header = self.header(f)?;
+                if self.image.is_none() {
+                    ensure!(hash(&header) == f.header_sha256, "DNG header checksum mismatch");
+                }
+                if self.corrected[i] { dng::clear_raw_digests(header.to_mut())?; }
                 let k = (f.header_len - at).min(n);
-                out[..k].copy_from_slice(&self.header(f)[at..at + k]);
+                out[..k].copy_from_slice(&header[at..at + k]);
                 at += k;
                 copied = k;
             }
@@ -961,7 +1012,7 @@ impl Archive {
     }
     pub fn stats(&self) -> Value {
         let c = self.cache.lock().unwrap();
-        json!({"cache_bytes":c.used,"reserved_bytes":c.reserved,"peak_bytes":c.peak,"budget_bytes":self.budget,"hits":self.hits.load(Ordering::Relaxed),"decoded_frames":self.misses.load(Ordering::Relaxed),"mount_installed":false,"jxl_backend":"cpu"})
+        json!({"cache_bytes":c.used,"reserved_bytes":c.reserved,"peak_bytes":c.peak,"budget_bytes":self.budget,"hits":self.hits.load(Ordering::Relaxed),"decoded_frames":self.misses.load(Ordering::Relaxed),"mount_installed":false,"jxl_backend":"cpu","og3k_aligned_frames":self.corrected_frames()})
     }
     pub fn export(&self, output: &Path, cancel: &AtomicBool) -> Result<()> {
         cancelled(cancel)?;

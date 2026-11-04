@@ -4,7 +4,7 @@
 use cdng_image::{
     Effort,
     dng::{self, Preview},
-    pack::{Clip, list_clips},
+    pack::{Clip, scan_clips},
 };
 use eframe::egui;
 use std::{
@@ -14,7 +14,7 @@ use std::{
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     time::{Duration, Instant},
@@ -33,6 +33,11 @@ const INFO_H: f32 = 18.; // preview info line
 enum JobEvent {
     Line(serde_json::Value),
     Exited { error: String },
+}
+
+enum ScanEvent {
+    Clip(Clip),
+    Finished(Result<(), String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -300,7 +305,65 @@ impl Player {
     }
 }
 
+/// Highlighted rows are separate from the checkboxes that determine what is packed.
+#[derive(Default)]
+struct ClipSelection {
+    rows: HashSet<usize>,
+    anchor: Option<usize>,
+    drag: Option<ClipDrag>,
+}
+
+struct ClipDrag {
+    origin: egui::Pos2,
+    screen_origin: egui::Pos2,
+    pressed_row: Option<usize>,
+    modifiers: egui::Modifiers,
+    original: HashSet<usize>,
+    started: bool,
+}
+
+impl ClipSelection {
+    fn click(&mut self, row: usize, shift: bool, additive: bool) {
+        if shift {
+            let anchor = *self.anchor.get_or_insert(row);
+            if !additive {
+                self.rows.clear();
+            }
+            self.rows.extend(anchor.min(row)..=anchor.max(row));
+        } else {
+            if additive {
+                if !self.rows.insert(row) {
+                    self.rows.remove(&row);
+                }
+            } else {
+                self.rows.clear();
+                self.rows.insert(row);
+            }
+            self.anchor = Some(row);
+        }
+    }
+
+    fn marquee(&mut self, end_y: f32, stride: f32, row_height: f32, count: usize) {
+        let Some(drag) = &self.drag else { return };
+        let low = drag.origin.y.min(end_y).max(0.);
+        let high = drag.origin.y.max(end_y).max(0.);
+        self.rows.clone_from(&drag.original);
+        if count == 0 {
+            return;
+        }
+        let first = (low / stride).floor() as usize;
+        let last = ((high / stride).floor() as usize).min(count - 1);
+        for row in first..=last {
+            if row as f32 * stride + row_height >= low {
+                self.rows.insert(row);
+            }
+        }
+        self.anchor = drag.pressed_row.or_else(|| (first < count).then_some(first));
+    }
+}
+
 struct App {
+    context: egui::Context,
     source: String,
     output: String,
     effort: Effort,
@@ -312,8 +375,11 @@ struct App {
     elapsed_seconds: Option<f64>,
     clips: Vec<(Clip, bool)>,
     active: Option<usize>,
+    clip_selection: ClipSelection,
     player: Player,
-    scan_rx: Option<mpsc::Receiver<(String, Result<Vec<Clip>, String>)>>,
+    scan_rx: Option<mpsc::Receiver<ScanEvent>>,
+    scan_cancel: Arc<AtomicBool>,
+    scan_default_included: bool,
     scan_source: String,
     scanning: bool,
     remembered: HashMap<String, bool>,
@@ -322,6 +388,8 @@ struct App {
     mount_rx: Option<mpsc::Receiver<MountEvent>>,
     #[cfg(target_os = "macos")]
     mount_status: String,
+    #[cfg(target_os = "macos")]
+    correct_og3k: bool,
 }
 
 /// Spawns this executable's command-line core and forwards its output lines.
@@ -382,6 +450,7 @@ impl App {
             }
         }
         let mut app = Self {
+            context: ctx.clone(),
             source: String::new(),
             output: String::new(),
             effort: Effort::Max,
@@ -393,8 +462,11 @@ impl App {
             elapsed_seconds: None,
             clips: Vec::new(),
             active: None,
+            clip_selection: ClipSelection::default(),
             player: Player::new(ctx),
             scan_rx: None,
+            scan_cancel: Arc::new(AtomicBool::new(false)),
+            scan_default_included: true,
             scan_source: String::new(),
             scanning: false,
             remembered: HashMap::new(),
@@ -403,6 +475,8 @@ impl App {
             mount_rx: None,
             #[cfg(target_os = "macos")]
             mount_status: String::new(),
+            #[cfg(target_os = "macos")]
+            correct_og3k: false,
         };
         if let Some(source) = initial_source {
             app.set_source(source);
@@ -478,8 +552,10 @@ impl App {
     #[cfg(target_os = "macos")]
     fn start_mount(&mut self, path: PathBuf) {
         let result = (|| -> Result<_, String> {
-            Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
-                .arg("mount").arg(path).stdin(Stdio::null())
+            let mut cmd = Command::new(std::env::current_exe().map_err(|e| e.to_string())?);
+            cmd.arg("mount").arg(path);
+            if self.correct_og3k { cmd.arg("--correct-og3k"); }
+            cmd.stdin(Stdio::null())
                 .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()
                 .map_err(|e| format!("Could not mount archive: {e}"))
         })();
@@ -498,7 +574,13 @@ impl App {
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
                     if value["mounted"].is_string() || value["already_mounted"].is_string() {
-                        let _ = tx.send(MountEvent::Status("Mounted in Finder · eject the volume when finished".into()));
+                        let status = match value["corrected_frames"].as_u64() {
+                            Some(n) if n > 0 => format!("Mounted in Finder · OG3K alignment: {n} frames · eject when finished"),
+                            Some(0) if value["og3k_alignment"].as_bool() == Some(true) => "Mounted in Finder · no supported OG3K frames found".into(),
+                            _ if value["og3k_alignment"].as_bool() == Some(true) => "Already mounted · OG3K alignment enabled".into(),
+                            _ => "Mounted in Finder · eject the volume when finished".into(),
+                        };
+                        let _ = tx.send(MountEvent::Status(status));
                     } else if value["ejected"].is_string() {
                         let _ = tx.send(MountEvent::Status("Archive ejected".into()));
                     }
@@ -543,9 +625,13 @@ impl App {
     }
 
     fn begin_scan(&mut self) {
-        if self.source.is_empty() || self.scanning || self.running() {
+        if self.running() {
             return;
         }
+        self.scan_cancel.store(true, Ordering::Relaxed);
+        // Dropping the old receiver also releases a scanner waiting to deliver
+        // a clip. Results from a previous source can never enter the new list.
+        self.scan_rx = None;
         self.remembered = if self.scan_source == self.source {
             self.clips.iter().map(|(c, s)| (c.relative.clone(), *s)).collect()
         } else {
@@ -553,15 +639,30 @@ impl App {
         };
         let source = self.source.clone();
         self.scan_source = source.clone();
-        self.scanning = true;
+        self.scanning = !source.is_empty();
+        self.scan_default_included = true;
         self.clips.clear();
         self.active = None;
+        self.clip_selection = ClipSelection::default();
         self.player.reset(0);
-        let (tx, rx) = mpsc::channel();
+        self.status.clear();
+        if !self.scanning {
+            return;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.scan_cancel = cancel.clone();
+        let (tx, rx) = mpsc::sync_channel(16);
         self.scan_rx = Some(rx);
+        let ctx = self.context.clone();
         std::thread::spawn(move || {
-            let result = list_clips(std::path::Path::new(&source)).map_err(|e| format!("{e:#}"));
-            let _ = tx.send((source, result));
+            let result = scan_clips(std::path::Path::new(&source), &cancel, |clip| {
+                if tx.send(ScanEvent::Clip(clip)).is_err() {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+                ctx.request_repaint();
+            }).map_err(|e| format!("{e:#}"));
+            let _ = tx.send(ScanEvent::Finished(result));
+            ctx.request_repaint();
         });
     }
 
@@ -582,28 +683,35 @@ impl App {
             }
             if mount_finished { self.mount_rx = None; }
         }
-        if let Some((source, result)) = self.scan_rx.as_ref().and_then(|r| r.try_recv().ok()) {
-            self.scanning = false;
-            self.scan_rx = None;
-            if source == self.source {
-                match result {
-                    Ok(clips) => {
-                        self.clips = clips
-                            .into_iter()
-                            .map(|c| {
-                                let selected = *self.remembered.get(&c.relative).unwrap_or(&true);
-                                (c, selected)
-                            })
-                            .collect();
-                        if !self.clips.is_empty() {
-                            self.select_clip(0);
-                        }
-                        self.status.clear();
+        // Bound work per repaint even when a source contains thousands of clips.
+        for _ in 0..64 {
+            let event = match self.scan_rx.as_ref().map(|r| r.try_recv()) {
+                Some(Ok(event)) => event,
+                Some(Err(mpsc::TryRecvError::Disconnected)) => ScanEvent::Finished(Err("Folder scan stopped unexpectedly; choose the folder again.".into())),
+                _ => break,
+            };
+            match event {
+                ScanEvent::Clip(clip) => {
+                    let selected = *self.remembered.get(&clip.relative).unwrap_or(&self.scan_default_included);
+                    self.clips.push((clip, selected));
+                    if self.active.is_none() {
+                        self.clip_selection.click(0, false, false);
+                        self.select_clip(0);
                     }
-                    Err(e) => {
-                        self.status = e;
+                }
+                ScanEvent::Finished(result) => {
+                    self.scanning = false;
+                    self.scan_rx = None;
+                    if let Err(error) = result {
+                        self.status = error;
+                        // An incomplete inventory must not enable compression.
+                        self.clips.clear();
+                        self.active = None;
+                        self.clip_selection = ClipSelection::default();
+                        self.player.reset(0);
                         self.scan_source.clear();
                     }
+                    break;
                 }
             }
         }
@@ -661,7 +769,7 @@ impl App {
                 self.progress = 0.;
             } else if ok {
                 self.progress = 1.;
-                if job.completed && self.choice == Choice::Temporal {
+                if job.completed {
                     self.completed_archive = Some(PathBuf::from(&self.output));
                 }
             } else {
@@ -671,8 +779,37 @@ impl App {
     }
 
     fn select_clip(&mut self, i: usize) {
-        self.active = Some(i);
-        self.player.reset(self.clips[i].0.frames.len() / 2);
+        if self.active != Some(i) {
+            self.active = Some(i);
+            self.player.reset(self.clips[i].0.frames.len() / 2);
+        }
+    }
+
+    fn set_highlighted_included(&mut self, included: bool) {
+        for &i in &self.clip_selection.rows {
+            if let Some((_, checked)) = self.clips.get_mut(i) {
+                *checked = included;
+            }
+        }
+    }
+
+    fn set_all_clips_included(&mut self, included: bool) {
+        self.clips.iter_mut().for_each(|(_, checked)| *checked = included);
+        self.scan_default_included = included;
+        if self.scanning {
+            self.remembered.clear();
+        }
+    }
+
+    fn click_clip_checkbox(&mut self, i: usize, included: bool, modifiers: egui::Modifiers) {
+        if modifiers.shift {
+            self.clip_selection.click(i, true, modifiers.command || modifiers.ctrl);
+        } else if !self.clip_selection.rows.contains(&i) {
+            self.clip_selection.click(i, false, false);
+        } else {
+            self.clip_selection.anchor = Some(i);
+        }
+        self.set_highlighted_included(included);
     }
 
     fn clip_header(&mut self, ui: &mut egui::Ui) {
@@ -683,38 +820,151 @@ impl App {
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.small_button("None").clicked() {
-                self.clips.iter_mut().for_each(|(_, s)| *s = false);
+                self.set_all_clips_included(false);
             }
             if ui.small_button("All").clicked() {
-                self.clips.iter_mut().for_each(|(_, s)| *s = true);
+                self.set_all_clips_included(true);
             }
         });
     }
 
     fn clip_list(&mut self, ui: &mut egui::Ui, h: f32) {
-        let mut clicked = None;
         egui::Frame::new().fill(egui::Color32::WHITE).corner_radius(4.).inner_margin(4).show(ui, |ui| {
-            egui::ScrollArea::vertical().id_salt("clips").auto_shrink([false, false]).max_height(h - 8.).show(ui, |ui| {
-                ui.set_min_height(h - 8.);
-                for (i, (clip, selected)) in self.clips.iter_mut().enumerate() {
-                    ui.horizontal(|ui| {
-                        ui.checkbox(selected, "");
-                        let name = if clip.relative.is_empty() { "/" } else { &clip.relative };
-                        let label = egui::Button::selectable(self.active == Some(i), name);
-                        if ui.add(label).clicked() {
-                            clicked = Some(i);
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(4.);
-                            ui.weak(format!("{} frames", clip.frames.len()));
-                        });
-                    });
-                }
+            ui.horizontal(|ui| {
+                ui.weak(format!("{} selected", self.clip_selection.rows.len()));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let enabled = !self.clip_selection.rows.is_empty();
+                    if ui.add_enabled(enabled, egui::Button::new("Exclude").small()).clicked() {
+                        self.set_highlighted_included(false);
+                    }
+                    if ui.add_enabled(enabled, egui::Button::new("Include").small()).clicked() {
+                        self.set_highlighted_included(true);
+                    }
+                });
             });
+            let row_height = 24.;
+            let stride = row_height + ui.spacing().item_spacing.y;
+            let list_height = (h - 8. - LINE_H).max(row_height);
+            let count = self.clips.len();
+            let mut checkbox_action = None;
+            let mut output = egui::ScrollArea::vertical().id_salt("clips")
+                .auto_shrink([false, false]).max_height(list_height).min_scrolled_height(list_height)
+                .scroll_source(egui::scroll_area::ScrollSource { drag: false, ..Default::default() })
+                .show_rows(ui, row_height, count, |ui, range| {
+                    for i in range {
+                        let (clip, included) = &self.clips[i];
+                        let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), row_height), egui::Sense::hover());
+                        let chosen = self.clip_selection.rows.contains(&i);
+                        if chosen {
+                            ui.painter().rect_filled(rect, 3., ui.visuals().selection.bg_fill);
+                        }
+                        let checkbox_rect = egui::Rect::from_min_size(rect.min, egui::vec2(22., row_height));
+                        let mut checked = *included;
+                        if ui.put(checkbox_rect, egui::Checkbox::without_text(&mut checked)).clicked() {
+                            checkbox_action = Some((i, checked));
+                        }
+                        let text_rect = egui::Rect::from_min_max(rect.min + egui::vec2(28., 0.), rect.max - egui::vec2(4., 0.));
+                        let font = egui::TextStyle::Body.resolve(ui.style());
+                        let count_text = ui.painter().layout_no_wrap(format!("{} frames", clip.frames.len()), font.clone(), ui.visuals().weak_text_color());
+                        let text_right = text_rect.right() - count_text.size().x - 6.;
+                        let name_rect = egui::Rect::from_min_max(text_rect.min, egui::pos2(text_right.max(text_rect.left()), text_rect.bottom()));
+                        let name = if clip.relative.is_empty() { "/" } else { &clip.relative };
+                        let color = if chosen { ui.visuals().selection.stroke.color } else { ui.visuals().text_color() };
+                        ui.painter().with_clip_rect(ui.clip_rect().intersect(name_rect)).text(
+                            name_rect.left_center(), egui::Align2::LEFT_CENTER, name, font, color,
+                        );
+                        ui.painter().galley(egui::pos2(text_rect.right() - count_text.size().x, text_rect.center().y - count_text.size().y / 2.), count_text, ui.visuals().weak_text_color());
+                        if self.active == Some(i) {
+                            ui.painter().line_segment([rect.left_top(), rect.left_bottom()], egui::Stroke::new(2_f32, egui::Color32::from_rgb(42, 113, 199)));
+                        }
+                        ui.interact(text_rect, ui.id().with(("clip-name", i)), egui::Sense::hover()).on_hover_text(name);
+                    }
+                });
+            let view = output.inner_rect.intersect(ui.clip_rect());
+            let label_view = egui::Rect::from_min_max(view.min + egui::vec2(28., 0.), view.max);
+            let response = ui.interact(label_view, ui.id().with("clip-selection"), egui::Sense::click_and_drag())
+                .on_hover_text("Drag to select · Shift-click for a range · Command/Ctrl-click to add");
+            let (pointer, pressed, released, down, modifiers, dt) = ui.input(|input| (
+                input.pointer.interact_pos(), input.pointer.primary_pressed(), input.pointer.primary_released(),
+                input.pointer.primary_down(), input.modifiers, input.stable_dt.clamp(0.001, 0.05),
+            ));
+            if let Some((i, checked)) = checkbox_action {
+                self.click_clip_checkbox(i, checked, modifiers);
+                ui.ctx().request_repaint();
+            }
+            if ui.is_enabled() {
+                if let Some(pointer) = pointer {
+                    let row_at = |y: f32, offset: f32| {
+                        let y = y - output.inner_rect.top() + offset;
+                        let row = (y.max(0.) / stride).floor() as usize;
+                        (y >= 0. && row < count && y - row as f32 * stride <= row_height).then_some(row)
+                    };
+                    if pressed && response.contains_pointer() && label_view.contains(pointer) {
+                        response.request_focus();
+                        let original = if modifiers.command || modifiers.ctrl || modifiers.shift {
+                            self.clip_selection.rows.clone()
+                        } else {
+                            HashSet::new()
+                        };
+                        self.clip_selection.drag = Some(ClipDrag {
+                            origin: egui::pos2(pointer.x - output.inner_rect.left(), pointer.y - output.inner_rect.top() + output.state.offset.y),
+                            screen_origin: pointer,
+                            pressed_row: row_at(pointer.y, output.state.offset.y),
+                            modifiers,
+                            original,
+                            started: false,
+                        });
+                    }
+                    if let Some(drag) = &mut self.clip_selection.drag {
+                        drag.started |= pointer.distance(drag.screen_origin) > 4.;
+                    }
+                    if self.clip_selection.drag.as_ref().is_some_and(|d| d.started) {
+                        if down {
+                            let edge = 24.;
+                            let speed = if pointer.y < view.top() + edge {
+                                -((view.top() + edge - pointer.y) / edge).clamp(0., 1.) * 500.
+                            } else if pointer.y > view.bottom() - edge {
+                                ((pointer.y - view.bottom() + edge) / edge).clamp(0., 1.) * 500.
+                            } else { 0. };
+                            let max_offset = (output.content_size.y - output.inner_rect.height()).max(0.);
+                            output.state.offset.y = (output.state.offset.y + speed * dt).clamp(0., max_offset);
+                            output.state.clone().store(ui.ctx(), output.id);
+                            ui.ctx().request_repaint();
+                        }
+                        let end_y = pointer.y - output.inner_rect.top() + output.state.offset.y;
+                        self.clip_selection.marquee(end_y, stride, row_height, count);
+                        if let Some(drag) = &self.clip_selection.drag {
+                            let start = egui::pos2(output.inner_rect.left() + drag.origin.x, output.inner_rect.top() + drag.origin.y - output.state.offset.y);
+                            let rect = egui::Rect::from_two_pos(start, pointer).intersect(view);
+                            let painter = ui.painter().with_clip_rect(view);
+                            painter.rect_filled(rect, 0., egui::Color32::from_rgba_unmultiplied(70, 130, 220, 35));
+                            painter.rect_stroke(rect, 0., egui::Stroke::new(1_f32, egui::Color32::from_rgb(70, 130, 220)), egui::StrokeKind::Inside);
+                        }
+                    }
+                    if released && let Some(drag) = self.clip_selection.drag.take() {
+                        if !drag.started && label_view.contains(pointer) {
+                            if let Some(row) = drag.pressed_row.filter(|r| Some(*r) == row_at(pointer.y, output.state.offset.y)) {
+                                self.clip_selection.click(row, drag.modifiers.shift, drag.modifiers.command || drag.modifiers.ctrl);
+                                self.select_clip(row);
+                            } else if !drag.modifiers.command && !drag.modifiers.ctrl && !drag.modifiers.shift {
+                                self.clip_selection.rows.clear();
+                            }
+                        }
+                        ui.ctx().request_repaint();
+                    }
+                }
+                if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Space)) {
+                    let included = !self.clip_selection.rows.iter().all(|&i| self.clips.get(i).is_none_or(|(_, checked)| *checked));
+                    self.set_highlighted_included(included);
+                }
+                if response.has_focus() && modifiers.command && ui.input(|i| i.key_pressed(egui::Key::A)) {
+                    self.clip_selection.rows = (0..count).collect();
+                }
+            }
+            if !down && !released {
+                self.clip_selection.drag = None;
+            }
         });
-        if let Some(i) = clicked {
-            self.select_clip(i);
-        }
     }
 
     /// Completed-file progress, with an activity pulse before the first file is ready.
@@ -766,7 +1016,10 @@ impl App {
                                 ui.set_width(LABEL_W);
                                 ui.label("Source");
                             });
-                            ui.add_sized([field_w, LINE_H], egui::TextEdit::singleline(&mut self.source).vertical_align(egui::Align::Center));
+                            let source_field = ui.add_sized([field_w, LINE_H], egui::TextEdit::singleline(&mut self.source).vertical_align(egui::Align::Center));
+                            if source_field.lost_focus() && self.source != self.scan_source {
+                                self.begin_scan();
+                            }
                             if ui.add_sized([PICK_W, LINE_H], egui::Button::new("Choose…")).clicked()
                                 && let Some(p) = rfd::FileDialog::new().pick_folder()
                             {
@@ -815,10 +1068,11 @@ impl App {
                         ui.add_space(GAP - 8.);
                         ui.allocate_ui_with_layout(egui::vec2(preview_w, body_h), egui::Layout::top_down(egui::Align::LEFT), |ui| {
                             ui.set_width(preview_w);
-                            let frames = self.active.map(|i| self.clips[i].0.frames.clone()).unwrap_or_default();
+                            let frames = self.active.and_then(|i| self.clips.get(i))
+                                .map_or(&[][..], |(clip, _)| clip.frames.as_slice());
                             let open = self.preview_open && !frames.is_empty();
                             if open {
-                                self.player.update(ui.ctx(), &frames);
+                                self.player.update(ui.ctx(), frames);
                             } else {
                                 self.player.playing = false; // closed: no decoding
                             }
@@ -836,7 +1090,7 @@ impl App {
                             ui.radio_value(&mut self.choice, Choice::Lj92, if cfg!(target_os = "macos") { "LJ92 + DMG" } else { "LJ92 + ISO" });
                             ui.add_space(12.);
                             ui.radio_value(&mut self.choice, Choice::Jxl, if cfg!(target_os = "macos") { "JPEG XL + DMG" } else { "JPEG XL + ISO" })
-                                .on_hover_text("Lossless JPEG XL archive. Conversion for DaVinci Resolve is not available for this format yet; choose LJ92 for Resolve.");
+                                .on_hover_text("Lossless JPEG XL. On macOS, use Mount archive or Open archive in this app to read ordinary DNG frames on demand. Opening the DMG directly in Finder exposes the stored JPEG XL DNGs.");
                             ui.add_space(12.);
                             ui.radio_value(&mut self.choice, Choice::Temporal, "Temporal JXL")
                                 .on_hover_text("Lossless compression across up to 8 consecutive frames. Compares temporal and independent representations and keeps the smaller one. Saves a .cdngt archive; requires this app to mount on macOS or extract on other platforms.");
@@ -854,7 +1108,8 @@ impl App {
                             }
                             if self.choice == Choice::Jxl {
                                 ui.add_space(8.);
-                                ui.weak("Resolve conversion pending");
+                                ui.weak(if cfg!(target_os = "macos") { "Use this app to mount as ordinary DNG" }
+                                    else { "JPEG XL DNG · requires a compatible reader" });
                             } else if self.choice == Choice::Temporal {
                                 ui.weak(if cfg!(target_os = "macos") {
                                     "App-mounted archive · requires this app"
@@ -872,6 +1127,14 @@ impl App {
                                     .on_hover_text("Elapsed time from Start to completion, including startup, compression, packing, verification and pauses");
                             });
                         }
+                    });
+                    #[cfg(target_os = "macos")]
+                    ui.add_enabled_ui(idle && self.mount_rx.is_none(), |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.checkbox(&mut self.correct_og3k, "Correct OG3K row alignment when mounting")
+                                .on_hover_text("SIGMA fp OG3K (3024×2010): interpolates the mounted RAW pixels; the saved archive remains unchanged. Other frames are not altered. Eject and remount to change.");
+                            if self.correct_og3k { ui.weak("Interpolated view; archive unchanged."); }
+                        });
                     });
                     row(ui, &mut |ui| {
                         let can_start = idle && !self.scanning && self.clips.iter().any(|(_, s)| *s);
@@ -894,7 +1157,7 @@ impl App {
                         }
                         #[cfg(target_os = "macos")]
                         if ui.add_enabled(idle && self.mount_rx.is_none(), egui::Button::new("Open archive…").min_size(size)).clicked()
-                            && let Some(path) = rfd::FileDialog::new().add_filter("CDNG archive", &["cdngt", "cdngj"]).pick_file()
+                            && let Some(path) = rfd::FileDialog::new().add_filter("CDNG archive or image", &["cdngt", "cdngj", "dmg", "iso"]).pick_file()
                         {
                             self.start_mount(path);
                         }
@@ -916,6 +1179,8 @@ impl eframe::App for App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        self.scan_cancel.store(true, Ordering::Relaxed);
+        self.scan_rx = None;
         // never leave a core running without its window
         self.cancel();
         if let Some(job) = &mut self.job {
@@ -950,6 +1215,152 @@ pub fn run(initial_source: Option<PathBuf>) -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn selection_test_app(count: usize) -> (egui::Context, App) {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None);
+        app.source = "/source".into();
+        app.output = "/output.dmg".into();
+        app.clips = (0..count).map(|i| (
+            Clip { relative: format!("clip-{i:03}"), frames: vec![], bytes: 0 }, true,
+        )).collect();
+        (ctx, app)
+    }
+
+    fn render_selection(app: &mut App, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: egui::Modifiers) -> egui::FullOutput {
+        ctx.run(egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320., 300.))),
+            events, modifiers, ..Default::default()
+        }, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.set_width(LIST_W);
+                app.clip_list(ui, 220.);
+            });
+        })
+    }
+
+    fn selection_text(output: &egui::FullOutput, name: &str) -> egui::Pos2 {
+        output.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.job.text == name => Some(s.clip_rect.intersect(s.shape.visual_bounding_rect()).center()),
+            _ => None,
+        }).unwrap_or_else(|| panic!("missing visible text {name}"))
+    }
+
+    fn selection_pointer(app: &mut App, ctx: &egui::Context, position: egui::Pos2, pressed: bool, modifiers: egui::Modifiers) {
+        render_selection(app, ctx, vec![
+            egui::Event::PointerMoved(position),
+            egui::Event::PointerButton { pos: position, button: egui::PointerButton::Primary, pressed, modifiers },
+        ], modifiers);
+    }
+
+    fn click_selection_text(app: &mut App, ctx: &egui::Context, name: &str, modifiers: egui::Modifiers) {
+        let output = render_selection(app, ctx, vec![], modifiers);
+        let position = selection_text(&output, name);
+        selection_pointer(app, ctx, position, true, modifiers);
+        selection_pointer(app, ctx, position, false, modifiers);
+    }
+
+    #[test]
+    fn clip_shift_reverse_and_command_selection_drives_batch_exclusion() {
+        let (ctx, mut app) = selection_test_app(8);
+        click_selection_text(&mut app, &ctx, "clip-004", egui::Modifiers::NONE);
+        click_selection_text(&mut app, &ctx, "clip-001", egui::Modifiers::SHIFT);
+        assert_eq!(app.clip_selection.rows, (1..=4).collect());
+        assert_eq!(app.active, Some(1));
+        let additive = egui::Modifiers { command: true, ctrl: true, ..Default::default() };
+        click_selection_text(&mut app, &ctx, "clip-000", additive);
+        assert_eq!(app.clip_selection.rows, (0..=4).collect());
+        click_selection_text(&mut app, &ctx, "clip-002", additive);
+        assert_eq!(app.clip_selection.rows, [0, 1, 3, 4].into_iter().collect());
+        click_selection_text(&mut app, &ctx, "Exclude", egui::Modifiers::NONE);
+        assert_eq!(app.clips.iter().map(|(_, included)| *included).collect::<Vec<_>>(),
+            [false, false, true, false, false, true, true, true]);
+        let args = app.pack_args();
+        for i in [0, 1, 3, 4] {
+            assert!(args.windows(2).any(|a| a[0] == "--exclude-clip" && a[1] == format!("clip-{i:03}")));
+        }
+        click_selection_text(&mut app, &ctx, "Include", egui::Modifiers::NONE);
+        assert!(app.clips.iter().all(|(_, included)| *included));
+    }
+
+    #[test]
+    fn shift_checkbox_applies_one_value_to_the_range_in_both_directions() {
+        let (ctx, mut app) = selection_test_app(8);
+        click_selection_text(&mut app, &ctx, "clip-001", egui::Modifiers::NONE);
+        // Checkbox hit testing is exercised through actual pointer events.
+        let output = render_selection(&mut app, &ctx, vec![], egui::Modifiers::SHIFT);
+        let name = selection_text(&output, "clip-004");
+        let name_left = output.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.job.text == "clip-004" => Some(t.pos.x), _ => None,
+        }).unwrap();
+        let checkbox = egui::pos2(name_left - 17., name.y);
+        selection_pointer(&mut app, &ctx, checkbox, true, egui::Modifiers::SHIFT);
+        selection_pointer(&mut app, &ctx, checkbox, false, egui::Modifiers::SHIFT);
+        assert_eq!(app.clip_selection.rows, (1..=4).collect());
+        assert_eq!(app.clips.iter().map(|(_, included)| *included).collect::<Vec<_>>(),
+            [true, false, false, false, false, true, true, true]);
+        app.clip_selection.click(4, false, false);
+        app.click_clip_checkbox(1, true, egui::Modifiers::SHIFT);
+        assert!(app.clips.iter().all(|(_, included)| *included));
+        assert_eq!(app.clip_selection.rows, (1..=4).collect());
+    }
+
+    #[test]
+    fn clip_marquee_selection_and_auto_scroll_reach_offscreen_rows() {
+        let (ctx, mut app) = selection_test_app(1000);
+        let output = render_selection(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+        let start = selection_text(&output, "clip-000");
+        let end = egui::pos2(start.x + 70., 225.);
+        selection_pointer(&mut app, &ctx, start, true, egui::Modifiers::NONE);
+        for _ in 0..40 {
+            render_selection(&mut app, &ctx, vec![egui::Event::PointerMoved(end)], egui::Modifiers::NONE);
+        }
+        selection_pointer(&mut app, &ctx, end, false, egui::Modifiers::NONE);
+        assert!(app.clip_selection.drag.is_none());
+        assert!(app.clip_selection.rows.contains(&0));
+        assert!(app.clip_selection.rows.iter().max().copied().unwrap_or(0) > 10,
+            "dragging at the bottom must scroll and select rows beyond the initial viewport");
+        app.set_highlighted_included(false);
+        assert_eq!(app.clips.iter().filter(|(_, included)| !included).count(), app.clip_selection.rows.len());
+        assert!(app.clips.last().unwrap().1, "unreached rows remain included");
+    }
+
+    #[test]
+    fn marquee_adds_to_existing_selection_and_list_only_paints_visible_rows() {
+        let (ctx, mut app) = selection_test_app(10_000);
+        app.clip_selection.click(9999, false, false);
+        let output = render_selection(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+        let painted = output.shapes.iter().filter(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.job.text.starts_with("clip-"))).count();
+        assert!(painted > 0 && painted < 20, "large lists must virtualize rows");
+        let start = selection_text(&output, "clip-001");
+        let end = selection_text(&output, "clip-003") + egui::vec2(30., 0.);
+        let additive = egui::Modifiers { command: true, ctrl: true, ..Default::default() };
+        selection_pointer(&mut app, &ctx, start, true, additive);
+        render_selection(&mut app, &ctx, vec![egui::Event::PointerMoved(end)], additive);
+        selection_pointer(&mut app, &ctx, end, false, additive);
+        assert_eq!(app.clip_selection.rows, [1, 2, 3, 9999].into_iter().collect());
+    }
+
+    #[test]
+    fn clip_select_all_and_none_apply_to_later_scan_results() {
+        let (_ctx, mut app) = selection_test_app(0);
+        let (tx, rx) = mpsc::sync_channel(16);
+        app.scan_rx = Some(rx);
+        app.scanning = true;
+        app.remembered.insert("late-1".into(), true);
+        app.set_all_clips_included(false);
+        tx.send(ScanEvent::Clip(Clip { relative: "late-1".into(), frames: vec![], bytes: 0 })).unwrap();
+        app.poll();
+        assert!(!app.clips[0].1, "None includes clips discovered after the click");
+        assert_eq!(app.clip_selection.rows, [0].into_iter().collect());
+        app.remembered.insert("late-2".into(), false);
+        app.set_all_clips_included(true);
+        tx.send(ScanEvent::Clip(Clip { relative: "late-2".into(), frames: vec![], bytes: 0 })).unwrap();
+        tx.send(ScanEvent::Finished(Ok(()))).unwrap();
+        app.poll();
+        assert!(app.clips.iter().all(|(_, included)| *included));
+        assert!(!app.scanning);
+    }
 
     fn controlled_player(ctx: &egui::Context) -> (Player, mpsc::Receiver<(u64, usize, PathBuf)>, mpsc::Sender<(u64, usize, Result<Preview, String>)>) {
         let mut player = Player::new(ctx);
@@ -1049,6 +1460,43 @@ mod tests {
         )
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn og3k_alignment_checkbox_is_off_by_default_and_can_be_selected() {
+        let ctx=egui::Context::default();
+        let mut app=App::with_context(&ctx,None);
+        assert!(!app.correct_og3k);
+        let size=egui::vec2(720.,760.);
+        let out=draw(&mut app,&ctx,size,egui::Pos2::ZERO);
+        let pos=out.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.job.text=="Correct OG3K row alignment when mounting" => Some(s.shape.visual_bounding_rect().center()),
+            _=>None,
+        }).expect("mount correction option should be visible");
+        for pressed in [true,false] {
+            let _=ctx.run(egui::RawInput {
+                screen_rect:Some(egui::Rect::from_min_size(egui::Pos2::ZERO,size)),
+                events:vec![egui::Event::PointerMoved(pos),egui::Event::PointerButton { pos,
+                    button:egui::PointerButton::Primary,pressed,modifiers:egui::Modifiers::NONE }],
+                ..Default::default()
+            },|ctx|app.update_ui(ctx));
+        }
+        assert!(app.correct_og3k);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn og3k_mount_controls_remain_visible_at_default_window_size() {
+        let ctx=egui::Context::default();
+        let mut app=App::with_context(&ctx,None);
+        app.correct_og3k=true;
+        let out=draw(&mut app,&ctx,egui::vec2(720.,680.),egui::Pos2::ZERO);
+        let button=out.shapes.iter().find(|s| match &s.shape {
+            egui::Shape::Text(t)=>t.galley.job.text=="Open archive…", _=>false,
+        }).expect("Open archive button should be drawn");
+        assert!(button.clip_rect.contains_rect(button.shape.visual_bounding_rect()),
+            "the correction explanation pushed the mount button offscreen");
+    }
+
     #[test]
     fn choosing_each_method_updates_filename_and_core_arguments() {
         let ctx = egui::Context::default();
@@ -1088,6 +1536,72 @@ mod tests {
         app.choice = Choice::Temporal;
         app.normalize_output_extension();
         assert_eq!(app.output, "/output folder/typed-without-extension.cdngt");
+    }
+
+    #[test]
+    fn scan_displays_clips_before_completion_and_keeps_user_choices() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None);
+        let (tx, rx) = mpsc::channel();
+        app.scan_rx = Some(rx);
+        app.scanning = true;
+        let clip = |name: &str| Clip { relative: name.into(), frames: vec![PathBuf::from("frame.dng")], bytes: 123 };
+        tx.send(ScanEvent::Clip(clip("A"))).unwrap();
+        app.poll();
+        assert!(app.scanning);
+        assert_eq!(app.clips.len(), 1);
+        assert_eq!(app.active, Some(0));
+        app.clips[0].1 = false;
+        tx.send(ScanEvent::Clip(clip("B"))).unwrap();
+        tx.send(ScanEvent::Finished(Ok(()))).unwrap();
+        app.poll();
+        assert!(!app.scanning);
+        assert!(app.scan_rx.is_none());
+        assert_eq!(app.clips.len(), 2);
+        assert!(!app.clips[0].1, "later results must not replace the user's exclusions");
+        assert!(app.clips[1].1);
+        assert_eq!(app.active, Some(0));
+    }
+
+    #[test]
+    fn disconnected_scanner_does_not_leave_a_permanent_spinner() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None);
+        let (tx, rx) = mpsc::channel();
+        app.scan_rx = Some(rx);
+        app.scanning = true;
+        drop(tx);
+        app.poll();
+        assert!(!app.scanning && app.scan_rx.is_none());
+        assert!(!app.status.is_empty());
+    }
+
+    #[test]
+    fn scan_error_disables_partial_inventory_and_source_change_discards_old_results() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None);
+        let (tx, rx) = mpsc::channel();
+        app.scan_rx = Some(rx);
+        app.scanning = true;
+        tx.send(ScanEvent::Clip(Clip { relative: "A".into(), frames: vec![PathBuf::new()], bytes: 1 })).unwrap();
+        tx.send(ScanEvent::Finished(Err("Directory unavailable".into()))).unwrap();
+        app.poll();
+        assert!(!app.scanning && app.clips.is_empty() && app.active.is_none());
+        assert_eq!(app.status, "Directory unavailable");
+
+        let old_cancel = app.scan_cancel.clone();
+        let (old_tx, old_rx) = mpsc::sync_channel(1);
+        app.scan_rx = Some(old_rx);
+        app.scanning = true;
+        old_tx.send(ScanEvent::Clip(Clip { relative: "stale".into(), frames: vec![], bytes: 0 })).unwrap();
+        // Clearing the source must cancel a running scan instead of keeping its
+        // receiver or waiting for an entire external disk to finish enumerating.
+        app.source.clear();
+        app.begin_scan();
+        assert!(old_cancel.load(Ordering::Relaxed));
+        assert!(old_tx.send(ScanEvent::Finished(Ok(()))).is_err());
+        app.poll();
+        assert!(app.clips.is_empty() && !app.scanning && app.scan_rx.is_none());
     }
 
     /// Empty text has an empty (inf..-inf) mesh, so text is judged by its position and layout box.

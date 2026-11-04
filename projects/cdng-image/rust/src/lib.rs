@@ -8,6 +8,7 @@ mod gpu_prune;
 pub mod gpu_batch;
 pub mod hfs;
 pub mod iso;
+mod image_archive;
 pub mod jxl;
 pub mod temporal;
 #[cfg(target_os = "macos")]
@@ -15,7 +16,9 @@ pub mod mount;
 pub mod pack;
 mod output;
 mod ram;
+mod row_align;
 mod tile_buffer;
+mod volume;
 pub mod virtual_disk;
 
 use serde::{Deserialize, Serialize};

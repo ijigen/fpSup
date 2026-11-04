@@ -71,6 +71,21 @@ mod tests {
         assert_eq!(fs::read(&image).unwrap(), fs::read(&scanned).unwrap());
         fs::remove_dir_all(root).unwrap();
     }
+
+    #[test]
+    fn descriptors_use_saved_filename_with_unicode_joliet_label() {
+        let path = std::env::temp_dir().join(format!("cdng-volume-{}-{}.iso", std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
+        let iso = Iso::new(File::create(&path).unwrap(), &[], "My 拍攝.v2").unwrap();
+        let primary = iso.descriptor(0, 40);
+        let joliet = iso.descriptor(1, 40);
+        assert_eq!(std::str::from_utf8(&primary[40..72]).unwrap().trim_end(), "MY____V2");
+        let units: Vec<_> = joliet[40..72].chunks_exact(2)
+            .map(|b| u16::from_be_bytes([b[0], b[1]])).collect();
+        assert_eq!(String::from_utf16(&units).unwrap().trim_end(), "My 拍攝.v2");
+        drop(iso);
+        fs::remove_file(path).unwrap();
+    }
 }
 fn both16(v: u16) -> Vec<u8> {
     [v.to_le_bytes(), v.to_be_bytes()].concat()
@@ -457,7 +472,7 @@ impl Iso {
             b[at..at + len].copy_from_slice(&raw[..len]);
         }
         text(&mut b, 8, 32, "CDNG IMAGE", j);
-        text(&mut b, 40, 32, &self.volume, j);
+        text(&mut b, 40, 32, &crate::volume::iso_label(&self.volume, j == 1), j);
         b[80..88].copy_from_slice(&both32(total));
         if j == 1 {
             b[88..91].copy_from_slice(b"%/E");

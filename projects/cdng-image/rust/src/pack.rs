@@ -20,6 +20,9 @@ use std::{
 
 const MANIFEST: &str = "_CDNG_IMAGE_MANIFEST.json";
 
+#[path = "clip_scan.rs"]
+mod clip_scan;
+
 pub(crate) enum Work {
     Compressed(Vec<u8>, dng::Info, String, String),
     Copy,
@@ -363,9 +366,17 @@ fn groups(items: &[Item]) -> BTreeMap<String, Clip> {
     clips
 }
 pub fn list_clips(source: &Path) -> Result<Vec<Clip>> {
-    Ok(groups(&inventory(&source.canonicalize()?)?)
-        .into_values()
-        .collect())
+    let mut clips = Vec::new();
+    scan_clips(source, &AtomicBool::new(false), |clip| clips.push(clip))?;
+    clips.sort_by(|a, b| a.relative.cmp(&b.relative));
+    Ok(clips)
+}
+
+/// Discover preview clips without building the full, fingerprinted packing inventory.
+/// Each complete clip is delivered as soon as its directory has been enumerated.
+/// The packer still takes and validates its own inventory immediately before writing.
+pub fn scan_clips(source: &Path, cancel: &AtomicBool, emit: impl FnMut(Clip)) -> Result<()> {
+    clip_scan::scan(source, cancel, emit)
 }
 pub(crate) fn select_items(items: Vec<Item>, excluded: &[String]) -> Result<Vec<Item>> {
     if excluded.is_empty() {
@@ -775,20 +786,7 @@ fn pack_with_verification_mode(
         false,
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
     ));
-    let volume: String = source
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .chars()
-        .take(16)
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c.to_ascii_uppercase()
-            } else {
-                '_'
-            }
-        })
-        .collect();
+    let volume = crate::volume::name(&output);
     let is_dmg = output.extension().is_some_and(|e| e.eq_ignore_ascii_case("dmg"));
     let pipelined_verify = options.verify && cfg!(any(unix, windows)) && pipeline_requested;
     let readback_file = if pipelined_verify { Some(readback_handle(&file, partial.path())?) } else { None };

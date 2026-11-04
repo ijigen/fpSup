@@ -902,12 +902,16 @@ impl BitArray16 {
     }
 
     fn get_lsb(&self) -> u16 {
-        self.storage >> (16 - self.nbits)
+        if self.is_empty() {
+            0
+        } else {
+            self.storage >> (16 - self.nbits)
+        }
     }
 
     fn from_lsb(nbits: usize, value: u16) -> Self {
         Self {
-            storage: value << (16 - nbits),
+            storage: if nbits == 0 { 0 } else { value << (16 - nbits) },
             nbits,
         }
     }
@@ -917,6 +921,22 @@ impl BitArray16 {
 mod tests {
     use super::{BitstreamJPEG, HuffTableBuilder};
     use alloc::vec::Vec;
+
+    #[test]
+    fn bit_array_handles_empty_and_full_width_codes() {
+        use super::BitArray16;
+
+        assert_eq!(BitArray16::default().get_lsb(), 0);
+        for value in [0, 1, 0x55aa, u16::MAX] {
+            assert_eq!(BitArray16::from_lsb(0, value), BitArray16::default());
+            for nbits in 1..=16 {
+                let code = BitArray16::from_lsb(nbits, value);
+                let mask = u16::MAX >> (16 - nbits);
+                assert_eq!(code.len(), nbits);
+                assert_eq!(code.get_lsb(), value & mask);
+            }
+        }
+    }
 
     #[test]
     fn bounded_plan_and_stack_header_match_exhaustive_serialization() {
