@@ -16,7 +16,6 @@ static CANCEL: AtomicBool = AtomicBool::new(false);
 enum Codec {
     Lj92,
     Jxl,
-    Temporal,
 }
 
 impl Codec {
@@ -24,24 +23,15 @@ impl Codec {
         match name {
             "lj92" => Ok(Self::Lj92),
             "jxl" => Ok(Self::Jxl),
-            "temporal" => Ok(Self::Temporal),
-            _ => bail!("Invalid codec (lj92, jxl or temporal)"),
+            _ => bail!("Invalid codec (choose lj92 or jxl)"),
         }
     }
 }
 
 fn output_codec(output: &std::path::Path, requested: Option<Codec>) -> Result<Codec> {
-    let temporal = output.extension().is_some_and(|e| e.eq_ignore_ascii_case("cdngt"));
-    if temporal {
-        anyhow::ensure!(requested.is_none_or(|c| c == Codec::Temporal),
-            ".cdngt requires --codec temporal; use .dmg or .iso for LJ92 and single-frame JPEG XL");
-        return Ok(Codec::Temporal);
-    }
-    anyhow::ensure!(requested != Some(Codec::Temporal),
-        "Temporal compression requires an output filename ending in .cdngt");
-    Ok(requested.unwrap_or_else(|| {
-        if output.extension().is_some_and(|e| e.eq_ignore_ascii_case("cdngj")) { Codec::Jxl } else { Codec::Lj92 }
-    }))
+    anyhow::ensure!(output.extension().is_some_and(|e| e.eq_ignore_ascii_case("dmg") || e.eq_ignore_ascii_case("iso")),
+        "New output must be a .dmg or .iso disk image; existing .cdngt and .cdngj archives can still be opened");
+    Ok(requested.unwrap_or(Codec::Lj92))
 }
 
 fn listen_for_cancel() {
@@ -87,7 +77,7 @@ fn run() -> Result<()> {
     }
     if args[0] == "--help" {
         println!(
-            "CDNG Image\ncdng-image pack SOURCE OUTPUT.dmg [--codec lj92|jxl] [--effort fast|balanced|max]\ncdng-image pack SOURCE OUTPUT.cdngt [--codec temporal] [--effort fast|balanced|max]\n  Default effort: max (Smallest), prioritizing compression ratio. All modes are lossless; faster modes may produce larger files.\n  jxl: Metal on macOS (every frame decoded again on the GPU); --backend cpu uses libjxl.\n  temporal: compares up to 8 consecutive frames and keeps the smaller lossless representation;\n    writes an app-mounted .cdngt archive. Metal on macOS, CPU on other platforms.\n  --exclude-clip FOLDER may be repeated. Progress is printed as one JSON object per line.\n  A line \"cancel\" on stdin (or Ctrl+C) stops and removes the unfinished output. Every file is always verified.\n  expert: --backend cpu|metal|cuda (default: metal on macOS), --workers N (default: automatic), --ram-buffer-mib MiB\ncdng-image mount ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso [--no-open]   macOS: mount as ordinary DNG in Finder until ejected\ncdng-image inspect ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso\ncdng-image extract ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso NEW_DIRECTORY\ncdng-image read ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso PATH OFFSET LENGTH NEW_OUTPUT\nNo arguments opens the desktop app."
+            "CDNG Image\ncdng-image pack SOURCE OUTPUT.dmg [--codec lj92|jxl] [--effort fast|balanced|max]\n  Default effort: max (Smallest), prioritizing compression ratio. All modes are lossless; faster modes may produce larger files.\n  jxl: Metal on macOS (every frame decoded again on the GPU); --backend cpu uses libjxl.\n  --exclude-clip FOLDER may be repeated. Progress is printed as one JSON object per line.\n  A line \"cancel\" on stdin (or Ctrl+C) stops and removes the unfinished output. Every file is always verified.\n  expert: --backend cpu|metal|cuda (default: metal on macOS), --workers N (default: automatic), --ram-buffer-mib MiB\ncdng-image mount ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso [--no-open]   macOS: mount as ordinary DNG in Finder until ejected\ncdng-image inspect ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso\ncdng-image extract ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso NEW_DIRECTORY\ncdng-image read ARCHIVE.cdngj|ARCHIVE.cdngt|IMAGE.dmg|IMAGE.iso PATH OFFSET LENGTH NEW_OUTPUT\nNo arguments opens the desktop app."
         );
         println!("  mount --correct-og3k: interpolate supported SIGMA fp OG3K rows in the mounted view; the archive stays unchanged.");
         println!("  The same --correct-og3k option is available for inspect, read and extract.");
@@ -210,7 +200,6 @@ fn run() -> Result<()> {
         jxl: false,
     };
     let mut workers_specified = false;
-    let mut backend_specified = false;
     let mut effort = None;
     let mut requested_codec = None;
     let mut i = 3;
@@ -240,7 +229,6 @@ fn run() -> Result<()> {
                     Some("cuda") => Backend::Cuda,
                     _ => bail!("Invalid backend"),
                 };
-                backend_specified = true;
             }
             "--effort" => {
                 i += 1;
@@ -266,17 +254,10 @@ fn run() -> Result<()> {
     }
     let codec = output_codec(&options.output, requested_codec)?;
     options.jxl = codec != Codec::Lj92;
-    if codec == Codec::Temporal && !cfg!(target_os = "macos") && !backend_specified {
-        options.backend = Backend::Cpu;
-    }
-    let jxl = options.jxl || options.output.extension().is_some_and(|e| e.eq_ignore_ascii_case("cdngj"));
+    let jxl = options.jxl;
     // Honour explicit effort for LJ92 as well as CPU JPEG XL. Every setting is
     // lossless; more effort searches more predictors and tile geometries.
     options.effort = effort.unwrap_or(Effort::Max);
-    // the old .cdngj archive codes with libjxl on the CPU; JPEG XL DMGs use Metal on macOS
-    if options.output.extension().is_some_and(|e| e.eq_ignore_ascii_case("cdngj")) {
-        options.backend = Backend::Cpu;
-    }
     if !workers_specified {
         options.workers = cdng_image::pack::auto_workers(options.backend, jxl);
     }
@@ -291,21 +272,15 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn temporal_extension_selects_codec_and_rejects_mislabeled_output() {
-        for name in ["clip.cdngt", "clip.CDNGT"] {
-            assert_eq!(output_codec(Path::new(name), None).unwrap(), Codec::Temporal);
-            assert_eq!(output_codec(Path::new(name), Some(Codec::Temporal)).unwrap(), Codec::Temporal);
-            for codec in [Codec::Lj92, Codec::Jxl] {
-                assert!(output_codec(Path::new(name), Some(codec)).is_err());
-            }
-        }
-        for name in ["clip.dmg", "clip.iso", "clip.cdngj", "clip"] {
-            assert!(output_codec(Path::new(name), Some(Codec::Temporal)).is_err());
+    fn new_output_requires_disk_image_and_legacy_archives_remain_read_only() {
+        for name in ["clip.cdngt", "clip.CDNGT", "clip.cdngj", "clip"] {
+            assert!(output_codec(Path::new(name), None).is_err());
+            assert!(output_codec(Path::new(name), Some(Codec::Jxl)).is_err());
         }
         assert_eq!(output_codec(Path::new("clip.dmg"), None).unwrap(), Codec::Lj92);
-        assert_eq!(output_codec(Path::new("clip.cdngj"), None).unwrap(), Codec::Jxl);
         assert_eq!(output_codec(Path::new("clip.dmg"), Some(Codec::Jxl)).unwrap(), Codec::Jxl);
-        assert_eq!(Codec::parse("temporal").unwrap(), Codec::Temporal);
+        assert_eq!(output_codec(Path::new("clip.ISO"), Some(Codec::Jxl)).unwrap(), Codec::Jxl);
+        assert!(Codec::parse("temporal").is_err());
         assert!(Codec::parse("unknown").is_err());
     }
 }

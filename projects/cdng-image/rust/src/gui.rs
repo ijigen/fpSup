@@ -44,19 +44,17 @@ enum ScanEvent {
 enum Choice {
     Lj92,
     Jxl,
-    Temporal,
 }
 
 impl Choice {
     fn extension(self) -> &'static str {
-        if self == Self::Temporal { "cdngt" } else if cfg!(target_os = "macos") { "dmg" } else { "iso" }
+        if cfg!(target_os = "macos") { "dmg" } else { "iso" }
     }
 
     fn codec(self) -> &'static str {
         match self {
             Self::Lj92 => "lj92",
             Self::Jxl => "jxl",
-            Self::Temporal => "temporal",
         }
     }
 
@@ -508,7 +506,7 @@ impl App {
     fn pack_args(&self) -> Vec<String> {
         let mut args = vec!["pack".into(), self.source.clone(), self.output.clone(),
             "--codec".into(), self.choice.codec().into()];
-        // macOS codes both JPEG XL formats on Metal with one setting.
+        // macOS codes JPEG XL on Metal with one setting.
         if self.choice.has_effort() {
             let effort = match self.effort {
                 Effort::Fast => "fast",
@@ -753,7 +751,7 @@ impl App {
                                 self.status = name.to_owned();
                             }
                         } else if !job.paused && !job.cancelling && p["stage"] == "finalize" {
-                            self.status = if self.choice == Choice::Temporal { "Finishing archive…" } else { "Finishing disk image…" }.into();
+                            self.status = "Finishing disk image…".into();
                         }
                     }
                     JobEvent::Exited { error } => finished = Some(error),
@@ -1091,9 +1089,6 @@ impl App {
                             ui.add_space(12.);
                             ui.radio_value(&mut self.choice, Choice::Jxl, if cfg!(target_os = "macos") { "JPEG XL + DMG" } else { "JPEG XL + ISO" })
                                 .on_hover_text("Lossless JPEG XL. On macOS, use Mount archive or Open archive in this app to read ordinary DNG frames on demand. Opening the DMG directly in Finder exposes the stored JPEG XL DNGs.");
-                            ui.add_space(12.);
-                            ui.radio_value(&mut self.choice, Choice::Temporal, "Temporal JXL")
-                                .on_hover_text("Lossless compression across up to 8 consecutive frames. Compares temporal and independent representations and keeps the smaller one. Saves a .cdngt archive; requires this app to mount on macOS or extract on other platforms.");
                         });
                         if self.choice != previous_choice { self.normalize_output_extension(); }
                         row(ui, &mut |ui| {
@@ -1110,10 +1105,6 @@ impl App {
                                 ui.add_space(8.);
                                 ui.weak(if cfg!(target_os = "macos") { "Use this app to mount as ordinary DNG" }
                                     else { "JPEG XL DNG · requires a compatible reader" });
-                            } else if self.choice == Choice::Temporal {
-                                ui.weak(if cfg!(target_os = "macos") {
-                                    "App-mounted archive · requires this app"
-                                } else { "App archive · extract with this app" });
                             }
                         });
                     });
@@ -1505,9 +1496,8 @@ mod tests {
         app.output = "/output folder/movie.dmg".into();
         app.clips = vec![(Clip { relative: "excluded clip".into(), frames: vec![], bytes: 0 }, false)];
         let size = egui::vec2(720., 640.);
-        for choice in [Choice::Temporal, Choice::Jxl, Choice::Lj92] {
+        for choice in [Choice::Jxl, Choice::Lj92] {
             let label = match choice {
-                Choice::Temporal => "Temporal JXL",
                 Choice::Jxl => if cfg!(target_os = "macos") { "JPEG XL + DMG" } else { "JPEG XL + ISO" },
                 Choice::Lj92 => if cfg!(target_os = "macos") { "LJ92 + DMG" } else { "LJ92 + ISO" },
             };
@@ -1515,7 +1505,9 @@ mod tests {
             let button = out.shapes.iter().find_map(|s| match &s.shape {
                 egui::Shape::Text(text) if text.galley.job.text == label => Some(s.shape.visual_bounding_rect().center()),
                 _ => None,
-            }).expect("all three methods should be visible");
+            }).expect("both methods should be visible");
+            assert!(!out.shapes.iter().any(|s| matches!(&s.shape,
+                egui::Shape::Text(text) if text.galley.job.text == "Temporal JXL")));
             for pressed in [true, false] {
                 let _ = ctx.run(egui::RawInput {
                     screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
@@ -1533,9 +1525,9 @@ mod tests {
             assert_eq!(args.windows(2).any(|a| a == ["--effort", "max"]), choice.has_effort());
         }
         app.output = "/output folder/typed-without-extension".into();
-        app.choice = Choice::Temporal;
+        app.choice = Choice::Jxl;
         app.normalize_output_extension();
-        assert_eq!(app.output, "/output folder/typed-without-extension.cdngt");
+        assert_eq!(PathBuf::from(&app.output).extension().unwrap(), app.choice.extension());
     }
 
     #[test]
@@ -1656,7 +1648,7 @@ mod tests {
                     .collect();
                 app.active = Some(0);
             }
-            for (choice, progress, size) in [(Choice::Lj92, 0., egui::vec2(720., 640.)), (Choice::Jxl, 0.5, egui::vec2(640., 480.)), (Choice::Temporal, 1., egui::vec2(1600., 1000.))] {
+            for (choice, progress, size) in [(Choice::Lj92, 0., egui::vec2(720., 640.)), (Choice::Jxl, 0.5, egui::vec2(640., 480.)), (Choice::Lj92, 1., egui::vec2(1600., 1000.))] {
                 app.choice = choice;
                 app.progress = progress;
                 for y in (0..size.y as usize).step_by(20) {

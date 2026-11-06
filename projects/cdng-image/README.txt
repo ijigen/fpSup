@@ -1,3 +1,8 @@
+CDNG Image 0.2.14 — 保留兩種 DMG 輸出
+新輸出提供 LJ92 DMG 與 JPEG XL DMG；Windows／其他平台維持 ISO。
+時間線壓縮不再提供新增輸出；舊有 .cdngt 與 .cdngj 仍可開啟和掛載。
+壓縮與動態掛載流程未改；OG3K 校正仍為預設關閉的選項。
+
 CDNG Image 0.2.13 — OG3K 掛載時可選列對齊，2026-11-02
 勾選 Correct OG3K row alignment when mounting，支援本程式 LJ92／JPEG XL DMG、.cdngj 與 .cdngt。
 只處理 SIGMA fp OG3K：RAW 3024×2010、RGGB、裁切原點(8,5)與大小3008×2000；其他檔案原樣讀取。
