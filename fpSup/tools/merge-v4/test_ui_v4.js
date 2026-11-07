@@ -121,7 +121,7 @@ for (const id of api.compose(api.picked()).on.slice()) change({id}, false);
 assert(!el('dl').disabled);              // v4: the fpSup page alone is a card
 
 // History is available on every tile, including Sups without a release.
-for (const p of api.CAT.products.concat(api.CAT.pending || [])){
+for (const p of api.CAT.products.concat(api.CAT.pending || []).filter(p => !p.infra)){   // infra: no tile (below)
   assert(el('tiles').innerHTML.includes(`data-history="${p.id}"`));
   const html = api.history(p);
   assert(html.includes('版本改動'));
@@ -156,6 +156,29 @@ assert(Buffer.from(api.zipFor(['raw-view'])).equals(beforeHistory));
 const unsafe = api.history({id:'example',name:'<example>',history:[{label:'v1',
   changes:{en:['<script>unsafe</script>'],zh:['<script>unsafe</script>']}}]});
 assert(!unsafe.includes('<script>') && unsafe.includes('&lt;script&gt;'));
+// Sensor Lab (Bei 2026-11-07): QS-Share has no tile and cannot be ticked or picked by Select all; it comes with
+// Sensor Lab, shown in the summary as shared.  Sensor Lab <-> RES-Custom: the second one ticked goes on the card off.
+if (api.CAT.products.some(p => p.id === 'sensor-lab')){
+  const tiles = () => el('tiles').innerHTML;
+  assert(tiles().includes('data-id="sensor-lab"') && !tiles().includes('data-id="qs-share"') && !tiles().includes('data-history="qs-share"'));
+  assert(tiles().includes('QS-Share') && tiles().includes('QSContainer_v*.BIN'));   // the hint and the upgrade note on Sensor Lab's tile
+  change({id:'sensor-lab'}, true);
+  assert.deepStrictEqual(api.picked(), ['sensor-lab']);
+  assert(el('tree').innerHTML.includes('QS-Share (共用元件，自動附上)') && el('tree').innerHTML.includes('Sensor Lab-IMX410'));
+  assert(api.compose(api.picked()).on.includes('qs-share') && !el('dl').disabled);
+  change({id:'qs-share'}, false);                   // no such tile; a stray event changes nothing it needs
+  assert(api.compose(api.picked()).on.includes('qs-share'));
+  change({id:'res-custom'}, true);
+  assert.deepStrictEqual(api.compose(api.picked()).off, ['res-custom']);
+  assert(tiles().includes('data-yield="sensor-lab"') || tiles().includes('data-swap="res-custom"'));
+  assert(api.checks(api.picked()).every(r => r.ok) && !el('dl').disabled);
+  change({id:'res-custom'}, false); change({id:'sensor-lab'}, false);
+  assert.deepStrictEqual(api.picked(), []);
+  handlers.get('click')({target:{closest:()=>({dataset:{selall:'1'}})}});
+  assert(api.picked().includes('sensor-lab') && !api.picked().includes('qs-share'));
+  handlers.get('click')({target:{closest:()=>({dataset:{selall:'0'}})}});
+  assert.deepStrictEqual(api.picked(), []);
+}
 console.log('passed: boot choices, selections, download checks, version history, languages and retained disclosure state');
 
 const resSimple = api.CAT.products.find(p => p.id === 'res-custom');

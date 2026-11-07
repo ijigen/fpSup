@@ -1,4 +1,36 @@
 {
+ "fpsup-sensor-lab-v0.0.1test": {
+  "en": [
+   "First release on fpSup-Merge. Sensor Lab-IMX410 0.0.1test is SensorLab-IMX410 v0.7.39test renamed; the code is unchanged.",
+   "From the Quick Set: sensor crop (DC), resolution (RES), frame rate (FPS), readout recipe (RECIPE), FORMAT, the data rate (MB/s) and QR. The choice is applied as a camera mode, so recordings really use it, and it is applied again at start-up without opening MENU or QS.",
+   "The merge hint follows the recipe that is actually in effect: 2x2 binning such as OG 3K shows “2x2”, not “2x”; a recipe that scales with RWZM shows “RWZM”. The small line under RECIPE is shorter: no size suffix, RS to one decimal.",
+   "CPU x2 (horizontal 2:1 averaging on the camera CPU) was tested and left out: the CPU merges about 103 MB/s, OG 3K 25p needs 457 MB/s. For half width use ISP HBIN 1 (RWZM); a saved CPU x2 setting becomes ISP HBIN 1.",
+   "Needs QS-Share, which the page adds automatically. Cannot run together with RES-Custom (both change the recording modes); on one card RES-Custom loads and Sensor Lab is refused.",
+   "Updating: delete fpSup\\SensorLab-IMX410_v0.7.*.BIN and fpSup\\QSContainer_v*.BIN from the card first. Settings start from the defaults.",
+   "On the camera (as v0.7.39test, 2026-11-05): start-up apply, QS and RECIPE display, the CPU x2 setting moved to ISP HBIN 1."
+  ],
+  "zh": [
+   "第一次上 fpSup-Merge。Sensor Lab-IMX410 0.0.1test 就是改名的 SensorLab-IMX410 v0.7.39test，程式沒有改。",
+   "在快速設定選感光元件裁切（DC）、解析度（RES）、幀率（FPS）、讀取配方（RECIPE）、FORMAT，並顯示資料率（MB/s）與 QR。選擇會套用成相機的模式，錄影真的照它錄；開機時自動再套用，不用先開 MENU 或 QS。",
+   "合併提示改看實際生效的配方：OG 3K 這類 2x2 合併顯示「2x2」，不再誤顯示「2x」；有 RWZM 縮放的配方顯示「RWZM」。RECIPE 下方小字縮短：去掉尺寸尾巴，RS 改一位小數。",
+   "CPU×2（用相機 CPU 做水平 2:1 等權合併）實測後不納入：CPU 合併約 103 MB/s，OG 3K 25p 需要 457 MB/s。要水平減半請用 ISP HBIN 1（RWZM）；存過 CPU×2 的設定會自動改成 ISP HBIN 1。",
+   "需要 QS-Share，合併頁會自動附上。不能和 RES-Custom 同時執行（兩者都改錄影模式）；同一張卡上 RES-Custom 會先載入、Sensor Lab 被拒。",
+   "更新：先刪掉卡上 fpSup 裡的 SensorLab-IMX410_v0.7.*.BIN 與 QSContainer_v*.BIN。設定會回到預設。",
+   "已上機（以 v0.7.39test，2026-11-05）：開機自動套用、QS 與 RECIPE 顯示、舊 CPU×2 設定轉成 ISP HBIN 1。"
+  ]
+ },
+ "fpsup-qs-share-v0.0.1test": {
+  "en": [
+   "Shared Quick Set plumbing used by Sensor Lab: adds its functions to the QS editor and the QS page. It is not a choice of its own; the page adds it with Sensor Lab.",
+   "QS-Share 0.0.1test is QS Container v0.3.8 renamed (same sup_id, QSCT). Delete fpSup\\QSContainer_v*.BIN from the card: it is the same sup and only one of them loads.",
+   "Fixed: the name the camera shows for this sup (SupManager) was “font_menu_SB_kigou_09” since v0.2.1; it is now “QS-Share”."
+  ],
+  "zh": [
+   "Sensor Lab 共用的快速設定底層：把功能加進 QS 編輯器與 QS 頁。它不是單獨的選項，勾 Sensor Lab 時合併頁自動附上。",
+   "QS-Share 0.0.1test 就是改名的 QS Container v0.3.8（sup_id 同為 QSCT）。請刪掉卡上 fpSup 裡的 QSContainer_v*.BIN：同一個 sup 只會載入一個。",
+   "修正：相機（SupManager）顯示的名稱自 v0.2.1 起誤為「font_menu_SB_kigou_09」，現在是「QS-Share」。"
+  ]
+ },
  "fpsup-res-custom-v0.1.5": {
   "en": [
    "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",

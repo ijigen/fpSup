@@ -2,6 +2,7 @@
 """Build the Loader v4 product snapshot the Merge v4 page reads.
 
     python3 -B tools/merge-v4/build_inputs_v4.py --out tools/merge-v4/inputs/v4-YYYYMMDD
+    python3 -B tools/merge-v4/build_inputs_v4.py --out ... --only sensor-lab,qs-share   # some products only
 
 Runs each product's own v4 builder (nothing is rebuilt by hand), copies the
 outputs into a NEW directory and writes manifest.json in the format
@@ -25,6 +26,8 @@ BUILDS = {
     'flip': ([FPSUP / 'screenflip/build_v4_flip.py'], '.'),
     'rawv': ([ROOT / 'projects/rawview/build/build_v4_rawview.py'], '.'),
     'rescus': ([ROOT / 'projects/open-gate/build/res-custom-v4/build_v4_rescustom.py'], '.'),
+    'slqs': ([ROOT / 'projects/sensorlab-imx410/qs/build_slqs.py'], 'fpSup'),
+    'qsct': ([ROOT / 'projects/qs-container/build_qsct.py'], 'fpSup'),
 }
 # product id -> (build, sup_id, data dir or None); the file is names_v4's
 # <base>_v<version>.BIN (the user 2026-10-25)
@@ -40,6 +43,9 @@ PRODUCTS = {
     'desqueeze': ('jose', 'DSQZ', None),
     'tap-to-zoom': ('jose', 'TAPZ', None),
     'usbshell': ('ports', 'SHEL', None),
+    # 2026-11-07 (Bei): Sensor Lab-IMX410 and the QS container it needs, renamed QS-Share (sup_id QSCT)
+    'sensor-lab': ('slqs', 'SL41', None),
+    'qs-share': ('qsct', 'QSCT', None),
 }
 SOURCES = [
     'fpSup/loader-v4/ports.py', 'fpSup/loader-v4/ports_jose.py', 'fpSup/loader-v4/build_v4.py',
@@ -51,9 +57,21 @@ SOURCES = [
     'projects/open-gate/build/res-custom-v4/build_v4_rescustom.py',
     'projects/open-gate/build/res-custom-v4/build_v3_rescustom.py',
     'projects/open-gate/build/res-custom-v4/ogc.c', 'projects/open-gate/build/res-custom-v4/ogc_files.c',
+    'projects/sensorlab-imx410/qs/build_slqs.py', 'projects/sensorlab-imx410/qs/slqs.c', 'projects/sensorlab-imx410/qs/qrdec.c',
+    'projects/sensorlab-imx410/core/core.c', 'projects/sensorlab-imx410/apply/ap.c', 'projects/sensorlab-imx410/apply/ap_calc.c',
+    'projects/qs-container/build_qsct.py', 'projects/qs-container/qsct.c', 'projects/qs-container/qsc.h',
+    'projects/qs-container/editor_data.py', 'projects/qs-container/editor_title.py', 'projects/qs-container/qs_page_data.py',
 ]
 VALIDATION = ('fpSup/loader-v4/README.md "已上線 sup 的 v4 第一次上機(2026-10-24)": all eleven load, '
               'menus and saving checked on the camera; recording (ULWR, Gyro2, Lossless compression) not yet.')
+VALIDATION_OF = {
+    'sensor-lab': ('projects/sensorlab-imx410/validation/20261105-cpux2-removed: v0.7.39test offline full suite and '
+                   'on the camera 2026-11-05 (boot apply, QS and RECIPE display, CPU x2 settings -> ISP HBIN 1); '
+                   '0.0.1test = the same body, only the header display name changed (2026-11-07, offline).'),
+    'qs-share': ('projects/qs-container v0.3.8 (API 8): offline suites, on the camera with SensorLab v0.7.39test '
+                 '2026-11-05; 0.0.1test = the v0.3.8 code with the header display name fixed to "QS-Share" '
+                 '(state/DMA offsets 64 B lower); not yet on the camera under this name.'),
+}
 
 
 def sha(b):
@@ -63,20 +81,26 @@ def sha(b):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', type=pathlib.Path, required=True)
+    ap.add_argument('--only', default='', help='comma-separated product ids (default: all)')
     a = ap.parse_args()
+    only = [x for x in a.only.split(',') if x]
+    if any(x not in PRODUCTS for x in only):
+        raise SystemExit(f'--only: unknown product in {only}; known: {", ".join(PRODUCTS)}')
+    chosen = {k: v for k, v in PRODUCTS.items() if not only or k in only}
+    builds = {k: v for k, v in BUILDS.items() if any(b == k for b, _s, _d in chosen.values())}
     out = a.out.resolve()
     if out.exists():
         raise SystemExit(f'{out} exists: a snapshot is never overwritten')
     files, products = {}, {}
     with tempfile.TemporaryDirectory(prefix='mergev4-') as t:
         t = pathlib.Path(t)
-        for key, (cmd, sub) in BUILDS.items():
+        for key, (cmd, sub) in builds.items():
             r = subprocess.run([sys.executable, '-B', *map(str, cmd), '--out', str(t / key)],
                                capture_output=True, text=True, cwd=FPSUP)
             if r.returncode:
                 raise SystemExit(f'{key}: builder failed\n{r.stderr[-3000:]}')
         out.mkdir(parents=True)
-        for pid, (build, sid, data) in PRODUCTS.items():
+        for pid, (build, sid, data) in chosen.items():
             name = N.file_name(sid)
             src = t / build / BUILDS[build][1]
             b = (src / name).read_bytes()
@@ -96,7 +120,9 @@ def main():
             products[pid] = entry
     meta = dict(date=f'{datetime.date.today():%Y-%m-%d}',
                 source_sha256={s: sha((ROOT / s).read_bytes()) for s in SOURCES},
-                files=files, products=products, loader='v4', validation=VALIDATION)
+                files=files, products=products, loader='v4',
+                validation=' '.join(VALIDATION_OF[k] for k in chosen if k in VALIDATION_OF)
+                if all(k in VALIDATION_OF for k in chosen) else VALIDATION)
     (out / 'manifest.json').write_text(json.dumps(meta, indent=1, ensure_ascii=False) + '\n')
     for name, f in files.items():
         print(f'{name:28s} {f["size"]:8,d} B  {f["sha256"][:12]}')

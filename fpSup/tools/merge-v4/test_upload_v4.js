@@ -79,13 +79,14 @@ handlers.get('click')({target:{closest: () => ({dataset:{rm: up.id}})}});
 assert(!api.CAT.products.some(p => p.id === up.id) && !api.picked().includes(up.id));
 assert.strictEqual(JSON.parse(stored['fpsup-merge-v4-uploads']).length, 1);
 // the tiles show versions, not the snapshot's build label (the user 2026-10-25)
-for (const p of api.CAT.products.filter(p => !p.upload && p.category !== 'development'))
+for (const p of api.CAT.products.filter(p => !p.upload && p.category !== 'development' && !p.infra))   // infra: no tile
   assert(tiles().includes(`${p.name}<span class="m">v${p.version}`), p.name);
 // select all / clear all (the user 2026-10-25)
 const click = ds => handlers.get('click')({target:{closest: () => ({dataset: ds})}});
 assert(tiles().includes('data-selall="1"'));
 click({selall: '1'});
-const rel = api.CAT.products.filter(p => p.category !== 'development').map(p => p.id);
+const rel = api.CAT.products.filter(p => p.category !== 'development' && !p.infra).map(p => p.id);
+assert(!api.picked().includes('qs-share'));   // shared plumbing is never picked, only required
 assert(rel.every(id => api.picked().includes(id)) && tiles().includes('data-selall="0"'));
 assert(api.checks(api.picked()).every(r => r.ok), JSON.stringify(api.checks(api.picked()).filter(r => !r.ok)));
 assert(!api.plan(api.picked()).on.some((a, i, on) => on.some(b => a !== b && api.CAT.products.find(p => p.id === a).excl.includes(b))));

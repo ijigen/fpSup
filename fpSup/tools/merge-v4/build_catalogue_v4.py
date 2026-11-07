@@ -29,7 +29,8 @@ RELEASES = FPSUP / 'releases'
 TEMPLATE = HERE / 'template.html'
 GUIDE = FPSUP / 'guide'
 OUT = HERE / 'index.html'
-INPUTS = [HERE / 'inputs' / 'v4-20261027']
+# 2026-11-07: Sensor Lab-IMX410 + QS-Share in their own snapshot (the others unchanged, still 20261027)
+INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107']
 sys.path.insert(0, str(FPSUP / 'fp_usb_shell'))
 from v3 import build_v3 as V3
 sys.path.insert(0, str(FPSUP / 'loader-v4'))
@@ -55,10 +56,14 @@ MANAGER = ['fpSup/SUPMGR.BIN', 'fpSup/UI/FPSUP.BIN', 'fpSup/UI/SUPMGR.BIN']
 #   mine, no need to say so); set it only for a sup someone else wrote.
 #   credits are people whose work the sup builds on, not its authors.  Keep
 #   them in step with the guide page's "Thank you" box (test checks it).
+# infra: shared plumbing, not a choice (Bei 2026-11-07, QS-Share): no tile; it
+#   goes on the card when a ticked sup `requires` it, like the fpSup page files.
+# note: {en, zh} install note shown on the tile and written into the card's README.
+# guide_page: the details link when it is not fpSup/guide/<id>.html (path from fpSup/).
 CATEGORIES = ['format', 'focus', 'motion', 'monitor', 'development']
 # the page shows sups in this order (user 2026-10-07); the card's load order is
 # still the file names'
-ORDER = ['res-custom', 'res-lab', 'lossless', 'fcap', 'unlocked-writer', 'stopfx', 'split-record', 'hdrx', 'af', 'gyro2', 'raw-view', 'screenflip', 'desqueeze', 'tap-to-zoom', 'lut', 'usbshell']
+ORDER = ['res-custom', 'sensor-lab', 'qs-share', 'res-lab', 'lossless', 'fcap', 'unlocked-writer', 'stopfx', 'split-record', 'hdrx', 'af', 'gyro2', 'raw-view', 'screenflip', 'desqueeze', 'tap-to-zoom', 'lut', 'usbshell']
 AUTHOR = ''
 PRODUCTS = {
     # og3k / og2k: not this round (user 2026-10-07) -- the OG line ships as
@@ -70,7 +75,7 @@ PRODUCTS = {
     'res-custom': dict(name=N.display('RCUS'), sup_id='RCUS',
                        summary=dict(en='Custom recording resolutions in one sup: open gate OG2K, OG3K, OG3.5K, OG4K and S16.',
                                     zh='多種自訂錄影解析度合一:Open Gate OG2K、OG3K、OG3.5K、OG4K 與 S16。'), category='format', file=N.file_name('RCUS'),
-                       excl=['og3k', 'og2k', 'formats'],
+                       excl=['og3k', 'og2k', 'formats', 'sensor-lab'],
                        data=dict(dir='RESCUS', ext='.RCD',
                                  names={'OG35K': 'OG3.5K'},
                                  # per-format author shown on its chip (user 2026-10-13)
@@ -79,6 +84,25 @@ PRODUCTS = {
                                  order=['OG2K', 'OG3K', 'OG35K', 'OG4K', 'S16']),
                        author=AUTHOR, credits=['Jose Hurtado'],
                        pending=True),
+    # projects/sensorlab-imx410 (Bei 2026-11-07: first merge-page release, 0.0.1test = v0.7.39test renamed).
+    # It claims the same SL_EXCL hook sites as RES-Custom: on one card RES-Custom (earlier by name) loads and
+    # SensorLab is refused -- so they clash.  The native QS plumbing is the separate sup QS-Share (requires).
+    'sensor-lab': dict(name=N.display('SL41'), sup_id='SL41', file=N.file_name('SL41'), category='format',
+                       summary=dict(en='Choose the sensor crop, resolution, frame rate and readout recipe from the Quick Set, '
+                                       'with the data rate shown; the camera records exactly that mode.',
+                                    zh='在快速設定選感光元件裁切、解析度、幀率與讀取配方，並顯示資料率；相機照選定的模式錄影。'),
+                       excl=['res-custom'], requires=['qs-share'], author=AUTHOR, credits=[],
+                       guide_page='sensor_lab_imx410/index.html',
+                       note=dict(en='Updating from an older SensorLab or QS Container: delete fpSup\\SensorLab-IMX410_v0.7.*.BIN '
+                                    'and fpSup\\QSContainer_v*.BIN first. The old 0.7.x file would load instead of 0.0.1test, '
+                                    'and QSContainer is the same sup as QS-Share. Saved Sensor Lab / QS settings start from the defaults.',
+                                 zh='從舊版 SensorLab 或 QS Container 更新：先刪掉卡上 fpSup 裡的 SensorLab-IMX410_v0.7.*.BIN 與 '
+                                    'QSContainer_v*.BIN。舊的 0.7.x 檔會比 0.0.1test 優先載入，QSContainer 與 QS-Share 是同一個 sup。'
+                                    'Sensor Lab／QS 的設定會回到預設。')),
+    'qs-share':   dict(name=N.display('QSCT'), sup_id='QSCT', file=N.file_name('QSCT'), category='format', infra=True,
+                       summary=dict(en='Shared Quick Set plumbing used by Sensor Lab: adds its functions to the QS editor and the QS page.',
+                                    zh='Sensor Lab 共用的快速設定底層：把功能加進 QS 編輯器與 QS 頁。'),
+                       excl=[], author=AUTHOR, credits=[]),
     'res-lab': dict(name='RES-Lab', sup_id='RLAB', category='format', file='50RES-Lab v0.1.0test.BIN',
                     excl=[], requires=['res-custom'], needs_manager=True, pending=True, stage='dev',  # user 2026-10-13: in development, not selectable
                     summary=dict(en='Adjust the sensor readout, crop and recording size with a live diagram, and save custom formats.',
@@ -224,6 +248,7 @@ def input_products(directory):
         # the snapshot's name and version (names_v4, 2026-10-25) when it carries them
         name = entry.get('name') or (filename.stem.lstrip('0123456789') if key == 'res-lab' else spec['name'])
         p = dict(id=key, name=name, category=spec['category'], file=filename.name, sup_id=spec['sup_id'],
+                 infra=spec.get('infra', False), note=spec.get('note'),
                  excl=list(spec['excl']), requires=spec.get('requires', []), links=spec.get('links', []), needs_manager=spec.get('needs_manager', False),
                  author=spec['author'], credits=spec['credits'], release=entry.get('release', f'fpsup-{key}-dev-r{version}'),
                  version=entry.get('version', str(version)),
@@ -261,6 +286,9 @@ def data_author(spec, rel):
 def guide(key):
     """The tile's details are the site's illustrated guide page, nothing else
     (user 2026-10-07: no README text on the page).  '' when it has none yet."""
+    page = PRODUCTS.get(key, {}).get('guide_page')
+    if page:
+        return f'../../{page}' if (FPSUP / page).exists() else ''
     return f'../../guide/{key}.html' if (GUIDE / f'{key}.html').exists() else ''
 
 
@@ -282,6 +310,11 @@ def main():
         for o in spec['excl']:
             if o in PRODUCTS and k not in PRODUCTS[o]['excl']:
                 raise SystemExit(f'excl not symmetric: {k} -> {o}')
+        for r in spec.get('requires', []):
+            if r not in PRODUCTS:
+                raise SystemExit(f'{k}: requires unknown {r}')
+        if spec.get('infra') and (spec['excl'] or spec.get('requires') or spec.get('pending')):
+            raise SystemExit(f'{k}: infra plumbing has no clashes, requirements or pending tile')
 
     snapshots = [p for directory in inputs for p in input_products(directory)
                  if PRODUCTS[p['id']].get('stage') not in ('dev', 'long')]
@@ -295,6 +328,10 @@ def main():
         p['loader'] = 'v4'
     products = snapshots
     have = {p['id'] for p in products}
+    for p in products:
+        missing = [r for r in p['requires'] if r not in have]
+        if missing:
+            raise SystemExit(f"{p['id']}: requires {missing}, not in the snapshots")
     skipped = [k for k in PRODUCTS if k not in have]
     # shown greyed out, not selectable: the user wants to see what is coming
     pending = [dict(id=k, name=spec['name'], category=spec['category'], file=spec.get('file', ''),

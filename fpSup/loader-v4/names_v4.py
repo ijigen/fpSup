@@ -23,6 +23,10 @@ SUPS = {
     'TAPZ': ('Tap To Zoom', 'TapToZoom', '0.1.1'),
     'SHEL': ('USB-Shell', 'USB-Shell', '3.4.0'),
     'FCAP': ('Early Flush', 'EarlyFlush', '0.1.0'),
+    # 2026-11-07 (Bei): renamed and restarted at 0.0.1test for the first merge-page release; content =
+    # SensorLab-IMX410 v0.7.39test / QS Container v0.3.8 (only the header name changes).  QSCT keeps its sup_id.
+    'SL41': ('Sensor Lab-IMX410', 'SensorLab-IMX410', '0.0.1test'),
+    'QSCT': ('QS-Share', 'QS-Share', '0.0.1test'),
 }
 
 DISPLAY_MAX = 23      # sloader4.c struct sup disp[24]

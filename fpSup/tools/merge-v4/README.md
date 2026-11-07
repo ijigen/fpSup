@@ -11,7 +11,7 @@ python3 -B -m unittest discover -s tools/merge-v4 -p test_version_history.py
 ```
 
 和 v3 頁的差別：
-- **產品全部來自一份快照** `inputs/v4-20261027/`(2026-10-27:Gyro2 版號改 0.2.1;10-25 那份起：選單掉鍵修正、頁尾固定、sup 檔名帶版本):`build_inputs_v4.py` 跑各產品自己的 v4 builder
+- **產品全部來自一份快照** `inputs/v4-20261025/`(2026-10-25:選單掉鍵修正、頁尾固定、sup 檔名帶版本):`build_inputs_v4.py` 跑各產品自己的 v4 builder
   (`loader-v4/ports.py`、`ports_jose.py`、`lossless/build_v4_lossless.py`、`screenflip/build_v4_flip.py`、
   `projects/rawview/build/build_v4_rawview.py`、`projects/open-gate/build/res-custom-v4/build_v4_rescustom.py`),
   manifest 記每個檔的 size/sha256 與 builder 原始碼雜湊。v3 的 release 只當版本紀錄，不讀產品。
@@ -21,6 +21,16 @@ python3 -B -m unittest discover -s tools/merge-v4 -p test_version_history.py
   預設瞬間啟動開、快速啟動關。LOADER.BIN 尾端是空的停用清單(FSDS)。
 - 檔名沒有 v3 的數字前綴(DSQZ、FCAP、FLIP、GYR2、LOSS、RAWV、RESCUS、SHELL、STOPFX、TAPZ、ULWR),載入順序 = 檔名順序；
   頁面自檢改成 FSB4 檔頭(48 B)。Loader v4 不載入 v3 sup,README 提醒先刪卡上整個舊 `fpSup`。
+
+**2026-11-07 Sensor Lab-IMX410 + QS-Share**(Bei 定;本機頁面，未 commit、未發布):
+- 新快照 `inputs/v4-20261107/` 只放這兩個(`build_inputs_v4.py --only sensor-lab,qs-share`,跑 `projects/sensorlab-imx410/qs/build_slqs.py`
+  與 `projects/qs-container/build_qsct.py`);其他產品仍讀 `v4-20261027/`(`INPUTS` 兩份)。名稱/版本在 `loader-v4/names_v4.py`(SL41、QSCT)。
+- `infra`(QS-Share):共用元件，不是選項 —— 沒有圖磚、不被「全選」選到;Sensor Lab `requires` 它，所以勾 Sensor Lab 就自動進卡，
+  摘要列標「共用元件，自動附上」、README 標 `shared, included for ...`。Sensor Lab 被停用時 QS-Share 照樣執行(沒有用戶端時不改任何東西)。
+- Sensor Lab ⟂ RES-Custom(`excl`,同一組 SL_EXCL 掛點):後勾的那個裝成停用(LOADER.BIN 停用清單)。
+- `note`:圖磚提示與卡片 README 的「BEFORE YOU COPY」—— 舊的 `SensorLab-IMX410_v0.7.*.BIN` 版本號較大會蓋過 0.0.1test、
+  `QSContainer_v*.BIN` 與 QS-Share 同 sup_id,都要先刪。`guide_page`:Sensor Lab 的說明連到 `sensor_lab_imx410/index.html`。
+- 測試:`test_merge_v4.js` §8、`test_ui_v4.js` 末段(QS-Share 自動附上且不可選、兩向互斥);「全部可同時執行」那組改用 `plan(...).on`。
 
 驗證範圍(2026-10-24;**`b` 快照的 LOADER、SUPMGR、RESCUS、GYR2、LOSS 已改過，下面「與上機卡相同」只對第一份快照成立**):
 - 全選 zip 的每個 sup、RCD、UI 檔與當天上機那張卡逐位元組相同(`fpSup/loader-v4/README.md`「已上線 sup 的 v4 第一次上機」),

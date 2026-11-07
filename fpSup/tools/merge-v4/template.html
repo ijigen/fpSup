@@ -442,7 +442,7 @@ function checks(picked){
 }
 
 function cardName(picked){
-  const ids = CAT.products.filter(p => selected(picked).includes(p.id)).map(p => p.id);
+  const ids = CAT.products.filter(p => selected(picked).includes(p.id) && !p.infra).map(p => p.id);
   const name = ids.length === 1 ? byId(ids[0]).release : 'fpsup-v4-' + (ids.join('+') || 'manager');
   return name + (BOOT.instant ? '-IS' : '') + (BOOT.fast ? '-FS' : '');
 }
@@ -463,8 +463,10 @@ function readme(picked){
     '  SAVE creates named RCD files; RES-CUSTOM manages which files appear in Resolution and QS.');
   const who = p => [p.author && 'by ' + p.author, p.credits.length && 'thanks to ' + p.credits.join(', ')]
     .filter(Boolean).map(x => '  -- ' + x).join('');
+  /* infra (QS-Share): shared plumbing a ticked sup requires, never a choice of its own (Bei 2026-11-07) */
+  const usedBy = p => selected(picked).filter(id => (byId(id).requires || []).includes(p.id)).map(id => byId(id).name);
   for (const p of CAT.products.filter(p => on.includes(p.id))){
-    L.push(`  ${p.file.padEnd(12)} ${p.release}${who(p)}`);
+    L.push(`  ${p.file.padEnd(12)} ${p.release}${who(p)}` + (p.infra ? `  -- shared, included for ${usedBy(p).join(', ')}` : ''));
     const ds = dataChosen(p, picked);
     if (ds.length) L.push(`  ${''.padEnd(12)} data: ${ds.map(d => d.label + (d.author ? ' (by ' + d.author + ')' : '')).join(', ')}`);
   }
@@ -476,6 +478,11 @@ function readme(picked){
     L.push('', 'To switch: in the camera\'s SupManager (fpSup page) turn the running one off and this',
       'one on, then restart.  A .OFF file: rename the running one to .OFF and this one to .BIN.',
       'Never turn on two that clash together.');
+  }
+  const notes = CAT.products.filter(p => selected(picked).includes(p.id) && p.note);
+  if (notes.length){
+    L.push('', 'BEFORE YOU COPY:');
+    for (const p of notes) L.push(`  ${p.name}: ${p.note.en}`);
   }
   L.push('', 'files:');
   for (const f of files) L.push(`  ${f.name.padEnd(20)} ${String(f.data.length).padStart(7)} B  sha256=${f.sha256}`);
@@ -560,6 +567,7 @@ const T = {
     manager: 'fpSup 管理頁', managerHint: '在相機選單開啟 Sup 設定、啟用或停用；啟用清單於重開機後生效。',
     managerNeeded: 'Loader v4 的 Lossless 開關與 Res-Custom 檔案頁都在這一頁，所以一律附上。',
     required: n => `自動加入：${n} 需要此項。`,
+    infraWith: n => `會自動附上共用元件 ${n}（不用另外勾選）。`, infraAuto: '共用元件，自動附上',
     labNeeds: '自動帶入 RES-CUSTOM 與 fpSup 管理頁；預設不加入固定解析度，可另外勾選。',
     kofi: '在 Ko-fi 支持我',
     install: '安裝說明',
@@ -605,6 +613,7 @@ const T = {
     manager: 'fpSup menu page', managerHint: 'Open Sup settings and enable or disable Sups in the camera menu. Restart to apply the enable list.',
     managerNeeded: 'Always included on Loader v4: Lossless\'s switch and Res-Custom\'s file page live on this page.',
     required: n => `Included automatically: required by ${n}.`,
+    infraWith: n => `Comes with the shared ${n} (added automatically, nothing to tick).`, infraAuto: 'shared, added automatically',
     labNeeds: 'Includes RES-CUSTOM and the fpSup menu page. Fixed resolutions are optional and start unticked.',
     kofi: 'supMe on Ko-fi',
     install: 'Install',
@@ -717,6 +726,8 @@ function tile(p, t, pl){
     <span class="desc">${esc(about(p) || p.about.en || '')}</span>
     ${neededBy.length ? `<span class="hint">${esc(t.required(neededBy.map(id => byId(id).name).join(', ')))}</span>` : ''}
     ${p.id === 'res-lab' ? `<span class="hint">${esc(t.labNeeds)}</span>` : ''}
+    ${p.note ? `<span class="hint">${esc(about({about:p.note}))}</span>` : ''}
+    ${(p.requires || []).filter(r => byId(r) && byId(r).infra).map(r => `<span class="hint">${esc(t.infraWith(byId(r).name))}</span>`).join('')}
     ${dataChips(p, t)}
     ${warn}
     ${more(p, t)}
@@ -725,7 +736,7 @@ function tile(p, t, pl){
   </div>`;
 }
 
-const selectable = () => CAT.products.filter(p => p.category !== 'development').map(p => p.id);
+const selectable = () => CAT.products.filter(p => p.category !== 'development' && !p.infra).map(p => p.id);
 let UPNOTE = '';                                    // the last upload's refusal, shown in its section
 function ownSection(t, pl){
   const ps = CAT.products.filter(p => p.upload);
@@ -770,7 +781,7 @@ function render(){
   const byRank = (a, b) => rank(a) - rank(b);
   const upcoming = p => p.stage === 'dev' || p.stage === 'long';
   const section = c => {
-    const ps = CAT.products.filter(p => p.category === c).sort(byRank);
+    const ps = CAT.products.filter(p => p.category === c && !p.infra).sort(byRank);   // infra: no tile
     const pend = (CAT.pending || []).filter(p => p.category === c && !upcoming(p)).sort(byRank);
     if (!ps.length && !pend.length) return '';
     const [title, sub] = t[c] || [c, ''];
@@ -800,7 +811,7 @@ function render(){
     return esc(p.name) + (formats.length ? '\n  ' + formats.map(esc).join(' · ') : '');
   };
   $('#tree').innerHTML = ready
-    ? [...run.map(f => `<span class="new">${chosenTool(f.p)}</span>`),
+    ? [...run.map(f => `<span class="new">${chosenTool(f.p)}${f.p.infra ? ' (' + esc(t.infraAuto) + ')' : ''}</span>`),
        ...(managerEnabled(picked) ? [esc(t.manager)] : []),
        ...off.map(f => `<span class="off">${chosenTool(f.p)} (${esc(t.inactive)})</span>`)].join('\n')
     : esc(t.pick);

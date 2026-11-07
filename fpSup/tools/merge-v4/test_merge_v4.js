@@ -83,7 +83,8 @@ for (const p of CAT.products){
 for (const manager of [true]) for (const instant of [false, true]) for (const fast of [false, true]){
   BOOT.instant = instant; BOOT.fast = fast; BOOT.manager = manager;
   // Test both manager states directly; RES-Lab's automatic manager is below.
-  const picked = CAT.products.filter(p => !p.needs_manager).map(p => p.id);
+  // every sup that can run together (Sensor Lab / RES-Custom clash: the later one would change LOADER.BIN's list)
+  const picked = plan(CAT.products.filter(p => !p.needs_manager).map(p => p.id)).on;
   const z = unzip(zipFor(picked)), root = cardName(picked) + '/';
   const pair = CAT.boot.variants[`${manager ? 'm1' : ''}i${+instant}f${+fast}`].files;
   ok(pair.every(f => z[root + f.path].equals(Buffer.from(f.data, 'base64')) &&
@@ -249,6 +250,43 @@ if (CAT.products.some(p => p.id === 'stopfx')){
     ok(actual.join() === want.join() && plan(ids).off.length === 0 && checks(ids).every(r => r.ok),
        `${ids.join('+')}: ZIP has exactly the independently selected products`);
     if (ids.includes('stopfx')) ok(z[root + 'README.txt'].toString().includes('by Ruari'), 'ZIP README retains Ruari attribution');
+  }
+}
+
+// 8. Sensor Lab (Bei 2026-11-07): QS-Share is shared plumbing, added with it and never a choice of its own;
+//    Sensor Lab and RES-Custom claim the same hook sites, so they clash like OG3K / OG2K.
+if (CAT.products.some(p => p.id === 'sensor-lab')){
+  const byId = id => CAT.products.find(p => p.id === id);
+  const sl = byId('sensor-lab'), qs = byId('qs-share'), rc = byId('res-custom');
+  ok(qs && qs.infra && !sl.infra && qs.sup_id === 'QSCT' && sl.sup_id === 'SL41', 'QS-Share is infra (sup_id QSCT), Sensor Lab is not');
+  ok(sl.name === 'Sensor Lab-IMX410' && sl.file === 'SensorLab-IMX410_v0.0.1test.BIN' && sl.version === '0.0.1test' &&
+     qs.name === 'QS-Share' && qs.file === 'QS-Share_v0.0.1test.BIN' && qs.version === '0.0.1test', 'names_v4 names and versions');
+  const hdrName = p => { const d = Buffer.from(p.data, 'base64'), o = d.readUInt32LE(44); return d.slice(o, d.indexOf(0, o)).toString(); };
+  ok(hdrName(sl) === sl.name && hdrName(qs) === qs.name, 'header display names = page names (no font_menu_SB_kigou_09)');
+  ok(sl.requires.includes('qs-share') && selected(['sensor-lab']).includes('qs-share'), 'Sensor Lab selects QS-Share');
+  {
+    const ids = ['sensor-lab'], {on, files} = compose(ids), z = unzip(zipFor(ids)), root = cardName(ids) + '/';
+    ok(on.includes('sensor-lab') && on.includes('qs-share') && checks(ids).every(r => r.ok), 'Sensor Lab alone: both run, checks pass');
+    ok(z[root + 'fpSup/' + qs.file] && sha(z[root + 'fpSup/' + qs.file]) === qs.sha256 &&
+       z[root + 'fpSup/' + sl.file] && sha(z[root + 'fpSup/' + sl.file]) === sl.sha256, 'zip has QS-Share and Sensor Lab, exact bytes');
+    ok(cardName(ids) === sl.release + '-IS', 'card name is Sensor Lab\'s release (QS-Share not a choice)');
+    const r = z[root + 'README.txt'].toString();
+    ok(r.includes('shared, included for Sensor Lab-IMX410') && r.includes('BEFORE YOU COPY') && r.includes('QSContainer_v*.BIN'),
+       'README: QS-Share marked shared, the upgrade note (delete old SensorLab / QSContainer)');
+    const L = z[root + 'fpSup/LOADER.BIN'];
+    ok(L.readUInt32LE(L.length - 128) === 0x53445346 && L.readUInt32LE(L.length - 124) === 0, 'no clash: empty disabled list');
+  }
+  ok(!selected(['lossless']).includes('qs-share') && !compose(['lossless']).files.some(f => f.name.endsWith(qs.file)),
+     'QS-Share is not added without Sensor Lab');
+  ok(sl.excl.includes('res-custom') && rc.excl.includes('sensor-lab'), 'Sensor Lab <-> RES-Custom excl is symmetric');
+  for (const [first, second] of [['sensor-lab', 'res-custom'], ['res-custom', 'sensor-lab']]){
+    const ids = [first, second], pl = plan(ids), {files} = compose(ids);
+    ok(pl.on.includes(first) && pl.off.join() === second && !(pl.on.includes('sensor-lab') && pl.on.includes('res-custom')),
+       `${first} first: ${first} runs, ${second} is off`);
+    const L = files.find(f => f.name === 'fpSup/LOADER.BIN');
+    ok(L.disabled && L.disabled.join() === byId(second).sup_id && checks(ids).every(r => r.ok),
+       `${first} first: LOADER.BIN disabled list = [${byId(second).sup_id}], checks pass`);
+    ok(pl.on.includes('qs-share') && files.some(f => f.name === 'fpSup/' + qs.file && !f.off), `${first} first: QS-Share still on the card, running`);
   }
 }
 
