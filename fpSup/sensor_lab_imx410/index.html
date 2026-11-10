@@ -228,19 +228,25 @@ const PX_MM = 35.9 / 6048, WMAX = 6048, HMAX = 4040, WMIN = 256, HMIN = 144;
 const DCS = [['OG',6048,4040],['HD',6048,3402],['S35',4192,2358],['APS-C',3952,2624],['S16',2096,1240],['SQ',4032,4032]];
 const RATIOS = [[1,'×1'],[2/3,'÷1.5'],[1/2,'÷2'],[1/3,'÷3'],[1/6,'÷6']];
 const KS = [1,2,3,3.5,4,5,6];
+// 0.0.6test (Bei 11-10, exact merges): the ÷6 preset keeps VM_ROWS spare rows below the record so 6x6 (2x2 + ISP 3x3) and
+// 3x6 + RWZM H 2:1 record exactly the RES with the vertical-margin floor (quality.py VM_ROWS); 1x2 / 1x3 are the anamorphic
+// merge presets (full width, H / 2, H / 3), picked by label like the K ones.
+const VM_ROWS = 10, ANA = [2, 3];
+const binH = (H, r) => ev(H * r) - (r === 1/6 ? VM_ROWS : 0);   // an integer-bin ratio's preset height
 const a16 = w => Math.floor(w / 16) * 16, ev = h => Math.floor(h / 2) * 2;
 const kLabel = w => { const x = w / 1024;            // nearest .5 from 1K up; below 1K one decimal so ÷3/÷6 differ
   return (x < 0.75 ? (Math.round(x * 10) / 10).toFixed(1) : String(Math.round(x * 2) / 2)) + 'K'; };
 const mm = px => (px * PX_MM).toFixed(1);
 
 function divText(W, H, w, h) {                   // "3x2" when each axis is an integer bin plus < 1 alignment unit of crop (Bei 10-29 B)
-  const n = [1,2,3,4,5,6,8,12].find(k => a16(W / k) === w), m = [1,2,3,4,5,6,8,12].find(k => ev(H / k) === h);
+  const n = [1,2,3,4,5,6,8,12].find(k => a16(W / k) === w),
+    m = [1,2,3,4,5,6,8,12].find(k => ev(H / k) === h || (k === 6 && ev(H / k) - VM_ROWS === h));
   return n || m ? (n || '') + 'x' + (m || '') : '';        // one axis only: "2x" / "x3" (Bei 10-29)
 }
 function resList(W, H, dcName) {                 // presets for this DC: clean ratios ∪ 1K–6K, FHD/UHD on HD
   const items = [];
   for (const [r, n] of RATIOS) {                 // integer bins take H/k for the height (exact bin), ÷1.5 keeps the aspect
-    const w = a16(W * r), h = Number.isInteger(1 / r) ? ev(H * r) : ev(w * H / W);
+    const w = a16(W * r), h = Number.isInteger(1 / r) ? binH(H, r) : ev(w * H / W);
     if (w >= WMIN && h >= HMIN) items.push({w, h, ratio: true, div: divText(W, H, w, h), label: kLabel(w)});
   }
   for (const K of KS) {
@@ -250,6 +256,10 @@ function resList(W, H, dcName) {                 // presets for this DC: clean r
   }
   if (dcName === 'HD') for (const [n, w, h] of [['UHD',3840,2160],['FHD',1920,1080]])
     items.push({w, h, exact: false, div: divText(W, H, w, h), label: n});
+  for (const k of ANA) {                         // 1x2 / 1x3: labelled by the merge (div_text style)
+    const w = a16(W), h = ev(H / k);
+    if (w >= WMIN && h >= HMIN) items.push({w, h, exact: false, div: divText(W, H, w, h), label: '1x' + k});
+  }
   const seen = new Set();
   items.forEach(i => { i.exact = i.div !== ''; });               // exact = both axes divide by an integer
   return items.filter(i => !seen.has(i.w + 'x' + i.h) && seen.add(i.w + 'x' + i.h)).sort((a, b) => a.w - b.w);     // small → large (Bei 10-29)
@@ -258,7 +268,8 @@ function resList(W, H, dcName) {                 // presets for this DC: clean r
 // ---- state -----------------------------------------------------------------------------------------------
 const S = { dcW: 6048, dcH: 3402, dcLock: true, resRatio: 1/3, resCustom: null, resLock: true,
   dcAsp: 6048 / 3402, resAsp: 6048 / 3402, resK: null,
-  memory: {}, sub: null, focus: 1, open: true, fps: 59.94, fpsCustom: null, fine: false, recipe: null, recipeD: null, kh: 1, kv: 1, km: 0 };        // memory[dcKey] = {w,h} custom RES per crop
+  memory: {}, sub: null, focus: 1, open: true, fps: 59.94, fpsCustom: null, fine: false, recipe: null, recipeD: null, kh: 1, kv: 1, km: 0,
+  bits: 12 };        // memory[dcKey] = {w,h} custom RES per crop
 const dcName = () => (DCS.find(d => d[1] === S.dcW && d[2] === S.dcH) || ['Custom'])[0];
 const dcKey = () => dcName() === 'Custom' ? `C${S.dcW}x${S.dcH}` : dcName();
 const qualityKey = () => { const r = res(); return `${dcKey()}:${r.w}x${r.h}`; };
@@ -269,9 +280,9 @@ function res() {
     if (it) return {w: it.w, h: it.h};
   }
   let r = S.resRatio;
-  if (a16(S.dcW * r) < WMIN || ev(S.dcH * r) < HMIN) r = 1;     // too small on this DC: ×1, without forgetting the user's ratio
+  if (a16(S.dcW * r) < WMIN || binH(S.dcH, r) < HMIN) r = 1;     // too small on this DC: ×1, without forgetting the user's ratio
   const w = a16(S.dcW * r);
-  return {w, h: Number.isInteger(+(1 / r).toFixed(6)) ? ev(S.dcH * r) : ev(w * S.dcH / S.dcW)};
+  return {w, h: Number.isInteger(+(1 / r).toFixed(6)) ? binH(S.dcH, r) : ev(w * S.dcH / S.dcW)};
 }
 function resInfo() {
   const r = res(), list = resList(S.dcW, S.dcH, dcName());
@@ -305,11 +316,20 @@ const stock = (t, vals, i = 0, sub = '') => ({t, vals, i, sub,
 // The bits a recipe RECORDS (Bei 10-30, notes/RWZM_14BIT_CHECK.md): RWZM carries 12 bits, so a 14-bit-AD recipe
 // that scales (zoom != 1024 on either axis, every CRCT bin included) records into a 12-bit DNG; only 1:1 is true 14.
 const recBits = d => d.ad === 14 && d.zoom[0] === 1024 && d.zoom[1] === 1024 && d.hbin === 1 && d.vbin === 1 ? 14 : 12;
+// 0.0.3test (Bei 11-08): S.bits stands for the camera's stock bit-depth setting (menu BIT row; 12 = "RAW bit").  8 / 10
+// bit record that depth for any recipe (the picker asks the 8 / 10-bit route table, the readout is the recipe's own);
+// RAW bit records recBits.  0.0.4test: the QS FORMAT dial sets it as well; 'bits:N' stands for the menu BIT row.
+const outBits = d => S.bits === 8 || S.bits === 10 ? S.bits : recBits(d);
 // The sensor's native readout widths (QS_DC_RES_SPEC native-width markers): marked on the DC WIDTH dial, not presets.
 const NATIVE_W = [6048, 5040, 4144, 3984];
-const FORMAT = { t: 'FORMAT',                      // DNG only (MOV grey); the bit depth follows the recipe's ADC (Bei 10-29)
-  v: () => 'DNG', s: () => { const c = curRecipe(); return c ? recBits(c.d) + 'bit' : ''; },   // the recorded bits (11-bit AD and scaled 14-bit AD: 12)
-  opts: () => [{l: 'DNG'}, {l: 'MOV', na: true}], sel: () => 0, adj() {}, pick() {} };
+const FORMAT = { t: 'FORMAT',                      // DNG only (MOV grey); the dial picks the stock bit depth (0.0.4test)
+  v: () => 'DNG', s: () => { const c = curRecipe(); return c ? outBits(c.d) + 'bit' : ''; },   // the recorded bits (11-bit AD and scaled 14-bit AD: 12; stock 8 / 10: that)
+  // 0.0.4test (Bei 11-08): the dial picks the stock depth like the menu BIT row (one setting): 8bit / 10bit / RAW bit,
+  // shown as the recipe's own 12 / 14 bit; MOV grey; stops at the ends (the camera: the BIT row's stock setter)
+  opts: () => { const c = curRecipe(); return [{l: '8bit'}, {l: '10bit'}, {l: (c ? recBits(c.d) : 12) + 'bit'}, {l: 'MOV', na: true}]; },
+  sel: () => S.bits === 8 ? 0 : S.bits === 10 ? 1 : 2,
+  adj(d) { const k = FORMAT.sel() + d; if (k >= 0 && k <= 2) S.bits = [8, 10, 12][k]; },
+  pick(k) { if (k >= 0 && k <= 2) S.bits = [8, 10, 12][k]; } };
 // ---- FPS: preset fallback + current C-core cells from the local simulator server.
 const STD = [23.976, 24, 25, 29.97, 30, 47.952, 48, 50, 59.94, 60, 72, 90, 96, 100, 119.88, 120, 144, 150, 180, 200,
   239.76, 240, 300, 360, 400, 480, 500, 600, 1000];
@@ -349,7 +369,7 @@ function fineStep(f, d, big) {                    // next / previous rate any qu
   }
   return f;
 }
-const FPS = { t: 'FPS', more: 'fps',               // AEL opens the FPS sub-QS: FPS list + FINE (Bei 10-30, A)
+const FPS = { t: 'FPS', more: 'fps',               // AEL = in-place fine (Bei 11-07); the FPS sub-QS (FPS + FINE) only from the menu's CUSTOM
   v() { const Q = quals(); if (!Q) return '—'; const o = fpsList().find(o => same(o.f, S.fps)); return S.fine || !o ? f3(S.fps) : fmtF(o); },
   s() { const Q = quals(); if (!Q) return '—';
     const a = avail(Q, S.fps), top = Q.find(q => same(q.max, S.fps));
@@ -369,7 +389,7 @@ function fixFps() {                               // after DC / RES change: keep
   const Q = quals(); if (!Q) return;
   const M = fpsMax(Q); if (S.fps > M + 5e-4) S.fps = (fpsList().filter(o => o.std && !o.na).pop() || {f: M}).f;
 }
-// FINE: the old in-place fine mode as a sub-QS tile (K-style spinner: VMAX +-1, rear +-10); the menu's CUSTOM lands here
+// FINE: the fine mode as a sub-QS tile (K-style spinner: VMAX +-1, rear +-10); the menu's CUSTOM lands here ('fpscustom')
 const FINE = { t: 'FINE', spin: true,
   v: () => quals() ? f3(S.fps) : '—', s: () => FPS.s(),
   mark: () => { const Q = quals(); return !!(Q && Q.some(q => same(q.max, S.fps))); },
@@ -399,7 +419,7 @@ function tileGrid(W, H) {                         // stock rule: tile w 32..512 
 }
 function rates() {                                // {u, ll} in MB/s plus each one's media duty; null without a recipe
   const c = curRecipe(); if (!c) return null;
-  const [W, H] = c.d.rec, b = recBits(c.d), fps = S.fps;
+  const [W, H] = c.d.rec, b = outBits(c.d), fps = S.fps;
   const one = c.d.mh * c.d.mv === 1 && c.d.hbin * c.d.vbin === 1 && c.d.zoom[0] <= 1028 && c.d.zoom[1] <= 1028;
   // bpp: 5.0 for 12-bit merged = above every camera recording (max 4.35, ISO 100..6400; real takes don't rise with ISO,
   // the exposure follows it), 14-bit +2, 1x1 +1.5 (6K stills); notes/MBPS_TILE_RESEARCH.md "v2" (Bei 10-29: v1 far too high)
@@ -410,7 +430,7 @@ function rates() {                                // {u, ll} in MB/s plus each o
   const praw = Math.max(0, 1 - 1000 / (fps * tc));
   const Fl = (1 - praw) * Fc + praw * Fu;
   const [, R, C] = MEDIA[S.media ?? 1], duty = F => fps * (Math.ceil(F / C) * C / (R * 1e6) + 0.51e-3);
-  return {u: fps * Fu / 1e6, ll: fps * Fl / 1e6, du: duty(Fu), dl: duty(Fl), no: Fc > LL_MAX_FRAME};
+  return {u: fps * Fu / 1e6, ll: fps * Fl / 1e6, du: duty(Fu), dl: duty(Fl), no: Fc > LL_MAX_FRAME || b === 8};   // Lossless: 10 / 12 bit only
 }
 const tone = d => d <= 0.75 ? 'ok' : d <= 1 ? 'approx' : 'bad';
 const MBPS = { t: 'MB/s',
@@ -430,8 +450,8 @@ const DC = { t: '<span class="icon">DC</span>',
     : Math.max(0, Math.min(DCS.length - 1, k + d)); this.pick(k); },
   pick(k) { setDC(DCS[k][1], DCS[k][2]); S.dcAsp = DCS[k][1] / DCS[k][2]; }, more: 'dc' };
 const RES = { t: '<span class="icon">RES.</span>',
-  v: () => resInfo().label, s: () => { const i = resInfo(), v = visible();       // visible size; the remembered RES stays the raster
-    return [`${v.w}×${v.h}` + (i.div ? ` · ${i.div}` : ''), v.short]; },
+  v: () => resInfo().label, s: () => { const v = visible(), dv = hintDiv();     // visible size; the hint of the RES the user gets
+    return [`${v.w}×${v.h}` + (dv ? ` · ${dv}` : ''), v.short]; },
   opts: () => resInfo().list.map(i => ({l: i.label})),     // the ratio stays on the tile only (Bei 10-29)
   sel: () => { const i = resInfo(); return i.list.indexOf(i.hit); },
   adj(d) { const i = resInfo(), L = i.list; let k = L.indexOf(i.hit);
@@ -443,9 +463,16 @@ const RES = { t: '<span class="icon">RES.</span>',
 function dimTile(axis, which) {                  // WIDTH / HEIGHT for DC or RES; front = 1 step, rear = 10 steps
   const isDC = which === 'dc', step = axis === 'w' ? 16 : 2;
   return { t: axis === 'w' ? 'WIDTH' : 'HEIGHT',
-    v() { const r = isDC ? {w: S.dcW, h: S.dcH} : visible(); return String(axis === 'w' ? r.w : r.h); },
+    // v0.7.36test (Bei 11-05): the dialed RES itself (its nominal visible size), never the recipe's -- it moves every click
+    v() { const r = isDC ? {w: S.dcW, h: S.dcH} : (x => ({w: x.w - 16, h: x.h - 10}))(res()); return String(axis === 'w' ? r.w : r.h); },
     s() { const r = isDC ? {w: S.dcW, h: S.dcH} : res();
-      return isDC ? mm(axis === 'w' ? r.w : r.h) + ' mm' : divText(S.dcW, S.dcH, r.w, r.h); },
+      if (isDC) return mm(axis === 'w' ? r.w : r.h) + ' mm';
+      const {e, c, hint: dv} = effDisplay();       // a tolerance recipe: what it records, then its merge (single source)
+      const rec = e.w !== r.w || e.h !== r.h ? `→${e.w}×${e.h}` : '';
+      const t = rec && dv ? `${rec} · ${dv}` : rec || dv;
+      if (!c || !c.d.zoom || !rwOn(c.d)) return t;
+      const x = ` /${(c.d.zoom[axis === 'w' ? 0 : 1] / 1024).toFixed(2)}`;    // 0.0.6test: this axis' RWZM ratio, when it fits
+      return utf8Len(t + x) <= SMALL_MAX ? t + x : t; },
     opts: () => [], sel: () => -1, spin: true,
     mark: () => isDC && axis === 'w' && NATIVE_W.includes(S.dcW),        // a native readout width: dotted underline
     adj(d, big) {
@@ -510,8 +537,26 @@ function nearest(R, d) {                          // fewest parameters changed, 
 // Not a picture-quality ranking: which looks best is unknown.
 function defaultPick(R) {
   const r = res(), rx = S.dcW / r.w, ry = S.dcH / r.h, dv = q => Math.abs(ry - q.d.mv), dh = q => Math.abs(rx - q.d.mh);
-  return R.slice().sort((a, b) => dv(a) - dv(b) || recBits(b.d) - recBits(a.d) || dh(a) - dh(b) || b.d.rs_ms - a.d.rs_ms)[0];
+  return R.slice().sort((a, b) => dv(a) - dv(b) || outBits(b.d) - outBits(a.d) || dh(a) - dh(b) || b.d.rs_ms - a.d.rs_ms)[0];
 }
+function effRes() {                              // v0.7.35test: the RES the user gets (the recipe's visible + margins)
+  const r = res(), c = curRecipe();
+  return c && c.d.vis ? {w: c.d.vis[0] + 16, h: c.d.vis[1] + 10} : r;
+}
+// v0.7.38test (Bei 11-05, display rules, single source): the effective recipe (curRecipe, the
+// one that overrides RES) is the single source of the merge hint: per axis sensor merge × ISP bin, "HxV"; 0.0.6test
+// (Bei 11-10: "one axis RWZM and it all says RWZM, I can't tell if it is right"): always the merge per axis, "+RW" when
+// the RWZM is on (either axis not 1024: the ÷3 bins' forced 1025 included, as the firmware runs it); no recipe: the
+// geometric DC / RES division.  QS: slqs.c eff_now / recipe_hint.
+const rwOn = d => d.zoom[0] > 1024 || d.zoom[1] > 1024;
+const recipeHint = d => `${d.mh * d.hbin}x${d.mv * d.vbin}` + (rwOn(d) ? '+RW' : '');
+const SMALL_MAX = 23;                             // QS small text bytes (qsc.h QSC_VALUE 24, NUL incl.)
+const utf8Len = t => [...t].reduce((n, c) => { const u = c.codePointAt(0); return n + (u < 0x80 ? 1 : u < 0x800 ? 2 : u < 0x10000 ? 3 : 4); }, 0);
+function effDisplay() {                           // the RES the user gets and its hint
+  const r = res(), c = curRecipe(), e = effRes();
+  return {r, e, c, hint: c && c.d.zoom ? recipeHint(c.d) : divText(S.dcW, S.dcH, e.w, e.h)};
+}
+function hintDiv() { return effDisplay().hint; }  // the bin hint of the effective RES
 function visible() {                             // what the DNG shows: the recipe's own crop (<= 2 % short), else nominal
   const r = res(), c = curRecipe();
   if (c && c.d.vis) return {w: c.d.vis[0], h: c.d.vis[1], short: c.d.vis[1] < r.h - 10 || c.d.vis[0] < r.w - 16};
@@ -521,7 +566,8 @@ const RECIPE = { t: 'RECIPE', more: 'recipe',
   v() { const c = curRecipe(); return !c ? '—' : isPreset(c) ? `${c.d.ad}b ${c.d.mh}x${c.d.mv}` : 'CUSTOM'; },
   s() { const c = curRecipe(); if (!c) return 'on camera';
     const v = visible();
-    return [(isPreset(c) ? '' : `${c.d.ad}b ${c.d.mh}x${c.d.mv} ISP ${c.d.hbin}x${c.d.vbin} · `) + `RS ${c.d.rs_ms.toFixed(2)} ms` + (v.short ? ` · ${v.w}×${v.h}` : ''), v.short]; },   // kernels in the sub-QS
+    // v0.7.38test (Bei live 11-05): RS one decimal, no visible-size suffix (RES shows what is recorded); short = yellow
+    return [(isPreset(c) ? '' : `${c.d.ad}b ${c.d.mh}x${c.d.mv} ISP ${c.d.hbin}x${c.d.vbin} · `) + `RS ${c.d.rs_ms.toFixed(1)} ms`, v.short]; },   // kernels in the sub-QS
   opts() { const r = res(); return presets().map(q => ({l: `${q.d.ad}b ${q.d.mh}x${q.d.mv}`,
     s: `${q.d.rs_ms.toFixed(1)}ms` + (q.d.vis && q.d.vis[1] < r.h - 10 ? ` H${q.d.vis[1]}` : ''),     // short: the footer font is ~12 px
     na: !usable(q), approx: q.d.vis && q.d.vis[1] < r.h - 10})); },
@@ -682,9 +728,10 @@ function render() {
   });
   const f = L[S.focus];
   $('ael').style.visibility = f && f.more && !S.sub ? 'visible' : (S.sub ? 'visible' : 'hidden');
-  $('ael').innerHTML = S.sub ? `<b>MENU</b>${say('back')}` : `<b>AEL</b>${say('more')}`;     // stock strings only (Bei 10-29), localised like the camera's
-  if (f && f.spin) {                                // numeric footer like the stock K tile: ◀ value ▶
-    $('footer').innerHTML = `<span class="arrow sp" data-d="-1" data-big="1">«</span><span class="arrow sp" data-d="-1">◀</span><div class="o big ${f.mark && f.mark() ? 'mk' : ''}">${f.v()}</div><span class="arrow sp" data-d="1">▶</span><span class="arrow sp" data-d="1" data-big="1">»</span>`;
+  $('ael').innerHTML = S.sub || S.fine ? `<b>MENU</b>${say('back')}` : `<b>AEL</b>${say('more')}`;     // stock strings only (Bei 10-29), localised like the camera's
+  const sf = f === FPS && S.fine ? FINE : f;        // in-place fine (Bei 11-07): FPS shows FINE's spinner
+  if (sf && sf.spin) {                              // numeric footer like the stock K tile: ◀ value ▶
+    $('footer').innerHTML = `<span class="arrow sp" data-d="-1" data-big="1">«</span><span class="arrow sp" data-d="-1">◀</span><div class="o big ${sf.mark && sf.mark() ? 'mk' : ''}">${sf.v()}</div><span class="arrow sp" data-d="1">▶</span><span class="arrow sp" data-d="1" data-big="1">»</span>`;
   } else {
   const o = f ? f.opts() : [], sel = f ? f.sel() : -1;
   for (let n = 9; n >= 1; n--) {                  // as many options as fit, centred on the selection
@@ -719,6 +766,7 @@ function moveFocus(d) {
   S.focus = i;
 }
 function act(k) {
+  if (/^bits:/.test(k)) { S.bits = +k.slice(5); return render(); }   // the stock BIT row (menu), outside the QS
   if (k === 'qs') { if (S.fine) fineExit(); S.open = !S.open; if (!S.open) closeSub(); return render(); }
   if (!S.open) return;
   const L = layout(), f = L[S.focus];
@@ -727,9 +775,16 @@ function act(k) {
   else if (k === 'up' || k === 'down') { const i = (S.focus + 4) % 8; if (L[i]) S.focus = i; }
   else if (/^[fr][+-]$/.test(k) && f) f.adj(k[1] === '+' ? 1 : -1, k[0] === 'r');
   else if (k === 'ael') {
-    if (S.sub) closeSub();
+    if (S.fine && !S.sub) fineExit();             // AEL again: the tuned rate joins the list
+    else if (S.sub) closeSub();
+    else if (f === FPS) { if (quals()) { S.fine = true; S.fpsCustom = null; } }   // in place (Bei 11-07); entering drops the old tuned rate
     else if (f && f.more) { S.sub = f.more; S.focus = 0; }
-  } else if ((k === 'esc' || k === 'menu') && S.sub) closeSub();
+  } else if (k === 'fpscustom') {                 // the menu's FPS CUSTOM: the FPS sub-QS, focus on FINE (on the camera via the menu)
+    if (S.fine) fineExit();
+    if (S.sub) closeSub();
+    S.sub = 'fps'; S.focus = 1;
+  } else if ((k === 'esc' || k === 'menu') && S.fine && !S.sub) fineExit();
+  else if ((k === 'esc' || k === 'menu') && S.sub) closeSub();
   else if (k === 'ok') { if (S.fine) fineExit(); S.open = false; closeSub(); }
   render();
 }

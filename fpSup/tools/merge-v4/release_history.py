@@ -54,6 +54,14 @@ def attach_history(cat, releases):
                                 current=d.name == p.get('release'),
                                 changes=notes.get(d.name, dict(en=readme_changes(readme))),
                                 source=source_link(readme), source_kind='release'))
+        # versions this page offered from an earlier snapshot (build_catalogue_v4: a later snapshot replaces them)
+        for old in p.get('superseded', []):
+            if not any(h['release'] == old['release'] for h in history):
+                manifest = pathlib.Path(old['manifest'])
+                history.append(dict(release=old['release'], version=old['version'], label='v' + old['version'],
+                                    date=old['date'], current=False, changes=notes.get(old['release'], {}),
+                                    source=source_link(manifest if manifest.is_absolute() else HERE / manifest),
+                                    source_kind='manifest'))
         history.sort(key=lambda h: version_key(h['version']), reverse=True)
         if p.get('provenance') and not any(h['current'] for h in history):
             manifest = pathlib.Path(p['provenance']['manifest'])

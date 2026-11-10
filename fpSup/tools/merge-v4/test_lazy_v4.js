@@ -79,7 +79,7 @@ const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://'));
   p.change({id: 'lossless'}, true);
   await p.settle();
   assert.deepStrictEqual(siteFetches(p).map(c => c.url).sort(),
-    ['inputs/v4-20261027/EarlyFlush_v0.1.0.BIN', 'inputs/v4-20261027/Lossless_v0.3.1.BIN', 'inputs/v4-20261027/Stop-FX_v0.1.0.BIN']);
+    ['inputs/v4-20261027/EarlyFlush_v0.1.0.BIN', 'inputs/v4-20261110c/Lossless_v0.3.2test.BIN', 'inputs/v4-20261027/Stop-FX_v0.1.0.BIN'].sort());
   assert(lossless.data != null && fcap.data != null);
 
   // 3. download: the zip, then one request per release asset, unreadable (no-cors); once per visit
@@ -89,7 +89,7 @@ const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://'));
   assert.strictEqual(p.clicked.length, 1);
   assert.deepStrictEqual(counted().map(c => c.url).sort(), [
     'https://github.com/ijigen/fpSup/releases/download/fpsup-fcap-v0.1.0/EarlyFlush_v0.1.0.BIN',
-    'https://github.com/ijigen/fpSup/releases/download/fpsup-lossless-v0.3.1/Lossless_v0.3.1.BIN',
+    'https://github.com/ijigen/fpSup/releases/download/fpsup-lossless-v0.3.2test/Lossless_v0.3.2test.BIN',
     'https://github.com/ijigen/fpSup/releases/download/fpsup-stopfx-v0.1.0/Stop-FX_v0.1.0.BIN']);
   assert(counted().every(c => c.opt.mode === 'no-cors'));
   p.click({id: 'dl', dataset: {}});

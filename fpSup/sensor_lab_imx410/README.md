@@ -7,7 +7,7 @@ bit depth, sizes, rolling shutter, data rates). Anything the simulator cannot sh
 on the page. Every change in the simulator rewrites the address to the camera's own payload format.
 English by default, with Simplified and Traditional Chinese. `simulator/` redirects here.
 
-The simulator uses the SensorLab **0.7.29test** C calculation core and QR encoder compiled
+The simulator uses the SensorLab **0.0.6test** C calculation core and QR encoder compiled
 to WebAssembly. Everything runs in the browser; no camera, local server, account or remote
 calculation service is needed. Image quality, recording, playback and physical camera stability are
 not simulated.

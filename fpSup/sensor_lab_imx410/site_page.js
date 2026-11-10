@@ -178,14 +178,44 @@ function decodeRecipe(code) {                     // {fields} or {error: length|
 // ---- what a code means (ported from the former mode viewer, site/README.md) -----------------------------------------
 // v1 records the requested RES and actual ISP window, not zoom itself. Rebuild core.c q_isp's visible-tolerance zoom,
 // including its <1026 unity and bin3 rule.
+// quality.py vmargin (0.0.5test): spare RWZM input rows below the record x1024, as the firmware lays it in; null = off
+const VMARGIN = 4992;                              // quality.VMARGIN: 4.875 rows, the least stock RWZM profile (FHD)
+function vmargin(winH, vbin, zh, zv, recH) {
+  if (zh <= 1024 && zv <= 1024) return null;
+  const R = Math.floor(winH / vbin), z = Math.max(zv, 1024);
+  const est = z > 1024 ? Math.floor((Math.floor(z / 2) + R * 1024) / z) : R;
+  const y0 = est > recH ? Math.floor((est - recH) / 4) * 2 : 0;
+  return R * 1024 - (y0 + recH) * z;
+}
+// 0.0.6test exact merges (quality.py (E) / (V), validation/20261110-binning-exact)
+const CROP_W = 16, CROP_H = 4, CROP_FOV = [3, 200], VCROP = 12;
+const cropOk = (b, n, o, lim) => b - o >= 0 && b - o <= lim && CROP_FOV[1] * Math.max(n - o, 0) <= CROP_FOV[0] * n;
 function ispZoom(f) {
-  const bw = Math.max(f.ww, Math.floor(f.dcw / f.mh));
-  const bh = Math.max(f.wh, Math.floor(f.dch / f.mv / 2) * 2);
+  const nw = Math.floor(f.dcw / f.mh), nh = Math.floor(f.dch / f.mv / 2) * 2;
+  const bw = Math.max(f.ww, nw), bh = Math.max(f.wh, nh);
+  // (E) a merge within one readout step of the RES records 1:1 (RWZM off, a centred crop)
+  if (f.hbin === 1 && f.vbin === 1 && cropOk(bw, nw, f.rw, CROP_W) && cropOk(bh, nh, f.rh, CROP_H)) return [1024, 1024];
   const z = (src, bin, dst) => { const n = Math.floor(Math.floor(src / bin) * 1024 / dst); return n < 1026 ? 1024 : n; };
   let h = f.hbin === 3 || bw > f.rw ? z(bw, f.hbin, f.rw) : 1024;
   let v = f.vbin === 3 || bh > f.rh ? z(bh, f.vbin, f.rh) : 1024;
+  if (v > 1024 && (h > 1024 || f.hbin === 3 || f.vbin === 3)) {   // (V) spare rows cropped: the aspect ratio, else 1:1
+    const d = f.mv * f.vbin, R = Math.floor(f.wh / f.vbin), zm = Math.max(h, 1025);
+    for (const t of [Math.floor((h * f.mh * f.hbin + Math.floor(d / 2)) / d), 1024]) {
+      if (t < 1024 || t >= v) continue;
+      const est = t > 1024 ? Math.floor((Math.floor(t / 2) + R * 1024) / t) : R;
+      if (est - f.rh > 0 && est - f.rh <= VCROP && vmargin(f.wh, f.vbin, zm, t, f.rh) >= VMARGIN) { v = t; break; }
+    }
+  }
   if ((f.hbin === 3 || f.vbin === 3) && h === 1024 && v === 1024) h = v = 1025;
-  return [h, v];
+  const recH = f.vish + 10, m = vmargin(f.wh, f.vbin, h, v, recH);
+  if (m !== null && m < VMARGIN && h > 1024 && v > 1024)   // both ratios smaller by one factor (quality._margin_fix 1)
+    for (let k = v - 1; k > 1024; k--) {
+      if (vmargin(f.wh, f.vbin, h, k, recH) < VMARGIN) continue;
+      const g = Math.floor((h * k + Math.floor(v / 2)) / v);
+      if (g <= 1024) break;
+      return [g, k];
+    }
+  return [h, v];                                   // (a shorter record is in the code's own visible height)
 }
 const SENSOR = [6048, 4040], CLK = 72e6;
 function describe(f) {
@@ -194,6 +224,9 @@ function describe(f) {
   M.adBits = [11, 12, 14, 12][f.ad]; M.fpsExact = CLK / (f.hmax * f.vmax);
   // This is the current SensorLab recording policy, not a claim about every ISP path.
   M.recordBits = M.adBits === 14 && M.zoom.every(z => z === 1024) && f.hbin === 1 && f.vbin === 1 ? 14 : 12;
+  // 0.0.3test: the simulator's stand-in for the stock bit-depth setting (dcres.html S.bits, 0.0.4test: set by the QS
+  // FORMAT dial or the menu BIT row; a camera code carries none)
+  if (typeof S === 'object' && S && (S.bits === 8 || S.bits === 10)) M.recordBits = S.bits;
   M.recW = f.visw + 16; M.recH = f.vish + 10;     // v1 carries each recipe's own DNG DefaultCrop
   M.fpsLabel = f.fps < 29 ? String(STD[f.fps]) : '';
   M.k = KERNELS[f.kh] || KERNELS[1]; M.mode = f.km ? 'STD' : 'SOFT';
@@ -310,18 +343,24 @@ function applyStart(f) {                          // DC, RES and kernels now; FP
   S.kh = f.kh; S.kv = f.kv; S.km = f.km;
   PAGE.pending = f;
 }
+// the payload fields a code's selection is made of (slqs.c QF_INPUT); the others are derived by the current core
+const QR_INPUTS = ['ver', 'dcw', 'dch', 'rw', 'rh', 'fps', 'ad', 'mh', 'mv', 'hbin', 'vbin', 'kh', 'kv', 'km', 'fmt', 'scw', 'sch'];
 function resolvePending() {                       // the camera's recipe and frame rate, by identity, not by "nearest"
   const f = PAGE.pending, key = qualityKey();
   if (!f || !(key in FPSDATA.cases)) return;
   const R = recipes(), ad = [11, 12, 14][f.ad];
-  const q = R.find(q => q.hm === f.hmax && q.d.key === KEY_NAMES[f.key] && q.d.ad === ad && q.d.mh === f.mh && q.d.mv === f.mv &&
-    q.d.hbin === f.hbin && q.d.vbin === f.vbin && q.d.scw === f.scw && q.d.sch === f.sch && q.d.win[0] === f.ww && q.d.win[1] === f.wh);
+  // 0.0.5test (slqs.c qr_restore): the recipe by its INPUT fields only; key / HMAX / window are what the current core
+  // derives (a code made before the vertical-margin fix names the old window)
+  const q = R.find(q => q.d.ad === ad && q.d.mh === f.mh && q.d.mv === f.mv &&
+    q.d.hbin === f.hbin && q.d.vbin === f.vbin && q.d.scw === f.scw && q.d.sch === f.sch);
   S.recipe = q ? q.q : null;
   S.recipeD = q ? q.d : {ad, mh: f.mh, mv: f.mv, hbin: f.hbin, vbin: f.vbin, scw: f.scw, sch: f.sch};
   S.fpsCustom = null; S.fine = false;
   const exact = FPSDATA.clk / (f.hmax * f.vmax);
-  if (f.fps < 29) S.fps = STD[f.fps];
-  else if (f.fps === 30 && q) {                   // the recipe maximum whose VMAX the camera recorded
+  if (f.fps < 29) {                               // a common rate; a tuned VMAX within 5e-4 of it keeps its own VMAX
+    S.fps = STD[f.fps];
+    if (q && Math.max(q.lo, Math.ceil(FPSDATA.clk / (q.hm * S.fps) - 1e-9)) !== f.vmax && same(exact, S.fps)) S.fps = exact;
+  } else if (f.fps === 30 && q) {                   // the recipe maximum whose VMAX the camera recorded
     const vm = g => Math.max(q.lo, Math.min(FPSDATA.vmax_max, Math.ceil(FPSDATA.clk / (q.hm * g) - 1e-9)));
     const m = quals() ? fpsList().find(o => o.mark && vm(o.f) === f.vmax) : null;
     S.fps = m ? m.f : exact;
@@ -330,8 +369,16 @@ function resolvePending() {                       // the camera's recipe and fra
     if (quals() && !fpsList().some(o => !o.custom && same(o.f, exact))) S.fpsCustom = exact;
   }
   PAGE.pending = null; PAGE.applied = f;
-  const now = qrCode(), mine = now ? decodeRecipe(now).fields : null;
-  PAGE.inexact = QR_FIELDS.map(([k]) => k).filter(k => !mine || mine[k] !== f[k]).map(k => [k, f[k], mine ? mine[k] : null]);
+  let now = qrCode(), mine = now ? decodeRecipe(now).fields : null;
+  let bad = QR_INPUTS.filter(k => !mine || mine[k] !== f[k]);
+  if (bad.length && q && f.fps >= 29) {            // slqs.c qr_map_rate: the same recipe at its maximum (30) or at the fastest
+    const v = Math.min(FPSDATA.vmax_max, Math.max(q.lo, f.fps === 30 ? q.lo : Math.ceil(f.vmax * f.hmax / q.hm - 1e-9)));
+    S.fps = FPSDATA.clk / (q.hm * v); S.fpsCustom = null;   // VMAX step not faster than the code's rate, in range
+    if (f.fps === 29 && quals() && !fpsList().some(o => !o.custom && same(o.f, S.fps))) S.fpsCustom = S.fps;
+    now = qrCode(); mine = now ? decodeRecipe(now).fields : null;
+    bad = QR_INPUTS.filter(k => !mine || mine[k] !== f[k] && !(k === 'fps' && mine.fps >= 29));   // tuned <-> maximum
+  }
+  PAGE.inexact = bad.map(k => [k, f[k], mine ? mine[k] : null]);
   PAGE.baseline = now;
 }
 function syncHash() {                              // the address follows every change, without history entries

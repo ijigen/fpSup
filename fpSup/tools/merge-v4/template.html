@@ -628,7 +628,7 @@ const T = {
     motion: ['陀螺儀與後製', '錄影時記下的資料，給後製用'],
     development: ['開發用', '一般拍攝不需要'],
     dl: '下載 zip', pick: '先勾選想使用的功能',
-    by: '作者', thanks: '致謝', soon: '尚未發行', dev: '開發中', long: '長期開發', updated: '更新', formats: '要放進卡的格式', guide: '更多說明',
+    by: '作者', thanks: '致謝', soon: '尚未發行', coming: '即將推出', dev: '開發中', long: '長期開發', updated: '更新', formats: '要放進卡的格式', guide: '更多說明',
     history: '版本改動', currentVersion: '目前提供', releaseNotes: '完整版本說明',
     noHistory: '尚無版本改動紀錄。', noChanges: '此版本未另外記錄改動摘要。', originalNotes: '以下為原始英文改動紀錄。',
     clash: n => `與 ${n} 不相容：已安裝、關閉(開機不載入，可在相機的 SupManager 打開)`,
@@ -674,7 +674,7 @@ const T = {
     motion: ['Gyro & post', 'Data recorded with the clip, for post'],
     development: ['Development', 'Not needed for shooting'],
     dl: 'Download zip', pick: 'Choose the tools you want',
-    by: 'By', thanks: 'Thanks to', soon: 'Not released yet', dev: 'In development', long: 'Long-term development', updated: 'updated', formats: 'Formats to put on the card', guide: 'More',
+    by: 'By', thanks: 'Thanks to', soon: 'Not released yet', coming: 'Coming Soon', dev: 'In development', long: 'Long-term development', updated: 'updated', formats: 'Formats to put on the card', guide: 'More',
     history: 'Version changes', currentVersion: 'Currently offered', releaseNotes: 'Full release notes',
     noHistory: 'No version changes recorded yet.', noChanges: 'No separate change summary was recorded for this version.', originalNotes: 'Original change notes in English:',
     clash: n => `Not compatible with ${n}: installed, off (does not load; turn it on in the camera's SupManager)`,
@@ -866,7 +866,7 @@ function ownSection(t, pl){
 function pendingTile(p, t){
   return `<div class="tile pending">
     <input type="checkbox" disabled aria-label="${esc(t.soon)}">
-    <span class="name">${esc(p.name)}<span class="soon">${esc(p.stage === 'dev' ? t.dev : p.stage === 'long' ? t.long : t.soon)}</span></span>
+    <span class="name">${esc(p.name)}<span class="soon">${esc(p.stage === 'dev' ? t.dev : p.stage === 'long' ? t.long : p.stage === 'coming' ? t.coming : t.soon)}</span></span>
     <span class="desc">${esc(about(p) || p.about.en || '')}</span>
     ${more(p, t)}
     ${versionHistory(p, t)}

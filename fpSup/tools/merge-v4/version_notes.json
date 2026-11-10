@@ -1,4 +1,56 @@
 {
+ "fpsup-sensor-lab-v0.0.6test": {
+  "en": [
+   "Pixel merge made easy: every format offers 2x2, 3x3 and 6x6, plus 1x2 and 1x3, as RES presets.",
+   "2x2, 3x3, 1x2 and 1x3 record 1:1 with RWZM off (centred crop of at most 16 px). 6x6 presets already include the purple-safe margin, so the size you set is the size you record.",
+   "The merge hint shows each preset's merge, e.g. “2x2”, or “6x6+RW” where RWZM scales, with the per-axis ratio in the RES small text.",
+   "No purple first frame. Old QR codes keep working.",
+   "CinemaDNG 8/10-bit; bit depth on the QS FORMAT tile.",
+   "Known issue: OG 6x6 (2x2 + ISP 3x3) can place its first frame about 2 rows off."
+  ],
+  "zh": [
+   "像素合併更好用：每個畫幅的 RES 預設都有 2x2、3x3、6x6，以及 1x2、1x3。",
+   "2x2、3x3、1x2、1x3 都是 1:1 錄製、RWZM 關閉（置中裁切最多 16 px）。6x6 預設已包含防紫屏餘量，設定的尺寸就是錄出的尺寸。",
+   "合併提示顯示每個預設的合併方式（例如「2x2」，用到 RWZM 時為「6x6+RW」），RES 小字顯示各軸比率。",
+   "首幀不紫屏。舊 QR 碼可用。",
+   "CinemaDNG 8／10-bit，QS FORMAT 格可選位深。",
+   "已知問題：OG 6x6（2x2＋ISP 3x3）第一幀可能錯位約 2 列。"
+  ]
+ },
+ "fpsup-qs-share-v0.0.2test": {
+  "en": [
+   "API 9: fine-tune and sub-QS on one function (needed by Sensor Lab 0.0.2test and later).",
+   "On the camera since 2026-11-07, in every Sensor Lab session since."
+  ],
+  "zh": [
+   "API 9：細調與子 QS 可在同一功能（Sensor Lab 0.0.2test 起需要）。",
+   "2026-11-07 起上機，之後每次 Sensor Lab 上機都用它。"
+  ]
+ },
+ "fpsup-lossless-v0.3.2test": {
+  "en": [
+   "Compresses true 14-bit (Sensor Lab 1:1 AD14) as well as 10/12-bit. A take can mix compressed and uncompressed frames.",
+   "On the camera (2026-11-10, SD card): 14-bit 1936x1090, 63 of 63 frames compressed, and 6048x4040, 41 of 41; decoded frames match the uncompressed first frame. SSD not tested."
+  ],
+  "zh": [
+   "支援真 14-bit 壓縮（Sensor Lab 1:1 AD14），10／12-bit 照舊。同一段可混合壓縮與未壓縮幀。",
+   "已上機（2026-11-10，SD 卡）：14-bit 1936×1090 63/63 幀壓縮、6048×4040 41/41 幀；解碼後與未壓縮首幀相同。SSD 未測。"
+  ]
+ },
+ "fpsup-dial-fix-v0.2.1test": {
+  "en": [
+   "Andy_hal9000's rear-wheel decoder v6 as a Loader v4 sup. The rear wheel (its switch bounces) moves one step per click, in the right direction; clockwise is +1, and fast spins are counted too.",
+   "The decoder is his v6 word for word; it runs from the sup's own memory and the dial's vtable is pointed at it, so no camera code is overwritten. Power off restores the stock decoder.",
+   "Firmware 5.02 only. If the dial object is not where 5.02 has it, the sup does nothing.",
+   "The decoder was tested on the camera by its author as an AutoRun card (2026-11-07), and this sup form on 2026-11-10: it loads and the wheel steps one click at a time. Restoring the stock decoder at power off has not been checked separately."
+  ],
+  "zh": [
+   "Andy_hal9000 的後轉盤解碼器 v6,做成 Loader v4 sup。後轉盤(開關會彈跳)每轉一格只走一步、方向正確；順時針為 +1,快轉也照算。",
+   "解碼器與他的 v6 逐字相同，在 sup 自己的記憶體執行，只把轉盤的 vtable 指過去，不覆寫相機程式碼。關機時還原原廠解碼器。",
+   "僅限韌體 5.02。轉盤物件不在 5.02 的位置時,sup 什麼都不做。",
+   "解碼器本身由作者以 AutoRun 卡上機驗證過(2026-11-07);這個 sup 版 2026-11-10 上機：正常載入、轉盤一格一下。關機還原原廠解碼器這點沒有另外確認。"
+  ]
+ },
  "fpsup-sensor-lab-v0.0.1test": {
   "en": [
    "First release on fpSup-Merge. Sensor Lab-IMX410 0.0.1test is SensorLab-IMX410 v0.7.39test renamed; the code is unchanged.",
@@ -441,20 +493,6 @@
   "zh": [
    "修正飽和度設為 +0.2 時，影片在 Resolve 裡偏冷的問題。",
    "飽和度 0、RAW 監看與錄下的 RAW 像素維持原樣。"
-  ]
- },
- "fpsup-dial-fix-v0.2.1test": {
-  "en": [
-   "Andy_hal9000's rear-wheel decoder v6 as a Loader v4 sup. The rear wheel (its switch bounces) moves one step per click, in the right direction; clockwise is +1, and fast spins are counted too.",
-   "The decoder is his v6 word for word; it runs from the sup's own memory and the dial's vtable is pointed at it, so no camera code is overwritten. Power off restores the stock decoder.",
-   "Firmware 5.02 only. If the dial object is not where 5.02 has it, the sup does nothing.",
-   "The decoder was tested on the camera by its author as an AutoRun card (2026-11-07), and this sup form on 2026-11-10: it loads and the wheel steps one click at a time. Restoring the stock decoder at power off has not been checked separately."
-  ],
-  "zh": [
-   "Andy_hal9000 的後轉盤解碼器 v6,做成 Loader v4 sup。後轉盤(開關會彈跳)每轉一格只走一步、方向正確；順時針為 +1,快轉也照算。",
-   "解碼器與他的 v6 逐字相同，在 sup 自己的記憶體執行，只把轉盤的 vtable 指過去，不覆寫相機程式碼。關機時還原原廠解碼器。",
-   "僅限韌體 5.02。轉盤物件不在 5.02 的位置時,sup 什麼都不做。",
-   "解碼器本身由作者以 AutoRun 卡上機驗證過(2026-11-07);這個 sup 版 2026-11-10 上機：正常載入、轉盤一格一下。關機還原原廠解碼器這點沒有另外確認。"
   ]
  }
 }

@@ -30,8 +30,10 @@ TEMPLATE = HERE / 'template.html'
 GUIDE = FPSUP / 'guide'
 OUT = HERE / 'index.html'
 # 2026-11-07: Sensor Lab-IMX410 + QS-Share in their own snapshot (the others unchanged, still 20261027)
-# 2026-11-10: Dial Fix 0.2.1test in v4-20261110
-INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107', HERE / 'inputs' / 'v4-20261110']
+# 2026-11-10: Lossless 0.3.2test, Sensor Lab 0.0.6test, QS-Share 0.0.2test in v4-20261110c.  A later snapshot
+# replaces an earlier one's product of the same id (the earlier version stays on GitHub as its own release).
+INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107', HERE / 'inputs' / 'v4-20261110',
+          HERE / 'inputs' / 'v4-20261110c']
 sys.path.insert(0, str(FPSUP / 'fp_usb_shell'))
 from v3 import build_v3 as V3
 sys.path.insert(0, str(FPSUP / 'loader-v4'))
@@ -108,17 +110,17 @@ PRODUCTS = {
                        excl=['res-custom'], requires=['qs-share'], author=AUTHOR, credits=[],
                        guide_page='sensor_lab_imx410/index.html',
                        note=dict(en='Updating from an older SensorLab or QS Container: delete fpSup\\SensorLab-IMX410_v0.7.*.BIN '
-                                    'and fpSup\\QSContainer_v*.BIN first. The old 0.7.x file would load instead of 0.0.1test, '
+                                    'and fpSup\\QSContainer_v*.BIN first. The old 0.7.x file would load instead of this version, '
                                     'and QSContainer is the same sup as QS-Share. Saved Sensor Lab / QS settings start from the defaults.',
                                  zh='從舊版 SensorLab 或 QS Container 更新：先刪掉卡上 fpSup 裡的 SensorLab-IMX410_v0.7.*.BIN 與 '
-                                    'QSContainer_v*.BIN。舊的 0.7.x 檔會比 0.0.1test 優先載入，QSContainer 與 QS-Share 是同一個 sup。'
+                                    'QSContainer_v*.BIN。舊的 0.7.x 檔會比這一版優先載入，QSContainer 與 QS-Share 是同一個 sup。'
                                     'Sensor Lab／QS 的設定會回到預設。')),
     'qs-share':   dict(name=N.display('QSCT'), sup_id='QSCT', file=N.file_name('QSCT'), category='format', infra=True,
                        summary=dict(en='Shared Quick Set plumbing used by Sensor Lab: adds its functions to the QS editor and the QS page.',
                                     zh='Sensor Lab 共用的快速設定底層：把功能加進 QS 編輯器與 QS 頁。'),
                        excl=[], author=AUTHOR, credits=[]),
     'res-lab': dict(name='RES-Lab', sup_id='RLAB', category='format', file='50RES-Lab v0.1.0test.BIN',
-                    excl=[], requires=['res-custom'], needs_manager=True, pending=True, stage='dev',  # user 2026-10-13: in development, not selectable
+                    excl=[], requires=['res-custom'], needs_manager=True, stage='dev',  # Bei 2026-11-10: no tile on the page (was a greyed 'in development' tile)
                     summary=dict(en='Adjust the sensor readout, crop and recording size with a live diagram, and save custom formats.',
                                  zh='搭配示意圖調整感光元件讀取方式、裁切與錄影尺寸，並可保存自訂格式。'),
                     author=AUTHOR, credits=[]),
@@ -189,7 +191,8 @@ PRODUCTS = {
                        summary=dict(en='Better in-camera continuous autofocus while recording in CINE.',
                                     zh='改善 CINE 錄影時的機內連續自動對焦。'),
                        author=AUTHOR, credits=[]),
-    'lut':        dict(name='LUT', category='monitor', excl=[], stage='dev', pending=True,
+    # Bei 2026-11-10: "Coming Soon" in its own category, not selectable (stage 'coming')
+    'lut':        dict(name='LUT', category='monitor', excl=[], stage='coming', pending=True,
                        summary=dict(en='Load a .cube LUT and see its look simulated on the screen; recorded files are unchanged.',
                                     zh='讀取 .cube LUT,在螢幕上模擬還原調色後的樣子;錄下的檔案不變。'),
                        author=AUTHOR, credits=[]),
@@ -352,10 +355,22 @@ def main():
         if spec.get('infra') and (spec['excl'] or spec.get('requires') or spec.get('pending')):
             raise SystemExit(f'{k}: infra plumbing has no clashes, requirements or pending tile')
 
-    snapshots = [p for directory in inputs for p in input_products(directory)
-                 if PRODUCTS[p['id']].get('stage') not in ('dev', 'long')]
-    if len({p['id'] for p in snapshots}) != len(snapshots):
-        raise SystemExit('duplicate product in input snapshots')
+    latest = {}
+    for directory in inputs:
+        got = [p for p in input_products(directory) if PRODUCTS[p['id']].get('stage') not in ('dev', 'long', 'coming')]
+        if len({p['id'] for p in got}) != len(got):
+            raise SystemExit(f'duplicate product in {directory.name}')
+        for p in got:
+            old = latest.get(p['id'])
+            if old is not None:
+                if old['release'] == p['release']:
+                    raise SystemExit(f"{p['id']}: {directory.name} repeats {p['release']}; a newer snapshot is a newer version")
+                print(f"  {p['id']}: {p['release']} ({directory.name}) replaces {old['release']}")
+                # the replaced version was offered (it is a release on GitHub): it stays in the version history
+                p['superseded'] = old.pop('superseded', []) + [dict(
+                    release=old['release'], version=old['version'], date=old['date'], manifest=old['provenance']['manifest'])]
+            latest[p['id']] = p
+    snapshots = list(latest.values())
     if not snapshots:
         raise SystemExit('no v4 product found')
     for p in snapshots:

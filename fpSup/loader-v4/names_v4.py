@@ -13,7 +13,7 @@ LOADER.BIN, UI\\*.BIN and the data folders (RESCUS\\, LUT\\) keep their names.""
 SUPS = {
     'BKLT': ('LCD Backlight', 'Backlight', '0.1.0test'),
     'RCUS': ('RES-Custom', 'RES-Custom', '0.1.5'),
-    'LOSS': ('Lossless', 'Lossless', '0.3.1'),
+    'LOSS': ('Lossless', 'Lossless', '0.3.2test'),   # 2026-11-10: 14 bit (Sensor Lab 1:1 true 14)
     'ULWR': ('Unlock Writer', 'UnlockWriter', '0.1.0test'),
     'STFX': ('Stop-FX', 'Stop-FX', '0.1.0'),
     'GYR2': ('Gyro2', 'Gyro2', '0.2.1'),   # last release v0.2.0 (build 6, on main's releases/)
@@ -25,8 +25,9 @@ SUPS = {
     'FCAP': ('Early Flush', 'EarlyFlush', '0.1.0'),
     # 2026-11-07 (Bei): renamed and restarted at 0.0.1test for the first merge-page release; content =
     # SensorLab-IMX410 v0.7.39test / QS Container v0.3.8 (only the header name changes).  QSCT keeps its sup_id.
-    'SL41': ('Sensor Lab-IMX410', 'SensorLab-IMX410', '0.0.1test'),
-    'QSCT': ('QS-Share', 'QS-Share', '0.0.1test'),
+    # SL41 0.0.6test (2026-11-10): exact merges, 1x2 / 1x3 presets, first-frame purple fix, CinemaDNG 8 / 10-bit
+    'SL41': ('Sensor Lab-IMX410', 'SensorLab-IMX410', '0.0.6test'),
+    'QSCT': ('QS-Share', 'QS-Share', '0.0.2test'),   # API 9
     # 2026-11-08 (Bei): Andy_hal9000's rear-wheel decoder v6 (fpSup/dialfix/reference/v6); the v1-based
     # DIALFIX.BIN was never released.  "test" until the sup form has been on the camera.
     'DIAL': ('Dial Fix', 'DialFix', '0.2.1test'),

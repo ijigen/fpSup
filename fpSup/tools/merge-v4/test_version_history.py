@@ -25,9 +25,12 @@ class VersionHistoryTests(unittest.TestCase):
                 self.assertTrue((HERE / h['source']).is_file(), h['source'])
         lossless = next(p for p in cat['products'] if p['id'] == 'lossless')
         # v4: every product is the v4 snapshot, named by its version; the v3 releases stay as history
-        self.assertEqual(lossless['release'], 'fpsup-lossless-v0.3.1')
+        self.assertEqual(lossless['release'], 'fpsup-lossless-v0.3.2test')
         self.assertEqual(lossless['history'][0]['release'], lossless['release'])
         self.assertIn('fpsup-lossless-v0.3.0test', [h['release'] for h in lossless['history']])
+        # a version an earlier snapshot offered stays in the history, with its notes, not current
+        old = [h for h in lossless['history'] if h['release'] == 'fpsup-lossless-v0.3.1']
+        self.assertEqual([(h['current'], bool(h['changes'].get('zh'))) for h in old], [(False, True)])
         self.assertTrue(all(p['release'].startswith(f"fpsup-{p['id']}-v") for p in cat['products']))
         self.assertTrue(all(not p['history'] for p in cat['pending']))
 

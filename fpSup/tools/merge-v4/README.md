@@ -48,6 +48,18 @@ python3 -B tools/merge-v4/publish_releases.py            # 每個提供中的版
   API 數字只加該 sup 的 .BIN;11 個突變全抓到)、`test_publish_releases.py`(假 GitHub;7 個突變全抓到)、
   `test_fill.js`(舊測試改從磁碟依 `src` 填位元組)。headless Chrome 實開過：勾 RES-Custom 抓 6 個檔、再勾 Lossless 抓 2 個。
 
+**2026-11-10 Lossless 0.3.2test、Sensor Lab 0.0.6test、QS-Share 0.0.2test**(Bei 經 SensorLab 那條線：更新 merge 頁):
+- 新快照 `inputs/v4-20261110c/`(`build_inputs_v4.py --only sensor-lab,qs-share,lossless`;`v4-20261110` 已被 Dial Fix 用掉；
+  `b` 是帶 Sensor Lab 0.0.5test 的那份，當天被 0.0.6test 取代、從未發布，已刪)。
+  三個檔與 SensorLab 那條線上機驗證的檔 sha256 相同(a174779d…、36f24a12…、4939f399…);上機範圍寫在快照 `manifest.json` 的 `validation`
+  (build_inputs 自動填的那句是 0.0.1test 時代的，已手動換掉；`VALIDATION_OF` 下次要一起更新)。
+- `build_catalogue_v4.py`:同一個產品出現在兩份快照時，**`INPUTS` 排後面的取代前面的**(建頁時印出「replaces」);同一份快照內重複、
+  或後面的快照重複同一個 release tag 仍然中止。被取代的版本記在產品的 `superseded`,`release_history.py` 把它排進版本歷史(非 current、帶 `version_notes.json` 的說明)。舊版(Lossless 0.3.1、Sensor Lab／QS-Share 0.0.1test)的 Release 留在 GitHub,計數各算各的。
+- Bei 當天看過本機頁後(經 sigmafp-re-18):Sensor Lab 0.0.6test 說明改成只講這版做什麼(不和舊版比);RES-Lab 不再有圖磚
+  (拿掉 `pending`);LUT 圖磚顯示「Coming Soon／即將推出」、不可選(新 stage `coming`,留在自己的分類)。Sensor Lab 圖磚的更新提醒不再寫死 0.0.1test。
+- push 時 workflow 新建三個 Release(都是 prerelease)。這次只推頁面、快照與 `names_v4.py` 三行;Lossless／Sensor Lab／QS-Share 的原始碼
+  由各自那條線另外同步進 repo(快照 `manifest.json` 的 `source_sha256` 記的是建檔當時的本機原始碼)。
+
 和 v3 頁的差別：
 - **產品全部來自一份快照** `inputs/v4-20261025/`(2026-10-25:選單掉鍵修正、頁尾固定、sup 檔名帶版本):`build_inputs_v4.py` 跑各產品自己的 v4 builder
   (`loader-v4/ports.py`、`ports_jose.py`、`lossless/build_v4_lossless.py`、`screenflip/build_v4_flip.py`、

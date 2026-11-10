@@ -268,8 +268,8 @@ if (CAT.products.some(p => p.id === 'sensor-lab')){
   const byId = id => CAT.products.find(p => p.id === id);
   const sl = byId('sensor-lab'), qs = byId('qs-share'), rc = byId('res-custom');
   ok(qs && qs.infra && !sl.infra && qs.sup_id === 'QSCT' && sl.sup_id === 'SL41', 'QS-Share is infra (sup_id QSCT), Sensor Lab is not');
-  ok(sl.name === 'Sensor Lab-IMX410' && sl.file === 'SensorLab-IMX410_v0.0.1test.BIN' && sl.version === '0.0.1test' &&
-     qs.name === 'QS-Share' && qs.file === 'QS-Share_v0.0.1test.BIN' && qs.version === '0.0.1test', 'names_v4 names and versions');
+  ok(sl.name === 'Sensor Lab-IMX410' && sl.file === 'SensorLab-IMX410_v0.0.6test.BIN' && sl.version === '0.0.6test' &&
+     qs.name === 'QS-Share' && qs.file === 'QS-Share_v0.0.2test.BIN' && qs.version === '0.0.2test', 'names_v4 names and versions');
   const hdrName = p => { const d = Buffer.from(p.data, 'base64'), o = d.readUInt32LE(44); return d.slice(o, d.indexOf(0, o)).toString(); };
   ok(hdrName(sl) === sl.name && hdrName(qs) === qs.name, 'header display names = page names (no font_menu_SB_kigou_09)');
   ok(sl.requires.includes('qs-share') && selected(['sensor-lab']).includes('qs-share'), 'Sensor Lab selects QS-Share');

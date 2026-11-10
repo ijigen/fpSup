@@ -1,0 +1,86 @@
+{
+ "date": "2026-11-10",
+ "source_sha256": {
+  "fpSup/loader-v4/ports.py": "a66114a188c327cf4b06b1c825694d5f8238f2420f05f20a7043d9529dd4135b",
+  "fpSup/loader-v4/ports_jose.py": "d6584705d8f285e1f5b70dd98b555db58cf34d50e7c1401ec858b6cf7b1de0c2",
+  "fpSup/loader-v4/build_v4.py": "b45d8cb8226d10a93fbf495aca917bc4ddcf2b76230fc53872490ca84ee6f48d",
+  "fpSup/loader-v4/names_v4.py": "9e11b70716fe51f679fad5d80436f9f0bdc5ffce1132cb4f684c861bd7fa192a",
+  "fpSup/fpsup-ui/fpui_stock.c": "2f53ac1f206d87dfa0a95e027ec981b6e6ba570296e6ae7b952b2a2333d5a1c4",
+  "fpSup/fpsup-ui/fpsup_ui.c": "72132b0a057464c0cf34fc21fddc4839672e3f3d7bf3c7296983b74b10777953",
+  "fpSup/fpsup-ui/build_stock_section.py": "95e2440da119e751d9778d953eb4857f8eb309d3fbe08212dfeedfdcb11c55b9",
+  "fpSup/lossless/build_v4_lossless.py": "66f73a1709fc49a312a71bdcaa58b3aa85534644c81827758e6ad48072fca970",
+  "fpSup/lossless/native/menu_row4.c": "47f672c486bb3ea4dd1266f936f6ba34386373f299914d85c3073cf44d1e4d9e",
+  "fpSup/screenflip/build_v4_flip.py": "313f291409937ea5b7517a4cad97c1a8a528ed57ff8ec9fbb8101b696e9f629b",
+  "fpSup/screenflip/native/flip.c": "532aa89f9b353ae0a3af7b6750bc2d9991e3799baaa10133e2853ff738d9f349",
+  "projects/rawview/build/build_v4_rawview.py": "091957c38bd856ced2667637c731e576581d0dc026cdc4241dff158018ee9d50",
+  "projects/rawview/build/build_v3_rawview.py": "cae22b629ba0a7dd98f9522c23aa5f42b5b6b235fb05475da085c6e7f64bc6b2",
+  "projects/open-gate/build/res-custom-v4/build_v4_rescustom.py": "265c7c129b99cc2db151a355d7e9140d577633d1d2aa2f640be55ec74c8cc8df",
+  "projects/open-gate/build/res-custom-v4/build_v3_rescustom.py": "946fd4b821f3639876d4398e8a4134d887e0b3799be107a00774c506efa52641",
+  "projects/open-gate/build/res-custom-v4/ogc.c": "9d5e810b6c243a2278af1092cf85b9fe7c7ac1ea27c717afbde30fa62c780e64",
+  "projects/open-gate/build/res-custom-v4/ogc_files.c": "42dc71221b340132d8d0440b9b90c6096a4b9fde62132caa5f323544ac2f2216",
+  "projects/sensorlab-imx410/qs/build_slqs.py": "10a3f3dde4e72917fe8c967c5cfa52011294642bb92968ad1cfe6581f146c28e",
+  "projects/sensorlab-imx410/qs/slqs.c": "0a1a14f2b18e5c59b3b520b6419a12435a8398fc81849b95d279656d6160e865",
+  "projects/sensorlab-imx410/qs/qrdec.c": "0a3dd5dd7835341ce657c5ce72959468210f431148981fda51817c21462991a3",
+  "projects/sensorlab-imx410/core/core.c": "d9bf03e25894d6a766083e652d2a61ca442d2a1fe94bba145200426fdf279df1",
+  "projects/sensorlab-imx410/apply/ap.c": "582287fdcc8fdcbcf284045212bd6f6a4971d7c3ee3bfd63c49d9e9e3087263e",
+  "projects/sensorlab-imx410/apply/ap_calc.c": "ab3e5b735a68f67a9d08d1b2db8fe5f8fe6cc49b510d72d00b0833b51f9d9580",
+  "projects/qs-container/build_qsct.py": "9377797baa874554e5e1244e64c44b9c239dae300b564aff0b08bf05343a410b",
+  "projects/qs-container/qsct.c": "14d98edcc77caad0d5a9d4ffa50857acca54b2b353daaebeb58972d8735902f6",
+  "projects/qs-container/qsc.h": "e2f65355b05ae342cd143321aaa79bb7bf70cadf7e0739c87cb440b557d93dd7",
+  "projects/qs-container/editor_data.py": "b6cfadd91a1e1ca90f01fd45fa74d28fcceeb0a89fb84e56c7b45fc09d481729",
+  "projects/qs-container/editor_title.py": "9d30dc977f62077db2a0e09ac9c4df8a24103d172d5272cb6fcf7685d9d20da8",
+  "projects/qs-container/qs_page_data.py": "04bf69cb1289136e17862bdc1e70d8d64358d971e4a943adefe0027939269b4e",
+  "fpSup/dialfix/build_dialfix.py": "6622b7c4a31576bc0ac887f1e0e095ef070590913626e1a0f79c8c881cc0eae4",
+  "fpSup/dialfix/dialfix.c": "ac0b6ec7fedbc885d0ecb06711c113b7ecfd90ff9079975d0489e7440603cdca",
+  "fpSup/dialfix/reference/v6/dial2_fast.S": "b8cf2cb6f8b23e5b675b82f49dd27307904f95f1fa2ed8ba8a243cb89f62e447",
+  "fpSup/dialfix/reference/v6/AutoRun.txt": "8f89d1f0e97f1e4debe83e12397f73cda07b34fea45cdd0c70eb12011c576d86"
+ },
+ "files": {
+  "Lossless_v0.3.2test.BIN": {
+   "size": 31232,
+   "sha256": "a174779d57132975581cf08233b8d20a35748c82d3ff21bc4b1549be91f7c047"
+  },
+  "SensorLab-IMX410_v0.0.6test.BIN": {
+   "size": 211820,
+   "sha256": "36f24a1267596cafaa99ed24830f3d4d9df20e58282e2da57661483edc470b83"
+  },
+  "QS-Share_v0.0.2test.BIN": {
+   "size": 202876,
+   "sha256": "4939f399abb21076576dcb337d2ba8b6e66ad8375868f37e97aa976485e372b2"
+  }
+ },
+ "products": {
+  "lossless": {
+   "file": "Lossless_v0.3.2test.BIN",
+   "version": "0.3.2test",
+   "name": "Lossless",
+   "release": "fpsup-lossless-v0.3.2test",
+   "build_label": {
+    "en": "Loader v4 test build",
+    "zh": "Loader v4 測試版"
+   }
+  },
+  "sensor-lab": {
+   "file": "SensorLab-IMX410_v0.0.6test.BIN",
+   "version": "0.0.6test",
+   "name": "Sensor Lab-IMX410",
+   "release": "fpsup-sensor-lab-v0.0.6test",
+   "build_label": {
+    "en": "Loader v4 test build",
+    "zh": "Loader v4 測試版"
+   }
+  },
+  "qs-share": {
+   "file": "QS-Share_v0.0.2test.BIN",
+   "version": "0.0.2test",
+   "name": "QS-Share",
+   "release": "fpsup-qs-share-v0.0.2test",
+   "build_label": {
+    "en": "Loader v4 test build",
+    "zh": "Loader v4 測試版"
+   }
+  }
+ },
+ "loader": "v4",
+ "validation": "sigmafp-re-18, 2026-11-10; all three are clean default builds (no --settings-from) and reproduce byte for byte. Lossless 0.3.2test: on the camera, SD, 14-bit 1936x1090 63/63 frames compressed and 6048x4040 41/41, decoded = uncompressed first frame; SSD not tested (projects/sensorlab-imx410/validation/20261110-lossless-14bit). Sensor Lab 0.0.6test (projects/sensorlab-imx410/validation/20261110-binning-exact): offline prelive 810 jobs pass, 493 mutants caught. On the camera, 0.0.6test code built with the card's settings: S16 2x2/3x3/6x6 and OG 3x3/3x6, 0 bad first frames in 24 takes; firmware-centred crop confirmed; OG 6x6 (2x2 + ISP 3x3) first frame off by ~2 rows in 5/5 takes (known issue). Not on the camera: the HD 12-row RES menu scroll; these default-settings bytes themselves. QS-Share 0.0.2test (API 9): on the camera since 2026-11-07 in every Sensor Lab session."
+}
