@@ -725,7 +725,7 @@ int core_isp_plan(const core_spec *s, core_isp_result *o)
         }
     } else {
         int c_fits = fdiv(W * UNITY, fh) <= SRC_MAX && fdiv(H * UNITY, fv) <= CD_SRC_MAX_H;
-        if (fh == fv && c_fits) { path = PATH_C; ph = fh; pv = fv; }
+        if ((fh == fv || (s->record_preview && act0 <= VIS_MAX_W)) && c_fits) { path = PATH_C; ph = fh; pv = fv; }
         else {
             if (W <= SRC_MAX && H <= CD_SRC_MAX_H) { path = PATH_E1; ph = pv = UNITY; }
             else if (W <= E3_W_MAX) { path = PATH_E3; ph = pv = 3 * UNITY; }
@@ -843,14 +843,45 @@ static i64 zr(i64 src, i64 dst)                                 /* quality._z: w
     return z < UNITY + 2 ? UNITY : z;
 }
 
-/* quality.isp: per axis, RWZM takes what the sensor merge and the CRCT bin leave of DC / RES; R2 1025 */
-static int q_isp(core_quality *q, i64 rw, i64 rh, int vbin, int hbin, const i64 *nom, core_spec *s, core_isp_result *o)
+static i64 vmargin(i64 win_h, i64 vbin, i64 zh, i64 zv, i64 rec_h);
+
+/* quality._crop_ok: (E) one axis, b at most lim over the RES o, at most CROP_FOV of n (the DC on the grid) lost */
+static int crop_ok(i64 b, i64 n, i64 o, i64 lim)
+{
+    return b - o >= 0 && b - o <= lim && CD_Q_CROP_FOV_DEN * imax(n - o, 0) <= CD_Q_CROP_FOV_NUM * n;
+}
+
+/* quality.isp: per axis, RWZM takes what the sensor merge and the CRCT bin leave of DC / RES; R2 1025.
+ * ex: the exact-merge rules (quality.py module doc): (E) no CRCT bin and both axes within one readout step -> 1:1 both
+ * (RWZM off, a centred crop; the scale stays when the plan refuses it); (V) an RWZM-on recipe whose vertical ratio is
+ * above the aspect-keeping one takes it (else 1:1) when that crops 1..VCROP spare rows and keeps the margin floor. */
+static int q_isp(core_quality *q, i64 rw, i64 rh, int vbin, int hbin, const i64 *nom, int ex, core_spec *s,
+                 core_isp_result *o)
 {
     i64 W = q->win_w, H = q->win_h, zh = UNITY, zv = UNITY;
     /* visible tolerance: an axis that delivers less than the DC on the readout grid keeps the DC's RWZM */
     i64 bw = nom ? imax(W, nom[0]) : W, bh = nom ? imax(H, nom[1]) : H;
+    q->hbin = hbin; q->vbin = vbin;
+    if (ex && hbin == 1 && vbin == 1 && crop_ok(bw, nom ? nom[0] : W, rw, CD_Q_CROP_W) &&
+        crop_ok(bh, nom ? nom[1] : H, rh, CD_Q_CROP_H)) {                                  /* (E) */
+        q->zh = q->zv = UNITY; q->rec_w = (int32_t)rw; q->rec_h = (int32_t)(imin(rh, H) & ~(i64)1);
+        core_quality_spec(q, s);
+        int e = core_isp_plan(s, o);
+        if (!e) { q->path = o->path; return 0; }
+        if (e != CORE_E_ISP) return e;
+    }
     if (hbin == 3 || bw > rw) { if (!rw) return CORE_E_ZERO; zh = zr(fdiv(bw, hbin), rw); }
     if (vbin == 3 || bh > rh) { if (!rh) return CORE_E_ZERO; zv = zr(fdiv(bh, vbin), rh); }
+    if (ex && zv > UNITY && (zh > UNITY || hbin == 3 || vbin == 3)) {                     /* (V) */
+        i64 zm = imax(zh, CD_Q_NEAR_UNITY), d = (i64)q->mv * vbin, R = fdiv(H, vbin);
+        i64 zt[2] = {fdiv(zh * q->mh * hbin + (d >> 1), d), UNITY};   /* the aspect-keeping ratio, else 1:1 */
+        for (int i = 0; i < 2; i++) {
+            i64 z = zt[i];
+            if (z < UNITY || z >= zv) continue;
+            i64 est = z > UNITY ? fdiv((z >> 1) + R * UNITY, z) : R;
+            if (est - rh > 0 && est - rh <= CD_Q_VCROP && vmargin(H, vbin, zm, z, rh) >= CD_Q_VMARGIN) { zv = z; break; }
+        }
+    }
     if ((hbin == 3 || vbin == 3) && zh == UNITY && zv == UNITY) zh = zv = CD_Q_NEAR_UNITY;
     i64 most_h = zv > UNITY ? fdiv(fdiv(H, vbin) * UNITY, zv) : fdiv(H, vbin);
     q->hbin = hbin; q->vbin = vbin; q->zh = (int32_t)zh; q->zv = (int32_t)zv;
@@ -915,13 +946,92 @@ int core_r16_rows(int key, int ch, uint32_t tol_num, uint32_t tol_den)
     return r16_rows(key, ch, tol_den != 0, tol_num, tol_den);
 }
 
+/* quality.vmargin: spare RWZM input rows below the record, x1024, as the firmware lays the record in (ContSet_Adr1
+ * @C031BE60: est = (Zv/2 + R*1024) / Zv, crop y0 = (est - rec_h) / 4 * 2, R = META_h / vbin); VM_OFF when the
+ * RWZM is off (both axes 1:1) */
+#define VM_OFF ((i64)1 << 40)
+static i64 vmargin(i64 win_h, i64 vbin, i64 zh, i64 zv, i64 rec_h)
+{
+    if (zh <= UNITY && zv <= UNITY) return VM_OFF;
+    i64 R = fdiv(win_h, vbin), z = imax(zv, UNITY);
+    i64 est = z > UNITY ? fdiv((z >> 1) + R * UNITY, z) : R;
+    i64 y0 = est > rec_h ? ((est - rec_h) >> 2) << 1 : 0;
+    return R * UNITY - (y0 + rec_h) * z;
+}
+
+/* quality._shorter: steps 2 and 3 at tolerance tn / td (c's rec_h is put back when neither works) */
+static int q_shorter(core_quality *c, i64 rw, i64 rh, u64 tn, u64 td, core_spec *s, core_isp_result *o)
+{
+    i64 H = c->win_h, zh = c->zh, zv = c->zv, N = c->rec_h;
+    for (i64 h = N - 2; h > 0; h -= 2) {                         /* 2. a shorter record at the ratios */
+        if (!short_ok(c->rec_w, h, rw, rh, tn, td)) break;
+        if (vmargin(H, c->vbin, zh, zv, h) < CD_Q_VMARGIN) continue;
+        c->rec_h = (int32_t)h;
+        core_quality_spec(c, s);
+        int e = core_isp_plan(s, o);
+        if (!e) { c->path = o->path; return 0; }
+        c->rec_h = (int32_t)N;
+        if (e != CORE_E_ISP) return e;
+        break;
+    }
+    if (zh > UNITY && zv > UNITY)                                /* 3. both: the longest record inside tol, at the */
+        for (i64 n = N - 2; n > 0; n -= 2) {                     /*    largest common ratio that keeps the floor */
+            if (!short_ok(c->rec_w, n, rw, rh, tn, td)) break;
+            for (i64 z = zv - 1; z > UNITY; z--) {
+                if (vmargin(H, c->vbin, zh, z, n) < CD_Q_VMARGIN) continue;
+                i64 h = fdiv(zh * z + (zv >> 1), zv);
+                if (h <= UNITY) break;
+                core_quality_spec(c, s);
+                s->zh = (int32_t)h; s->zv = (int32_t)z; s->rec_h = (int32_t)n;
+                int e = core_isp_plan(s, o);
+                if (!e) { c->zh = s->zh; c->zv = s->zv; c->rec_h = o->rec[1]; c->path = o->path; return 0; }   /* what was planned */
+                if (e != CORE_E_ISP) return e;
+            }
+        }
+    return 1;
+}
+
+/* quality._margin_fix on c (accepted, rec set), same readout: 0 = c meets the floor (maybe fixed), 1 = not offered,
+ * < 0 = error.  1. both ratios smaller by one factor; 2. a shorter record inside tol; 3. both together; 4. steps 2-3
+ * again at the wider CD_Q_VM_TOL (3 %: only the recipes 1-3 cannot keep, Bei 11-10) */
+static int q_margin(core_quality *c, i64 rw, i64 rh, int tol, u64 tn, u64 td, core_spec *s, core_isp_result *o)
+{
+    i64 H = c->win_h, zh = c->zh, zv = c->zv, N = c->rec_h;
+    if (vmargin(H, c->vbin, zh, zv, N) >= CD_Q_VMARGIN) return 0;
+    if (zh > UNITY && zv > UNITY)
+        for (i64 z = zv - 1; z > UNITY; z--) {
+            if (vmargin(H, c->vbin, zh, z, N) < CD_Q_VMARGIN) continue;
+            i64 h = fdiv(zh * z + (zv >> 1), zv);
+            if (h <= UNITY) break;
+            core_quality_spec(c, s);
+            s->zh = (int32_t)h; s->zv = (int32_t)z;
+            int e = core_isp_plan(s, o);
+            if (!e) { c->zh = s->zh; c->zv = s->zv; c->path = o->path; return 0; }
+            if (e != CORE_E_ISP) return e;
+        }
+    if (!tol) return 1;
+    int e = q_shorter(c, rw, rh, tn, td, s, o);
+    if (e != 1) return e;
+    if (tn * CD_Q_VM_TOL_DEN >= CD_Q_VM_TOL_NUM * td) return 1;     /* tol already as wide */
+    return q_shorter(c, rw, rh, CD_Q_VM_TOL_NUM, CD_Q_VM_TOL_DEN, s, o);
+}
+
+static int qualities(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_t cap_den, uint32_t tol_num,
+                     uint32_t tol_den, int vm, core_quality *out, int max);
+
 int core_qualities(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_t cap_den, core_quality *out, int max)
 {
-    return core_qualities_tol(cw, ch, ow, oh, cap_num, cap_den, 0, 0, out, max);
+    return qualities(cw, ch, ow, oh, cap_num, cap_den, 0, 0, 0, out, max);
 }
 
 int core_qualities_tol(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_t cap_den, uint32_t tol_num,
                        uint32_t tol_den, core_quality *out, int max)
+{
+    return qualities(cw, ch, ow, oh, cap_num, cap_den, tol_num, tol_den, 1, out, max);
+}
+
+static int qualities(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_t cap_den, uint32_t tol_num,
+                     uint32_t tol_den, int vm, core_quality *out, int max)
 {
     if (cw < 0 || ch < 0 || ow < 0 || oh < 0 || (cap_num && cap_num < cap_den) || (cap_num && !cap_den) ||
         (tol_den && tol_num > tol_den))
@@ -954,7 +1064,7 @@ int core_qualities_tol(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_
         for (int b = 0; b < CD_N_QBINS; b++) {
             int hbin = cd_qbins[b][0], vbin = cd_qbins[b][1];
             core_quality *c = &base;
-            e = q_isp(c, ow, oh, vbin, hbin, np, &s, &o);
+            e = q_isp(c, ow, oh, vbin, hbin, np, vm, &s, &o);
             if (e == CORE_E_ISP) {
                 /* RWZM 1025 (R2) loses up to 16 px of a 1:1 record: 16 px more sensor crop buys them back */
                 if ((hbin == 1 && vbin == 1) || (i64)cw + CD_Q_WIDEN > CD_Q_SENSOR_W) continue;
@@ -965,14 +1075,14 @@ int core_qualities_tol(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_
                 }
                 if (wide_e) { if (value_error(wide_e)) continue; return wide_e; }
                 c = &wide;
-                e = q_isp(c, ow, oh, vbin, hbin, np, &s, &o);
+                e = q_isp(c, ow, oh, vbin, hbin, np, vm, &s, &o);
                 if (e == CORE_E_ISP) continue;
             }
             if (e) return e;
             if ((o.rec[0] != ow || o.rec[1] != oh) &&                /* a quality never changes the RES ... */
                 (!tol || !short_ok(o.rec[0], o.rec[1], ow, oh, tol_num, tol_den))) continue;   /* ... beyond tol */
             c->rec_w = o.rec[0]; c->rec_h = o.rec[1];
-            c->vis_w = o.rec[0] - CD_Q_MARGIN_W; c->vis_h = o.rec[1] - CD_Q_MARGIN_H;
+            c->vis_w = c->rec_w - CD_Q_MARGIN_W; c->vis_h = c->rec_h - CD_Q_MARGIN_H;
             c->rs_us = (int32_t)dround_milli(dmul(dratio((u64)c->hm * (u64)c->lines, CD_CLK), 1000u));
             c->seq = seq++;
             n = q_pick(out, n, max, c);
@@ -984,5 +1094,17 @@ int core_qualities_tol(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_
             core_quality t;
             copy_q(&t, &out[j]); copy_q(&out[j], &out[j - 1]); copy_q(&out[j - 1], &t);
         }
+    if (vm) {                                                    /* the vertical margin, after the pick: each quality */
+        int m = 0;                                               /* keeps its readout variant (quality._margin_fix) */
+        for (int i = 0; i < n; i++) {
+            int e = q_margin(&out[i], ow, oh, tol, tol_num, tol_den, &s, &o);
+            if (e < 0) return e;
+            if (e) continue;
+            out[i].vis_w = out[i].rec_w - CD_Q_MARGIN_W; out[i].vis_h = out[i].rec_h - CD_Q_MARGIN_H;
+            if (m != i) copy_q(&out[m], &out[i]);
+            m++;
+        }
+        n = m;
+    }
     return n;
 }

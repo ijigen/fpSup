@@ -1,0 +1,202 @@
+{
+  "status": "PASS_OFFLINE",
+  "native_calls": 81,
+  "cycles": 27,
+  "image_sha256": "92a8ee993f6c3d66c251e88d45a2ccd5135c6cf7342717784321c2ed506e2fb4",
+  "physical_display_verified": false,
+  "models": "layer pointer table and stack only; getters/ready/rotation execute original ARM without function stubs",
+  "front_pointer_address": "0xc3824ff0",
+  "back_pointer_address": "0xc3824ff4",
+  "index_address": "0xc3824ff8",
+  "cases": [
+    {
+      "start": 0,
+      "cycle": 0,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 0,
+      "cycle": 1,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    },
+    {
+      "start": 0,
+      "cycle": 2,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 0,
+      "cycle": 3,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 0,
+      "cycle": 4,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    },
+    {
+      "start": 0,
+      "cycle": 5,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 0,
+      "cycle": 6,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 0,
+      "cycle": 7,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    },
+    {
+      "start": 0,
+      "cycle": 8,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 1,
+      "cycle": 0,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    },
+    {
+      "start": 1,
+      "cycle": 1,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 1,
+      "cycle": 2,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 1,
+      "cycle": 3,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    },
+    {
+      "start": 1,
+      "cycle": 4,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 1,
+      "cycle": 5,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 1,
+      "cycle": 6,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    },
+    {
+      "start": 1,
+      "cycle": 7,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 1,
+      "cycle": 8,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 2,
+      "cycle": 0,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 2,
+      "cycle": 1,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 2,
+      "cycle": 2,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    },
+    {
+      "start": 2,
+      "cycle": 3,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 2,
+      "cycle": 4,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 2,
+      "cycle": 5,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    },
+    {
+      "start": 2,
+      "cycle": 6,
+      "front": "0xc38d6de8",
+      "back": "0xc38d6db0",
+      "committed": "0xc38d6db0"
+    },
+    {
+      "start": 2,
+      "cycle": 7,
+      "front": "0xc38d6db0",
+      "back": "0xc38d6dcc",
+      "committed": "0xc38d6dcc"
+    },
+    {
+      "start": 2,
+      "cycle": 8,
+      "front": "0xc38d6dcc",
+      "back": "0xc38d6de8",
+      "committed": "0xc38d6de8"
+    }
+  ]
+}

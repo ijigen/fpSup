@@ -1,0 +1,15 @@
+test_active_request_rejected_not_queued_and_mode_latched (test_sltp.Trial) ... ok
+test_clock_wrap_and_real_task_loop (test_sltp.Trial) ... ok
+test_gate_rechecked_after_quiet_window (test_sltp.Trial) ... ok
+test_invalid_mode_non_cine_and_all_record_guards_reject (test_sltp.Trial) ... ok
+test_loader_owns_block_and_task_descriptor (test_sltp.Trial) ... ok
+test_movie_sequence_and_timestamp_delays (test_sltp.Trial) ... ok
+test_native_return_codes_recorded_without_retrying_on (test_sltp.Trial) ... ok
+test_sequence_writes_only_private_memory (test_sltp.Trial) ... ok
+test_task_creation_or_start_failure_retains_provided_block (test_sltp.Trial) ... ok
+test_thumbnail_omits_ok_and_releases_both_keys (test_sltp.Trial) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 7.698s
+
+OK

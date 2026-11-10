@@ -1,0 +1,77 @@
+Offline DNG inspection
+======================
+
+Run from the repository root. Uses the already available numpy; Pillow is used
+only for --preview. No camera transport, USB imports, installation or external
+processes are used by this tool.
+
+  python3 projects/sensorlab-imx410/tools/analyze_dng.py capture.DNG --out report.json
+  python3 projects/sensorlab-imx410/tools/analyze_dng.py capture.DNG --limit-bytes 2097152 --out prefix.json
+  python3 projects/sensorlab-imx410/tools/analyze_dng.py capture-prefix.bin --out prefix.json --preview prefix.png
+
+A capture must begin at original file byte zero. A physical 2 MiB prefix file
+needs no --limit-bytes. The tool never treats local file size as proof that the
+original DNG or recording is complete.
+
+metadata contains raster, crop, DefaultScale, BitsPerSample, compression,
+black/white levels, frame rate, strips, CFA and WB. All captured IFD0/SubIFD/Exif
+tags retain offsets, types, counts, exact rational pairs and capture status.
+Missing tags are null rather than a guessed setting. TIFF byte order applies
+to tag values; packed 12/14-bit pixel rows are MSB first.
+
+pixels.capture_requirements reports prefix byte counts from file byte zero:
+- next_complete_row_required_prefix_bytes / additional_prefix_bytes_for_next_row
+- raster_required_prefix_bytes / additional_prefix_bytes_for_raster
+- declared_strips_required_prefix_bytes / additional_prefix_bytes_for_declared_strips
+
+Only whole TIFF rows count as decoded pixels. partial_next_row_bytes is reported
+but not decoded, padded or filled with zero. row_ranges use half-open raster
+coordinates. Declared surplus strip bytes do not become extra pixels. A short
+declared StripByteCount is flagged separately; more captured bytes cannot fix
+that metadata contradiction. Pixel-data completeness concerns one selected
+raster, not the original file's trailing metadata, any other image, or a clip.
+
+Low-two-bit histograms are raw sample code counts; they are not a measurement
+of ADC precision or effective sensor noise. Compressed/tiled images provide
+metadata only. Nonstandard row strides are not inferred from excess strip
+bytes: decoding follows byte-aligned TIFF rows ceil(width*bits/8).
+
+Optical-black statistics use MaskedAreas when declared. Without MaskedAreas,
+left/right 16-column summaries are diagnostic edges, not assumed OB. If the
+actual OB geometry is known, explicitly provide --ob-rect top,left,bottom,right
+(repeatable). Coordinates are raster-relative; default crop margins alone do
+not establish optical black.
+
+The optional preview requires declared RGGB 2x2 CFA, BlackLevel, WhiteLevel and
+AsShotNeutral. Dimensions come from the selected raster, not a hardcoded mode.
+It uses only the contiguous captured prefix, black/white normalization, metadata
+WB, mean greens, p99.5 exposure and gamma 2.2. It is diagnostic sensor RGB;
+ColorMatrix, crop, DefaultScale and orientation are not applied. The report
+records source rows, output size, partial status and display gains. Missing or
+unsupported required metadata produces preview.error, not a guessed image.
+
+Validation:
+  python3 -m unittest discover -s projects/sensorlab-imx410/tools -p test_analyze_dng.py -v
+
+Nine tests cover independent packed-bit reference data, all low bits, odd row
+widths, both TIFF byte orders, SubIFD/Exif selection, multiple strips/gaps,
+partial rows and required byte counts, truncated metadata, cyclic directories,
+declared byte-count shortfall, compressed metadata-only, preview and CLI.
+
+Real local fixture reports and previews:
+  projects/sensorlab-imx410/validation/dng-analyzer-20261030/SUMMARY.json
+
+apply1 12-bit: 2016x1330 complete; 2 MiB capture = 667 complete rows. Next row
+requires prefix length 2,098,880 bytes (1,728 more), full raster 4,100,768 bytes
+(2,003,616 more). These differ from the complete local file's 4,101,120 bytes.
+
+Archived RAW14: 688x406 packed14; source member push/cdng_002335.bin in
+projects/isp-lab/validation/20261028-p6r14-FHD60_Caf537419/evidence.tar.zst.
+Restored SHA matches ARCHIVE.json:
+a639f17ebd68671cea52e9f3a102205b14b937d0f9ae57c7bb4f7867b350f3b7
+This particular prior hardware experiment has all 279,328 samples divisible by
+four. Synthetic fixtures separately verify preservation of all four low-bit
+classes. The strip has 16 surplus bytes, correctly excluded from pixels.
+
+A 2 MiB prefix of the existing _SDI0045 still DNG selects its 6064x4042 RAW14
+SubIFD and Exif; compression 7 is explicitly left undecoded.

@@ -74,6 +74,7 @@ typedef struct {
 typedef struct {
     int32_t win_w, win_h, zh, zv, sx, sy, vbin, hbin, bits, hirate;
     int32_t has_rec, rec_w, rec_h;               /* has_rec 0 = Spec.rec None (the most R8 allows) */
+    int32_t record_preview;                     /* prefer C when it fits; defaults to the existing path rules */
 } core_spec;
 
 enum { PATH_B = 1, PATH_C, PATH_D, PATH_E1, PATH_E3 };
@@ -126,9 +127,12 @@ int core_line_hmax(int key, int w);
 /* cap = cap_num / cap_den (cap_num 0 = None: uncapped, max fps); returns the number of qualities in out (matrix
  * order) or a CORE_E_* code: an error the Python raises through (CORE_E_ZERO for an empty crop / RES) */
 int core_qualities(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_t cap_den, core_quality *out, int max);
-/* quality.qualities(..., tol): tol = tol_num / tol_den (tol_den 0 = None: exactly core_qualities).  With a tol
- * every recipe whose raster is at most tol short of ow x oh per axis is listed too (quality.short_ok, r16_rows(tol),
- * isp(nom)); each carries vis_w / vis_h, the RES's nominal is (ow - 16, oh - 10). */
+/* The product's list: quality.qualities(..., tol, vmargin_floor=VMARGIN): tol = tol_num / tol_den (tol_den 0 =
+ * None).  With a tol every recipe whose raster is at most tol short of ow x oh per axis is listed too
+ * (quality.short_ok, r16_rows(tol), isp(nom)); each carries vis_w / vis_h, the RES's nominal is (ow - 16, oh - 10).
+ * Every recipe keeps CD_Q_VMARGIN / 1024 spare RWZM input rows below its record (the first-frame purple fix,
+ * validation/20261110-vertical-margin) on its own readout: both RWZM ratios smaller by one factor, else (an axis at
+ * 1:1) a shorter record inside tol, else it is not listed.  core_qualities has no margin (= matrix.py). */
 int core_qualities_tol(int cw, int ch, int ow, int oh, uint32_t cap_num, uint32_t cap_den, uint32_t tol_num,
                        uint32_t tol_den, core_quality *out, int max);
 /* the readout plan of quality q at fps (fps_num 0 = fps_max; VMAX step v: fps = CD_CLK / (q->hm * v)) */

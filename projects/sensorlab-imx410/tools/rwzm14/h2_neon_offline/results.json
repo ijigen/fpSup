@@ -1,0 +1,41 @@
+{
+  "status": "PASS",
+  "cases": 526,
+  "cfa_phases": [
+    "RGGB",
+    "GRBG",
+    "GBRG",
+    "BGGR"
+  ],
+  "seed": 1315842,
+  "raw_binary_bytes": 52,
+  "sha256": "66073162da74bdd73f0a16c58da3ad122558d98f52b5aa6e5eeb2e7c9f439320",
+  "loop_instructions_per_16_input_samples": 5,
+  "vector_instructions_per_16_input_samples": 3,
+  "per_nonzero_valid_row_instruction_formula": "6 + 5 * (width / 16)",
+  "instruction_counts_by_input_width": {
+    "0": 6,
+    "16": 11,
+    "32": 16,
+    "48": 21,
+    "80": 31,
+    "608": 196,
+    "3840": 1206,
+    "6000": 1881,
+    "6016": 1886
+  },
+  "memory_read_bytes_per_16_input_samples": 32,
+  "memory_write_bytes_per_16_input_samples": 16,
+  "only_neon_registers_used": "d0-d3 / q0-q1",
+  "preservation": "r4-r11, sp, lr, d4-d31, FPSCR verified",
+  "unrounded_average_mutation_detected": true,
+  "limitations": [
+    "offline ARM execution only; no real device throughput measurements",
+    "right-justified u16 RAW14 only, not packed RAW14",
+    "input width multiple of 16; nonmultiples return -1 without memory access",
+    "disjoint, 2-byte-aligned buffers; no image-stride wrapper",
+    "input samples must be in 0..16383; no mask or format conversion",
+    "CFA phase and sensor vertical mode must be established by caller",
+    "no hook, DMA, cache-coherency, scheduling, or recorder integration"
+  ]
+}

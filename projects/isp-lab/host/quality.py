@@ -23,6 +23,30 @@ need, so a downscaled RES loses field of view as rows, never as a stretch -- and
 `tol` short of the clean raster.  Each case then carries its own `visible` = its raster minus the stock 16 x 10
 margin (the RES the UI shows while that recipe is selected) and the case's `nominal` = the clean raster minus the
 margin (what the UI remembers and restores; Bei 10-29: no shared minimum).  tol=None: exactly as before.
+Vertical margin (opt-in, vmargin_floor=; SensorLab 2026-11-10, sensorlab-imx410/validation/20261110-vertical-margin):
+the first recorded frame came one row down (purple) whenever the RWZM was on and it had (almost) no spare input rows
+below the record.  The firmware lays the record into the RWZM input itself (ContSet_Adr1 @C031BE60): est = (Zv/2 +
+R*1024) // Zv, crop y0 = (est - rec_h) // 4 * 2, R = META_h // vbin; spare = R - (y0 + rec_h) * Zv / 1024 (vmargin()).
+Every stock CinemaDNG profile with the RWZM on keeps >= VMARGIN / 1024 = 4.875 rows (FHD; UHD 12.0); ours had 0..1.7.
+A recipe below it (Bei 11-10: never read more rows -- rolling shutter and fps stay as they are): (1) both RWZM ratios
+smaller by one factor (Zh' = round(Zh * Zv' / Zv), the largest Zv' that keeps the floor: the same readout, the same
+record, ~0.3 % less field of view on both axes, the pixel aspect kept); (2) where an axis is 1:1 (no ratio to shrink),
+a shorter record at the same ratios inside tol; (3) both together (the longest record inside tol at the largest
+common ratio); (4) steps 2-3 again with the visible tolerance widened to VM_TOL (3 %, only for the recipes 1-3 cannot
+keep: the longest record that reaches the floor, so just as wide as needed); else it is not offered.  Applied after pick(): each quality keeps
+the readout variant it had, so its RS and fps are exactly the same.
+Exact merges (exact=, on with vmargin_floor: the product rules; SensorLab 2026-11-10, validation/20261110-binning-exact;
+Bei: "2x2 3x3 6x6 ... the most important thing"), in isp():
+  (E) a recipe without a CRCT bin whose sensor merge reaches the RES within one readout step -- the merged DC (its window,
+      or the DC on the readout grid when larger) at most CROP_W = 16 px wider and CROP_H = 4 rows taller than the RES,
+      losing at most CROP_FOV = 1.5 % of the DC on the readout grid -- records 1:1 on both axes (RWZM off; the firmware
+      centres the crop, ContSet_Adr1) instead of scaling by up to 1.6 %; the scale stays when the plan refuses the crop.
+  (V) a recipe that keeps the RWZM (a horizontal ratio, or a CRCT bin: R2) and whose vertical ratio is larger than the one
+      that keeps the pixel aspect (Zu = Zh * mh * hbin / (mv * vbin)) takes Zu, else 1:1, when that leaves 1..VCROP = 12
+      spare rows over the RES and keeps the margin floor below the record (1:1: R - N >= 9, y0 4, margin >= 5 rows): the
+      rows are cropped (the firmware centres them), the pixels stay square.  The /6 presets are ev(DC_h / 6) - VM_ROWS (10)
+      rows so 6x6 (2x2 + CRCT 3x3: 1:1) and 3x6 + RWZM H 2:1 (Zu = 1:1) record exactly the RES, and the other recipes
+      there keep square pixels (Zu).  A bin whose other axis is then 1:1 too takes R2 as before (1025, the +16 px readout).
 """
 import pathlib, sys
 
@@ -33,6 +57,12 @@ import readout_cfg as RCF                                            # noqa: E40
 import isp_formula as F                                             # noqa: E402
 
 NEAR_UNITY = 1025
+VMARGIN = 1708 * 1024 - 1090 * 1600     # 4992 = 4.875 rows x1024: the least spare of any stock RWZM profile (FHD, mode 27..)
+VM_TOL = 0.03                           # Bei 11-10: the visible tolerance a recipe may use for the margin when 2 % cannot
+CROP_W, CROP_H = 16, 4                  # (E) one readout width step (the a16 RES grid); stock UHD CROP crops 4 rows 1:1
+CROP_FOV = (3, 200)                     # (E) at most 1.5 % of the DC on the readout grid lost per axis
+VCROP = 12                              # (V) spare rows an RWZM-on recipe may crop 1:1 (the /6 presets carry 10 + rounding)
+VM_ROWS = 10                            # the least even R - N with Zv = 1024 that keeps VMARGIN (y0 4, 6 rows): /6 preset rows
 WIDEN, SENSOR_W = 16, 6064
 QUAL = [(k, 14 if k.startswith('14') else 12) for k in sorted(RCF.BY_KEY)]   # every readout class (40)
 BINS = ((1, 1), (1, 3), (3, 1), (3, 3))                             # CRCT bins (R3: with binfilt)
@@ -91,21 +121,50 @@ def _z(src, dst):
     return 1024 if z < 1024 + 2 else z                              # within 0.2 %: 1:1, the record crops
 
 
-def isp(p, bits, rw, rh, vbin, hbin=1, nom=None):
+def _crop_ok(b, n, o, lim):
+    """(E) one axis: b (the merged extent) at most lim over the RES o, at most CROP_FOV of n (the DC on the grid) lost"""
+    return 0 <= b - o <= lim and CROP_FOV[1] * max(n - o, 0) <= CROP_FOV[0] * n
+
+
+def _vcrop(H, vbin, zh, zv, rh, zu):
+    """(V) the vertical ratio that crops 1..VCROP spare rows keeping the floor: zu (the ratio that keeps the pixel aspect,
+    Zh * mh * hbin / (mv * vbin)), else 1:1; zv when neither (or neither is below it)"""
+    R = H // vbin
+    for z in (zu, 1024):
+        if not 1024 <= z < zv:
+            continue
+        est = (z // 2 + R * 1024) // z if z > 1024 else R
+        if 0 < est - rh <= VCROP and vmargin(H, vbin, zh, z, rh) >= VMARGIN:
+            return z
+    return zv
+
+
+def isp(p, bits, rw, rh, vbin, hbin=1, nom=None, exact=False):
     """Each axis on its own (user 10-27: 3x3 is also sensor 1x3 + RWZM 3x1, ...): the sensor merge, the CRCT bin
     and RWZM share the axis' total reduction DC/RES; RWZM takes what the other two leave.
     nom (visible tolerance): the DC on the readout grid; an axis that delivers less keeps the DC's RWZM, and the
     record is as short as the delivery (the most R8 allows, never more than rw x rh).  Only rows come short: the
-    readout already refuses a crop wider than its format beyond plan()'s 0.5 % trim, so nom[0] <= W always."""
+    readout already refuses a crop wider than its format beyond plan()'s 0.5 % trim, so nom[0] <= W always.
+    exact: the exact-merge rules (E) and (V) of the module doc."""
     W, H = p['raster_w'], p['out_h']
     bw, bh = (W, H) if nom is None else (max(W, nom[0]), max(H, nom[1]))
+    sc = tuple(int(x) for x in p['merge'].split('x'))
+    if exact and hbin == vbin == 1:                                 # (E)
+        nw, nh = nom if nom is not None else (W, H)
+        if _crop_ok(bw, nw, rw, CROP_W) and _crop_ok(bh, nh, rh, CROP_H):
+            s = F.Spec(window=(W, H), zoom=(1024, 1024), scale=sc, vbin=1, hbin=1, bits=bits, rec=(rw, min(rh, H) & ~1))
+            try:
+                return s, F.plan(s)
+            except F.NotPossible:
+                pass
     zh = _z(bw // hbin, rw) if hbin == 3 or bw > rw else 1024
     zv = _z(bh // vbin, rh) if vbin == 3 or bh > rh else 1024
+    if exact and zv > 1024 and (zh > 1024 or hbin == 3 or vbin == 3):                                    # (V)
+        zv = _vcrop(H, vbin, max(zh, NEAR_UNITY), zv, rh, (zh * sc[0] * hbin + sc[1] * vbin // 2) // (sc[1] * vbin))
     if (hbin == 3 or vbin == 3) and zh == zv == 1024:                # R2: a 1:1 record does not bin; 1025 takes
         zh = zv = NEAR_UNITY                                        # branch C (bin4 b3x3-z1025 10-27)
     most_h = (H // vbin) * 1024 // zv if zv > 1024 else H // vbin
-    s = F.Spec(window=(W, H), zoom=(zh, zv), scale=tuple(int(x) for x in p['merge'].split('x')), vbin=vbin, hbin=hbin,
-               bits=bits, rec=(rw, min(rh, most_h) & ~1))
+    s = F.Spec(window=(W, H), zoom=(zh, zv), scale=sc, vbin=vbin, hbin=hbin, bits=bits, rec=(rw, min(rh, most_h) & ~1))
     return s, F.plan(s)
 
 
@@ -114,9 +173,80 @@ def short_ok(rec, rw, rh, tol):
     return rec[0] <= rw and rec[1] <= rh and rw - rec[0] <= tol * rw and rh - rec[1] <= tol * rh
 
 
-def candidates(cw, ch, rw, rh, cap=None, tol=None):
+def vmargin(win_h, vbin, zh, zv, rec_h):
+    """Spare RWZM input rows below the record, x1024, as the firmware lays the record in (ContSet_Adr1 @C031BE60:
+    est = (Zv/2 + R*1024) // Zv, crop y0 = (est - rec_h) // 4 * 2, R = META_h // vbin); None when the RWZM is off
+    (both axes 1:1: the firmware clamps them to 0x400 and records without it)."""
+    if zh <= 1024 and zv <= 1024:
+        return None
+    R, z = win_h // vbin, max(zv, 1024)
+    est = (z // 2 + R * 1024) // z if z > 1024 else R
+    y0 = (est - rec_h) // 4 * 2 if est > rec_h else 0
+    return R * 1024 - (y0 + rec_h) * z
+
+
+def _margin_fix(bits, rw, rh, vbin, hbin, tol, s, pl, floor):
+    """-> (Spec, Plan) meeting the vertical margin floor on the same readout, or None (not offered).  Module doc."""
+    zh, zv = s.zoom
+    H, N = s.window[1], pl.rec[1]
+    m = vmargin(H, vbin, zh, zv, N)
+    if m is None or m >= floor:
+        return s, pl
+    if zh > 1024 and zv > 1024:                    # 1. both ratios smaller by one factor, the most that keeps the floor
+        for z in range(zv - 1, 1024, -1):
+            if vmargin(H, vbin, zh, z, N) < floor:
+                continue
+            h = (zh * z + zv // 2) // zv
+            if h <= 1024:
+                break
+            s2 = F.Spec(window=s.window, zoom=(h, z), scale=s.scale, vbin=vbin, hbin=hbin, bits=bits, rec=tuple(pl.rec))
+            try:
+                return s2, F.plan(s2)
+            except F.NotPossible:
+                continue
+    if tol is None:
+        return None
+    return _shorter(bits, rw, rh, vbin, hbin, tol, s, pl, floor) or \
+        (_shorter(bits, rw, rh, vbin, hbin, VM_TOL, s, pl, floor) if tol < VM_TOL else None)
+
+
+def _shorter(bits, rw, rh, vbin, hbin, tol, s, pl, floor):
+    """_margin_fix steps 2 and 3 at tolerance tol"""
+    zh, zv = s.zoom
+    H, N = s.window[1], pl.rec[1]
+    for h in range(N - 2, 0, -2):                  # 2. a shorter record at the ratios
+        if not short_ok((pl.rec[0], h), rw, rh, tol):
+            break
+        if vmargin(H, vbin, zh, zv, h) >= floor:
+            s2 = F.Spec(window=s.window, zoom=s.zoom, scale=s.scale, vbin=vbin, hbin=hbin, bits=bits,
+                        rec=(pl.rec[0], h))
+            try:
+                return s2, F.plan(s2)
+            except F.NotPossible:
+                break
+    if zh > 1024 and zv > 1024:                    # 3. both: the longest record inside tol, at the largest
+        for n in range(N - 2, 0, -2):              #    common ratio that keeps the floor
+            if not short_ok((pl.rec[0], n), rw, rh, tol):
+                break
+            for z in range(zv - 1, 1024, -1):
+                if vmargin(H, vbin, zh, z, n) < floor:
+                    continue
+                h = (zh * z + zv // 2) // zv
+                if h <= 1024:
+                    break
+                s2 = F.Spec(window=s.window, zoom=(h, z), scale=s.scale, vbin=vbin, hbin=hbin, bits=bits,
+                            rec=(pl.rec[0], n))
+                try:
+                    return s2, F.plan(s2)
+                except F.NotPossible:
+                    continue
+    return None
+
+
+def candidates(cw, ch, rw, rh, cap=None, tol=None, exact=False):
     """Every readout x CRCT bin that records exactly rw x rh from the crop, window variants included, in matrix order.
-    tol: also every one whose record is at most tol short of rw x rh per axis (module doc: visible tolerance)."""
+    tol: also every one whose record is at most tol short of rw x rh per axis (module doc: visible tolerance).
+    exact: the exact-merge rules (module doc)."""
     out = []
     for key, bits in QUAL:
         rch, rows = ch, None
@@ -138,7 +268,7 @@ def candidates(cw, ch, rw, rh, cap=None, tol=None):
         for hbin, vbin in BINS:
             pb = p
             try:
-                s, pl = isp(pb, bits, rw, rh, vbin, hbin, nom)
+                s, pl = isp(pb, bits, rw, rh, vbin, hbin, nom, exact)
             except F.NotPossible:
                 # RWZM 1025 (R2) loses up to 16 px of a 1:1 record: one more 16 px of sensor crop
                 # (+0.3 % field) buys them back, inside the 6064 the readouts deliver
@@ -146,7 +276,7 @@ def candidates(cw, ch, rw, rh, cap=None, tol=None):
                     continue
                 try:
                     pb = readout(key, cw + WIDEN, rch, cap, rows)
-                    s, pl = isp(pb, bits, rw, rh, vbin, hbin, nom)
+                    s, pl = isp(pb, bits, rw, rh, vbin, hbin, nom, exact)
                 except (ValueError, F.NotPossible):
                     continue
             if tuple(pl.rec) != (rw, rh) and (tol is None or not short_ok(pl.rec, rw, rh, tol)):
@@ -185,12 +315,23 @@ def visible_of(rec):
     return [rec[0] - F.MARGIN[0], rec[1] - F.MARGIN[1]]
 
 
-def qualities(cw, ch, ow, oh, cap=None, tol=None):
+def qualities(cw, ch, ow, oh, cap=None, tol=None, vmargin_floor=None, exact=None):
     """The qualities that record exactly ow x oh from a cw x ch sensor crop, each on its fastest readout variant
     (max fps, or the most that reaches `cap`).  Raises what the formulas raise on input they do not cover
     (ZeroDivisionError for an empty sensor-grid crop or RES).
-    tol: also the ones at most tol short per axis; every case then carries its own `visible` and the RES's `nominal`."""
-    cs = pick(candidates(cw, ch, ow, oh, cap, tol))
+    tol: also the ones at most tol short per axis; every case then carries its own `visible` and the RES's `nominal`.
+    exact (None: on with vmargin_floor): the exact-merge rules (module doc)."""
+    cs = pick(candidates(cw, ch, ow, oh, cap, tol, vmargin_floor is not None if exact is None else exact))
+    if vmargin_floor is not None:                   # after the pick: a quality keeps its readout variant (RS, fps)
+        kept = []
+        for c in cs:
+            s = settings(c)[1]
+            fx = _margin_fix(c['bits'], ow, oh, c['vbin'], c['hbin'], tol, s, F.plan(s), vmargin_floor)
+            if fx is None:
+                continue
+            c.update(zoom=list(fx[0].zoom), rec=list(fx[1].rec), path=fx[1].path)
+            kept.append(c)
+        cs = kept
     if tol is not None:
         for c in cs:
             c['visible'], c['nominal'] = visible_of(c['rec']), visible_of((ow, oh))

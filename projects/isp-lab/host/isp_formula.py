@@ -63,6 +63,7 @@ class Spec:
     hirate: bool = False
     rec: tuple = None                # the record size wanted (DNG); None = the most R8 allows. Stock UHD
                                      # declares 3856 x 2170 out of a possible 3872 x 2184: rec is a choice <= max
+    record_preview: bool = False    # prefer the record tap when it fits; high-rate SensorLab candidate
 
 
 @dataclass
@@ -119,7 +120,7 @@ def path(s: Spec, act=None):
         k = max(-(-W // SRC_MAX), -(-aw // VIS_MAX_W), -(-H // SRC_MAX_H))
         return 'D', k * UNITY, k * UNITY
     c_fits = W * UNITY // fh <= SRC_MAX and H * UNITY // fv <= SRC_MAX_H
-    if fh == fv and c_fits:                          # C live 1536..3218 unbinned, 6436 with vbin (mx1/cmax 10-27)
+    if (fh == fv or (s.record_preview and aw <= VIS_MAX_W)) and c_fits:  # record tap without a new FOV crop
         return 'C', fh, fv
     if W <= SRC_MAX and H <= SRC_MAX_H:              # R12: a tall 1:1 preview froze the take (SQ 2032x4040 E1)
         e = 'E1', UNITY, UNITY

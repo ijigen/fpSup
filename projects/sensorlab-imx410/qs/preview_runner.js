@@ -19,21 +19,21 @@ const seqs = JSON.parse(fs.readFileSync(seqFile, 'utf8'));
 const body = logic + '\nfunction render() {}\n' + input + `
 const cells = {};
 const _allQuals = allQuals;
-allQuals = function () { const r = res(); cells[dcName() + ':' + r.w + 'x' + r.h] = [S.dcW, S.dcH, r.w, r.h]; return _allQuals(); };
+allQuals = function () { const r = res(); cells[qualityKey()] = [S.dcW, S.dcH, r.w, r.h]; return _allQuals(); };
 function snap() {
   const L = layout();
   const tiles = L.map((f, i) => {
     if (!f) return null;
     let s = f.s(), approx = false; if (Array.isArray(s)) [s, approx] = s;
-    return {t: f.t, v: String(f.v()), s: s || '', approx: !!approx};
+    return {t: f.t, v: String(f.v()), s: s || '', approx: !!approx, lock: f.lock ? f.lock() : null};
   });
   const f = L[S.focus];
   let foot = null;
   if (f && f === FPS && S.fine) { const Q = quals(); foot = {spin: f3(S.fps), mark: !!Q.find(q => same(q.max, S.fps))}; }
-  else if (f && f.spin) foot = {spin: String(f.v()), mark: false};
+  else if (f && f.spin) foot = {spin: String(f.v()), mark: !!(f.mark && f.mark())};
   else if (f) foot = {opts: f.opts().map(o => ({l: o.l, s: o.s || '', mark: !!o.mark, custom: !!o.custom, na: !!o.na,
                                                  approx: !!o.approx})), sel: f.sel()};
-  return {tiles, focus: S.focus, sub: S.sub, open: S.open, fine: S.fine, foot,
+  return {tiles, focus: S.focus, sub: S.sub, open: S.open, fine: S.fine, foot, qr: qrVisible(), qrcode: qrCode() || '',
           S: {dcW: S.dcW, dcH: S.dcH, fps: S.fps, fpsCustom: S.fpsCustom, recipe: S.recipe, kh: S.kh, kv: S.kv, km: S.km,
               res: res(), rec: (curRecipe() || {}).q || null}};
 }

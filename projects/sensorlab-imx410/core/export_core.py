@@ -96,7 +96,11 @@ def collect():
     d['const'].update(WIDE14_W=F.WIDE14_W, WIDE14_HMAX=F.WIDE14_HMAX)                          # R15
     d['const'].update(LINE_PX_NUM=num, LINE_PX_DEN=den, Q_NEAR_UNITY=Q.NEAR_UNITY, Q_WIDEN=Q.WIDEN,
                       Q_SENSOR_W=Q.SENSOR_W, SRC_MAX_H=F.SRC_MAX_H,      # R12: preview source rows
-                      Q_MARGIN_W=F.MARGIN[0], Q_MARGIN_H=F.MARGIN[1])     # quality.visible_of: the stock margin
+                      Q_MARGIN_W=F.MARGIN[0], Q_MARGIN_H=F.MARGIN[1],     # quality.visible_of: the stock margin
+                      Q_VMARGIN=Q.VMARGIN,
+                      Q_VM_TOL_NUM=Fraction(str(Q.VM_TOL)).numerator, Q_VM_TOL_DEN=Fraction(str(Q.VM_TOL)).denominator,    # quality vertical margin (core_qualities_tol)
+                      Q_CROP_W=Q.CROP_W, Q_CROP_H=Q.CROP_H, Q_CROP_FOV_NUM=Q.CROP_FOV[0], Q_CROP_FOV_DEN=Q.CROP_FOV[1],
+                      Q_VCROP=Q.VCROP)                                    # quality exact merges (E) / (V)
     d['qual'] = [(keys.index(k), b, int(Q.ad_of(k, b))) for k, b in Q.QUAL]
     d['qbins'] = list(Q.BINS)
     if sorted(d['qbins']) != [(1, 1), (1, 3), (3, 1), (3, 3)]:

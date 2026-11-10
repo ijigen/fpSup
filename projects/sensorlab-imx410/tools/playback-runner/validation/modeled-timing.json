@@ -1,0 +1,128 @@
+[
+  {
+    "magic": 827348051,
+    "version": 1,
+    "req_mode": 1,
+    "req_seq": 1,
+    "seen_seq": 1,
+    "active_seq": 1,
+    "done_seq": 1,
+    "phase": 8,
+    "mode": 1,
+    "error": 0,
+    "reject_seq": 0,
+    "reject_error": 0,
+    "task_id": 7,
+    "task_rc": 0,
+    "accepted_us": 1420000,
+    "phase_us": 10024000,
+    "done_us": 20024000,
+    "n_events": 4,
+    "cine_at_arm": 1,
+    "busy_at_arm": 0,
+    "phase_name": "done",
+    "error_name": "none",
+    "events": [
+      {
+        "key": "PLAYON",
+        "entered_us": 3420000,
+        "returned_us": 3421000,
+        "rc": 0,
+        "since_accept_us": 2000000
+      },
+      {
+        "key": "PLAYOFF",
+        "entered_us": 4221000,
+        "returned_us": 4222000,
+        "rc": 0,
+        "since_accept_us": 2801000
+      },
+      {
+        "key": "S1ON",
+        "entered_us": 9222000,
+        "returned_us": 9223000,
+        "rc": 0,
+        "since_accept_us": 7802000
+      },
+      {
+        "key": "S1OFF",
+        "entered_us": 10023000,
+        "returned_us": 10024000,
+        "rc": 0,
+        "since_accept_us": 8603000
+      }
+    ],
+    "sequence_completed": true,
+    "physical_exit_verified": false
+  },
+  {
+    "magic": 827348051,
+    "version": 1,
+    "req_mode": 2,
+    "req_seq": 1,
+    "seen_seq": 1,
+    "active_seq": 1,
+    "done_seq": 1,
+    "phase": 8,
+    "mode": 2,
+    "error": 0,
+    "reject_seq": 0,
+    "reject_error": 0,
+    "task_id": 7,
+    "task_rc": 0,
+    "accepted_us": 1420000,
+    "phase_us": 10826000,
+    "done_us": 20826000,
+    "n_events": 6,
+    "cine_at_arm": 1,
+    "busy_at_arm": 0,
+    "phase_name": "done",
+    "error_name": "none",
+    "events": [
+      {
+        "key": "PLAYON",
+        "entered_us": 3420000,
+        "returned_us": 3421000,
+        "rc": 0,
+        "since_accept_us": 2000000
+      },
+      {
+        "key": "PLAYOFF",
+        "entered_us": 4221000,
+        "returned_us": 4222000,
+        "rc": 0,
+        "since_accept_us": 2801000
+      },
+      {
+        "key": "OKON",
+        "entered_us": 6222000,
+        "returned_us": 6223000,
+        "rc": 0,
+        "since_accept_us": 4802000
+      },
+      {
+        "key": "OKOFF",
+        "entered_us": 7023000,
+        "returned_us": 7024000,
+        "rc": 0,
+        "since_accept_us": 5603000
+      },
+      {
+        "key": "S1ON",
+        "entered_us": 10024000,
+        "returned_us": 10025000,
+        "rc": 0,
+        "since_accept_us": 8604000
+      },
+      {
+        "key": "S1OFF",
+        "entered_us": 10825000,
+        "returned_us": 10826000,
+        "rc": 0,
+        "since_accept_us": 9405000
+      }
+    ],
+    "sequence_completed": true,
+    "physical_exit_verified": false
+  }
+]

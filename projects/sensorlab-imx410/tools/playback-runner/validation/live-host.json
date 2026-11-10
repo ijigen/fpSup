@@ -1,0 +1,39 @@
+{
+  "status": "PASS_OFFLINE",
+  "tests": 11,
+  "test_names": [
+    "test_mode_first_seq_last_and_no_usb_after_commit",
+    "test_ack_exception_or_error_still_only_waits_locally",
+    "test_wrong_code_or_context_revokes_and_refuses",
+    "test_active_pending_invalid_and_failed_task_cannot_write",
+    "test_idle_gate_and_mode_readback_fail_before_commit",
+    "test_status_is_read_only_and_does_not_prove_physical_exit",
+    "test_human_confirmation_required_before_build_or_transport",
+    "test_exact_unique_log_entry",
+    "test_relative_output_is_resolved_before_getfile_changes_cwd",
+    "test_shared_flock_excludes_second_operator",
+    "test_completed_sequence_increments_once"
+  ],
+  "live_execution": false,
+  "model": "Fake transport; no putfile import, camera, USB or real sleep",
+  "source_sha256": {
+    "live_sltp.py": "f9dd6ceb0189a6dd6289d7e0d733d11b236a2f62c9bed0af6763234a8563905a",
+    "test_live_sltp.py": "2d1391bdb5f49057c312a17f9553ca083f077ee64635db00300b1c030011ade1"
+  },
+  "pinned_sltp_sha256": "c1bc654a825128a7f50ca2ce41e21ab4b49e43b7b3b3e0ac4ae9cae79bcb6d45",
+  "independent_review": {
+    "agent": "cpu_feasibility",
+    "result": "no blocking finding",
+    "fake_tests_passed": 10,
+    "live_execution": false,
+    "findings": [
+      "putfile.sh retries=0 sends one command only",
+      "all final commit success/error/exception paths contain local save/sleep only",
+      "MEM1 read window revoked before mode/sequence writes",
+      "native cached writes match the cached state/context alias read by the worker",
+      "30-second host silence does not prove key completion or physical exit"
+    ],
+    "reviewed_source_sha256": "3263674d464a10aa276badce07a1ede965e63506d05da91be15a3045c32bc043"
+  },
+  "followup": "relative out resolved in main and card-reader before cwd=SHELL; eleven fake tests pass"
+}

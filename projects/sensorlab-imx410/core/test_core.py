@@ -63,7 +63,7 @@ class Mode(ctypes.Structure):
 
 
 class Spec(ctypes.Structure):
-    _fields_ = [(n, I32) for n in 'win_w win_h zh zv sx sy vbin hbin bits hirate has_rec rec_w rec_h'.split()]
+    _fields_ = [(n, I32) for n in 'win_w win_h zh zv sx sy vbin hbin bits hirate has_rec rec_w rec_h record_preview'.split()]
 
 
 class IspRes(ctypes.Structure):
@@ -236,7 +236,7 @@ EC_KEYS = [r['key'] for r in C.READOUTS]
 def spec_c(s):
     rec = s.rec
     return Spec(s.window[0], s.window[1], s.zoom[0], s.zoom[1], int(s.scale[0]), int(s.scale[1]), s.vbin, s.hbin,
-                s.bits, int(bool(s.hirate)), 1 if rec else 0, rec[0] if rec else 0, rec[1] if rec else 0)
+                s.bits, int(bool(s.hirate)), 1 if rec else 0, rec[0] if rec else 0, rec[1] if rec else 0, int(s.record_preview))
 
 
 def plan_diff(pp, cp):
@@ -507,8 +507,9 @@ TOLS = {0.02: Fraction(1, 50), 0.005: Fraction(1, 200), 0.002: Fraction(1, 500),
 
 
 def py_qualities(cw, ch, ow, oh, cap, tol=None):
+    """tol None: core_qualities (= matrix.py, no margin); a tol: core_qualities_tol, the product list (vertical margin)"""
     try:
-        return Q.qualities(cw, ch, ow, oh, cap, tol=tol), 0
+        return Q.qualities(cw, ch, ow, oh, cap, tol=tol, vmargin_floor=None if tol is None else Q.VMARGIN), 0
     except ZeroDivisionError:
         return None, E['CORE_E_ZERO']
 
@@ -543,6 +544,29 @@ def c_qrec(q):
     return d
 
 
+def vmargin_c(q):
+    """the firmware's spare RWZM input rows below a C recipe's record, x1024 (ContSet_Adr1 @C031BE60), from the C
+    fields alone; RWZM off = no floor.  Written out here, not Q.vmargin, so a slip in both cannot hide."""
+    if q.zh <= 1024 and q.zv <= 1024:
+        return 1 << 40
+    R, z = q.win_h // q.vbin, max(q.zv, 1024)
+    est = (z // 2 + R * 1024) // z if z > 1024 else R
+    y0 = ((est - q.rec_h) >> 2) << 1 if est > q.rec_h else 0
+    return R * 1024 - (y0 + q.rec_h) * z
+
+
+def same_readout(c, cell, cap, tol):
+    """Bei 11-10: the margin never changes the readout -- the same args (RS, fps) as the list without it, and the
+    pixel aspect (Zh / Zv) within one rounding step"""
+    old = {x['quality']: x for x in Q.qualities(*cell, cap, tol=tol, exact=True)}.get(c['quality'])   # exact merges, no margin
+    if old is None or old['readout'] != c['readout'] or old['window'] != c['window'] or old['fps'] != c['fps']:
+        return False
+    (h0, v0), (h1, v1) = old['zoom'], c['zoom']
+    if (h0, v0) == (h1, v1):
+        return True
+    return h0 > 1024 and v0 > 1024 and v1 < v0 and abs(h1 * v0 - h0 * v1) * 2 <= v0   # Zh' = round(Zh * Zv' / Zv)
+
+
 def cmp_qualities(core, T, name, cell, cap, steps=0, rnd=None, tol=None):
     """quality.qualities vs core_qualities for one cell; steps > 0: settings at that many VMAX steps per quality.
     cap: a float, or a Fraction (C gets it exactly, Python gets its nearest float).  tol: a TOLS key (core_qualities_tol;
@@ -564,6 +588,11 @@ def cmp_qualities(core, T, name, cell, cap, steps=0, rnd=None, tol=None):
         got = C.plan(*a)
         T.add(name + ' args replay', [] if (got['soc'], v016_of(got), got['id']) == (want['soc'], v016_of(want), c['readout_id'])
               else [('replay', a, got['soc'], want['soc'])], (cell, cap, c['quality']))
+    if tol is not None:                                 # the invariant: every product recipe keeps the floor
+        T.add(name + ' vmargin floor', [(q.key, q.hbin, q.vbin, q.win_h, q.zh, q.zv, q.rec_h) for q in cq
+                                        if vmargin_c(q) < Q.VMARGIN], (cell, cap, tol))
+        T.add(name + ' vmargin keeps the readout', [c['quality'] for c in pq if not same_readout(c, cell, cap, tol)],
+              (cell, cap, tol))
     for c, q in zip(pq, cq):
         a, b = py_qrec(c, cap), c_qrec(q)
         T.add(name + ' quality', [(k, a[k], b[k]) for k in a if a[k] != b[k]], (cell, cap, c['quality']))
@@ -693,7 +722,14 @@ def run_quality_tol(core, T, rnd, quick, cells):
     and at the tolerances the isp-lab tests use; the full-height crops it changes, around their rows; random cells"""
     for dc, cell in cells:
         for tol in ((0.02,) if quick else (0.02, 0.005, 0.0)):
-            cmp_qualities(core, T, f'quality tol {tol} preset', cell, None, steps=0 if quick else 1, rnd=rnd, tol=tol)
+            # steps >= 1 even when quick: the margin-fixed recipes' settings (core_quality_plan / _spec) are compared too
+            cmp_qualities(core, T, f'quality tol {tol} preset', cell, None, steps=1, rnd=rnd, tol=tol)
+    # the vertical margin's later steps live in the smallest RES (dcres.html presets): the shrink + shorter record
+    # (S16 688x412), the 3 % retry (S35 / APS-C / S16 / OG), the 14 not offered (S16 336x206); every VMAX step compared
+    for cell in ((2096, 1240, 688, 412), (4192, 2358, 688, 392), (3952, 2624, 656, 436), (2096, 1240, 336, 206),
+                 (6048, 4040, 1008, 672)):
+        for tol in (0.02, 0.0, 0.03):
+            cmp_qualities(core, T, f'quality tol {tol} small RES', cell, None, steps=1, rnd=rnd, tol=tol)
     full = [(6048, 4040), (4032, 4032), (6048, 4038), (4032, 4034), (4032, 3990), (6032, 4040), (5056, 4040)]
     for cw, ch in full:
         for k in (1, 1.5, 2, 3, 4, 6):
@@ -710,6 +746,84 @@ def run_quality_tol(core, T, rnd, quick, cells):
         oh = rnd.choice([int(ch / k) & ~1, ow * ch // max(cw, 1) & ~1, (int(ch / k) & ~1) - rnd.randint(0, 40) * 2])
         cmp_qualities(core, T, 'quality tol random', (cw, ch, ow, max(oh, 0)), rnd.choice([None, None, 59.94, 29.97]),
                       steps=1 if not quick else 0, rnd=rnd, tol=rnd.choice(list(TOLS)))
+
+
+PAGE_DCS = [('OG', 6048, 4040), ('HD', 6048, 3402), ('S35', 4192, 2358), ('APS-C', 3952, 2624), ('S16', 2096, 1240),
+            ('SQ', 4032, 4032)]
+
+
+def merge_presets(vm_rows=None):
+    """the merge presets of every format, as dcres.html resList / slqs.c res_list make them (0.0.6test):
+    [(name, label, (W, H, w, h), (mh, mv, hbin, vbin) required, exact)]: /2 2x2, /3 3x3, 1x2, 1x3 exact (RWZM off);
+    /6 6x6 (2x2 + CRCT 3x3) and 3x6 with the record = the RES (their RWZM stays on, the margin floor holds)"""
+    vm = Q.VM_ROWS if vm_rows is None else vm_rows
+    out = []
+    for n, W, H in PAGE_DCS:
+        for lab, w, h, quals, exact in (('2x2', W // 2 // 16 * 16, H // 2 & ~1, [(2, 2, 1, 1)], True),
+                                        ('3x3', W // 3 // 16 * 16, H // 3 & ~1, [(3, 3, 1, 1)], True),
+                                        ('1x2', W, H // 2 & ~1, [(1, 2, 1, 1)], True),
+                                        ('1x3', W, H // 3 & ~1, [(1, 3, 1, 1)], True),
+                                        ('6x6', W // 6 // 16 * 16, (H // 6 & ~1) - vm, [(2, 2, 3, 3), (3, 6, 1, 1)], False)):
+            for qm in quals:
+                out.append((n, lab, (W, H, w, h), qm, exact))
+    return out
+
+
+def merge_invariant(core, presets, tol=0.02):
+    """[failure...] of the exact-merge invariant over core_qualities_tol (C fields only, written out here): each preset
+    has its merge (12-bit AD, any variant); an exact one with Zh = Zv = 1024 and a record inside tol of the RES (the
+    readout's own delivery may be short: OG 2014 / V3 1330 rows), the 6x6 / 3x6 one with the record = the RES; every
+    RWZM-on recipe keeps the floor"""
+    bad = []
+    for n, lab, cell, (mh, mv, hb, vb), exact in presets:
+        cq, ce = core.qualities(*cell, None, tol)
+        if ce:
+            bad.append((n, lab, 'error', ce)); continue
+        if any(vmargin_c(q) < Q.VMARGIN for q in cq):
+            bad.append((n, lab, 'floor'))
+        m = [q for q in cq if (q.mh, q.mv, q.hbin, q.vbin, q.ad) == (mh, mv, hb, vb, 12)]
+        if not m:
+            bad.append((n, lab, (mh, mv, hb, vb), 'not offered')); continue
+        q = m[0]
+        w, h = cell[2:]
+        if exact and not ((q.zh, q.zv) == (1024, 1024) and q.rec_w == w and Q.short_ok((q.rec_w, q.rec_h), w, h, tol)):
+            bad.append((n, lab, (mh, mv, hb, vb), 'not exact', q.zh, q.zv, q.rec_w, q.rec_h))
+        if not exact and (q.rec_w, q.rec_h) != (w, h):
+            bad.append((n, lab, (mh, mv, hb, vb), 'record != RES', q.rec_w, q.rec_h))
+    return bad
+
+
+def run_exact(core, T, quick=False):
+    """the exact merges (quality.py (E) / (V), validation/20261110-binning-exact): every page preset cell (dcres.html
+    resList, the product's list) compared with steps; the invariant over the merge presets, and proof that it can fail
+    (the /6 presets without their spare rows); cells at the crop limits; random cells near a merge"""
+    rnd = random.Random(1110)
+    sys.path.insert(0, str(HERE.parent / 'preview'))
+    import gen_fps
+    for n, W, H, rs in gen_fps.preset_lists():
+        for w, h in rs:
+            cmp_qualities(core, T, 'exact page preset', (W, H, w, h), None, steps=0 if quick else 1, rnd=rnd, tol=0.02)
+    T.add('exact merge invariant', merge_invariant(core, merge_presets()), 'presets')
+    T.add('exact merge invariant can fail (no spare rows)', [] if merge_invariant(core, merge_presets(vm_rows=0))
+          else ['passed without the spare rows'], 'presets')
+    # the limits: 16 px / 4 rows over, one more each; the 1.5 % field of view; ISP bins (never E); custom DCs
+    cells = []
+    for cw, ch, k in ((2096, 1240, 2), (2096, 1240, 3), (3952, 2624, 2), (3952, 2624, 3), (4192, 2358, 3), (1056, 620, 2),
+                      (528, 300, 2), (560, 316, 2), (800, 452, 3), (2112, 1248, 2), (2128, 1252, 2), (6048, 4040, 6)):
+        for dw in ((0, 16) if quick else (0, 16, -16, 32)):
+            for dh in ((0, 3, 4, 6, 10, 12) if quick else (0, 1, 2, 3, 4, 6, 8, 10, 12, 14)):   # odd: an odd RES height
+                ow = cw // k // 16 * 16 - dw
+                cells.append((cw, ch, ow, (ch // k & ~1) - dh))
+    for i in range(30 if quick else 400):
+        cw = rnd.choice([6048, 4192, 3952, 2096, 4032, rnd.randint(64, 380) * 16])
+        ch = rnd.choice([4040, 3402, 2358, 2624, 1240, 4032, rnd.randint(150, 4040)])
+        k = rnd.choice([1, 2, 3, 6])
+        mv = rnd.choice([1, 2, 3, 6])
+        cells.append((cw, ch, cw // k // 16 * 16 - rnd.choice([0, 0, 16]), (ch // mv & ~1) - rnd.randint(0, 14) * 2))
+    for cell in cells:
+        if cell[2] > 0 and cell[3] > 0:
+            cmp_qualities(core, T, 'exact limits', cell, rnd.choice([None, 59.94]), steps=0 if quick else 1, rnd=rnd,
+                          tol=rnd.choice([0.02, 0.02, 0.0, 0.03]))
 
 
 def run_isp(core, T, base, n=100000, seed=1027):
@@ -731,7 +845,8 @@ def run_isp(core, T, base, n=100000, seed=1027):
                 most = (0, 0)
             rec = rnd.choice([most, (most[0] - 16 * rnd.randint(0, 20), most[1] - 2 * rnd.randint(0, 50)),
                               (most[0] + 16, most[1]), (most[0] - 8, most[1]), (most[0], most[1] - 1), (16, 10), (32, 12)])
-        s = F.Spec(window=(W, H), zoom=(zh, zv), scale=sc, vbin=vb, hbin=hb, bits=bits, hirate=rnd.random() < 0.1, rec=rec)
+        s = F.Spec(window=(W, H), zoom=(zh, zv), scale=sc, vbin=vb, hbin=hb, bits=bits, hirate=rnd.random() < 0.1, rec=rec,
+                   record_preview=rnd.random() < 0.5)
         T.add('isp-random plan', isp_diff(s, core.isp(s)), s)
         if i % 10 == 0:
             try:
@@ -956,24 +1071,60 @@ def run_ties(core, T):
         T.bad['vmax at round() ties'] = [(bad[:5], 'mismatch')]; T.bad['vmax at round() ties#'] = len(bad)
 
 
+def steps(core, T, base, quick):
+    return (('matrix', lambda: run_matrix(core, T, base, quick)),
+            ('grid', lambda: run_grid(core, T, quick, smc_cap=600 if quick else None)),
+            ('fps', lambda: run_fps_sweep(core, T, quick)),
+            ('smc-synthetic', lambda: run_smc_synthetic(core, T, 1500 if quick else 6000)),
+            ('isp', lambda: run_isp(core, T, base, 8000 if quick else 100000)),
+            ('quality', lambda: run_quality(core, T, quick)),
+            ('exact', lambda: run_exact(core, T, quick)),
+            ('quality proofs', lambda: run_quality_proofs(core, T, quick)),
+            ('tol proofs', lambda: run_tol_proofs(core, T, quick)),
+            ('vmax ties', lambda: run_ties(core, T)),
+            ('proofs', lambda: None if quick else run_proofs(core, T)))
+
+
 def run_all(lib, quick=False, verbose=True):
     core = Core(lib)
     T = Tally()
     base = base_row()
     t = time.time()
-    for name, fn in (('matrix', lambda: run_matrix(core, T, base, quick)),
-                     ('grid', lambda: run_grid(core, T, quick, smc_cap=600 if quick else None)),
-                     ('fps', lambda: run_fps_sweep(core, T, quick)),
-                     ('smc-synthetic', lambda: run_smc_synthetic(core, T, 1500 if quick else 6000)),
-                     ('isp', lambda: run_isp(core, T, base, 8000 if quick else 100000)),
-                     ('quality', lambda: run_quality(core, T, quick)),
-                     ('quality proofs', lambda: run_quality_proofs(core, T, quick)),
-                     ('tol proofs', lambda: run_tol_proofs(core, T, quick)),
-                     ('vmax ties', lambda: run_ties(core, T)),
-                     ('proofs', lambda: None if quick else run_proofs(core, T))):
+    for name, fn in steps(core, T, base, quick):
         fn()
         if verbose:
             print(f'  [{name} done, {time.time() - t:.1f} s]', flush=True)
+    return T
+
+
+_JOB_LIB = None                                   # the parent's host build, inherited by the forked workers
+
+
+def _run_step(arg):
+    name, quick = arg
+    core, T, t = Core(_JOB_LIB), Tally(), time.time()
+    dict(steps(core, T, base_row(), quick))[name]()
+    return name, T.n, T.bad, time.time() - t
+
+
+def run_all_jobs(lib, quick, jobs):
+    """run_all with each step in its own forked process (steps are independent: each has its own seeded RNG);
+    the tally is the same, the report the same"""
+    import multiprocessing
+    global _JOB_LIB
+    _JOB_LIB = lib
+    names = [n for n, _f in steps(None, None, None, quick)]
+    T, t = Tally(), time.time()
+    with multiprocessing.get_context('fork').Pool(min(jobs, len(names))) as pool:
+        for name, n, bad, dt in pool.imap_unordered(_run_step, [(n, quick) for n in names]):
+            for k, v in n.items():
+                T.n[k] = T.n.get(k, 0) + v
+            for k, v in bad.items():
+                if k.endswith('#'):
+                    T.bad[k] = T.bad.get(k, 0) + v
+                else:
+                    T.bad[k] = (T.bad.get(k, []) + v)[:5]
+            print(f'  [{name} done in {dt:.1f} s, {time.time() - t:.1f} s]', flush=True)
     return T
 
 
@@ -1052,19 +1203,58 @@ MUTANTS = {
                                        'if (tol && rows > full) return (int)full;'),
     'tol: nominal rows not even': ('fdiv(ch, cd_ro[key].mv) & ~(i64)1};', 'fdiv(ch, cd_ro[key].mv)};'),
     'tol: nominal from the widened crop': ('i64 nom[2] = {fdiv(cw, cd_ro[key].mh),', 'i64 nom[2] = {fdiv(cw + 16, cd_ro[key].mh),'),
-    'visible: margin 16 x 8': ('c->vis_h = o.rec[1] - CD_Q_MARGIN_H;', 'c->vis_h = o.rec[1] - 8;'),
+    'visible: margin 16 x 8': ('c->vis_w = c->rec_w - CD_Q_MARGIN_W; c->vis_h = c->rec_h - CD_Q_MARGIN_H;', 'c->vis_w = c->rec_w - CD_Q_MARGIN_W; c->vis_h = c->rec_h - 8;'),
+    'visible: not after the fix': ('out[i].vis_h = out[i].rec_h - CD_Q_MARGIN_H;', '(void)0;'),
+    # vertical margin (quality.vmargin / _margin_fix, validation/20261110-vertical-margin)
+    'vm: crop y0 ignored': ('i64 y0 = est > rec_h ? ((est - rec_h) >> 2) << 1 : 0;', 'i64 y0 = 0;'),
+    'vm: est without the rounding half': ('i64 est = z > UNITY ? fdiv((z >> 1) + R * UNITY, z) : R;\n    i64 y0', 'i64 est = z > UNITY ? fdiv(R * UNITY, z) : R;\n    i64 y0'),
+    'exact: (V) est without the rounding half': ('i64 est = z > UNITY ? fdiv((z >> 1) + R * UNITY, z) : R;\n            if', 'i64 est = z > UNITY ? fdiv(R * UNITY, z) : R;\n            if'),
+    'vm: CRCT vbin ignored': ('i64 R = fdiv(win_h, vbin), z = imax(zv, UNITY);', 'i64 R = win_h, z = imax(zv, UNITY);'),
+    'vm: off unless the vertical scales': ('if (zh <= UNITY && zv <= UNITY) return VM_OFF;', 'if (zv <= UNITY) return VM_OFF;'),
+    'vm: floor 4096': ('#define VM_OFF ((i64)1 << 40)\n', '#define VM_OFF ((i64)1 << 40)\n#undef CD_Q_VMARGIN\n#define CD_Q_VMARGIN 4096\n'),
+    'vm: no margin at all': ('if (vm) {                                                    /* the vertical margin, after', 'if (0) {   /* the vertical margin, after'),
+    'vm: a refused quality kept': ('            if (e) continue;\n            out[i].vis_w', '            out[i].vis_w'),
+    'vm: only the vertical ratio shrinks': ('s->zh = (int32_t)h; s->zv = (int32_t)z;\n            int e', 's->zv = (int32_t)z;\n            int e'),
+    'vm: the fixed ratios not kept': ('if (!e) { c->zh = s->zh; c->zv = s->zv; c->path = o->path; return 0; }', 'if (!e) { c->path = o->path; return 0; }'),
+    'vm: Zh truncated': ('            i64 h = fdiv(zh * z + (zv >> 1), zv);\n            if', '            i64 h = fdiv(zh * z, zv);\n            if'),
+    'vm: Zh may reach 1:1': ('            if (h <= UNITY) break;\n            core', '            if (h < UNITY) break;\n            core'),
+    'vm: no shrink': ('if (zh > UNITY && zv > UNITY)\n        for (i64 z = zv - 1;', 'if (0)\n        for (i64 z = zv - 1;'),
+    'vm: shorter record past tol': ('if (!short_ok(c->rec_w, h, rw, rh, tn, td)) break;', 'if (h < 2) break;'),
+    'vm: no shorter record': ('    for (i64 h = N - 2; h > 0; h -= 2) {                         /* 2.', '    for (i64 h = N - 2; h > N; h -= 2) {   /* 2.'),
+    'vm: no combined step': ('    if (zh > UNITY && zv > UNITY)                                /* 3.', '    if (0)   /* 3.'),
+    'vm: no 3 % retry': ('    return q_shorter(c, rw, rh, CD_Q_VM_TOL_NUM, CD_Q_VM_TOL_DEN, s, o);', '    return 1;'),
+    'vm: the retry at 5 %': ('return q_shorter(c, rw, rh, CD_Q_VM_TOL_NUM, CD_Q_VM_TOL_DEN, s, o);', 'return q_shorter(c, rw, rh, 5, 100, s, o);'),
+    'vm: the retry first': ('    int e = q_shorter(c, rw, rh, tn, td, s, o);', '    int e = q_shorter(c, rw, rh, CD_Q_VM_TOL_NUM, CD_Q_VM_TOL_DEN, s, o);'),
+    'vm: combined past tol': ('if (!short_ok(c->rec_w, n, rw, rh, tn, td)) break;', 'if (n < 2) break;'),
+    'vm: combined keeps the full record': ('s->rec_h = (int32_t)n;', 's->rec_h = (int32_t)N;'),
+    'vm: combined Zh not proportional': ('                core_quality_spec(c, s);\n                s->zh = (int32_t)h; s->zv = (int32_t)z; s->rec_h', '                core_quality_spec(c, s);\n                s->zv = (int32_t)z; s->rec_h'),
+    # exact merges (quality.py (E) / (V), validation/20261110-binning-exact)
+    'exact: no (E)': ('if (ex && hbin == 1 && vbin == 1 && crop_ok(', 'if (0 && ex && hbin == 1 && vbin == 1 && crop_ok('),
+    'exact: width limit 15 px': ('crop_ok(bw, nom ? nom[0] : W, rw, CD_Q_CROP_W)', 'crop_ok(bw, nom ? nom[0] : W, rw, 15)'),
+    'exact: height limit 2 rows': ('crop_ok(bh, nom ? nom[1] : H, rh, CD_Q_CROP_H)', 'crop_ok(bh, nom ? nom[1] : H, rh, 2)'),
+    'exact: height limit 6 rows': ('crop_ok(bh, nom ? nom[1] : H, rh, CD_Q_CROP_H)', 'crop_ok(bh, nom ? nom[1] : H, rh, 6)'),
+    'exact: no field-of-view bound': ('&& CD_Q_CROP_FOV_DEN * imax(n - o, 0) <= CD_Q_CROP_FOV_NUM * n;', ';'),
+    'exact: (E) record not even': ('q->rec_h = (int32_t)(imin(rh, H) & ~(i64)1);', 'q->rec_h = (int32_t)imin(rh, H);'),
+    'exact: no (V)': ('if (ex && zv > UNITY && (zh > UNITY || hbin == 3 || vbin == 3)) {', 'if (0) {'),
+    'exact: (V) not the aspect ratio first': ('i64 zt[2] = {fdiv(zh * q->mh * hbin + (d >> 1), d), UNITY};', 'i64 zt[2] = {UNITY, UNITY};'),
+    'exact: (V) aspect ratio truncated': ('i64 zt[2] = {fdiv(zh * q->mh * hbin + (d >> 1), d), UNITY};', 'i64 zt[2] = {fdiv(zh * q->mh * hbin, d), UNITY};'),
+    'exact: (V) 9 spare rows at most': ('est - rh <= CD_Q_VCROP && vmargin', 'est - rh <= 9 && vmargin'),
+    'exact: (V) floor not checked': ('est - rh <= CD_Q_VCROP && vmargin(H, vbin, zm, z, rh) >= CD_Q_VMARGIN', 'est - rh <= CD_Q_VCROP'),
+    'exact: (V) for a plain 1:1 horizontal': ('if (ex && zv > UNITY && (zh > UNITY || hbin == 3 || vbin == 3)) {', 'if (ex && zv > UNITY) {'),
     'rs: truncated to the microsecond': ('c->rs_us = (int32_t)dround_milli(dmul(dratio((u64)c->hm * (u64)c->lines, CD_CLK), 1000u));',
                                          'c->rs_us = (int32_t)udiv64((u64)c->hm * (u64)c->lines * 1000000u, CD_CLK, 0);'),
     'js toFixed: half even': ('return (int64_t)(q + (rem >= half));', 'return (int64_t)(q + (rem > half || (rem == half && (q & 1u))));'),
 }
 
 
-def run_mutants():
+def run_mutants(part=(0, 1)):
     src = (HERE / 'core.c').read_text()
     survivors = []
     mdir = BUILD / 'mutants'
     mdir.mkdir(parents=True, exist_ok=True)
     for i, (name, (old, new)) in enumerate(MUTANTS.items()):
+        if i % part[1] != part[0]:
+            continue
         if src.count(old) != 1:
             print(f'  MUTANT {name}: pattern found {src.count(old)} times'); survivors.append(name); continue
         f = mdir / f'm{i}.c'
@@ -1083,17 +1273,26 @@ def run_mutants():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--mutants', action='store_true'); ap.add_argument('--quick', action='store_true')
+    ap.add_argument('--jobs', type=int, default=1, help='run the comparison steps in N forked processes')
+    ap.add_argument('--mutants-only', action='store_true', help='skip the comparisons, run the mutants')
+    ap.add_argument('--part', default='0/1', help='with --mutants: mutant i runs when i %% n == k (k/n)')
     a = ap.parse_args()
-    (HERE / 'core_data.h').write_text(EC.emit(EC.collect()))      # always from the current Python
-    lib = build_host()
-    ok_arm, msg = build_arm()
-    print(msg, '' if ok_arm else '  <-- FAIL')
-    T = run_all(lib, quick=a.quick)
-    T.report()
-    fail = T.failed() + (0 if ok_arm else 1)
-    if a.mutants:
-        surv = run_mutants()
-        print(f'mutants: {len(MUTANTS) - len(surv)}/{len(MUTANTS)} caught' + (f', SURVIVED: {surv}' if surv else ''))
+    part = tuple(int(x) for x in a.part.split('/'))
+    data = EC.emit(EC.collect())                                  # always from the current Python
+    if not (HERE / 'core_data.h').exists() or (HERE / 'core_data.h').read_text() != data:
+        (HERE / 'core_data.h').write_text(data)                   # unchanged: not rewritten (parallel builds read it)
+    fail = 0
+    if not a.mutants_only:
+        lib = build_host()
+        ok_arm, msg = build_arm()
+        print(msg, '' if ok_arm else '  <-- FAIL')
+        T = run_all_jobs(lib, a.quick, a.jobs) if a.jobs > 1 else run_all(lib, quick=a.quick)
+        T.report()
+        fail = T.failed() + (0 if ok_arm else 1)
+    if a.mutants or a.mutants_only:
+        surv = run_mutants(part)
+        n = len([i for i in range(len(MUTANTS)) if i % part[1] == part[0]])
+        print(f'mutants: {n - len(surv)}/{n} caught' + (f', SURVIVED: {surv}' if surv else ''))
         fail += len(surv)
     print('PASS' if not fail else f'FAIL ({fail})')
     sys.exit(1 if fail else 0)

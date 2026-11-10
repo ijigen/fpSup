@@ -1,0 +1,14 @@
+{
+  "status": "PASS_SCALAR_MODEL_ONLY",
+  "frame_cases": 3840,
+  "h3_sum_values_checked": 49150,
+  "drop_low2_mutants_caught": 2,
+  "source_layouts": [
+    "BUFA_MSB_in_LE32",
+    "RMIX_endian1_MSB_bytes"
+  ],
+  "camera_operations": 0,
+  "arm_execution": false,
+  "throughput_measured": false,
+  "limits": "Exclusive completed frame; exact-base forward contraction only; not an optimized kernel, firmware integration or DMA/cache proof."
+}

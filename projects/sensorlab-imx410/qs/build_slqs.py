@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Build the SensorLab-IMX410 QS client (loader v4 sup, sup_id SL41): fpSup/SensorLab-IMX410_v<ver>.BIN, a client
-of the QS container (API 4, QSContainer v0.2.2).
+"""Build the SensorLab-IMX410 QS client (loader v4 sup, sup_id SL41): fpSup/SensorLab-IMX410_v<ver>.BIN (names_v4), a client
+of the QS container (API 6, v0.3.1+ (v0.3.2: AEL on the first QS open): native-slot replacement, menu-to-sub-QS opening, FINE blur()).
 
     python3 -B build_slqs.py --out out          # + out/build-<ver>.json (offsets, sha256); older BINs untouched
+    # Optional: --settings-from old.BIN preserves its validated settings record in the new build.
+    python3 -B build_slqs.py --rec-delay-test --out out-rec-delay-test   # TEST build (-DAP_REC_DELAY_TEST): the same
+    # file name, so only into a directory whose name says rec-delay (validation/20261107-rec-delay/README.md)
+    python3 -B build_slqs.py --purple-test --out out-purple-test   # TEST build (+ -DAP_PURPLE_TEST: the REC-delay build plus
+    # the first-frame toggles; only into a *purple* directory; validation/20261108-purple-stock-diff/README.md)
 
 slqs.c is one unit with the C core (#include core.c).  The core's tables are read-only data and the v4 loader
 copies one flat image, so link_flat() lays out .text then the .rodata sections and resolves the Thumb calls and
@@ -26,16 +31,30 @@ QSC = ROOT / 'projects' / 'qs-container'
 LDR = ROOT / 'fpSup' / 'loader-v4'
 sys.path[:0] = [str(HERE), str(LDR), str(QSC)]
 import build_v4 as B                       # noqa: E402
+import names_v4 as N                       # noqa: E402  (display name, file base, version)
 
-VERSION = '0.2.0test'
 SUP_ID = 'SL41'
-NAME = 'SensorLab-IMX410'
+# 2026-11-07 (Bei): 'Sensor Lab-IMX410' 0.0.1test = the v0.7.39test content renamed (names_v4.py).  The card
+# file's version is what the loader compares (sloader4.c cand_cmp); the header's version word is informational
+# only (sups_list), so it stays a plain build number, not derived from the version string.
+VERSION = '0.0.6test'                      # a literal: preview/server.py and build_web.py read it with ast
+if VERSION != N.version(SUP_ID):
+    raise ImportError(f'build_slqs VERSION {VERSION} != names_v4 {N.version(SUP_ID)}')
+NAME = N.display(SUP_ID)
+HEADER_VERSION = 20
 SOURCE = HERE / 'slqs.c'
 CFG_MAGIC = 0x32344C53                     # "SL42"
 CFG_WORDS = 5
-STATE_RESERVE = 49152                      # sizeof(struct st) (the entry checks it fits before dma_off)
+STATE_RESERVE = 143360 + 0x37000 + 0x3200 + 0x40 + 0x2800            # sizeof(struct st), including v0.6 playback/HUD storage
+                                                            # and (v0.7.25test) ap.h AP_MEM_BYTES 0x16000 -> 0x36000: defect tables
+                                                            # and (v0.7.26test) + 0x40: struct ap_status +7 words (AP_ABI 3)
+                                                            # and (v0.7.27test) AP_MEM_BYTES 0x36000 -> 0x37000: the trace
+                                           # _Static_assert in slqs.c too); v0.4.1test: + the QR shadow (205 x 205 x 2)
 DMA_BYTES = 0x800 + 0x400
 REC_WORDS = 2 + 30 + 4 * 8 + 1
+SETTINGS_CFG_VERSION = 2
+SETTINGS_REC_MAGIC = 0x32514C53             # "SLQ2"
+SETTINGS_REC_VERSION = 2
 
 
 class BuildError(RuntimeError):
@@ -43,7 +62,7 @@ class BuildError(RuntimeError):
 
 
 def file_name():
-    return f'SensorLab-IMX410_v{VERSION}.BIN'
+    return N.file_name(SUP_ID)
 
 
 class TextImage:
@@ -170,25 +189,87 @@ def link_flat(data):
     return TextImage(bytes(out), funcs, load)
 
 
-def compile_text(src, extra=()):
+def compile_text(src, extra=(), reserve=STATE_RESERVE):
     """slqs.c (+ the core) -> TextImage: .text and the read-only data, linked flat"""
     clang = shutil.which('clang') or 'clang'
-    flags = [*B.CFLAGS, *B.V3.cdefs(), *extra, '-I', str(CORE), '-I', str(QSC), '-I', str(LDR),
+    flags = [*B.CFLAGS, *B.V3.cdefs(), *extra, f'-DSL_STATE_RESERVE={reserve}', '-I', str(CORE), '-I', str(HERE.parent / 'apply'), '-I', str(HERE.parent / 'menu'), '-I', str(QSC), '-I', str(LDR),
              '-I', str(B.FPSUP_UI), '-fno-unwind-tables', '-fno-asynchronous-unwind-tables']
     with tempfile.TemporaryDirectory(prefix='slqs-') as t:
         obj = pathlib.Path(t) / 'slqs.o'
         r = subprocess.run([clang, *flags, '-c', str(src), '-o', str(obj)], capture_output=True, text=True)
         if r.returncode:
-            raise BuildError('compile failed:\n' + r.stderr)
+            hint = ('\n(a Thumb movw/movt pair resolved inside .text spans more than +-32 KiB: keep the function that '
+                    'takes the address near its target, e.g. noinline, as slqs.c qr_show)'
+                    if 'Relocation Not In Range' in r.stderr else '')
+            raise BuildError('compile failed:\n' + r.stderr + hint)
         img = link_flat(obj.read_bytes())
     if not img.functions.get('sup_entry', 0) & 1:
         raise BuildError('sup_entry missing or not Thumb')
     return img
 
 
-def build(src=None):
+def settings_record(source):
+    """Validate a complete saved BIN and return its unchanged settings record.
+
+    This only checks the file/record envelope and FNV integrity. The compiled
+    client's record loader remains responsible for field semantics. A blank
+    default record is deliberately refused when migration is requested.
+    """
+    path = pathlib.Path(source).resolve()
+    data = path.read_bytes()
+    hdr = B.SL4_HEADER_LEN
+    if len(data) < hdr + 4 * CFG_WORDS:
+        raise BuildError('settings source is too short for header/config')
+    h = struct.unpack_from('<12I', data)
+    magic, hlen, flen, block, entry, sid = h[:6]
+    if magic != 0x34425346 or hlen != hdr or flen != len(data):
+        raise BuildError('settings source has an invalid v4 file header/length')
+    if sid != int.from_bytes(SUP_ID.encode('ascii'), 'little'):
+        raise BuildError('settings source sup_id does not match ' + SUP_ID)
+    if block < flen or not hdr <= (entry & ~1) < flen:
+        raise BuildError('settings source has an invalid block/entry range')
+    cfg_magic, cfg_version, state, dma, off = struct.unpack_from('<5I', data, hdr)
+    if cfg_magic != CFG_MAGIC or cfg_version != SETTINGS_CFG_VERSION:
+        raise BuildError('settings source config magic/version is unsupported')
+    if state < flen or dma < state or h[9] != dma or dma + h[10] > block:
+        raise BuildError('settings source has an invalid state/DMA range')
+    size = 4 * REC_WORDS
+    if off & 3 or off < hdr + 4 * CFG_WORDS or off + size > flen:
+        raise BuildError('settings source record range is invalid')
+    record = data[off:off + size]
+    words = struct.unpack(f'<{REC_WORDS}I', record)
+    if words[:2] != (SETTINGS_REC_MAGIC, SETTINGS_REC_VERSION):
+        raise BuildError('settings source record magic/version is unsupported or blank')
+    checksum = 2166136261
+    for byte in record[:-4]:
+        checksum = ((checksum ^ byte) * 16777619) & 0xFFFFFFFF
+    if checksum != words[-1]:
+        raise BuildError('settings source record FNV checksum mismatch')
+    manifest = dict(source_file=str(path), source_bytes=len(data),
+                    source_sha256=hashlib.sha256(data).hexdigest(), source_sup_id=SUP_ID,
+                    source_file_version=h[6], source_cfg_version=cfg_version,
+                    source_rec_off=off, record_bytes=size, record_words=REC_WORDS,
+                    record_magic=f'{words[0]:08x}', record_version=words[1],
+                    record_fnv1a32=f'{checksum:08x}',
+                    record_sha256=hashlib.sha256(record).hexdigest())
+    return record, manifest
+
+
+REC_DELAY_DEFINE = '-DAP_REC_DELAY_TEST=1'     # 0.0.2test: the REC-start delay TEST build (apply/ap.c H_RECDLY)
+REC_DELAY_RESERVE = 0x800                      # struct ap_rd (800 B) + the hook's veneer and pointer in struct ap
+PURPLE_DEFINE = '-DAP_PURPLE_TEST=1'           # 0.0.3test: + the first-frame toggles (apply/ap.c PT_*; struct ap_rd ver 2)
+PURPLE_RESERVE = 0xC00                         # struct ap_rd ver 2: 64 + 16 x 64 B
+PURPLE_FIELDS = ['seq', 'ms', 't0', 't1', 't2', 'rc', 'line0', 'line2', 'arm_us', 'arm_line', 'ff', 'pad',
+                 'bits', 'sw', 'sw_dt', 'cur']
+
+
+def build(src=None, *, settings_from=None, rec_delay=False, purple=False):
+    record, settings = settings_record(settings_from) if settings_from is not None else (bytes(4 * REC_WORDS), None)
     src = src or os.environ.get('SLQS_SRC') or SOURCE
-    text = compile_text(pathlib.Path(src))
+    rec_delay = rec_delay or purple
+    reserve = STATE_RESERVE + (PURPLE_RESERVE if purple else REC_DELAY_RESERVE if rec_delay else 0)
+    text = compile_text(pathlib.Path(src), ([REC_DELAY_DEFINE] if rec_delay else []) + ([PURPLE_DEFINE] if purple else []),
+                        reserve)
     hdr = B.SL4_HEADER_LEN
     lead = 4 * CFG_WORDS
     lead += -(hdr + lead) % 8                  # the code (and its folded data) 8-aligned in the block
@@ -200,33 +281,60 @@ def build(src=None):
         at = hdr + len(body)
         body.extend(data)
         return at
-    rec_off = place(bytes(4 * REC_WORDS))
+    rec_off = place(record)
     probe = B.make_sup(bytes(body), entry, SUP_ID, min_svc=6, flags=B.SL_F_CACHED_OK, name=NAME)
     file_len = len(probe)
     state_off = (file_len + 63) & ~63
-    dma_off = (state_off + STATE_RESERVE + 63) & ~63
+    dma_off = (state_off + reserve + 63) & ~63
     block = dma_off + DMA_BYTES
     words = [CFG_MAGIC, 2, state_off, dma_off, rec_off]
     body[0:4 * CFG_WORDS] = struct.pack(f'<{CFG_WORDS}I', *words)
     blob = B.make_sup(bytes(body), entry, SUP_ID, min_svc=6, flags=B.SL_F_CACHED_OK, name=NAME,
-                      block_size=block, dma=(dma_off, DMA_BYTES), version=20)
+                      block_size=block, dma=(dma_off, DMA_BYTES), version=HEADER_VERSION)
     if len(blob) != file_len:
         raise BuildError('layout moved')
     info = dict(file=file_name(), bytes=len(blob), sha256=hashlib.sha256(blob).hexdigest(), sup_id=SUP_ID,
                 entry=entry, code=len(text.code), code_off=hdr + lead, state_off=state_off, dma_off=dma_off,
                 block_size=block, rec_off=rec_off, functions=text.functions)
+    if settings is not None:
+        info['settings_from'] = settings
+    if rec_delay:                              # struct ap_rd is struct st's first member: block + state_off
+        info['rec_delay'] = dict(test_build=True, define=REC_DELAY_DEFINE, site='0xC0379180', sq_test_op=49,
+                                 base_off=state_off, ms_off=state_off + 4, n_off=state_off + 12,
+                                 ring_off=state_off + 32, rec_words=12, nmax=16, max_ms=200,
+                                 rec_fields=['seq', 'ms', 't0', 't1', 't2', 'rc', 'line0', 'line2', 'arm_us',
+                                             'arm_line', 'ff', 'pad'])
+    if purple:                                 # struct ap_rd ver 2: 16 header words, 16-word records
+        info['rec_delay'].update(ring_off=state_off + 64, rec_words=16, rec_fields=PURPLE_FIELDS)
+        info['purple'] = dict(test_build=True, define=PURPLE_DEFINE, ver=2, bits_off=state_off + 32,
+                              smode_off=state_off + 36, live_off=state_off + 40, refused_off=state_off + 44,
+                              commits_off=state_off + 48, sw_total_off=state_off + 52,
+                              bits={'TWIN': 1, 'NOWIN': 2, 'ROWS': 4, 'RWZM': 8, 'SBSTOCK': 16},
+                              smodes=[7, 101, 123, 151], recommit='sq_test 30 1, then sq_test 30 0')
     return blob, info
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--out', required=True)
+    ap.add_argument('--settings-from', type=pathlib.Path, help='validated complete saved BIN; copy its settings record')
+    ap.add_argument('--purple-test', action='store_true',
+                    help='TEST build: --rec-delay-test + the first-frame toggles (--out must name a purple directory)')
+    ap.add_argument('--rec-delay-test', action='store_true',
+                    help='TEST build: the REC-start delay hook (same file name: --out must name a rec-delay directory)')
     a = ap.parse_args()
     out = pathlib.Path(a.out)
+    if a.purple_test and 'purple' not in out.resolve().name:
+        raise BuildError('--purple-test writes the product file name: --out must be a directory named *purple*')
+    if a.rec_delay_test and 'rec-delay' not in out.resolve().name:
+        raise BuildError('--rec-delay-test writes the product file name: --out must be a directory named *rec-delay*')
+    if a.settings_from is not None and (out / 'fpSup' / file_name()).resolve() == a.settings_from.resolve():
+        raise BuildError('output would overwrite the settings source')
     (out / 'fpSup').mkdir(parents=True, exist_ok=True)
-    blob, info = build()
+    blob, info = build(settings_from=a.settings_from, rec_delay=a.rec_delay_test, purple=a.purple_test)
     (out / 'fpSup' / file_name()).write_bytes(blob)
-    info.pop('functions')
+    fns = info.pop('functions')
+    info['sq_test_off'] = info['code_off'] + fns['sq_test']        # v0.5.0test: block + this (Thumb) = sq_test
     (out / f'build-{VERSION}.json').write_text(json.dumps(info, indent=1) + '\n')
     print(f'{file_name()}  {len(blob)} B  {info["sha256"][:16]}')
 

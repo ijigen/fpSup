@@ -1,0 +1,50 @@
+[
+  {
+    "label": "missing PLAY release",
+    "compiled": true,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_movie_sequence_and_timestamp_delays (test_sltp.Trial)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/dido/Developer.localized/SIGMAfp_re/projects/sensorlab-imx410/tools/playback-runner/test_sltp.py\", line 99, in test_movie_sequence_and_timestamp_delays\n    self.assertEqual([x[0] for x in c.keys],['key PLAYON','key PLAYOFF','key OKON','key OKOFF','key S1ON','key S1OFF'])\nAssertionError: Lists differ: ['key PLAYON', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF'] != ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF']\n\nFirst differing element 1:\n'key OKON'\n'key PLAYOFF'\n\nSecond list contains 1 additional elements.\nFirst extra element 5:\n'key S1OFF'\n\n- ['key PLAYON', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF']\n+ ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF']\n?                    +++++++++++++++\n\n\n----------------------------------------------------------------------\nRan 1 test in 0.648s\n\nFAILED (failures=1)\n"
+  },
+  {
+    "label": "missing S1 release",
+    "compiled": true,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_movie_sequence_and_timestamp_delays (test_sltp.Trial)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/dido/Developer.localized/SIGMAfp_re/projects/sensorlab-imx410/tools/playback-runner/test_sltp.py\", line 99, in test_movie_sequence_and_timestamp_delays\n    self.assertEqual([x[0] for x in c.keys],['key PLAYON','key PLAYOFF','key OKON','key OKOFF','key S1ON','key S1OFF'])\nAssertionError: Lists differ: ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON'] != ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF']\n\nSecond list contains 1 additional elements.\nFirst extra element 5:\n'key S1OFF'\n\n- ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON']\n+ ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF']\n?                                                                  +++++++++++++\n\n\n----------------------------------------------------------------------\nRan 1 test in 0.638s\n\nFAILED (failures=1)\n"
+  },
+  {
+    "label": "short key hold",
+    "compiled": true,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_movie_sequence_and_timestamp_delays (test_sltp.Trial)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/dido/Developer.localized/SIGMAfp_re/projects/sensorlab-imx410/tools/playback-runner/test_sltp.py\", line 103, in test_movie_sequence_and_timestamp_delays\n    self.assertGreaterEqual(ev[i][1]-ev[i-1][2],delay)\nAssertionError: 100000 not greater than or equal to 800000\n\n----------------------------------------------------------------------\nRan 1 test in 0.634s\n\nFAILED (failures=1)\n"
+  },
+  {
+    "label": "short post exit wait",
+    "compiled": true,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_movie_sequence_and_timestamp_delays (test_sltp.Trial)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/dido/Developer.localized/SIGMAfp_re/projects/sensorlab-imx410/tools/playback-runner/test_sltp.py\", line 104, in test_movie_sequence_and_timestamp_delays\n    self.assertGreaterEqual(c.state()['done_us']-ev[-1][2],10_000_000)\nAssertionError: 100000 not greater than or equal to 10000000\n\n----------------------------------------------------------------------\nRan 1 test in 0.611s\n\nFAILED (failures=1)\n"
+  },
+  {
+    "label": "thumbnail sends OK",
+    "compiled": true,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_thumbnail_omits_ok_and_releases_both_keys (test_sltp.Trial)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/dido/Developer.localized/SIGMAfp_re/projects/sensorlab-imx410/tools/playback-runner/test_sltp.py\", line 111, in test_thumbnail_omits_ok_and_releases_both_keys\n    self.assertEqual([x[0] for x in c.keys],['key PLAYON','key PLAYOFF','key S1ON','key S1OFF'])\nAssertionError: Lists differ: ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF'] != ['key PLAYON', 'key PLAYOFF', 'key S1ON', 'key S1OFF']\n\nFirst differing element 2:\n'key OKON'\n'key S1ON'\n\nFirst list contains 2 additional elements.\nFirst extra element 4:\n'key S1ON'\n\n- ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF']\n?                                   -------------------------\n\n+ ['key PLAYON', 'key PLAYOFF', 'key S1ON', 'key S1OFF']\n\n----------------------------------------------------------------------\nRan 1 test in 0.826s\n\nFAILED (failures=1)\n"
+  },
+  {
+    "label": "record flags ignored",
+    "compiled": true,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_invalid_mode_non_cine_and_all_record_guards_reject (test_sltp.Trial)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/dido/Developer.localized/SIGMAfp_re/projects/sensorlab-imx410/tools/playback-runner/test_sltp.py\", line 124, in test_invalid_mode_non_cine_and_all_record_guards_reject\n    q+=1;c.request(2,q);c.step();self.assertEqual(c.state()['error'],3)\nAssertionError: 0 != 3\n\n----------------------------------------------------------------------\nRan 1 test in 0.577s\n\nFAILED (failures=1)\n"
+  },
+  {
+    "label": "quiet window recheck removed",
+    "compiled": true,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_gate_rechecked_after_quiet_window (test_sltp.Trial)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/dido/Developer.localized/SIGMAfp_re/projects/sensorlab-imx410/tools/playback-runner/test_sltp.py\", line 135, in test_gate_rechecked_after_quiet_window\n    self.assertEqual(c.state()['phase'],9);self.assertEqual(c.keys,[])\nAssertionError: 2 != 9\n\n----------------------------------------------------------------------\nRan 1 test in 0.557s\n\nFAILED (failures=1)\n"
+  },
+  {
+    "label": "mode not latched",
+    "compiled": true,
+    "caught": true,
+    "stderr": "======================================================================\nFAIL: test_active_request_rejected_not_queued_and_mode_latched (test_sltp.Trial)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/dido/Developer.localized/SIGMAfp_re/projects/sensorlab-imx410/tools/playback-runner/test_sltp.py\", line 143, in test_active_request_rejected_not_queued_and_mode_latched\n    self.assertEqual([x[0] for x in c.keys],['key PLAYON','key PLAYOFF','key S1ON','key S1OFF'])\nAssertionError: Lists differ: ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF'] != ['key PLAYON', 'key PLAYOFF', 'key S1ON', 'key S1OFF']\n\nFirst differing element 2:\n'key OKON'\n'key S1ON'\n\nFirst list contains 2 additional elements.\nFirst extra element 4:\n'key S1ON'\n\n- ['key PLAYON', 'key PLAYOFF', 'key OKON', 'key OKOFF', 'key S1ON', 'key S1OFF']\n?                                   -------------------------\n\n+ ['key PLAYON', 'key PLAYOFF', 'key S1ON', 'key S1OFF']\n\n----------------------------------------------------------------------\nRan 1 test in 0.647s\n\nFAILED (failures=1)\n"
+  }
+]

@@ -7,7 +7,7 @@ fpsdata(cells) is the same for any list of cells (the QS client's tests add cust
 
 cases[key] = [[hm, lo, q, recipe], ...] with recipe = {key, mh, mv, ad, hbin, vbin, scw, sch, sw, sh, win, zoom, path,
 rs_ms}: scw x sch the sensor crop the readout reads (R16: the full height it reads before the TIM keeps the DC's
-rows; WIDEN: the crop + 16), sw x sh its output, win / zoom / path the isp Spec / plan, rs_ms the rolling shutter =
+rows; WIDEN: the crop + 16), sw x sh its output, win / zoom / path the isp Spec / plan, rs_ms the rolling shutter (win includes the vertical-margin rows a recipe reads beyond the DC: quality.py vmargin) =
 readout_cfg.plan rolling_ms = HMAX x receiver lines / 72 MHz (every line the sensor sends: image rows + over, the
 whole frame for full height / R16, the window + V3 margin for a window).
 
@@ -35,7 +35,7 @@ def preset_lists():
 def case(W, H, w, h, tol):
     """the page's FPSDATA case for one DC x RES: [[hm, lo, q, recipe], ...] (or {'err': ...})"""
     try:
-        cs = Q.qualities(W, H, w, h, tol=tol)
+        cs = Q.qualities(W, H, w, h, tol=tol, vmargin_floor=Q.VMARGIN)   # the product list (core_qualities_tol)
     except Exception as e:
         return {'err': type(e).__name__}
     qs = []

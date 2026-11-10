@@ -1,0 +1,547 @@
+{
+ "before_20261030": {
+  "suites": {
+   "sensorlab-imx410/site/test_site": {
+    "wall_s": 1.3,
+    "rc": 0,
+    "ran": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_site.Site": 1.0
+    },
+    "outside_tests_s": 0.3,
+    "slow_tests_s": {}
+   },
+   "sensorlab-imx410/menu/test_menu": {
+    "wall_s": 0.4,
+    "rc": 0,
+    "ran": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_menu.Capacity": 0.2,
+     "test_menu.Lists": 0.05,
+     "test_menu.Csv": 0.02,
+     "test_menu.Plan": 0.0
+    },
+    "outside_tests_s": 0.14,
+    "slow_tests_s": {}
+   },
+   "sensorlab-imx410/menu/test_page": {
+    "wall_s": 15.2,
+    "rc": 0,
+    "ran": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_page.Native": 13.79,
+     "test_page.PageStructure": 1.18
+    },
+    "outside_tests_s": 0.24,
+    "slow_tests_s": {
+     "test_page.Native.test_native_firmware_parses_both_pages": 9.357,
+     "test_page.Native.test_arm_fpui_stock_composes_both_pages_and_guards_reinstall": 3.454
+    }
+   },
+   "sensorlab-imx410/menu/test_runtime": {
+    "wall_s": 54.0,
+    "rc": 0,
+    "ran": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_runtime.MenuBridge": 28.2,
+     "test_runtime.FirstMenu": 18.35,
+     "test_runtime.Runtime": 7.09
+    },
+    "outside_tests_s": 0.37,
+    "slow_tests_s": {
+     "test_runtime.FirstMenu.test_first_layout_writes_each_native_model_once_and_times_leave": 15.194,
+     "test_runtime.MenuBridge.test_fps_custom_opens_the_fps_sub_qs_on_fine": 9.182,
+     "test_runtime.MenuBridge.test_mov_locks_sensor_rows_and_dng_unlocks": 4.144,
+     "test_runtime.MenuBridge.test_custom_reselection_queues_open_and_recording_refuses": 4.092,
+     "test_runtime.MenuBridge.test_native_models_private_confirm_and_silent_sync": 3.824,
+     "test_runtime.MenuBridge.test_format_notification_unlocks_same_page_without_applying_settings": 3.719,
+     "test_runtime.Runtime.test_every_dc_uses_qs_rows_and_always_offers_custom": 3.717,
+     "test_runtime.MenuBridge.test_recording_rejects_confirmed_preset_before_state_changes": 3.236,
+     "test_runtime.FirstMenu.test_pause_keeps_stock_across_layouts": 3.154
+    }
+   },
+   "sensorlab-imx410/menu/test_runtime_mutations": {
+    "wall_s": 63.5,
+    "rc": 0,
+    "ran": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_runtime_mutations.Mutations": 63.15
+    },
+    "outside_tests_s": 0.35,
+    "slow_tests_s": {
+     "test_runtime_mutations.Mutations.test_each_compiled_mutant_fails_its_contract_assertion": 63.15
+    }
+   },
+   "sensorlab-imx410/qs/test_settings_migration": {
+    "wall_s": 2.7,
+    "rc": 1,
+    "ran": 8,
+    "failures": 0,
+    "errors": 4,
+    "skipped": 0,
+    "classes_s": {
+     "test_settings_migration.ArmMigration": 2.36,
+     "test_settings_migration.Envelope": 0.03,
+     "test_settings_migration.Envelope.test_default_bytes_match_both_frozen_builds (sid='SL41')": 0.0
+    },
+    "outside_tests_s": 0.31,
+    "slow_tests_s": {
+     "test_settings_migration.ArmMigration.test_actual_loader_loads_exact_selection_and_qs_slots": 2.357
+    }
+   },
+   "sensorlab-imx410/apply/test_pb_page": {
+    "wall_s": 1.3,
+    "rc": 0,
+    "ran": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_pb_page.PlaybackPageTests": 1.12
+    },
+    "outside_tests_s": 0.18,
+    "slow_tests_s": {}
+   },
+   "sensorlab-imx410/apply/test_apply": {
+    "wall_s": 34.0,
+    "rc": 0,
+    "ran": 47,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_apply.CommitTests": 8.98,
+     "test_apply.TransactionTests": 8.68,
+     "test_apply.PlaybackV1Tests": 5.98,
+     "test_apply.CalcTests": 5.57,
+     "test_apply.PlaybackTests": 3.37,
+     "test_apply.SourceTests": 1.04,
+     "test_apply.PoolTests": 0.12,
+     "test_apply.InstallTests": 0.1
+    },
+    "outside_tests_s": 0.15,
+    "slow_tests_s": {
+     "test_apply.PlaybackV1Tests.test_a_clip_the_stock_profile_cannot_read_never_reaches_the_decoder": 4.498,
+     "test_apply.TransactionTests.test_any_failure_restores_stock": 4.428,
+     "test_apply.CalcTests.test_limit_denominator_ties": 2.432,
+     "test_apply.CommitTests.test_a_fast_recipe_rides_119_88_with_the_real_engine_rate_and_the_clock_open": 2.126
+    }
+   },
+   "qs-container/test_api5": {
+    "wall_s": 23.4,
+    "rc": 0,
+    "ran": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_api5.Api5": 23.09
+    },
+    "outside_tests_s": 0.31,
+    "slow_tests_s": {
+     "test_api5.Api5.test_absent_function_opens_standalone_sub_or_fine": 11.952
+    }
+   },
+   "qs-container/test_qsct": {
+    "wall_s": 40.4,
+    "rc": 0,
+    "ran": 32,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_qsct.SaveSwap": 12.21,
+     "test_qsct.Registration": 8.4,
+     "test_qsct.EditorPages": 4.72,
+     "test_qsct.Headphone": 1.65,
+     "test_qsct.CsvRows": 0.0
+    },
+    "outside_tests_s": 13.42,
+    "slow_tests_s": {}
+   },
+   "qs-container/test_qs_page": {
+    "wall_s": 60.3,
+    "rc": 0,
+    "ran": 58,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "classes_s": {
+     "test_qs_page.Api4": 14.99,
+     "test_qs_page.Keys": 8.77,
+     "test_qs_page.Recipe024": 5.19,
+     "test_qs_page.Release": 4.83,
+     "test_qs_page.KeyClips": 3.88,
+     "test_qs_page.Footer": 3.56,
+     "test_qs_page.Icon02Return": 3.3,
+     "test_qs_page.MainQS": 1.18,
+     "test_qs_page.SubTiles": 0.8,
+     "test_qs_page.Layer": 0.39,
+     "test_qs_page.Tiles": 0.31,
+     "test_qs_page.PageStrip": 0.15
+    },
+    "outside_tests_s": 12.95,
+    "slow_tests_s": {
+     "test_qs_page.Api4.test_api3_client_keeps_api3": 12.185,
+     "test_qs_page.KeyClips.test_only_our_key_event_is_live_on_every_new_id": 3.737,
+     "test_qs_page.Icon02Return.test_values_come_back_after_the_sub_qs": 3.265
+    }
+   },
+   "sensorlab-imx410/qs/test_slqs": {
+    "wall_s": 327.9,
+    "rc": 0,
+    "ran": 53,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_slqs.Preview": 222.31,
+     "test_slqs.Exact": 29.24,
+     "test_slqs.Record": 21.43,
+     "test_slqs.QR": 19.06,
+     "test_slqs.Apply": 13.81,
+     "test_slqs.Tiles": 12.25,
+     "test_slqs.ApplyUnit": 6.76,
+     "test_slqs.Build": 0.39,
+     "test_slqs.QRPayload": 0.21
+    },
+    "outside_tests_s": 2.45,
+    "slow_tests_s": {
+     "test_slqs.Preview.test_18": 33.136,
+     "test_slqs.Preview.test_05": 18.686,
+     "test_slqs.Preview.test_17": 17.698,
+     "test_slqs.Preview.test_01": 15.221,
+     "test_slqs.Apply.test_apply_hook_records_the_effective_selection": 13.806,
+     "test_slqs.Preview.test_09": 13.406,
+     "test_slqs.Exact.test_texts": 13.175,
+     "test_slqs.Preview.test_06": 12.534,
+     "test_slqs.Preview.test_11": 12.307,
+     "test_slqs.Preview.test_08": 11.229,
+     "test_slqs.Preview.test_04": 10.478,
+     "test_slqs.Preview.test_15": 9.129,
+     "test_slqs.Preview.test_16": 9.081,
+     "test_slqs.Preview.test_03": 9.052,
+     "test_slqs.Preview.test_14": 8.827,
+     "test_slqs.Preview.test_13": 8.453,
+     "test_slqs.Exact.test_lock_rounding_and_aspect": 8.213,
+     "test_slqs.Exact.test_ratios_widths_heights": 7.855,
+     "test_slqs.Preview.test_00": 7.761,
+     "test_slqs.Preview.test_07": 7.463,
+     "test_slqs.Preview.test_02": 7.227,
+     "test_slqs.Preview.test_12": 5.588,
+     "test_slqs.Preview.test_10": 5.031,
+     "test_slqs.Record.test_fps_recipe_kernels_restored": 4.633,
+     "test_slqs.QR.test_triple_buffer_and_present": 4.359,
+     "test_slqs.Tiles.test_recipe_layout_v022": 4.215,
+     "test_slqs.Record.test_written_at_leave_and_restored_next_boot": 3.76,
+     "test_slqs.Record.test_a_damaged_record_is_the_default": 3.595,
+     "test_slqs.Record.test_never_creates_or_writes_a_file_that_is_not_ours": 3.206,
+     "test_slqs.Record.test_stock_settings_untouched": 3.172,
+     "test_slqs.Record.test_locked_while_recording": 3.061,
+     "test_slqs.ApplyUnit.test_leave_flushes_the_owed_commit_once_the_descriptor_exists": 2.99,
+     "test_slqs.Tiles.test_main_qs_layout_v021": 2.67,
+     "test_slqs.QR.test_observer_rejects_other_dimensions_and_untouched_hidden_buffers": 2.439,
+     "test_slqs.QR.test_encoder_matrix": 2.289,
+     "test_slqs.QR.test_live_payload_is_the_selection": 2.219,
+     "test_slqs.ApplyUnit.test_entry_arms_it_and_the_change_events_reach_ap_request": 2.175,
+     "test_slqs.QR.test_refused_without_a_free_slot_after_the_gui": 2.122,
+     "test_slqs.QR.test_locked_while_recording": 2.075,
+     "test_slqs.Tiles.test_format_has_no_dial_and_mov_is_grey": 2.038
+    }
+   },
+   "core/test_core.py": {
+    "wall_s": 120.2,
+    "rc": 0
+   },
+   "core/test_core.py --quick": {
+    "wall_s": 10.0,
+    "rc": 0
+   }
+  },
+  "total_serial_s": 741.9
+ },
+ "after_serial_20261030": {
+  "suites": {
+   "sensorlab-imx410/site/test_site": {
+    "wall_s": 1.3,
+    "rc": 0,
+    "ran": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_site.Site": 1.0
+    },
+    "outside_tests_s": 0.3,
+    "slow_tests_s": {}
+   },
+   "sensorlab-imx410/menu/test_menu": {
+    "wall_s": 0.4,
+    "rc": 0,
+    "ran": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_menu.Capacity": 0.2,
+     "test_menu.Lists": 0.05,
+     "test_menu.Csv": 0.02,
+     "test_menu.Plan": 0.0
+    },
+    "outside_tests_s": 0.14,
+    "slow_tests_s": {}
+   },
+   "sensorlab-imx410/menu/test_page": {
+    "wall_s": 12.8,
+    "rc": 0,
+    "ran": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_page.Native": 11.46,
+     "test_page.PageStructure": 1.16
+    },
+    "outside_tests_s": 0.18,
+    "slow_tests_s": {
+     "test_page.Native.test_native_firmware_parses_both_pages": 9.403
+    }
+   },
+   "sensorlab-imx410/menu/test_runtime": {
+    "wall_s": 13.1,
+    "rc": 0,
+    "ran": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_runtime.MenuBridge": 6.26,
+     "test_runtime.FirstMenu": 5.59,
+     "test_runtime.Runtime": 0.9
+    },
+    "outside_tests_s": 0.36,
+    "slow_tests_s": {
+     "test_runtime.FirstMenu.test_first_layout_writes_each_native_model_once_and_times_leave": 4.992,
+     "test_runtime.MenuBridge.test_fps_custom_opens_the_fps_sub_qs_on_fine": 2.137
+    }
+   },
+   "sensorlab-imx410/menu/test_runtime_mutations": {
+    "wall_s": 21.2,
+    "rc": 0,
+    "ran": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_runtime_mutations.Mutations": 20.84
+    },
+    "outside_tests_s": 0.36,
+    "slow_tests_s": {
+     "test_runtime_mutations.Mutations.test_each_compiled_mutant_fails_its_contract_assertion": 20.838
+    }
+   },
+   "sensorlab-imx410/apply/test_pb_page": {
+    "wall_s": 1.2,
+    "rc": 0,
+    "ran": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_pb_page.PlaybackPageTests": 1.04
+    },
+    "outside_tests_s": 0.16,
+    "slow_tests_s": {}
+   },
+   "sensorlab-imx410/apply/test_apply": {
+    "wall_s": 10.5,
+    "rc": 0,
+    "ran": 47,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_apply.CalcTests": 5.25,
+     "test_apply.CommitTests": 2.15,
+     "test_apply.SourceTests": 1.05,
+     "test_apply.PlaybackTests": 0.67,
+     "test_apply.TransactionTests": 0.59,
+     "test_apply.PlaybackV1Tests": 0.43,
+     "test_apply.PoolTests": 0.1,
+     "test_apply.InstallTests": 0.04
+    },
+    "outside_tests_s": 0.21,
+    "slow_tests_s": {
+     "test_apply.CalcTests.test_limit_denominator_ties": 2.42
+    }
+   },
+   "qs-container/test_api5": {
+    "wall_s": 5.0,
+    "rc": 0,
+    "ran": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_api5.Api5": 4.69
+    },
+    "outside_tests_s": 0.31,
+    "slow_tests_s": {}
+   },
+   "qs-container/test_qsct": {
+    "wall_s": 7.7,
+    "rc": 0,
+    "ran": 32,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_qsct.Registration": 2.18,
+     "test_qsct.SaveSwap": 1.93,
+     "test_qsct.EditorPages": 1.74,
+     "test_qsct.Headphone": 0.66,
+     "test_qsct.CsvRows": 0.15
+    },
+    "outside_tests_s": 1.05,
+    "slow_tests_s": {}
+   },
+   "qs-container/test_qs_page": {
+    "wall_s": 28.1,
+    "rc": 0,
+    "ran": 58,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "classes_s": {
+     "test_qs_page.KeyClips": 3.82,
+     "test_qs_page.Icon02Return": 3.29,
+     "test_qs_page.Keys": 2.22,
+     "test_qs_page.Recipe024": 2.04,
+     "test_qs_page.Api4": 1.73,
+     "test_qs_page.Footer": 1.24,
+     "test_qs_page.MainQS": 0.56,
+     "test_qs_page.Release": 0.52,
+     "test_qs_page.Layer": 0.38,
+     "test_qs_page.Tiles": 0.31,
+     "test_qs_page.SubTiles": 0.16,
+     "test_qs_page.PageStrip": 0.15
+    },
+    "outside_tests_s": 11.7,
+    "slow_tests_s": {
+     "test_qs_page.KeyClips.test_only_our_key_event_is_live_on_every_new_id": 3.672,
+     "test_qs_page.Icon02Return.test_values_come_back_after_the_sub_qs": 3.241
+    }
+   },
+   "sensorlab-imx410/qs/test_slqs": {
+    "wall_s": 56.0,
+    "rc": 0,
+    "ran": 53,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes_s": {
+     "test_slqs.Preview": 35.77,
+     "test_slqs.Exact": 5.95,
+     "test_slqs.Record": 3.96,
+     "test_slqs.QR": 3.87,
+     "test_slqs.Tiles": 2.51,
+     "test_slqs.ApplyUnit": 1.2,
+     "test_slqs.Apply": 0.61,
+     "test_slqs.Build": 0.39,
+     "test_slqs.QRPayload": 0.2
+    },
+    "outside_tests_s": 1.54,
+    "slow_tests_s": {
+     "test_slqs.Preview.test_18": 4.234,
+     "test_slqs.Preview.test_17": 3.187,
+     "test_slqs.Preview.test_09": 2.714,
+     "test_slqs.Preview.test_11": 2.503,
+     "test_slqs.Preview.test_06": 2.261,
+     "test_slqs.Exact.test_lock_rounding_and_aspect": 2.142,
+     "test_slqs.Exact.test_ratios_widths_heights": 2.082,
+     "test_slqs.Preview.test_01": 2.006
+    }
+   },
+   "core/test_core.py": {
+    "wall_s": 53.9,
+    "rc": 0
+   },
+   "core/test_core.py --quick": {
+    "wall_s": 5.3,
+    "rc": 0
+   }
+  },
+  "total_serial_s": 211.2
+ },
+ "_about": "Wall times on this Mac (10 cores, Python 3.9.6, unicorn 2.1.4), 2026-10-30, v0.7.0test + QSContainer v0.3.1. before_20261030: each suite alone, serial, the code as it was (python3 -B tools/timed_unittest.py). qs/test_settings_migration is not in the tiers: it fails before and after (4 errors: it reads validation/20261030-takeover/settings-migration/frozen/, which has no v0.7.0test BIN). after_serial_20261030: same, after the changes, cold test cache. after_parallel_20261030: tools/test.py.",
+ "before_mutants_estimate_s": {
+  "note": "never run end to end (hours); estimate = mutants x the serial suite time each mutant re-runs",
+  "slqs": 30176,
+  "qsc": 1360,
+  "qsc_page": 5040,
+  "apply": "68 x (build + one class), ~1000",
+  "core": "62 x ~11, ~700",
+  "menu": 5,
+  "total_h": 10.6
+ },
+ "after_parallel_20261030": {
+  "fast_wall_s": 6.7,
+  "full_no_mutants_wall_s": 83.4,
+  "full_with_mutants_wall_s": 933.8,
+  "workers": 10,
+  "mutant_cpu_s": {
+   "slqs": 4775.2,
+   "qsc_page": 2384.8,
+   "core": 886.6,
+   "apply": 365.7,
+   "qsc": 329.0,
+   "menu": 4.4
+  },
+  "full_jobs": 490,
+  "unit_tests": {
+   "site": 6,
+   "menu": 15,
+   "menu_page": 13,
+   "menu_runtime": 11,
+   "menu_runtime_mutations": 1,
+   "pb_page": 4,
+   "apply": 47,
+   "qsc_api5": 11,
+   "qsc": 32,
+   "qsc_page": "58 (1 skip)",
+   "slqs": 53
+  },
+  "mutants": {
+   "total": 341,
+   "caught": 326,
+   "stale_pre_existing": "pattern not in the source or does not build: slqs 50 55 62 63 64 67 83 84, qsc-page 38 59",
+   "survive_pre_existing": "also survive with SL_EMU_COUNT=1 SL_TESTCACHE=0: slqs 51 53 60 91, qsc-page 81"
+  }
+ },
+ "after_mutant_fixes_20261030": {
+  "full_with_mutants_wall_s": 958.3,
+  "result": "PASS",
+  "jobs": 510,
+  "mutants": 339,
+  "unit_tests_added": [
+   "test_slqs.Preview.test_19",
+   "test_qs_page.Recipe024.test_the_window_centres_the_current_option"
+  ],
+  "suite_added": "qs/test_settings_migration (8 tests, own fixtures qs/test-fixtures/settings-migration)"
+ }
+}

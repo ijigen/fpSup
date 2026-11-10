@@ -1,0 +1,46 @@
+{
+  "status": "PASS_OFFLINE",
+  "build": {
+    "file": "SLTP.BIN",
+    "bytes": 1640,
+    "sha256": "c1bc654a825128a7f50ca2ce41e21ab4b49e43b7b3b3e0ac4ae9cae79bcb6d45",
+    "source_sha256": "345aa96370535e9e7096f9410dc871da1786f841558366e411073eaa5f11c8ff",
+    "entry": 1267,
+    "state_off": 1664,
+    "block_size": 1920,
+    "code_bytes": 1572,
+    "mutable_file_offsets": [
+      1612
+    ],
+    "state_bytes": 176,
+    "functions": {
+      "sltp_step": 49,
+      "context_word": 1593,
+      "sltp_task": 1237,
+      "sup_entry": 1267
+    }
+  },
+  "baseline": {
+    "tests": 10,
+    "passed": 10,
+    "skipped": 0,
+    "transcript": "baseline.txt"
+  },
+  "mutants": {
+    "compiled": 8,
+    "caught": 8,
+    "details": "mutants.json"
+  },
+  "source_sha256": {
+    "sltp.c": "345aa96370535e9e7096f9410dc871da1786f841558366e411073eaa5f11c8ff",
+    "build_sltp.py": "184426d06528080eb222178775b8e7af39d89b09e38c6c30c032715a8e4f316b",
+    "test_sltp.py": "7b39fc23a48715738ff7d20c07ebebfc1c8655b348038b4a94deffe7c1d48d70",
+    "decode_sltp.py": "855a7f788ed49a2973131b956ddb84d2b9c39694b67279d99b4c19fd9c748303"
+  },
+  "firmware_sha256": "92a8ee993f6c3d66c251e88d45a2ccd5135c6cf7342717784321c2ed506e2fb4",
+  "limits": [
+    "RTOS, key executor, clock and CINE getter modeled",
+    "No physical playback or exit claim",
+    "No camera or USB operations"
+  ]
+}

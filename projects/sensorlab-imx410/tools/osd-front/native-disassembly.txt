@@ -1,0 +1,216 @@
+Original image: /Users/dido/Developer.localized/SIGMAfp_re/out/MAIN_c0000000.bin
+SHA256: 92a8ee993f6c3d66c251e88d45a2ccd5135c6cf7342717784321c2ed506e2fb4
+ARM little-endian, raw bytes included.
+
+front getter @ C07212E0
+C07212E0  10402de9  push     {r4, lr}
+C07212E4  0040a0e1  mov      r4, r0
+C07212E8  001094e5  ldr      r1, [r4]
+C07212EC  301081e2  add      r1, r1, #0x30
+C07212F0  001091e5  ldr      r1, [r1]
+C07212F4  0400a0e1  mov      r0, r4
+C07212F8  31ff2fe1  blx      r1
+C07212FC  000050e3  cmp      r0, #0
+C0721300  0200001a  bne      #0xc0721310
+C0721304  d9ffffeb  bl       #0xc0721270
+C0721308  0010a0e1  mov      r1, r0
+C072130C  020000ea  b        #0xc072131c
+C0721310  240084e2  add      r0, r4, #0x24
+C0721314  670200eb  bl       #0xc0721cb8
+C0721318  0010a0e1  mov      r1, r0
+C072131C  0100a0e1  mov      r0, r1
+C0721320  1080bde8  pop      {r4, pc}
+
+back getter @ C0721328
+C0721328  10402de9  push     {r4, lr}
+C072132C  0040a0e1  mov      r4, r0
+C0721330  001094e5  ldr      r1, [r4]
+C0721334  301081e2  add      r1, r1, #0x30
+C0721338  001091e5  ldr      r1, [r1]
+C072133C  0400a0e1  mov      r0, r4
+C0721340  31ff2fe1  blx      r1
+C0721344  000050e3  cmp      r0, #0
+C0721348  0200001a  bne      #0xc0721358
+C072134C  c7ffffeb  bl       #0xc0721270
+C0721350  0010a0e1  mov      r1, r0
+C0721354  020000ea  b        #0xc0721364
+C0721358  240084e2  add      r0, r4, #0x24
+C072135C  590200eb  bl       #0xc0721cc8
+C0721360  0010a0e1  mov      r1, r0
+C0721364  0100a0e1  mov      r0, r1
+C0721368  1080bde8  pop      {r4, pc}
+
+commit wrapper @ C0721370
+C0721370  10402de9  push     {r4, lr}
+C0721374  08d04de2  sub      sp, sp, #8
+C0721378  0040a0e1  mov      r4, r0
+C072137C  001094e5  ldr      r1, [r4]
+C0721380  301081e2  add      r1, r1, #0x30
+C0721384  001091e5  ldr      r1, [r1]
+C0721388  0400a0e1  mov      r0, r4
+C072138C  31ff2fe1  blx      r1
+C0721390  000050e3  cmp      r0, #0
+C0721394  0100001a  bne      #0xc07213a0
+C0721398  080000ea  b        #0xc07213c0
+C072139C  00f020e3  nop      
+C07213A0  201084e2  add      r1, r4, #0x20
+C07213A4  0d00a0e1  mov      r0, sp
+C07213A8  babbe3eb  bl       #0xc0010298
+C07213AC  240084e2  add      r0, r4, #0x24
+C07213B0  480200eb  bl       #0xc0721cd8
+C07213B4  0d00a0e1  mov      r0, sp
+C07213B8  0210a0e3  mov      r1, #2
+C07213BC  c3bbe3eb  bl       #0xc00102d0
+C07213C0  08d08de2  add      sp, sp, #8
+C07213C4  1080bde8  pop      {r4, pc}
+
+ring getters and commit @ C0721CB8
+C0721CB8  00c0a0e1  mov      ip, r0
+C0721CBC  24109ce5  ldr      r1, [ip, #0x24]
+C0721CC0  0100a0e1  mov      r0, r1
+C0721CC4  1eff2fe1  bx       lr
+C0721CC8  00c0a0e1  mov      ip, r0
+C0721CCC  28109ce5  ldr      r1, [ip, #0x28]
+C0721CD0  0100a0e1  mov      r0, r1
+C0721CD4  1eff2fe1  bx       lr
+C0721CD8  00c0a0e1  mov      ip, r0
+C0721CDC  2c109ce5  ldr      r1, [ip, #0x2c]
+C0721CE0  020051e3  cmp      r1, #2
+C0721CE4  0100003a  blo      #0xc0721cf0
+C0721CE8  0010a0e3  mov      r1, #0
+C0721CEC  010000ea  b        #0xc0721cf8
+C0721CF0  2c109ce5  ldr      r1, [ip, #0x2c]
+C0721CF4  011081e2  add      r1, r1, #1
+C0721CF8  2c108ce5  str      r1, [ip, #0x2c]
+C0721CFC  2c309ce5  ldr      r3, [ip, #0x2c]
+C0721D00  ab2a0ae3  movw     r2, #0xaaab
+C0721D04  aa2a4ae3  movt     r2, #0xaaaa
+C0721D08  932281e0  umull    r2, r1, r3, r2
+C0721D0C  a110a0e1  lsr      r1, r1, #1
+C0721D10  18208ce2  add      r2, ip, #0x18
+C0721D14  811081e0  add      r1, r1, r1, lsl #1
+C0721D18  011043e0  sub      r1, r3, r1
+C0721D1C  011192e7  ldr      r1, [r2, r1, lsl #2]
+C0721D20  24108ce5  str      r1, [ip, #0x24]
+C0721D24  2c209ce5  ldr      r2, [ip, #0x2c]
+C0721D28  ab3a0ae3  movw     r3, #0xaaab
+C0721D2C  aa3a4ae3  movt     r3, #0xaaaa
+C0721D30  012082e2  add      r2, r2, #1
+C0721D34  923381e0  umull    r3, r1, r2, r3
+C0721D38  a110a0e1  lsr      r1, r1, #1
+C0721D3C  811081e0  add      r1, r1, r1, lsl #1
+C0721D40  011042e0  sub      r1, r2, r1
+C0721D44  18208ce2  add      r2, ip, #0x18
+C0721D48  011192e7  ldr      r1, [r2, r1, lsl #2]
+C0721D4C  28108ce5  str      r1, [ip, #0x28]
+C0721D50  1eff2fe1  bx       lr
+
+ready leaf @ C0721F98
+C0721F98  00c0a0e1  mov      ip, r0
+C0721F9C  0110a0e3  mov      r1, #1
+C0721FA0  0100a0e1  mov      r0, r1
+C0721FA4  1eff2fe1  bx       lr
+
+draw commits then presents @ C05289F8
+C05289F8  0600a0e1  mov      r0, r6
+C05289FC  ddfdffeb  bl       #0xc0528178
+C0528A00  000050e3  cmp      r0, #0
+C0528A04  0e00000a  beq      #0xc0528a44
+C0528A08  003097e5  ldr      r3, [r7]
+C0528A0C  143083e2  add      r3, r3, #0x14
+C0528A10  003093e5  ldr      r3, [r3]
+C0528A14  0700a0e1  mov      r0, r7
+C0528A18  33ff2fe1  blx      r3
+C0528A1C  0000a0e3  mov      r0, #0
+C0528A20  2c109de5  ldr      r1, [sp, #0x2c]
+C0528A24  1630dde5  ldrb     r3, [sp, #0x16]
+C0528A28  0720a0e1  mov      r2, r7
+C0528A2C  00108de5  str      r1, [sp]
+C0528A30  0010a0e1  mov      r1, r0
+C0528A34  0400a0e1  mov      r0, r4
+C0528A38  04ffffeb  bl       #0xc0528650
+
+present selects front @ C0528650
+C0528650  f04d2de9  push     {r4, r5, r6, r7, r8, sl, fp, lr}
+C0528654  00b0a0e1  mov      fp, r0
+C0528658  0160a0e1  mov      r6, r1
+C052865C  0270a0e1  mov      r7, r2
+C0528660  03a0a0e1  mov      sl, r3
+C0528664  00c097e5  ldr      ip, [r7]
+C0528668  0cc08ce2  add      ip, ip, #0xc
+C052866C  00c09ce5  ldr      ip, [ip]
+C0528670  0700a0e1  mov      r0, r7
+C0528674  3cff2fe1  blx      ip
+C0528678  00c0a0e1  mov      ip, r0
+C052867C  0c40a0e1  mov      r4, ip
+C0528680  06f2f6eb  bl       #0xc02e4ea0
+C0528684  00c0a0e1  mov      ip, r0
+C0528688  0c50a0e1  mov      r5, ip
+C052868C  0a30a0e1  mov      r3, sl
+C0528690  0420a0e1  mov      r2, r4
+C0528694  0610a0e1  mov      r1, r6
+C0528698  0500a0e1  mov      r0, r5
+C052869C  abf3f6eb  bl       #0xc02e5550
+C05286A0  20c09de5  ldr      ip, [sp, #0x20]
+C05286A4  00005ce3  cmp      ip, #0
+C05286A8  0600001a  bne      #0xc05286c8
+C05286AC  0a30a0e1  mov      r3, sl
+C05286B0  01c026e2  eor      ip, r6, #1
+C05286B4  0420a0e1  mov      r2, r4
+C05286B8  7c10efe6  uxtb     r1, ip
+C05286BC  0500a0e1  mov      r0, r5
+C05286C0  a2f3f6eb  bl       #0xc02e5550
+C05286C4  00f020e3  nop      
+C05286C8  f08dbde8  pop      {r4, r5, r6, r7, r8, sl, fp, pc}
+
+present copies front to output request @ C02E8ABC
+C02E8ABC  043097e5  ldr      r3, [r7, #4]
+C02E8AC0  000053e3  cmp      r3, #0
+C02E8AC4  0500000a  beq      #0xc02e8ae0
+C02E8AC8  0130a0e3  mov      r3, #1
+C02E8ACC  0430c4e5  strb     r3, [r4, #4]
+C02E8AD0  040097e5  ldr      r0, [r7, #4]
+C02E8AD4  a7d3f4eb  bl       #0xc001d978
+C02E8AD8  0030a0e1  mov      r3, r0
+C02E8ADC  083084e5  str      r3, [r4, #8]
+
+present submits request @ C02E8C54
+C02E8C54  35f4ffeb  bl       #0xc02e5d30
+C02E8C58  14108de2  add      r1, sp, #0x14
+C02E8C5C  7bf5ffeb  bl       #0xc02e6250
+C02E8C60  18008de2  add      r0, sp, #0x18
+
+front to back copy @ C0528BA0
+C0528BA0  f04c2de9  push     {r4, r5, r6, r7, sl, fp, lr}
+C0528BA4  00b0a0e1  mov      fp, r0
+C0528BA8  0140a0e1  mov      r4, r1
+C0528BAC  002094e5  ldr      r2, [r4]
+C0528BB0  0c2082e2  add      r2, r2, #0xc
+C0528BB4  002092e5  ldr      r2, [r2]
+C0528BB8  0400a0e1  mov      r0, r4
+C0528BBC  32ff2fe1  blx      r2
+C0528BC0  0020a0e1  mov      r2, r0
+C0528BC4  047092e5  ldr      r7, [r2, #4]
+C0528BC8  002094e5  ldr      r2, [r4]
+C0528BCC  102082e2  add      r2, r2, #0x10
+C0528BD0  002092e5  ldr      r2, [r2]
+C0528BD4  0400a0e1  mov      r0, r4
+C0528BD8  32ff2fe1  blx      r2
+C0528BDC  0020a0e1  mov      r2, r0
+C0528BE0  0260a0e1  mov      r6, r2
+C0528BE4  04a096e5  ldr      sl, [r6, #4]
+C0528BE8  002094e5  ldr      r2, [r4]
+C0528BEC  282082e2  add      r2, r2, #0x28
+C0528BF0  002092e5  ldr      r2, [r2]
+C0528BF4  0010a0e3  mov      r1, #0
+C0528BF8  0400a0e1  mov      r0, r4
+C0528BFC  32ff2fe1  blx      r2
+C0528C00  083096e5  ldr      r3, [r6, #8]
+C0528C04  045093e5  ldr      r5, [r3, #4]
+C0528C08  0020a0e1  mov      r2, r0
+C0528C0C  920505e0  mul      r5, r2, r5
+C0528C10  0520a0e1  mov      r2, r5
+C0528C14  0710a0e1  mov      r1, r7
+C0528C18  0a00a0e1  mov      r0, sl
+C0528C1C  3ab1ebeb  bl       #0xc001510c
+C0528C20  f08cbde8  pop      {r4, r5, r6, r7, sl, fp, pc}

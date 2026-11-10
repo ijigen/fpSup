@@ -21,6 +21,14 @@
 #define CD_SRC_MAX_H 1710
 #define CD_Q_MARGIN_W 16
 #define CD_Q_MARGIN_H 10
+#define CD_Q_VMARGIN 4992
+#define CD_Q_VM_TOL_NUM 3
+#define CD_Q_VM_TOL_DEN 100
+#define CD_Q_CROP_W 16
+#define CD_Q_CROP_H 4
+#define CD_Q_CROP_FOV_NUM 3
+#define CD_Q_CROP_FOV_DEN 200
+#define CD_Q_VCROP 12
 #define CD_N_KEYS 40
 typedef struct { int16_t mh, mv, bits, donor, hmin, over, centre, v016, v016_min, fast_set, is_new, y0, rows_full, cls; uint16_t nfmt, fmt_w[4], fmt_code[4], extra_start, extra_n; } cd_ro_t;
 static const cd_ro_t cd_ro[CD_N_KEYS] = {

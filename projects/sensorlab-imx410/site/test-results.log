@@ -1,0 +1,32 @@
+test_all_reference_recipes_preserve_zoom_recorded_bits_and_raster (test_site.Site) ... ok
+test_crc_canonical_pad_version_and_invalid_input (test_site.Site) ... ok
+test_data_rate_uses_recorded_depth_and_actual_raster (test_site.Site) ... ok
+test_english_default_and_complete_translations (test_site.Site) ... ok
+test_layout_simulator_right_on_desktop_after_the_diagram_on_phones (test_site.Site) ... ok
+test_local_publication_copy_is_the_generated_output (test_site.Site) ... ok
+test_qs_panel_value_text_contrast (test_site.Site)
+White value text over the lighter QS panel, on the brightest scene pixel (white line art at .75 over the ... ok
+test_schema_and_random_decode_match_camera_reference (test_site.Site) ... ok
+test_simulator_alias_redirects_with_the_hash (test_site.Site) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 1.101s
+
+OK
+✔ rapid custom crops keep separate cells; a delayed old response only populates its cache (13.711792ms)
+✔ an older QR response cannot overwrite the current payload or SVG (9.085083ms)
+✔ liveview uses actual recording raster shape and keeps the DC crop during RES squash (5.811708ms)
+✔ the real render shows QR on main QS, retains it across focus/AEL, and removes it on sub/close/no recipe (15.147208ms)
+✔ every preset recipe: state -> code -> page loaded from #code is the identical selection (10115.238708ms)
+✔ random payloads: decode(pack(f)) is the identity, and loading never rewrites the address (2935.592708ms)
+✔ changes rewrite the address with replaceState only; no hash means the plain default view (34.931708ms)
+✔ invalid codes: a clear error, the default simulator, and the address kept until a change (354.074291ms)
+✔ languages: English by default; saved 简 / 繁 translate the page, side panel, hint and engine status (109.157083ms)
+✔ frame diagram: shared scale, real positions, distinct outlines, key never crossed (all presets + extremes, 3 languages) (440.44075ms)
+✔ no keypad: every former keypad action is reachable by click, tap or wheel (17580.883958ms)
+✔ rolling shutter: the live view leans by RS x pan speed for every preset recipe; off = none; stock compare (5357.088333ms)
+✔ screen: QR bottom-right and WB in its cell on the main QS only; tiles keep their logical index (39.528708ms)
+✔ changing settings never moves a section or the scroll position (360 and 1280 px, real Chrome) (49305.513417ms)
+ℹ tests 14
+ℹ pass 14
+ℹ fail 0
