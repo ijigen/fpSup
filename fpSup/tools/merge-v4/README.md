@@ -7,8 +7,46 @@ python3 -B tools/merge-v4/build_inputs_v4.py --out tools/merge-v4/inputs/v4-YYYY
 python3 -B tools/merge-v4/build_catalogue_v4.py                                       # 寫 index.html
 node tools/merge-v4/test_merge_v4.js
 node tools/merge-v4/test_ui_v4.js
-python3 -B -m unittest discover -s tools/merge-v4 -p test_version_history.py
+node tools/merge-v4/test_upload_v4.js
+node tools/merge-v4/test_lazy_v4.js
+python3 -B -m unittest discover -s tools/merge-v4 -p "test_*.py"
+python3 -B tools/merge-v4/publish_releases.py            # 每個提供中的版本在 GitHub 上是不是 Release(只讀)
 ```
+
+**2026-11-10 下載量：每個版本一個 GitHub Release、頁面不內嵌 sup**(Bei 定):
+- **頁面不再帶 sup 的位元組**(index.html 2.26 MB → 0.91 MB;剩下的是四組開機檔與 splash)。目錄裡每個 sup／資料檔只有
+  `size`、`sha256`、`src`(網站上的位置 = `inputs/<快照>/<檔>`,本來就隨 Pages 發布)、`asset`(Release 資產網址)。
+  勾選時才抓 `src`,大小與 sha256 跟目錄相同才收下(`accept`),不同就顯示原因與「重試」;抓完才跑原本的自檢、才能下載。
+  同一個選擇產生的 zip 與內嵌版逐位元組相同(54 組選擇 × 開機組合比對過)。
+- **為什麼不是直接從 Release 抓**:Release 資產最後由 `release-assets.githubusercontent.com` 回應，沒有 CORS 標頭(2026-11-10 實測),
+  瀏覽器的 JS 讀不到內容。所以位元組走同網域的 `src`,**計數**另外做：按「下載 zip」時對卡上每個檔的 `asset` 發一次
+  `fetch(..., {mode:'no-cors'})`(`countDownloads`)。每次造訪每個資產只算一次；本機開啟(file://、localhost)不算。
+  **實測會算**(2026-11-10,拿 `ijigen/gyroflow-plugins` 的舊 Release 資產、headless Chrome、來源 `ijigen.github.io`):
+  1 次 no-cors → +1;連續 3 次 → 只 +1(GitHub 會合併同一來源短時間內的重複);數字 10~15 分鐘後才反映在 API。
+- **顯示**:頁面載入時問 `api.github.com/repos/ijigen/fpSup/releases`(有 CORS、免登入、每 IP 每小時 60 次),圖磚版本旁顯示
+  「↓ 下載 N 次」= 該 sup 所有版本(tag `fpsup-<id>-v*`)的 .BIN 下載數合計，滑過去看目前版本的數字。問不到就不顯示。
+- **Release 的樣子**:tag = 快照 manifest 的 `release`(`fpsup-lossless-v0.3.1`),資產 = 該 sup 的 .BIN 與資料檔
+  (RES-Custom 的五個 .RCD 是它那個 Release 的資產，各有各的計數)。版本帶 `test` 的標 prerelease。
+- **`publish_releases.py`**:讀 index.html 的目錄(頁面實際用的那份)。無參數 = 列出缺什麼；`--check` 缺就 exit 1;
+  `--publish`(要 `GH_TOKEN`)先建 draft、傳完資產才公開。**已存在的 Release 永不改寫**:同名資產位元組不同就整個停下 ——
+  改了位元組就是新版本(`names_v4.py` 進版 → 新 tag、新計數)。中斷後重跑會接著做完。
+- **發布順序**:Pages workflow 在部署前跑 `--publish`,所以推上去的頁面不會指到不存在的資產。workflow(合併 repo 根目錄
+  `.github/workflows/pages.yml`)要加(同步到 worktree 時一起改):
+  ```yaml
+  permissions:
+    contents: write        # 原本是 read;建 Release 需要
+  # ...「Releases tables are current」之後、upload-pages-artifact 之前:
+      - name: Offered sups are GitHub Releases
+        working-directory: fpSup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/merge-v4/publish_releases.py --publish --target "$GITHUB_SHA"
+  ```
+- `tools/card-composer/index.html` 是這頁的複本：`src` 先試自己資料夾、404 就改用 `../merge-v4/`(`src_bases`),之後都先問有效的那個。
+  所以複本不用另外建，但 `inputs/` 用到的快照要一起 commit。
+- 測試:`test_lazy_v4.js`(假 fetch 供檔：不勾不抓、只抓勾的、sha 不對不收、斷線、複本路徑、計數一次且 no-cors、本機不計數、
+  API 數字只加該 sup 的 .BIN;11 個突變全抓到)、`test_publish_releases.py`(假 GitHub;7 個突變全抓到)、
+  `test_fill.js`(舊測試改從磁碟依 `src` 填位元組)。headless Chrome 實開過：勾 RES-Custom 抓 6 個檔、再勾 Lossless 抓 2 個。
 
 和 v3 頁的差別：
 - **產品全部來自一份快照** `inputs/v4-20261025/`(2026-10-25:選單掉鍵修正、頁尾固定、sup 檔名帶版本):`build_inputs_v4.py` 跑各產品自己的 v4 builder

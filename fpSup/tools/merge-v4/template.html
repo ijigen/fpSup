@@ -230,6 +230,12 @@ function b64(s){
   return u;
 }
 
+function toB64(bytes){
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 function sha256hex(bytes){
   const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
     0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -365,10 +371,38 @@ const dataExcluded = (p, picked) => DATA_OFF[p.id] ||
   (!picked.includes(p.id) ? (p.data_files || []).map(d => d.path) : []);
 const dataChosen = (p, picked) => (p.data_files || []).filter(d => !dataExcluded(p, picked).includes(d.path));
 
+/* Sup bytes are not in the page (Bei 2026-11-10).  A catalogue record -- a sup,
+   one of its data files -- says where the site serves it (src) and which
+   GitHub Release asset it is (asset); its bytes (data, base64) arrive when a
+   selection first needs them and are kept only if they are the size and
+   sha256 the catalogue names.  The boot files and your own sups are in the
+   page / the browser from the start.
+   records: every such record compose(picked) reads, in no particular order. */
+function records(picked){
+  const {on, off} = plan(picked), sel = selected(picked), out = [];
+  for (const p of CAT.products){
+    if (on.includes(p.id)) out.push(payloadFor(p, picked));
+    if (off.includes(p.id)) out.push(p);
+    if (sel.includes(p.id)) out.push(...dataChosen(p, picked), ...(p.support_files || []));
+  }
+  return [...new Set(out)];
+}
+const missing = picked => records(picked).filter(r => r.data == null);
+function accept(r, bytes){
+  if (bytes.length !== r.size || sha256hex(bytes) !== r.sha256) return false;
+  r.data = toB64(bytes);
+  return true;
+}
+/* The release assets behind a card: requested once each when the zip is
+   downloaded, so GitHub's per-asset download count is the count of cards a
+   version went onto.  Your own sups have none. */
+const assets = picked => [...new Set(records(picked).map(r => r.asset).filter(Boolean))];
+
 /* The card for a selection: [{name, data, sha256}] in zip order, sups in the
    loader's name order. */
 function compose(picked){
   const {on, off} = plan(picked);
+  if (missing(picked).length) throw new Error('not downloaded yet: ' + missing(picked).map(r => r.src).join(', '));
   const files = bootFiles(picked).map(s => ({name: s.path, data: b64(s.data), sha256: s.sha256}));
   for (const p of CAT.products){                                   // CAT is in file order
     const payload = payloadFor(p, picked);
@@ -529,11 +563,9 @@ function addUpload(name, bytes){
   if (r.error) return r;
   const sha = sha256hex(bytes), id = 'up-' + sha.slice(0, 10);
   if (byId(id)) return {id};
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   const s = r.sup;
   CAT.products.push({id, upload: true, name: s.display, sup_id: s.sid, file: name, category: 'own',
-    data: btoa(bin), sha256: sha, size: bytes.length, version: s.version, release: name.replace(/\.BIN$/i, ''), date: '',
+    data: toB64(bytes), sha256: sha, size: bytes.length, version: s.version, release: name.replace(/\.BIN$/i, ''), date: '',
     about: {en: `sup_id ${s.sid} · ${name}`, zh: `sup_id ${s.sid} · ${name}`},
     excl: CAT.products.filter(p => p.sup_id === s.sid).map(p => p.id),
     requires: [], links: [], credits: [], author: '', data_files: [], support_files: [], guide: ''});
@@ -583,6 +615,7 @@ const T = {
     ],
     format: ['錄影格式', '解析度、開放式取景、無損壓縮'],
     monitor: ['監看與螢幕', '拍攝時螢幕上看到什麼'],
+    control: ['操作', '撥盤與按鍵的反應'],
     focus: ['對焦', '自動對焦'],
     upcoming: ['開發中', '還不能選，先讓你知道接下來有什麼'],
     own: ['自己加入的 sup', '別人給你的 v4 .BIN：放進同一張卡。只存在這個瀏覽器裡'],
@@ -603,6 +636,8 @@ const T = {
     clashSame: n => `與 ${n} 是同一個 sup(sup_id 相同):存成 .OFF,不載入`,
     swap: '改開這個', turnOff: '改關這個', selAll: '全選', selNone: '全部取消',
     ok: n => '已準備好，可以下載。', fail: w => `檢查失敗:${w}`, inactive: '未啟用',
+    fetching: n => `正在取得 ${n} 個檔案…`, fetchFail: w => `取得檔案失敗：${w}。請檢查網路後重試。`, retry: '重試',
+    downloads: n => `下載 ${n} 次`, downloadsOf: (v, n) => `各版本合計；v${v}:${n} 次`,
     nOff: n => `${n} 個 sup 已安裝但關閉。之後要換：在相機的 SupManager 關掉開著的那個、打開想用的，重開機(兩個不相容的別同時開)。`,
   },
   en: {
@@ -626,6 +661,7 @@ const T = {
     ],
     format: ['Recording formats', 'Resolution, open gate, lossless compression'],
     monitor: ['Monitoring & screen', 'What you see on the screen while shooting'],
+    control: ['Controls', 'How the dials and buttons respond'],
     focus: ['Focus', 'Autofocus'],
     upcoming: ['In development', 'Not selectable yet: what is coming next'],
     own: ['Your own sups', 'A v4 .BIN someone gave you, on the same card. Kept in this browser only'],
@@ -646,6 +682,8 @@ const T = {
     clashSame: n => `The same sup as ${n} (same sup_id): saved as .OFF, does not load`,
     swap: 'Turn this one on', turnOff: 'Turn this one off', selAll: 'Select all', selNone: 'Clear all',
     ok: n => 'Ready to download.', fail: w => `Check failed: ${w}`, inactive: 'not enabled',
+    fetching: n => `Getting ${n} file(s)…`, fetchFail: w => `Could not get ${w}. Check the connection and retry.`, retry: 'Retry',
+    downloads: n => `${n} downloads`, downloadsOf: (v, n) => `all versions; v${v}: ${n}`,
     nOff: n => `${n} sup(s) are installed but off. To switch later: in the camera's SupManager turn the running one off and the one you want on, then restart (never both of two that clash).`,
   },
 };
@@ -665,6 +703,82 @@ let picked = [];                     // priority order: earlier wins a clash
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const OPEN_HISTORY = new Set();
+
+/* The files a selection needs, fetched when it first needs them (records,
+   above).  ensure() starts what is missing and says whether everything is
+   here; render() runs again as each one lands.  A failure stays until the next
+   thing the user does, so a dead connection is not hammered. */
+const LOADING = new Set(), FAILED = new Map();
+let SRC_BASES = [...(CAT.src_bases || [''])];
+const srcUrl = (base, src) => base + src.split('/').map(encodeURIComponent).join('/');
+async function fetchRecord(r){
+  let why = '';
+  for (const base of [...SRC_BASES]){
+    try {
+      const res = await fetch(srcUrl(base, r.src));
+      if (!res.ok){ why = 'HTTP ' + res.status; continue; }
+      if (accept(r, new Uint8Array(await res.arrayBuffer()))){
+        SRC_BASES = [base, ...SRC_BASES.filter(b => b !== base)];      // the one that works, first from now on
+        return;
+      }
+      why = 'sha256';
+    } catch (e) { why = String(e && e.message || e); }
+  }
+  throw new Error(why);
+}
+function ensure(picked){
+  const need = missing(picked);
+  for (const r of need){
+    if (LOADING.has(r) || FAILED.has(r)) continue;
+    LOADING.add(r);
+    fetchRecord(r).then(() => { LOADING.delete(r); }, e => { LOADING.delete(r); FAILED.set(r, e.message); }).then(render);
+  }
+  return !need.length;
+}
+const hostedPage = () => typeof location !== 'undefined' && /^https?:$/.test(location.protocol)
+  && !/^(localhost$|127\.|\[::1\]$)/.test(location.hostname);
+/* GitHub counts a release asset when it is requested.  The page cannot read
+   the answer (no CORS header there), and does not need to: the bytes on the
+   card are the ones checked above.  Once per asset per visit, and only from
+   the published site. */
+const COUNTED = new Set();
+function countDownloads(picked){
+  if (!hostedPage()) return;
+  for (const url of assets(picked)){
+    if (COUNTED.has(url)) continue;
+    COUNTED.add(url);
+    fetch(url, {mode: 'no-cors', cache: 'no-store'}).catch(() => {});
+  }
+}
+/* Download counts, from GitHub's public API (it does send CORS headers):
+   every release of a sup is tagged fpsup-<id>-v<version>, and the count is its
+   .BIN's.  COUNTS[id] = {total, byTag}.  No answer (offline, rate limit): no
+   number shown. */
+const COUNTS = {};
+async function loadCounts(){
+  if (!hostedPage() || !CAT.repo) return;
+  const ids = CAT.products.map(p => p.id).sort((a, b) => b.length - a.length);
+  for (let page = 1; page <= 5; page++){
+    const res = await fetch(`https://api.github.com/repos/${CAT.repo}/releases?per_page=100&page=${page}`);
+    if (!res.ok) break;
+    const list = await res.json();
+    for (const rel of list){
+      const id = ids.find(id => new RegExp(`^fpsup-${id}-v\\d`).test(rel.tag_name));
+      if (!id || rel.draft) continue;
+      const n = (rel.assets || []).filter(a => /\.BIN$/i.test(a.name)).reduce((s, a) => s + a.download_count, 0);
+      const c = COUNTS[id] || (COUNTS[id] = {total: 0, byTag: {}});
+      c.total += n; c.byTag[rel.tag_name] = n;
+    }
+    if (list.length < 100) break;
+  }
+  render();
+}
+function downloads(p, t){
+  const c = COUNTS[p.id];
+  if (!c) return '';
+  const n = x => Number(x).toLocaleString('en-US');
+  return ` · <span class="dls" title="${esc(t.downloadsOf(p.version, n(c.byTag[p.release] || 0)))}">↓ ${esc(t.downloads(n(c.total)))}</span>`;
+}
 
 function versionHistory(p, t){
   const history = p.history || [];
@@ -722,7 +836,7 @@ function tile(p, t, pl){
   else if (potential) warn = `<span class="hint">⚠ ${esc(t.clash(potential).split(':')[0])}</span>`;
   return `<div class="tile${ticked ? (parked ? ' parked' : ' on') : ''}">
     <input type="checkbox" id="c-${p.id}" data-id="${p.id}" ${ticked ? 'checked' : ''} ${neededBy.length ? 'disabled' : ''}>
-    <label class="name" for="c-${p.id}">${esc(p.name)}<span class="m">${'v' + esc(p.version)}${p.build_label && p.category === 'development' ? ' · ' + esc(about({about:p.build_label})) : ''}${p.date ? ` · ${esc(t.updated)} ${esc(p.date)}` : ''}</span></label>
+    <label class="name" for="c-${p.id}">${esc(p.name)}<span class="m">${'v' + esc(p.version)}${p.build_label && p.category === 'development' ? ' · ' + esc(about({about:p.build_label})) : ''}${p.date ? ` · ${esc(t.updated)} ${esc(p.date)}` : ''}${downloads(p, t)}</span></label>
     <span class="desc">${esc(about(p) || p.about.en || '')}</span>
     ${neededBy.length ? `<span class="hint">${esc(t.required(neededBy.map(id => byId(id).name).join(', ')))}</span>` : ''}
     ${p.id === 'res-lab' ? `<span class="hint">${esc(t.labNeeds)}</span>` : ''}
@@ -802,9 +916,9 @@ function render(){
     + (soon.length ? `<section><h2>${esc(upTitle)}<span>${soon.length}</span></h2><p class="sub">${esc(upSub)}</p>${soon.map(p => pendingTile(p, t)).join('')}</section>` : '')
     + section('development');
 
-  const {files} = compose(picked);
-  const run = files.filter(f => f.p && !f.off);
-  const off = files.filter(f => f.off);
+  /* the card's list comes from the plan alone: it shows at once, before the bytes are here */
+  const run = CAT.products.filter(p => pl.on.includes(p.id)).map(p => ({p}));
+  const off = CAT.products.filter(p => pl.off.includes(p.id)).map(p => ({p}));
   const ready = selected(picked).length || managerEnabled(picked);
   const chosenTool = p => {
     const formats = dataChosen(p, picked).map(d => d.label);
@@ -818,12 +932,21 @@ function render(){
 
   const st = $('#status'), dl = $('#dl');
   dl.textContent = t.dl;
+  st.style.whiteSpace = 'pre-line';
   if (!ready){ dl.disabled = true; st.textContent = ''; st.className = 'status'; return; }
+  if (!ensure(picked)){
+    const failed = missing(picked).filter(r => FAILED.has(r));
+    dl.disabled = !failed.length;
+    if (failed.length) dl.textContent = t.retry;
+    st.className = 'status' + (failed.length ? ' bad' : '');
+    st.textContent = failed.length ? t.fetchFail(failed.map(r => r.src.split('/').pop() + ' (' + FAILED.get(r) + ')').join(', '))
+      : t.fetching(missing(picked).length);
+    return;
+  }
   const res = checks(picked), bad = res.find(r => !r.ok);
   dl.disabled = !!bad;
   st.className = 'status ' + (bad ? 'bad' : 'ok');
   st.textContent = (bad ? t.fail(bad.what) : t.ok(res.length)) + (pl.off.length && !bad ? '\n' + t.nOff(pl.off.length) : '');
-  st.style.whiteSpace = 'pre-line';
 }
 
 document.addEventListener('toggle', e => {
@@ -833,6 +956,7 @@ document.addEventListener('toggle', e => {
 document.addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
+  FAILED.clear();                                    // anything the user does is a fresh try
   if (b.dataset.lang){ lang = b.dataset.lang; try { localStorage.setItem(LANG_KEY, lang); } catch (e) {} render(); }
   else if (b.dataset.selall){
     picked = b.dataset.selall === '1' ? [...picked, ...selectable().filter(x => !picked.includes(x))]
@@ -844,12 +968,14 @@ document.addEventListener('click', e => {
   /* off: after every one it clashes with, so the first of them runs instead */
   else if (b.dataset.yield){ picked = [...picked.filter(x => x !== b.dataset.yield), b.dataset.yield]; render(); }
   else if (b.id === 'dl'){
+    if (missing(picked).length) return render();                      // "Retry": FAILED was cleared above
     if (checks(picked).some(r => !r.ok)) return render();
     const blob = new Blob([zipFor(picked)], {type: 'application/zip'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = cardName(picked) + '.zip';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    countDownloads(picked);
   }
 });
 function addFiles(list){
@@ -882,6 +1008,7 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.id === 'drop'){ e.preventDefault(); $('#upfile').click(); }
 });
 document.addEventListener('change', e => {
+  FAILED.clear();
   if (e.target.id === 'upfile'){ addFiles(e.target.files); e.target.value = ''; return; }
   const boot = e.target.dataset && e.target.dataset.boot;
   if (['instant', 'fast', 'manager'].includes(boot)){
@@ -903,6 +1030,7 @@ document.addEventListener('change', e => {
   render();
 });
 render();
+loadCounts().catch(() => {});
 </script>
 </body>
 </html>

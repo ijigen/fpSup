@@ -6,7 +6,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # write: the deploy creates the GitHub Release of each sup version the Merge
+  # page offers (tools/merge-v4/publish_releases.py); GitHub counts their downloads.
+  contents: write
   pages: write
   id-token: write
 
@@ -46,6 +48,14 @@ jobs:
       # from Google Fonts at build time, so a --check in CI would fail on a runner
       # image update rather than on anything being wrong. Rerun it by hand after
       # a redraw; a stale image is cosmetic, not a broken page.
+      # Before the page goes out: every sup version it offers is a release with
+      # exactly the page's bytes, so the asset URLs the page requests exist.
+      # Existing releases are never rewritten; other bytes under a tag fail here.
+      - name: Offered sups are GitHub Releases
+        working-directory: fpSup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/merge-v4/publish_releases.py --publish --target "$GITHUB_SHA"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: fpSup

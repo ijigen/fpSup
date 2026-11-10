@@ -23,6 +23,8 @@ global.document = {
 const api = new Function(grab('compose') + grab('ui') +
   '\nreturn {CAT, compose, checks, plan, readme, picked:()=>picked, addFiles, note:()=>UPNOTE};')();
 
+require('./test_fill.js')(api.CAT);       // the bytes the page would fetch
+
 function sup(sid, name, {magic = 'FSB4', svc = 6} = {}){
   const body = Buffer.alloc(16), nm = Buffer.from(name + '\0');
   const len = 48 + body.length + nm.length + (-(48 + body.length + nm.length) & 3);

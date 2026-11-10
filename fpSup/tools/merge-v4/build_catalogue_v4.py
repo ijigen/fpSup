@@ -38,6 +38,19 @@ import build_v4 as B4
 import names_v4 as N        # display / file names and versions (the user 2026-10-25)
 from release_history import attach_history
 
+# Sup bytes are not in the page (Bei 2026-11-10).  Each offered version is a
+# GitHub Release -- tag = the product's `release`, assets = its .BIN and data
+# files (publish_releases.py) -- so GitHub counts the downloads.  A browser
+# cannot read a release asset (release-assets.githubusercontent.com sends no
+# CORS header), so the page takes the same bytes from the snapshot folder the
+# site already serves (`src`), when a tile is ticked, checks them against the
+# sha256 here, and on "Download zip" requests each `asset` once so it counts.
+REPO = 'ijigen/fpSup'
+# where `src` resolves from: this folder, and from tools/card-composer/ (the
+# site's entry, a copy of this page)
+SRC_BASES = ['', '../merge-v4/']
+ASSET_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')     # GitHub rewrites anything else
+
 SPLASH = [f'fpSup/UI/{i}.BIN' for i in range(5)]
 MANAGER = ['fpSup/SUPMGR.BIN', 'fpSup/UI/FPSUP.BIN', 'fpSup/UI/SUPMGR.BIN']
 
@@ -189,6 +202,21 @@ def embedded(files):
             for rel, b in files.items()]
 
 
+def hosted(directory, rel, b, tag):
+    """A file the page fetches when it is needed: where the site serves it
+    (`src`, from this folder) and its release asset (`asset`, counted by
+    GitHub).  A snapshot outside this folder cannot be fetched, so it is
+    embedded as before (tests)."""
+    out = dict(size=len(b), sha256=sha(b))
+    if not directory.is_relative_to(HERE):
+        return dict(out, data=base64.b64encode(b).decode())
+    name = pathlib.PurePosixPath(rel).name
+    if not ASSET_NAME.fullmatch(name) or not re.fullmatch(r'[A-Za-z0-9._-]+', tag):
+        raise SystemExit(f'not a release asset / tag name GitHub keeps as it is: {tag}/{name}')
+    return dict(out, src=(directory.relative_to(HERE) / rel).as_posix(),
+                asset=f'https://github.com/{REPO}/releases/download/{tag}/{name}')
+
+
 def boot_options():
     """The splash, the fpSup page / SupManager files, and the four boot pairs
     (Instant x Fast) from fpSup/loader-v4/build_v4.py -- the same switches the
@@ -232,25 +260,26 @@ def input_products(directory):
         if len(b) != expected['size'] or sha(b) != expected['sha256']:
             raise SystemExit('snapshot does not match manifest: ' + rel)
         verified[rel] = b
-    def sup_file(rel, expected_sid):
+    def sup_file(rel, expected_sid, tag):
         b = verified[rel]
         magic, hlen, flen, block, entry, sid, version, service = struct.unpack_from('<8I', b)
         if (magic != B4.SL4_MAGIC or hlen != B4.SL4_HEADER_LEN or flen != len(b) or block < flen or
                 not hlen <= (entry & ~1) < flen or sid.to_bytes(4, 'little') != expected_sid.encode() or
                 service > B4.SL4_LOADER_SVC):
             raise SystemExit('invalid snapshot sup: ' + rel)
-        return dict(size=len(b), sha256=sha(b), data=base64.b64encode(b).decode()), version
+        return hosted(directory, rel, b, tag), version
     out = []
     for key, entry in meta['products'].items():
         spec = PRODUCTS[key]
-        payload, version = sup_file(entry['file'], spec['sup_id'])
+        tag = entry.get('release') or f"fpsup-{key}-dev-r{struct.unpack_from('<I', verified[entry['file']], 24)[0]}"
+        payload, version = sup_file(entry['file'], spec['sup_id'], tag)
         filename = pathlib.PurePosixPath(entry['file'])
         # the snapshot's name and version (names_v4, 2026-10-25) when it carries them
         name = entry.get('name') or (filename.stem.lstrip('0123456789') if key == 'res-lab' else spec['name'])
         p = dict(id=key, name=name, category=spec['category'], file=filename.name, sup_id=spec['sup_id'],
                  infra=spec.get('infra', False), note=spec.get('note'),
                  excl=list(spec['excl']), requires=spec.get('requires', []), links=spec.get('links', []), needs_manager=spec.get('needs_manager', False),
-                 author=spec['author'], credits=spec['credits'], release=entry.get('release', f'fpsup-{key}-dev-r{version}'),
+                 author=spec['author'], credits=spec['credits'], release=tag,
                  version=entry.get('version', str(version)),
                  build_label=entry.get('build_label', dict(en='Development build', zh='開發版')), date=meta['date'], about=spec['summary'], guide=guide(key),
                  provenance=dict(manifest=str(directory.relative_to(HERE) / 'manifest.json') if directory.is_relative_to(HERE) else str(directory / 'manifest.json'),
@@ -258,13 +287,14 @@ def input_products(directory):
         for rel in entry.get('data_files', []):
             b = verified[rel]
             target = 'fpSup/RESCUS/' + pathlib.PurePosixPath(rel).name
-            p['data_files'].append(dict(label=label(spec, target), author=data_author(spec, target), **embedded({target:b})[0]))
+            p['data_files'].append(dict(label=label(spec, target), author=data_author(spec, target), path=target,
+                                        **hosted(directory, rel, b, tag)))
         for rel in entry.get('support_files', []):
             target = 'fpSup/RESCUS/' + pathlib.PurePosixPath(rel).name
-            p['support_files'] += embedded({target:verified[rel]})
+            p['support_files'].append(dict(path=target, **hosted(directory, rel, verified[rel], tag)))
         p['data_files'].sort(key=lambda d: data_rank(spec, d['path']))
         if entry.get('virtual'):
-            p['virtual'], _ = sup_file(entry['virtual'], 'RCUS')
+            p['virtual'], _ = sup_file(entry['virtual'], 'RCUS', tag)
         out.append(p)
     return out
 
@@ -327,6 +357,15 @@ def main():
             raise SystemExit(f"{p['id']}: category {p['category']!r} not in CATEGORIES")
         p['loader'] = 'v4'
     products = snapshots
+    # one release per offered version: no two products share a tag, no two files of one an asset name
+    tags = [p['release'] for p in products]
+    if len(set(tags)) != len(tags):
+        raise SystemExit('two products share a release tag')
+    for p in products:
+        assets = [r['asset'] for r in [p, *p['data_files'], *p['support_files'], *([p['virtual']] if p.get('virtual') else [])]
+                  if r.get('asset')]
+        if len(set(a.lower() for a in assets)) != len(assets):
+            raise SystemExit(f"{p['id']}: two files share a release asset name")
     have = {p['id'] for p in products}
     for p in products:
         missing = [r for r in p['requires'] if r not in have]
@@ -350,7 +389,7 @@ def main():
     cat = dict(categories=CATEGORIES, t2s=t2s, shared=boot_shared, boot=boot,
                products=sorted(products, key=lambda p: p['file']),
                pending=sorted(pending, key=lambda p: p['file']),
-               order=ORDER, loader_svc=B4.SL4_LOADER_SVC)
+               order=ORDER, loader_svc=B4.SL4_LOADER_SVC, repo=REPO, src_bases=SRC_BASES)
     attach_history(cat, RELEASES)
     page = TEMPLATE.read_text(encoding='utf-8')
     if page.count('@@CATALOGUE@@') != 1:

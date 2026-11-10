@@ -15,6 +15,9 @@ global.document = {getElementById: () => ({textContent: grab('cat')})};
 const api = new Function(grab('compose') +
   '\nreturn {CAT, DATA_OFF, BOOT, bootFiles, selected, managerEnabled, payloadFor, plan, compose, checks, readme, zipFor, cardName, sha256hex};')();
 const {CAT, DATA_OFF, BOOT, bootFiles, selected, managerEnabled, payloadFor, plan, compose, checks, zipFor, cardName, sha256hex} = api;
+// The page holds no sup bytes (2026-11-10): it fetches each record's `src`.  Here they come from disk.
+const EMBEDDED = CAT.products.filter(p => !p.upload && p.data != null).map(p => p.id);
+const FILLED = require('./test_fill.js')(CAT);
 
 let fails = 0;
 const ok = (c, what) => { console.log((c ? 'ok   ' : 'FAIL ') + what); if (!c) fails++; };
@@ -37,6 +40,12 @@ function unzip(u8){
 
 // 0a. the page's UI script parses (the compose block runs above; this one is DOM-only)
 try { new Function(grab('ui')); ok(true, 'ui script parses'); } catch (e) { ok(false, 'ui script parses: ' + e.message); }
+
+// 0b. no sup bytes in the page: every product and data file names where the site serves it and its release asset
+ok(EMBEDDED.length === 0 && FILLED >= CAT.products.length, `no sup embedded; ${FILLED} files read from the snapshots by their src`);
+ok(CAT.products.every(p => [p, ...p.data_files, ...p.support_files].every(r =>
+     r.asset === `https://github.com/${CAT.repo}/releases/download/${p.release}/${path.basename(r.src)}`)),
+   'every file is an asset of its product\'s release tag');
 
 // 0. the page's sha256 is SHA-256
 ok(sha256hex(new Uint8Array(0)) === sha(Buffer.alloc(0)) &&

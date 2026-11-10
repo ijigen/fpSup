@@ -19,6 +19,7 @@ global.document = {
 };
 const api = new Function(grab('compose') + grab('ui') +
   '\nreturn {BOOT, CAT, DATA_OFF, compose, checks, readme, zipFor, picked:()=>picked, history:p=>versionHistory(p,T[lang])};')();
+require('./test_fill.js')(api.CAT);       // the bytes the page would fetch (test_lazy_v4.js covers the fetching)
 const change = (dataset, checked) => handlers.get('change')({target:{dataset, checked}});
 const startup = () => el('startup').innerHTML;
 const checked = key => new RegExp(`data-boot="${key}" checked`).test(startup());
