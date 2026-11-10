@@ -37,6 +37,19 @@
 #define DESC_VALUE      0x08u
 #define CARD_MAGIC      0x50494C46u      /* "FLIP" */
 #define TASK_PRIORITY   20u
+/* The task's stack. 4 KiB carried the polls, the applies and the row's pushes
+ * (camera 2026-10-06, 10 switches) -- but no save ran that day (recording()
+ * read 0 as "yes").  With the saves running the camera froze while setting and
+ * switching (user 2026-11-10): the card write (file_is, open 7, write, read
+ * back) goes through the file system on this stack.  The firmware's own tasks
+ * that write files have 0x2000 .. 0x4000 (task table C0B97F90), Lossless's
+ * saving task 0x2000; tk_cre_tsk takes no more than 0x2000 (taskcreate.S).
+ * v3's 40FLIP.BIN keeps its bytes. */
+#ifdef FPF_V4
+#define TASK_STACK      0x2000u
+#else
+#define TASK_STACK      0x1000u
+#endif
 #define USED __attribute__((used))
 
 #if !defined(__arm__) || UINTPTR_MAX != UINT32_MAX
@@ -108,7 +121,7 @@ static uint32_t recording(void) {
 static int32_t task_create(uintptr_t entry) {
     volatile uint32_t d[8];
     int32_t id;
-    d[0] = 0; d[1] = 0x41u; d[2] = (uint32_t)entry; d[3] = TASK_PRIORITY; d[4] = 0x1000u;
+    d[0] = 0; d[1] = 0x41u; d[2] = (uint32_t)entry; d[3] = TASK_PRIORITY; d[4] = TASK_STACK;
     d[5] = 0x4C465046u; d[6] = 0x00005049u; d[7] = 0;
     id = ((int32_t (*)(volatile uint32_t *))0xC0016A58u)(d);
     if (id < 1) return id;

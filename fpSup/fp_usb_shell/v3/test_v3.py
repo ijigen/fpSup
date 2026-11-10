@@ -234,6 +234,7 @@ class Camera:
             return self._ret(1)
         if name == 'TK_CRE':
             self.tasks.append(self.w(r0 + 8))
+            self.task_stacks = getattr(self, 'task_stacks', []) + [self.w(r0 + 16)]   # stksz
             return self._ret(7)
         if name == 'D_FILE':
             argv = [self.cstr(self.w(r2 + 4 * i)) for i in range(r1)]

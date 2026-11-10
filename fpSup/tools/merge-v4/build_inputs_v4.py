@@ -76,6 +76,7 @@ VALIDATION_OF = {
     'qs-share': ('projects/qs-container v0.3.8 (API 8): offline suites, on the camera with SensorLab v0.7.39test '
                  '2026-11-05; 0.0.1test = the v0.3.8 code with the header display name fixed to "QS-Share" '
                  '(state/DMA offsets 64 B lower); not yet on the camera under this name.'),
+    'screenflip': ("fpSup/screenflip/test_v4_flip.py + test_v3_flip.py (the task is created with stksz 0x2000; v3's 40FLIP.BIN keeps 0x1000 and its bytes). On the camera 2026-11-11, loaded under Loader v4: 19 value changes from the TOOLS row (19 saves, 0 failed, file = table each time), 25 STILL/CINE switches (25 applies; 0x30190044 = 0x00333000 at 180, 0 at Off), no freeze; DISP switching checked by hand by Bei. Not checked: a non-Off value across a restart; the old 0x1000 stack's depth was never measured."),
     'dial-fix': ('fpSup/dialfix/test_dialfix.py: 9 unicorn tests (his v6 words = his AutoRun = clang of his .S; '
                  'sup copy and his in-place code reached through the stock edge handlers agree over 600 random steps; '
                  'one click per detent, clockwise +1; the edge register is the one his installer writes) and 12 mutations '

@@ -262,6 +262,7 @@ class FlipV3Tests(unittest.TestCase):
         sym = self.facts['symbols']
         self.assertEqual(cam.subs, [(GUI_OBJECT, state + self.lay['name'], blob + sym['changed_shim'])])
         self.assertEqual(cam.tasks, [blob + sym['task_shim']])
+        self.assertEqual(cam.task_stacks, [0x1000])              # v3's bytes as released
         self.assertEqual(cam.w(blob + sym['g_state']), state)
         self.assertEqual(self.panel(cam), (0, 0), 'loading touched the panel')
         # the row: Y2_5_1 switched to the reference applier's page

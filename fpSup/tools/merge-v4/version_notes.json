@@ -494,5 +494,17 @@
    "修正飽和度設為 +0.2 時，影片在 Resolve 裡偏冷的問題。",
    "飽和度 0、RAW 監看與錄下的 RAW 像素維持原樣。"
   ]
+ },
+ "fpsup-screenflip-v0.1.2": {
+  "en": [
+   "Fixes the camera freezing while a Screen Flip value is being set or right after, and when switching into a display mode: the sup's task now has an 8 KiB stack (it was 4 KiB), enough for writing the setting to the card.",
+   "Nothing else changes; your saved flip settings are kept.",
+   "On the camera with Loader v4 (2026-11-11): 19 value changes with their saves and 25 STILL / CINE switches without a freeze; switching with the DISP button checked by hand."
+  ],
+  "zh": [
+   "修正設定 Screen Flip 的值時（或剛設完）、以及切進顯示模式時相機凍結的問題：sup 的任務堆疊由 4 KiB 加到 8 KiB，足夠把設定寫進卡片。",
+   "其他行為不變；已存的翻轉設定會保留。",
+   "Loader v4 上機（2026-11-11）：改值並存檔 19 次、STILL／CINE 切換 25 次都沒有凍結；DISP 鍵切換由手動確認。"
+  ]
  }
 }

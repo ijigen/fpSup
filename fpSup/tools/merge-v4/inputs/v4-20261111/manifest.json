@@ -1,0 +1,58 @@
+{
+ "date": "2026-11-11",
+ "source_sha256": {
+  "fpSup/loader-v4/ports.py": "a66114a188c327cf4b06b1c825694d5f8238f2420f05f20a7043d9529dd4135b",
+  "fpSup/loader-v4/ports_jose.py": "d6584705d8f285e1f5b70dd98b555db58cf34d50e7c1401ec858b6cf7b1de0c2",
+  "fpSup/loader-v4/build_v4.py": "b6f2cbc8e17f3fefb1d376e07cc5bcf9b9eb9e8c1cc0f137dcfdb01c9d98e1d8",
+  "fpSup/loader-v4/names_v4.py": "c03b03f86321506f6748033a5de08a424b1cc3a20ab536a84ac0100cbace6133",
+  "fpSup/fpsup-ui/fpui_stock.c": "2f53ac1f206d87dfa0a95e027ec981b6e6ba570296e6ae7b952b2a2333d5a1c4",
+  "fpSup/fpsup-ui/fpsup_ui.c": "72132b0a057464c0cf34fc21fddc4839672e3f3d7bf3c7296983b74b10777953",
+  "fpSup/fpsup-ui/build_stock_section.py": "95e2440da119e751d9778d953eb4857f8eb309d3fbe08212dfeedfdcb11c55b9",
+  "fpSup/lossless/build_v4_lossless.py": "3bb06e202f76b14087b90b6e6813f16e926286572f93db4ec3752e8f0df9a93a",
+  "fpSup/lossless/native/menu_row4.c": "47f672c486bb3ea4dd1266f936f6ba34386373f299914d85c3073cf44d1e4d9e",
+  "fpSup/screenflip/build_v4_flip.py": "313f291409937ea5b7517a4cad97c1a8a528ed57ff8ec9fbb8101b696e9f629b",
+  "fpSup/screenflip/native/flip.c": "532aa89f9b353ae0a3af7b6750bc2d9991e3799baaa10133e2853ff738d9f349",
+  "projects/rawview/build/build_v4_rawview.py": "9bc8fdac8f5a9d23a88d485e9b193a0c03512291e90fc034fe772d20b09a304d",
+  "projects/rawview/build/build_v3_rawview.py": "5e8fac747567a4b49bd6261bed47693bdc1d50f338e3b0536b7ecf27da15c785",
+  "projects/open-gate/build/res-custom-v4/build_v4_rescustom.py": "265c7c129b99cc2db151a355d7e9140d577633d1d2aa2f640be55ec74c8cc8df",
+  "projects/open-gate/build/res-custom-v4/build_v3_rescustom.py": "8acce36a16cda48dc45701973bdad2dce87139327cbbe630cf79daf0e0470deb",
+  "projects/open-gate/build/res-custom-v4/ogc.c": "454c49f48acc5a450a3f77aa34ada09f29415a583a84f2ab2306da38e975577c",
+  "projects/open-gate/build/res-custom-v4/ogc_files.c": "6aa3a90b232d6cdab99bbaf45b4a7a22e259e88c515cea8b00870f037da707a1",
+  "projects/sensorlab-imx410/qs/build_slqs.py": "1702527a2328b3a040d0995f1e259ca6f229237d5f0fab81b997e144ebbd520f",
+  "projects/sensorlab-imx410/qs/slqs.c": "058bf3a313436328325a81d5db1b173c68906cbbaad508250ee6748be986e343",
+  "projects/sensorlab-imx410/qs/qrdec.c": "0a3dd5dd7835341ce657c5ce72959468210f431148981fda51817c21462991a3",
+  "projects/sensorlab-imx410/core/core.c": "996de86ec271753b25442016427d58013d08b903924eb29f235d4387911ee613",
+  "projects/sensorlab-imx410/apply/ap.c": "582287fdcc8fdcbcf284045212bd6f6a4971d7c3ee3bfd63c49d9e9e3087263e",
+  "projects/sensorlab-imx410/apply/ap_calc.c": "ab3e5b735a68f67a9d08d1b2db8fe5f8fe6cc49b510d72d00b0833b51f9d9580",
+  "projects/qs-container/build_qsct.py": "9377797baa874554e5e1244e64c44b9c239dae300b564aff0b08bf05343a410b",
+  "projects/qs-container/qsct.c": "14d98edcc77caad0d5a9d4ffa50857acca54b2b353daaebeb58972d8735902f6",
+  "projects/qs-container/qsc.h": "e2f65355b05ae342cd143321aaa79bb7bf70cadf7e0739c87cb440b557d93dd7",
+  "projects/qs-container/editor_data.py": "b6cfadd91a1e1ca90f01fd45fa74d28fcceeb0a89fb84e56c7b45fc09d481729",
+  "projects/qs-container/editor_title.py": "9d30dc977f62077db2a0e09ac9c4df8a24103d172d5272cb6fcf7685d9d20da8",
+  "projects/qs-container/qs_page_data.py": "04bf69cb1289136e17862bdc1e70d8d64358d971e4a943adefe0027939269b4e",
+  "fpSup/dialfix/build_dialfix.py": "6622b7c4a31576bc0ac887f1e0e095ef070590913626e1a0f79c8c881cc0eae4",
+  "fpSup/dialfix/dialfix.c": "ac0b6ec7fedbc885d0ecb06711c113b7ecfd90ff9079975d0489e7440603cdca",
+  "fpSup/dialfix/reference/v6/dial2_fast.S": "b8cf2cb6f8b23e5b675b82f49dd27307904f95f1fa2ed8ba8a243cb89f62e447",
+  "fpSup/dialfix/reference/v6/AutoRun.txt": "8f89d1f0e97f1e4debe83e12397f73cda07b34fea45cdd0c70eb12011c576d86"
+ },
+ "files": {
+  "ScreenFlip_v0.1.2.BIN": {
+   "size": 21248,
+   "sha256": "93cf58723c2251bc42a06d680b938a476f487ab04c31fea5057e6f48655c2cc6"
+  }
+ },
+ "products": {
+  "screenflip": {
+   "file": "ScreenFlip_v0.1.2.BIN",
+   "version": "0.1.2",
+   "name": "Screen Flip",
+   "release": "fpsup-screenflip-v0.1.2",
+   "build_label": {
+    "en": "Loader v4 test build",
+    "zh": "Loader v4 測試版"
+   }
+  }
+ },
+ "loader": "v4",
+ "validation": "fpSup/screenflip/test_v4_flip.py + test_v3_flip.py (the task is created with stksz 0x2000; v3's 40FLIP.BIN keeps 0x1000 and its bytes). On the camera 2026-11-11, loaded under Loader v4: 19 value changes from the TOOLS row (19 saves, 0 failed, file = table each time), 25 STILL/CINE switches (25 applies; 0x30190044 = 0x00333000 at 180, 0 at Off), no freeze; DISP switching checked by hand by Bei. Not checked: a non-Off value across a restart; the old 0x1000 stack's depth was never measured."
+}

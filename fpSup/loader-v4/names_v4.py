@@ -18,7 +18,7 @@ SUPS = {
     'STFX': ('Stop-FX', 'Stop-FX', '0.1.0'),
     'GYR2': ('Gyro2', 'Gyro2', '0.2.1'),   # last release v0.2.0 (build 6, on main's releases/)
     'RAWV': ('RAW-View', 'RAW-View', '0.3.1'),
-    'FLIP': ('Screen Flip', 'ScreenFlip', '0.1.1'),
+    'FLIP': ('Screen Flip', 'ScreenFlip', '0.1.2'),   # 2026-11-10: the v4 task's stack 0x2000 (froze while saving on 0x1000)
     'DSQZ': ('Desqueeze', 'Desqueeze', '0.1.5'),
     'TAPZ': ('Tap To Zoom', 'TapToZoom', '0.1.1'),
     'SHEL': ('USB-Shell', 'USB-Shell', '3.4.0'),

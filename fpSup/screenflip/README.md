@@ -93,3 +93,40 @@ LOADED、READY、列在 y 405。使用者親自操作：設定不翻、DISP 切�
 `fpSup/releases/fpsup-screenflip-v0.1.0test/`（`tools/release_v3.py`，40FLIP.BIN sha256 `cc3d4c05…`，與測試建出的位元組相同），
 **未上機**。另一個 session 的草稿改名保留在 `releases/_draft-fpsup-screenflip-v0.1.0test-f1a273f5/`。
 發布前要上機：改值 → 等 1 秒以上 → 重開 → 值還在；單獨 Mirror。
+
+## 設定與切換時凍結（2026-11-10，離線，未上機）
+
+使用者回報：v4 的 Screen Flip 在設定與調用（切進顯示模式）過程有很高機率凍結。
+
+- **線索**：10-06 上機「10 次切換全部套用、看起來完美」那天**一次存檔都沒發生**（`recording()` 把 0 讀成錄影中）。
+  10-07 修好之後、以及整個 v4 版（存檔多了 `svc->file_is`），存檔路徑**從沒上機跑過**。
+  現在改值 1 秒後任務就會寫卡 —— 正好落在「設定」與緊接著的「切換」。
+- **嫌疑最大：任務堆疊只有 4 KiB**（`task_create` 的 stksz 0x1000）。存檔在這個堆疊上走
+  `fpf_poll → settings_write → file_is（讀檔）→ open 7 / seek / write → 再開檔讀回`，全部經過檔案系統。
+  韌體自己會寫檔的任務是 0x2000–0x4000（任務表 `C0B97F90`），Lossless 的存檔任務 0x2000。
+  輪詢、套用（寫暫存器 + `C02E4420` 只是配一則訊息丟進佇列）、推列值（`C0593F30`）在 4 KiB 上 10-06 跑過沒事。
+  **這是推論**：檔案系統實際用多深沒有量過（靜態走訪只看得到直接呼叫，vtable 之後看不到）。
+- **改動**：v4 的 `TASK_STACK` = 0x2000（`tk_cre_tsk` 上限）；v3 的 40FLIP.BIN 維持 0x1000、位元組不變。
+  `test_v4_flip` / `test_v3_flip` 檢查建任務時的 stksz（共用 harness `v3/test_v3.py` 多記一個 `task_stacks`）。
+- **上機要做**（相機空下來後）：
+  1. 換上新 BIN 前先在舊版讀任務的堆疊區（TCB 堆疊範圍表 `C301EACC`，每任務 0x34）：改一次值、等 2 秒、
+     看堆疊底部被寫到多深 —— 直接證實或否定溢位。
+  2. 新 BIN：改值 → 等 1 秒 → 切 DISP、STILL/CINE 多次；讀 `saves / save_failed / applies`；重開機值還在。
+  3. 若 8 KiB 仍凍結：下一個嫌疑是非 UI 任務寫圖層暫存器 + 重排與顯示任務相撞（上面「要上機才能回答」第 2 題），
+     改成把套用搬到 UI 執行緒的訂閱回呼裡做。
+- **上機（2026-11-10）**：`ScreenFlip_v0.1.2test.BIN`（堆疊 0x2000，與 0.1.1 只差這 1 個位元組）寫入相機；
+  使用者實測設定與切換，回報「應該 OK」。**但那次不算數**：之後兩次開機的 LOAD.LOG 都是 `13 … ScreenFlip_v0.1.2test.BIN`(停用、沒載入)，
+  卡上 LOADER.BIN 的停用清單仍含 FLIP(RCUS、GYR2、TAPZ、FLIP)。新版在載入狀態下**還沒測過**。舊版的堆疊深度沒有量（上面第 1 步沒做），
+  所以「4 KiB 溢位」仍是由結果反推，不是直接量到的。計數（saves / applies）與重開機後值是否保留，我沒有讀回。
+- **上機（2026-11-11，0.1.2test 載入狀態）**：把 LOADER.BIN 停用清單的 FLIP 拿掉（其餘 RCUS、GYR2、TAPZ、RAWV 不動）、重開，
+  LOAD.LOG `0A C51C0E00 ScreenFlip_v0.1.2test.BIN`，狀態 READY、任務在跑。狀態結構在區塊 +0x5330（讀非快取別名 0x451C6130）。
+  - 改值 19 次（Y2_5_1 TOOLS 第五列，按鍵由 USB 送）：`edits 19 / saves 19 / save_failed 0`，每次 `saved == table`，沒凍結。
+  - 切換 25 次（`key STILLON` / `key STILLOFF` 模擬 STILL/CINE 開關）：`switches 25 / applies 25 / refused 0`；
+    目前模式設 180° 時 `0x30190044 = 0x00333000`、觸控旗標 1，改回 Off 後兩者都回 0。
+  - **沒測到的**：DISP 鍵（`key DISPON` 從 USB 送不會換模式，自定 1、2 都開著也一樣，原因沒查）—— DISP 走事件處理器任務，
+    和 STILL/CINE 不是同一條路；「改值後 1 秒內切換」（那四輪切換事件把選單踢回待機，改值按鍵落空）；
+    非 0 值跨重開機保留；舊版 4 KiB 堆疊深度仍沒量。所以「8 KiB 修好凍結」= 44 次存檔/套用沒再出現，不是直接證實溢位。
+  - 測完表格改回全 Off。過程中盲按到別處：提示音頁（Y3_1）按了 RIGHT×2、DOWN×5、RIGHT、DOWN、OK；
+    模式設定自定 1 的彈出清單選了兩次；待機畫面按了四輪方向鍵+OK。原值不明，已告知 Bei。
+  - 工具坑：`key STILLON` 之後 `STILLOFF` 才回 CINE（`CINESWON` 沒作用）；切換事件會退出選單；
+    截圖編號和相片共用計數（用 getfile 二分找最大號，再 `ui_shot.sh N`）；`mem get 0x30190044` 讀得到真值。

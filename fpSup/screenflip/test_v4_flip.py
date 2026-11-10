@@ -100,6 +100,7 @@ class FlipV4Tests(V3F.FlipV3Tests):
         sym = self.facts['symbols']
         self.assertEqual(cam.subs, [(V3F.GUI_OBJECT, state + self.lay['name'], blob + sym['changed_shim'])])
         self.assertEqual(cam.tasks, [blob + sym['task_shim']])
+        self.assertEqual(cam.task_stacks, [0x2000])              # the saves go through the file system on it (froze at 0x1000, user 2026-11-10)
         self.assertEqual(self.panel(cam), (0, 0), 'loading touched the panel')
         y = SETS.index('Y2_5_1')
         entry = cam.w(cam.entries + 44 * y + 8)
