@@ -220,10 +220,12 @@ static void refresh(struct smgr *m)
     post_int(m, V_TITLE, (u32)paged(m));
     for (u32 k = 0; k < SLOTS; k++) {
         struct mrow *r = visible(m, k);
+        /* shown before its words, hidden after them: a hidden row is not told
+           (paging back from a one-row page left the others gone, user 2026-11-10) */
+        if (r) post_int(m, vslot(V_VISIBLE, k), 1);
         for (u32 pp = P_RED; pp <= P_VER; pp++) post_str(m, vpart(pp, k), part(m, r, pp));
         post_int(m, V_GSHOW + k, part(m, r, P_GREY) != text(m, T_BLANK));
         post_int(m, V_RSHOW + k, part(m, r, P_RED) != text(m, T_BLANK));
-        post_int(m, vslot(V_VISIBLE, k), !!r);
         post_int(m, vslot(V_LOCK, k), !r || r->lock);
         post_int(m, vslot(V_MORE, k), 0);
         post_int(m, vslot(V_DEFAULT, k), r && !r->bin);
@@ -231,6 +233,7 @@ static void refresh(struct smgr *m)
         post_int(m, vslot(V_VERSION_X, k), 49u);
         post_int(m, V_TOFF + k, r && !r->bin);
         post_int(m, V_TON + k, r && r->bin);
+        if (!r) post_int(m, vslot(V_VISIBLE, k), 0);
     }
     post_str(m, V_RIGHT_FOOTER, text(m, T_BLANK));
     post_str(m, V_VERSION, text(m, T_VERSION));

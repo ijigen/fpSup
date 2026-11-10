@@ -41,6 +41,38 @@ class Fp4Tests(unittest.TestCase):
         self.assertEqual(shape['objects'][row0]['name'], 'MenuItem_SelectJump_4')
         self.assertEqual(shape['objects'][shape['objects'][row0]['parent_id']]['parent_id'], F.ROWS_PARENT)
 
+    def test_rows_are_hidden_by_a_watcher_not_by_themselves(self):
+        """The user 2026-11-10: back from a one-row page, one row was left --
+        a row that binds its own is-visible hides and is never told again.
+        MainY5's way: an always-visible object's value events change it."""
+        manage, _refs, _row0 = MP.build_manage(self.img, self.pool, v4=True)
+        for label, page in (('home', self.home[0]), ('SupManager', manage)):
+            recs = [bytearray(r.to_bytes()) for r in F.N.split(page)]
+            pg = MP.Management(self.img, self.pool)
+            text = lambda o: self.pool.text(o) or ''
+            parent = {F.u32(r, 20): F.u32(r, 24) for r in recs if F.u32(r, 0) == 0x10003}
+            own = [text(F.u32(r, 40)) for r in recs if F.u32(r, 0) == 0x10006
+                   and F.pool_name(pg, r) == 'appVariableEvent' and len(r) == 58
+                   and text(F.u32(r, 49)) in ('is-visible', 'opacity', 'tab-index')]
+            self.assertTrue(own, label)                                     # FT_Title, the tabs ...
+            self.assertFalse([n for n in own if 'Visible' in n and 'Tab' not in n], label)
+            acts = [r for r in recs if F.u32(r, 0) == 0x10009 and F.pool_name(pg, r) == 'changePropertyByControl'
+                    and len(r) in (50, 55) and parent.get(F.u32(r, 20)) == 1 and text(F.u32(r, 45)) == 'is-visible']
+            rows = {}
+            for a in acts:
+                rows.setdefault(F.u32(a, 36), []).append((F.u32(a, 20), len(a)))
+            self.assertEqual(len(rows), 6, label)
+            for row, hits in rows.items():
+                self.assertEqual(parent[row], F.ROWS_PARENT, label)
+                self.assertEqual(sorted(n for _o, n in hits), [50, 55], label)      # == 0: hide, == 1: show
+                self.assertEqual(len({o for o, _n in hits}), 1, label)
+                watcher = [r for r in recs if F.u32(r, 0) != 0x10003 and len(r) >= 28
+                           and F.u32(r, 24 if F.u32(r, 0) == 0x10006 else 20) == hits[0][0]]
+                value = [r for r in watcher if F.pool_name(pg, r) == 'controlValue']
+                self.assertEqual([bytes(r[28:]) for r in value], [struct.pack('>If', 4, 1.0)], label)
+                self.assertEqual([len(r) for r in watcher if F.pool_name(pg, r) == 'controlValueEvent'], [40, 44], label)
+                self.assertEqual(sum(F.pool_name(pg, r) == 'appVariableEvent' for r in watcher), 1, label)
+
     def test_menu_leaves_the_menu(self):
         # MENU on FT_Y6 must be MainY5's own exit (48-byte controlAppState, no
         # request): TransFtTab has no Return from FT_Y6 (MENU did nothing, camera).

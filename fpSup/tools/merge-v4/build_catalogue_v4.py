@@ -30,7 +30,8 @@ TEMPLATE = HERE / 'template.html'
 GUIDE = FPSUP / 'guide'
 OUT = HERE / 'index.html'
 # 2026-11-07: Sensor Lab-IMX410 + QS-Share in their own snapshot (the others unchanged, still 20261027)
-INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107']
+# 2026-11-10: Dial Fix 0.2.1test in v4-20261110
+INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107', HERE / 'inputs' / 'v4-20261110']
 sys.path.insert(0, str(FPSUP / 'fp_usb_shell'))
 from v3 import build_v3 as V3
 sys.path.insert(0, str(FPSUP / 'loader-v4'))
@@ -73,10 +74,10 @@ MANAGER = ['fpSup/SUPMGR.BIN', 'fpSup/UI/FPSUP.BIN', 'fpSup/UI/SUPMGR.BIN']
 #   goes on the card when a ticked sup `requires` it, like the fpSup page files.
 # note: {en, zh} install note shown on the tile and written into the card's README.
 # guide_page: the details link when it is not fpSup/guide/<id>.html (path from fpSup/).
-CATEGORIES = ['format', 'focus', 'motion', 'monitor', 'development']
+CATEGORIES = ['format', 'focus', 'motion', 'monitor', 'control', 'development']
 # the page shows sups in this order (user 2026-10-07); the card's load order is
 # still the file names'
-ORDER = ['res-custom', 'sensor-lab', 'qs-share', 'res-lab', 'lossless', 'fcap', 'unlocked-writer', 'stopfx', 'split-record', 'hdrx', 'af', 'gyro2', 'raw-view', 'screenflip', 'desqueeze', 'tap-to-zoom', 'lut', 'usbshell']
+ORDER = ['res-custom', 'sensor-lab', 'qs-share', 'res-lab', 'lossless', 'fcap', 'unlocked-writer', 'stopfx', 'split-record', 'hdrx', 'af', 'gyro2', 'raw-view', 'screenflip', 'desqueeze', 'tap-to-zoom', 'dial-fix', 'lut', 'usbshell']
 AUTHOR = ''
 PRODUCTS = {
     # og3k / og2k: not this round (user 2026-10-07) -- the OG line ships as
@@ -163,6 +164,11 @@ PRODUCTS = {
                         summary=dict(en='Tap the LCD to zoom around that point; dials select 2x, 4x or 8x and the next tap restores the full frame. Works while recording.',
                                      zh='輕觸 LCD，以該點為中心放大；轉盤可選 2x、4x 或 8x，再點一次還原全畫面。錄影中也可使用。'),
                         author='Jose Hurtado', credits=[]),
+    # 2026-11-08 (Bei): Andy_hal9000's rear-wheel decoder v6 (fpSup/dialfix/reference/v6), ported to a v4 sup.
+    'dial-fix':   dict(name=N.display('DIAL'), sup_id='DIAL', file=N.file_name('DIAL'), category='control', excl=[],
+                       summary=dict(en='The rear wheel moves exactly one step per click, in the direction you turn it, also when spun fast.',
+                                    zh='後轉盤每轉一格只走一步、方向正確，快轉也不亂跳。'),
+                       author='Andy_hal9000', credits=[]),
     'gyro2':      dict(name=N.display('GYR2'), sup_id='GYR2',
                        summary=dict(en='Gyro data inside every CinemaDNG frame; stabilise in DaVinci Resolve with the Gyroflow plugin (fpSup build).',
                                     zh='把陀螺儀資料寫進每一格 CinemaDNG,用 Gyroflow 的 DaVinci Resolve 插件(fpSup 版)防震。'), category='motion', excl=[], file=N.file_name('GYR2'),

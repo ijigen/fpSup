@@ -27,6 +27,9 @@ SUPS = {
     # SensorLab-IMX410 v0.7.39test / QS Container v0.3.8 (only the header name changes).  QSCT keeps its sup_id.
     'SL41': ('Sensor Lab-IMX410', 'SensorLab-IMX410', '0.0.1test'),
     'QSCT': ('QS-Share', 'QS-Share', '0.0.1test'),
+    # 2026-11-08 (Bei): Andy_hal9000's rear-wheel decoder v6 (fpSup/dialfix/reference/v6); the v1-based
+    # DIALFIX.BIN was never released.  "test" until the sup form has been on the camera.
+    'DIAL': ('Dial Fix', 'DialFix', '0.2.1test'),
 }
 
 DISPLAY_MAX = 23      # sloader4.c struct sup disp[24]

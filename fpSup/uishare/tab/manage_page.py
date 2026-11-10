@@ -455,13 +455,16 @@ def sup_row(pg, k, key_shift=0, dots=True, native=False):
     pg.bind(out, m[SELECT], var('Default', k), u32(cv, 24), 'value', 1)
     lock = out[F.comp(out, F.by_object(out)[m[1515]], 'controlValue', pg.pool)]
     pg.bind(out, m[1515], var('Lock', k), u32(lock, 24), 'value', 1)
-    rootbase = out[F.comp(out, F.by_object(out)[m[SELECT_ROW]], 'objectBase', pg.pool)]
-    pg.bind(out, m[SELECT_ROW], var('Visible', k), u32(rootbase, 24), 'opacity', 1)
     # tab-index = 0 does not keep Up/Down out of an empty row (camera,
     # 2026-10-21); is-visible = 0 does for MainY5's closed popup.
-    pg.bind(out, m[SELECT_ROW], var('Visible', k), u32(rootbase, 24), 'is-visible', 1)
-    selectbase = out[F.comp(out, F.by_object(out)[m[SELECT]], 'objectBase', pg.pool)]
-    pg.bind(out, m[SELECT], var('Visible', k), u32(selectbase, 24), 'tab-index', 1)
+    if native:
+        row_visible(pg, var('Visible', k), m[SELECT_ROW])
+    else:                                               # v3's ALLSUPS.BIN: its bytes as built
+        rootbase = out[F.comp(out, F.by_object(out)[m[SELECT_ROW]], 'objectBase', pg.pool)]
+        pg.bind(out, m[SELECT_ROW], var('Visible', k), u32(rootbase, 24), 'opacity', 1)
+        pg.bind(out, m[SELECT_ROW], var('Visible', k), u32(rootbase, 24), 'is-visible', 1)
+        selectbase = out[F.comp(out, F.by_object(out)[m[SELECT]], 'objectBase', pg.pool)]
+        pg.bind(out, m[SELECT], var('Visible', k), u32(selectbase, 24), 'tab-index', 1)
     lb = out[F.comp(out, F.by_object(out)[m[LIST]], 'objectBase', pg.pool)]
     check(u32(lb, 28) == 0xD3, 'MainY5 popup base form')
     # Position beside this Sup, keeping both choices above the footer.
@@ -611,6 +614,47 @@ def plain_object(pg, parent, x, y, w, h, text=None, size=44, color=0xFFFFFFFF):
         pg.literal(draw, text)
         out.append(draw)
     return out, oid
+
+
+def row_visible(pg, name, row):
+    """`name` = 0 / 1 hides / shows `row` through its is-visible, the way MainY5
+    does it: a watcher that is always visible (a child of the page root, no
+    paint) holds the variable in a controlValue, and its value events change the
+    row's property (stock: 2816 changePropertyByControl is-visible, no variable
+    bound to is-visible).  Bound on the row itself, the row hid and never came
+    back -- paging back from a one-row page showed one row (user 2026-11-10);
+    a hidden text object likewise (camera 2026-10-24).  The watcher starts at 1,
+    the row's own state, so 0 is a change whatever the engine does on building."""
+    raw, pool = pg.raw, pg.pool
+    out, oid = plain_object(pg, 1, 0, 0, 0, 0)
+    lock = pg.src[1515]                                 # SelectLock: value, == 0, == 1
+    check(u32(raw[lock[0]], 8) == 4, 'SelectLock components')
+    cv = F.owned(raw[F.comp(raw, lock, 'controlValue', pool)], oid)
+    check(len(cv) == 32 and u32(cv, 28) == 0, 'SelectLock controlValue form')
+    cv[:] = cv[:28] + struct.pack('>If', 4, 1.0)        # value = 1 (stock's 36-byte mask-4 form)
+    put(cv, 4, len(cv))
+    events = [bytearray(raw[i]) for i in lock if u32(raw[i], 0) == 0x10006]
+    check([(len(e), u32(e, 32), e[36:]) for e in events]
+          == [(40, 1, struct.pack('>I', 0x13)), (44, 3, struct.pack('>If', 0x13, 1.0))],
+          'SelectLock value events: == 0, == 1')
+    vis = pool.find('is-visible')
+    donor = {len(r): r for r in raw if len(r) in (50, 55) and u32(r, 0) == 0x10009
+             and F.pool_name(pg, r) == 'changePropertyByControl' and u32(r, 45) == vis
+             and pool.text(u32(r, 40)) == 'objectBase'}
+    check(len(donor) == 2 and u32(donor[50], 32) == 0x0B and u32(donor[55], 32) == 0x1B
+          and pool.text(u32(donor[55], 50)) == '1', 'MainY5 is-visible 0 / 1 actions')
+    out += [cv]
+    put(out[0], 8, 2)
+    for ev, size in zip(events, (50, 55)):              # == 0: hidden; == 1: shown
+        act = bytearray(donor[size])
+        put(ev, 24, oid); put(ev, 16, 1)
+        put(act, 20, oid); put(act, 24, u32(ev, 28)); put(act, 28, 1); put(act, 36, row)
+        out += [ev, act]
+        put(out[0], 8, u32(out[0], 8) + 1)
+    pg.bind(out, oid, name, u32(cv, 24), 'value', 1)    # last, as SelectLock's FT_Lock
+    at = next(i for i, r in enumerate(pg.seq) if u32(r, 0) == 0x10003 and u32(r, 24) == 1)
+    pg.seq[at:at] = out; pg.added += out
+    put(pg.seq[pg.ob()[1][0]], 16, u32(pg.seq[pg.ob()[1][0]], 16) + 1)
 
 
 def fill_rect(pg, owner, color, w, h):

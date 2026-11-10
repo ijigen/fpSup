@@ -273,11 +273,12 @@ static void home_slot(struct state *st, u32 k)
         v = (u32)r->get(r->arg);
         if (v >= n) v = 0;
     }
+    /* shown before its words, hidden after them: a hidden row is not told (supmgr.c refresh) */
+    if (r) fpui_set(b, vi(G_VISIBLE, k), 1);
     fpui_set_text(b, vi(G_NAME, k), r ? r->title : fpui_text(b, T_BLANK));
     fpui_set_text(b, vi(G_VALUE, k), n ? home_label(b, r, v) : r && r->value ? r->value : fpui_text(b, T_BLANK));
     for (u32 j = 0; j < 3u; j++)
         fpui_set_text(b, vi(G_ITEM_A + j, k), r ? home_label(b, r, j) : fpui_text(b, T_BLANK));
-    fpui_set(b, vi(G_VISIBLE, k), !!r);
     fpui_set(b, vi(G_LOCK, k), !r);                  /* a locked row's keys never reach us */
     fpui_set(b, vi(G_DEFAULT, k), v);
     fpui_set(b, vi(G_MAX, k), n ? n - 1u : 0u);
@@ -287,6 +288,7 @@ static void home_slot(struct state *st, u32 k)
     fpui_set(b, vi(G_TOG, k), tog);
     fpui_set(b, vi(G_TOFF, k), tog && v == 0);
     fpui_set(b, vi(G_TON, k), tog && v == 1);
+    if (!r) fpui_set(b, vi(G_VISIBLE, k), 0);
 }
 
 static void home_hint(struct state *st)

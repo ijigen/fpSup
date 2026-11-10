@@ -28,6 +28,7 @@ BUILDS = {
     'rescus': ([ROOT / 'projects/open-gate/build/res-custom-v4/build_v4_rescustom.py'], '.'),
     'slqs': ([ROOT / 'projects/sensorlab-imx410/qs/build_slqs.py'], 'fpSup'),
     'qsct': ([ROOT / 'projects/qs-container/build_qsct.py'], 'fpSup'),
+    'dial': ([FPSUP / 'dialfix/build_dialfix.py'], 'fpSup'),
 }
 # product id -> (build, sup_id, data dir or None); the file is names_v4's
 # <base>_v<version>.BIN (the user 2026-10-25)
@@ -46,6 +47,8 @@ PRODUCTS = {
     # 2026-11-07 (Bei): Sensor Lab-IMX410 and the QS container it needs, renamed QS-Share (sup_id QSCT)
     'sensor-lab': ('slqs', 'SL41', None),
     'qs-share': ('qsct', 'QSCT', None),
+    # 2026-11-08 (Bei): Andy_hal9000's rear-wheel decoder v6 as a v4 sup
+    'dial-fix': ('dial', 'DIAL', None),
 }
 SOURCES = [
     'fpSup/loader-v4/ports.py', 'fpSup/loader-v4/ports_jose.py', 'fpSup/loader-v4/build_v4.py',
@@ -61,6 +64,8 @@ SOURCES = [
     'projects/sensorlab-imx410/core/core.c', 'projects/sensorlab-imx410/apply/ap.c', 'projects/sensorlab-imx410/apply/ap_calc.c',
     'projects/qs-container/build_qsct.py', 'projects/qs-container/qsct.c', 'projects/qs-container/qsc.h',
     'projects/qs-container/editor_data.py', 'projects/qs-container/editor_title.py', 'projects/qs-container/qs_page_data.py',
+    'fpSup/dialfix/build_dialfix.py', 'fpSup/dialfix/dialfix.c', 'fpSup/dialfix/reference/v6/dial2_fast.S',
+    'fpSup/dialfix/reference/v6/AutoRun.txt',
 ]
 VALIDATION = ('fpSup/loader-v4/README.md "已上線 sup 的 v4 第一次上機(2026-10-24)": all eleven load, '
               'menus and saving checked on the camera; recording (ULWR, Gyro2, Lossless compression) not yet.')
@@ -71,6 +76,12 @@ VALIDATION_OF = {
     'qs-share': ('projects/qs-container v0.3.8 (API 8): offline suites, on the camera with SensorLab v0.7.39test '
                  '2026-11-05; 0.0.1test = the v0.3.8 code with the header display name fixed to "QS-Share" '
                  '(state/DMA offsets 64 B lower); not yet on the camera under this name.'),
+    'dial-fix': ('fpSup/dialfix/test_dialfix.py: 9 unicorn tests (his v6 words = his AutoRun = clang of his .S; '
+                 'sup copy and his in-place code reached through the stock edge handlers agree over 600 random steps; '
+                 'one click per detent, clockwise +1; the edge register is the one his installer writes) and 12 mutations '
+                 'caught (2026-11-10). 0.2.1test on the camera 2026-11-10: loads (LOAD.LOG 0A), the three vtable '
+                 'slots and 0x301502E4 read back as expected, one step per click by hand (Bei). 0.2.0test wrote the '
+                 'wrong register address and froze on load; it was never offered.'),
 }
 
 

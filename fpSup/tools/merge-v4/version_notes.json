@@ -442,5 +442,19 @@
    "修正飽和度設為 +0.2 時，影片在 Resolve 裡偏冷的問題。",
    "飽和度 0、RAW 監看與錄下的 RAW 像素維持原樣。"
   ]
+ },
+ "fpsup-dial-fix-v0.2.1test": {
+  "en": [
+   "Andy_hal9000's rear-wheel decoder v6 as a Loader v4 sup. The rear wheel (its switch bounces) moves one step per click, in the right direction; clockwise is +1, and fast spins are counted too.",
+   "The decoder is his v6 word for word; it runs from the sup's own memory and the dial's vtable is pointed at it, so no camera code is overwritten. Power off restores the stock decoder.",
+   "Firmware 5.02 only. If the dial object is not where 5.02 has it, the sup does nothing.",
+   "The decoder was tested on the camera by its author as an AutoRun card (2026-11-07), and this sup form on 2026-11-10: it loads and the wheel steps one click at a time. Restoring the stock decoder at power off has not been checked separately."
+  ],
+  "zh": [
+   "Andy_hal9000 的後轉盤解碼器 v6,做成 Loader v4 sup。後轉盤(開關會彈跳)每轉一格只走一步、方向正確；順時針為 +1,快轉也照算。",
+   "解碼器與他的 v6 逐字相同，在 sup 自己的記憶體執行，只把轉盤的 vtable 指過去，不覆寫相機程式碼。關機時還原原廠解碼器。",
+   "僅限韌體 5.02。轉盤物件不在 5.02 的位置時,sup 什麼都不做。",
+   "解碼器本身由作者以 AutoRun 卡上機驗證過(2026-11-07);這個 sup 版 2026-11-10 上機：正常載入、轉盤一格一下。關機還原原廠解碼器這點沒有另外確認。"
+  ]
  }
 }

@@ -453,6 +453,29 @@ class SupManagerPageTests(unittest.TestCase):
         cam.notify('SM_Choice1', 1)                             # page 2, slot 1 = F.BIN: Disable
         self.assertEqual(cam.callsvc('disabled_get', T.sid('FFFF')), 1)
 
+    def test_paging_back_shows_the_rows_again(self):
+        """The user 2026-11-10: back from a page of one row, one row was left.
+        A hidden row is not told: a slot is shown before its words are posted,
+        and hidden after them."""
+        cam = self.boot_sm(*[(f'{c}.BIN', ts(c * 4, [])) for c in 'BCDEFGHIJ'])   # 11: 5 + 5 + 1
+        cam.press(41)
+        cam.notify('SM_Key', 11); cam.notify('SM_Key', 11)
+        self.assertEqual(cam.vars['SM_PageText'][1], '3 / 3')
+        self.assertEqual([sm(cam, 'Visible', k) for k in range(6)], [0, 1, 0, 0, 0, 0])
+        n = len(cam.posts)
+        cam.notify('SM_Key', 10)
+        self.assertEqual(cam.vars['SM_PageText'][1], '2 / 3')
+        self.assertEqual([sm(cam, 'Visible', k) for k in range(6)], [0, 1, 1, 1, 1, 1])
+        back = [name for name, _v in cam.posts[n:]]
+        for k in range(1, 6):
+            self.assertLess(back.index(f'SM_Visible{k}'), back.index(f'SM_N{k}'), k)
+        n = len(cam.posts)
+        cam.notify('SM_Key', 11)
+        there = [name for name, _v in cam.posts[n:]]
+        self.assertLess(there.index('SM_Visible1'), there.index('SM_N1'))
+        for k in range(2, 6):
+            self.assertGreater(there.index(f'SM_Visible{k}'), there.index(f'SM_TOn{k}'), k)
+
     def test_row_opens_the_page_with_its_focus(self):
         cam = self.boot_sm()
         self.assertEqual(slot(cam, 0)['N'], 'SupManager')

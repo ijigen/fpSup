@@ -20,8 +20,10 @@ the current page (projects/loader-v4/DESIGN.md §14):
            the row's open() (MainY5's popup opens too, behind the new page)
   locked   FT_Lock<k> = 1 only for an empty slot: a locked row's Right/OK do
            nothing at all, not even FT_Key (camera, 2026-10-21)
-  hidden   FT_Visible<k> = 0 also clears the row's is-visible: Up/Down skip
-           it, as they skip MainY5's closed popup (tab-index = 0 did not)
+  hidden   FT_Visible<k> = 0 clears the row's is-visible: Up/Down skip it, as
+           they skip MainY5's closed popup (tab-index = 0 did not).  A watcher
+           outside the row does it (manage_page.row_visible): bound on the row
+           itself, a hidden row never came back (user 2026-11-10)
 
 v3's manage_page.py is imported, not changed: v3's ALLSUPS.BIN stays as built.
 """
@@ -124,11 +126,7 @@ def setting_row(pg, k):
     pg.bind(out, m[MP.SELECT], var('Default', k), u32(cv, 24), 'value', 1)
     lock = out[F.comp(out, F.by_object(out)[m[1515]], 'controlValue', pg.pool)]
     pg.bind(out, m[1515], var('Lock', k), u32(lock, 24), 'value', 1)
-    rootbase = out[F.comp(out, F.by_object(out)[m[MP.SELECT_ROW]], 'objectBase', pg.pool)]
-    pg.bind(out, m[MP.SELECT_ROW], var('Visible', k), u32(rootbase, 24), 'opacity', 1)
-    pg.bind(out, m[MP.SELECT_ROW], var('Visible', k), u32(rootbase, 24), 'is-visible', 1)
-    selectbase = out[F.comp(out, F.by_object(out)[m[MP.SELECT]], 'objectBase', pg.pool)]
-    pg.bind(out, m[MP.SELECT], var('Visible', k), u32(selectbase, 24), 'tab-index', 1)
+    MP.row_visible(pg, var('Visible', k), m[MP.SELECT_ROW])
     # The popup: room for three choices beside the row, above the footer;
     # its height and its last choice follow the row (FT_PopH, FT_Max).
     lb = out[F.comp(out, F.by_object(out)[m[MP.LIST]], 'objectBase', pg.pool)]
