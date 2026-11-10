@@ -17,8 +17,8 @@ struct fpl_workspace_layout {
 
 /* Reservation arithmetic ONLY, for a tightly packed Bayer raster. It neither
  * allocates memory nor proves native source ownership, codec/DMA limits,
- * source headroom, writer deferral, or readiness. In particular, accepting
- * bits=14 here does NOT enable 14-bit recording in control.c.
+ * source headroom, writer deferral, or readiness. Recording eligibility
+ * (10/12/14 bit, 2026-11-10) is control.c's, not this planner's.
  *
  * The output span is align1024(raster_bytes): a benefit-only output BUDGET,
  * NOT a worst-case lossless-JPEG bound. A noisy image can exceed it. Do not

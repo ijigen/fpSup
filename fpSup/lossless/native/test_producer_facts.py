@@ -364,6 +364,47 @@ class FirmwareTableTests(unittest.TestCase):
                         self.execute(self.machine(), 0xC0135D40, (w, h, fmt), thumb=True),
                         mine(w, h, bits))
 
+    def test_format_1_rows_are_the_engines_pitch_exactly_when_the_width_is_16_aligned(self):
+        # 2026-11-10 (14-bit Lossless): the raster C0135D40 sizes for Sigpro
+        # format 1 has rows of align4(7w/4) bytes (only its LAST row is longer,
+        # past the frame); the engine (C062FFF8, next test) reads rows 14w/8
+        # apart. Every Sensor Lab 1:1 14-bit width is a multiple of 16.
+        size = lambda w, h: self.execute(self.machine(), 0xC0135D40, (w, h, 1), thumb=True)
+        for w, h in ((6048, 4040), (6048, 3412), (5040, 2844), (4144, 2340), (4112, 2170),
+                     (3984, 2250), (3856, 2170), (3024, 2010), (2576, 1450), (1936, 1090),
+                     (1296, 730)):
+            with self.subTest(w=w, h=h):
+                self.assertEqual(size(w, 2) - size(w, 1), w * 14 // 8)      # the row pitch
+                self.assertGreaterEqual(size(w, h), w * h * 14 // 8)
+                self.assertEqual(size(w, h) - size(w, 1), (h - 1) * w * 14 // 8)
+        # 8 mod 16: two bytes of row padding the engine would read as pixels
+        self.assertEqual(size(6056, 2) - size(6056, 1), 6056 * 14 // 8 + 2)
+
+    def test_c062fff8_programs_the_source_pitch_as_bits_times_width(self):
+        # The encoder's set-up (F_ENC -> C062FFF8) run from the image: depth
+        # code 1 is 14 bit (300D0040 = 2) and 300D006C = 14 x width / 16,
+        # i.e. a pitch of 14 x width / 8 bytes -- no 4-byte row rounding.
+        from unicorn import UC_PROT_ALL
+        for code, sel, bits in ((0, 1, 12), (1, 2, 14), (3, 0, 10)):
+            for w in (6048, 1936, 6064):
+                with self.subTest(code=code, w=w):
+                    uc = self.machine()
+                    uc.mem_map(0x300D0000, 0x1000, UC_PROT_ALL)
+                    try:
+                        uc.mem_map(0xC37CF000, 0x1000, UC_PROT_ALL)
+                    except Exception:
+                        pass                                   # inside the image
+                    uc.mem_write(0xC37CF000, bytes(0x1000))
+                    req = 0x46014000
+                    words = [w, 4040, code, 512, 512, 0x50000000, 0x02900000, 0x54000000,
+                             0x02900000, 0x58000000, 0, 0xC062FCB1]
+                    uc.mem_write(req, struct.pack('<12I', *words))
+                    self.assertEqual(self.execute(uc, 0xC062FFF8, (req,), thumb=True, limit=20000), 0)
+                    reg = lambda a: struct.unpack('<I', uc.mem_read(a, 4))[0]
+                    self.assertEqual(reg(0x300D0040) & 3, sel)
+                    self.assertEqual(reg(0x300D006C), (bits * w & 0x7FFFF) >> 4)
+                    self.assertEqual(reg(0x300D006C) * 2, bits * w // 8)
+
     def rate(self, code):
         mgr, settings, out = 0x46011000, 0x46012000, 0x46013000
         uc = self.machine()

@@ -315,6 +315,14 @@ struct fpl_card {
     uint32_t rec_tick, arrive_tick;     /* microseconds of the last REC / arrival */
     uint32_t fobj[1024];                /* a file object: loader.S gives it 4 KiB */
     uint32_t tile_force;                /* tile_grid.h, for measuring: w << 16 | h, 0 = default */
+    /* The row-pitch test switch (Bei 2026-11-10), written only by a host
+     * (mem set at state + layout 'pitch_test'). 0 at every boot (the
+     * launcher zeroes the state); never saved. 1: a 10/14-bit width whose
+     * packed row is not a multiple of 4 bytes is compressed anyway --
+     * control.c and codec_job.c skip their row-pitch refusal, nothing else.
+     * Any other value = 0. The take's count of such compressed frames is
+     * hold.pitch_forced + hold_b.pitch_forced (zeroed at each REC). */
+    uint32_t pitch_test;
     /* The take's compressed IFD inside the header template (header_tag.h):
      * the observer adds the tag at the template build and prepares the IFD
      * after the serialization; nothing per frame. Two copies:
@@ -356,8 +364,10 @@ static void card_saturate(uint32_t *v) { if (*v != UINT32_MAX) ++*v; }
 /* ---- the test card's assertions: the only place they are made -------- */
 static uint32_t test_yes(void *c) { (void)c; return 1; }
 static uint32_t test_readiness(void *c, uint32_t reserved) {
-    (void)c; (void)reserved;
-    return FPL_READY_CAPTURE;       /* ASSERTED for measurement, not proven */
+    const volatile struct fpl_card *card = (const volatile struct fpl_card *)c;
+    (void)reserved;
+    /* ASSERTED for measurement, not proven; plus the host's test switch */
+    return FPL_READY_CAPTURE | (card && card->pitch_test == 1u ? FPL_TEST_PITCH : 0u);
 }
 
 static uint32_t card_valid(const struct fpl_card *c) {
@@ -401,6 +411,7 @@ USED uint32_t fpl_card_init(struct fpl_card *c, uintptr_t base, uint32_t block_b
     c->rec.facts.cinemadng = test_yes;
     c->rec.facts.sd_media = test_yes;
     c->rec.facts.readiness = test_readiness;
+    c->rec.facts.readiness_context = c;
     /* No source copy: the engine reads each frame in place (operator
      * decision 2026-09-30; see frame_hold.c readable()). */
     c->rec.setup.copy_source = 0;
@@ -544,6 +555,7 @@ static uint32_t start_hold(struct fpl_card *c) {
         return 0;
     }
     c->hold.tile_force = c->hold_b.tile_force = c->tile_force;
+    c->hold.pitch_test = c->hold_b.pitch_test = *(volatile uint32_t *)&c->pitch_test == 1u;
     /* one open a take: codec_job.h keep_open */
     c->hold.job.keep_open = c->hold_b.job.keep_open = 1;
     c->take_frames = 0;

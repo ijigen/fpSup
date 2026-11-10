@@ -153,6 +153,9 @@ def main():
                   v['rec.facts.seen.bits'])
     if w and h and bits:
         print(f'  producer {w}x{h} {bits}-bit, raster {v["rec.facts.seen.raster"]:,} B')
+    if 'pitch_test' in v:                     # 2026-11-10 row-pitch test switch
+        print(f'  pitch test switch {v["pitch_test"]} (last take {v["hold.pitch_test"]}); '
+              f'compressed with unaligned rows {v["hold.pitch_forced"] + v["hold_b.pitch_forced"]}')
     tid = v['task_id'] - (1 << 32) if v['task_id'] & 0x80000000 else v['task_id']
     lanes = ['hold'] + (['hold_b'] if v['hold_b.magic'] else [])
     print(f'  takes admitted {v["rec_admitted"]}, recorded RAW {v["rec_raw"]}; codec task '

@@ -179,9 +179,15 @@ class WorkspaceLayoutTests(unittest.TestCase):
         # still reject infeasible memory sizes and base+size wrapping.
         self.refused((8, 2, 10, 0, metadata + 1), INVALID)
 
-    def test_planning_14bit_does_not_enable_the_existing_control(self):
-        self.plan(6064, 4042, 14)
-        context = Context(502, 1, 1, 14, 6064, 4042, 24, 1, 1, 127)
+    def test_planning_14bit_is_arithmetic_and_control_decides(self):
+        # 2026-11-10: control admits 14 (Sensor Lab 1:1); the planner alone
+        # still enables nothing -- a width the engine would misread (8 mod
+        # 16) plans fine but control refuses it.
+        self.plan(6048, 4040, 14)
+        context = Context(502, 1, 1, 14, 6048, 4040, 24, 1, 1, 127)
+        self.assertEqual(self.lib.fpl_can_enable(ct.byref(context)), OK)
+        self.plan(6056, 4040, 14)
+        context = Context(502, 1, 1, 14, 6056, 4040, 24, 1, 1, 127)
         self.assertEqual(self.lib.fpl_can_enable(ct.byref(context)), UNSUPPORTED)
 
     def test_arm_freestanding_compilation_has_no_runtime_helpers(self):

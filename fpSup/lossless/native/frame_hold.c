@@ -165,8 +165,8 @@ static int32_t free_slot(const struct fpl_frame_hold *h) {
 }
 /* The source length the engine will be told, for THIS producer. */
 static uint32_t told_source(const struct fpl_frame_hold *h) {
-    return fpl_codec_source_bytes(h->facts->seen.width, h->facts->seen.height,
-                                  h->facts->seen.format);
+    return fpl_codec_source_bytes_test(h->facts->seen.width, h->facts->seen.height,
+                                       h->facts->seen.format, h->pitch_test);
 }
 
 /* Copy-back. Word-by-word volatile accesses through the uncached alias made
@@ -295,6 +295,7 @@ static uint32_t handoff(void *context, const struct fpl_frame_lease *lease,
         c->file = file;                      /* published */
         barrier();
         saturate(&h->compressed);
+        if (h->job.misaligned) saturate(&h->pitch_forced);
     } else {
         saturate(&h->no_benefit);
     }
@@ -495,6 +496,7 @@ static uint32_t admit(struct fpl_frame_hold *h, uintptr_t creator, uint32_t nati
     in->table = h->workspace.table;
     in->table_capacity = h->workspace.table_capacity;
     in->tile_force = h->tile_force;
+    in->pitch_any = h->pitch_test;
     return 1;
 }
 

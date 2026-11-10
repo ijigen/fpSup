@@ -117,6 +117,8 @@ FIELDS = ['magic', 'hold_live', 'rec_events', 'rec_admitted', 'rec_raw',
           'play.clips', 'play.clips_ours', 'play.clip_size_was', 'play.clip_size_set',
           'play.clip_failed', 'play.scratch_bytes', 'play.scratch_failed',
           'play.scratch_freed', 'play.scratch_want', 'play.clips_first_stock', 'take_frames']
+FIELDS += ['pitch_test', 'hold.pitch_test', 'hold.pitch_forced', 'hold_b.pitch_forced',
+           'hold_b.pitch_test', 'rec.facts.readiness', 'rec.facts.readiness_context']   # 2026-11-10 row-pitch test switch
 FIELDS += ['settings_on', 'settings_ok', 'saves', 'save_failed', 'save_last', 'trace_n', 'trace', 'elog_n', 'elog']          # card.c FPL_TRACE: per-arrival records
 FIELDS += ['engine_release', 'hold.job.reused', 'hold_b.job.reused', 'tag_tiles', 'tag_bytes', 'hold.require_head', 'observer_slot', 'observer_full', 'observer_calls', 'tag_mode0',
            'tag_added', 'tag_add_result', 'tag_add_failed', 'tag_prepared', 'tag_prepare_failed',

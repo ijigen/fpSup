@@ -204,6 +204,62 @@ class CodecJobTests(unittest.TestCase):
                 self.assertEqual(self.lib.fpl_fixture_source_bytes(w, h, f),
                                  (w * h * bits // 8 + 0x3FF) & ~0x3FF)
 
+    def test_a_sensor_lab_6k_14bit_frame_is_submitted_as_format_1(self):
+        # 2026-11-10: Sensor Lab 1:1 true 14, the Sigpro format 1 raster.
+        # Its default grid (tile_grid.h) is 512 x 512: 12 x 8 = 96 tiles.
+        self.lib.fpl_fixture_reset(6048, 4040, 1)
+        self.assertEqual(self.lib.fpl_fixture_submit(), OK)
+        self.assertEqual([self.get(220 + i) for i in range(5)], [6048, 4040, 1, 512, 512])
+        r = self.request()
+        self.assertEqual(r[:5], [6048, 4040, 1, 512, 512])
+        self.assertEqual(r[6], (6048 * 4040 * 14 // 8 + 0x3FF) & ~0x3FF)    # 42,759,360 -> 42,759,168 + 1 KiB
+        self.assertEqual(self.get(TILECOUNT), 96)
+        self.assertEqual(self.calls(), SUBMIT_ORDER)
+
+    def test_a_14bit_or_10bit_width_8_mod_16_is_refused_before_any_call(self):
+        # the engine's pitch (bits x w / 8) differs from the raster's (4-byte rows)
+        for w, f in ((6056, 1), (1928, 1), (1928, 3)):
+            with self.subTest(w=w, f=f):
+                self.assertEqual(self.lib.fpl_fixture_source_bytes(w, 1090, f), 0)
+                self.lib.fpl_fixture_reset(w, 1090, f)
+                self.assertEqual(self.lib.fpl_fixture_submit(), UNSUPPORTED)
+                self.assertEqual(self.calls(), [])
+        self.assertNotEqual(self.lib.fpl_fixture_source_bytes(1928, 1090, 0), 0)   # 12 bit: same pitch
+
+    # ---- the row-pitch test switch (Bei 2026-11-10) ----------------------
+    K_PITCH, MISALIGNED = 20, 119
+
+    def test_the_pitch_switch_on_sends_an_unaligned_14_and_10_bit_width_to_the_engine(self):
+        for f, bits in ((1, 14), (3, 10)):
+            with self.subTest(f=f):
+                self.lib.fpl_fixture_reset(1928, 1090, f)
+                self.set(self.K_PITCH, 1)
+                self.assertEqual(self.lib.fpl_fixture_submit(), OK)
+                self.assertEqual(self.calls(), SUBMIT_ORDER)
+                self.assertEqual(self.request()[2], f)
+                self.assertEqual(self.request()[6], (1928 * 1090 * bits // 8 + 0x3FF) & ~0x3FF)
+                self.assertEqual(self.get(self.MISALIGNED), 1)
+
+    def test_the_pitch_switch_off_or_not_exactly_1_still_refuses(self):
+        for value in (0, 2, 0xFFFFFFFF):
+            with self.subTest(value=value):
+                self.lib.fpl_fixture_reset(1928, 1090, 1)
+                self.set(self.K_PITCH, value)
+                self.assertEqual(self.lib.fpl_fixture_submit(), UNSUPPORTED)
+                self.assertEqual(self.calls(), [])
+
+    def test_the_pitch_switch_changes_nothing_for_aligned_or_other_bad_shapes(self):
+        self.set(self.K_PITCH, 1)
+        self.assertEqual(self.lib.fpl_fixture_submit(), OK)        # FHD 12-bit
+        self.assertEqual(self.get(self.MISALIGNED), 0)
+        self.assertEqual(self.request()[6], (1936 * 1090 * 12 // 8 + 0x3FF) & ~0x3FF)
+        for w, h, f in ((1937, 1090, 1), (1928, 1091, 1), (1928, 1090, 4), (1928, 1090, 7)):
+            with self.subTest(w=w, h=h, f=f):
+                self.lib.fpl_fixture_reset(w, h, f)
+                self.set(self.K_PITCH, 1)
+                self.assertEqual(self.lib.fpl_fixture_submit(), UNSUPPORTED)
+                self.assertEqual(self.calls(), [])
+
     def test_shapes_the_engine_or_one_band_cannot_take_are_refused(self):
         for w, h, f in ((1937, 1090, 0), (1936, 1091, 0), (0, 2, 0), (1936, 1090, 4),
                         (1936, 1090, 7), (0x4008, 1090, 0), (0x4000, 0x4000, 2)):
@@ -463,6 +519,16 @@ class MutationTests(unittest.TestCase):
             '        fpl_tile_grid(in->width, in->height, 0, &j->grid[0], &j->grid[1]);'),
         'keeps a grid made for another force': ('        j->grid_for[2] != in->tile_force) {', '        0) {'),
         'tells the engine the default tile': ('    j->request[3] = tw;', '    j->request[3] = FPL_TILE_WIDTH;'),
+        'misreads 14-bit rows 8 mod 16': ('    if (((bits * width) >> 3) & 3u && pitch_any != 1u) return 0;',
+                                          '    (void)pitch_any;'),
+        'ignores the pitch switch': ('    if (((bits * width) >> 3) & 3u && pitch_any != 1u) return 0;',
+                                     '    if (((bits * width) >> 3) & 3u && pitch_any != 0xA5A5A5A5u) return 0;'),
+        'switch on for any nonzero': ('    if (((bits * width) >> 3) & 3u && pitch_any != 1u) return 0;',
+                                      '    if (((bits * width) >> 3) & 3u && !pitch_any) return 0;'),
+        'never marks a job misaligned': ("    j->misaligned = ((j->depth * in->width) >> 3) & 3u ? 1u : 0u;",
+                                         "    j->misaligned = 0;"),
+        'submit ignores the input switch': ('                                               in->pitch_any);',
+                                            '                                               0);'),
         'clears the flag on a timeout': (
             '    if (native == E_TMOUT) return FPL_BUSY;          /* still encoding */',
             '    if (native == E_TMOUT) { native_clr_flg(j->flag, 0); return FPL_BUSY; }'),

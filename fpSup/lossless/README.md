@@ -1,5 +1,18 @@
 # fpLossless — standalone lossless RAW compression
 
+## 2026-11-10: 14 bit (v0.3.2test, offline)
+
+`control.c` now admits 14-bit (Sensor Lab 1:1 true 14, Sigpro format 1) besides
+10/12, and both `control.c` and `codec_job.c` refuse a width whose packed row
+(`bits x width / 8`) is not a multiple of 4 bytes: the engine reads rows that far
+apart (C062FFF8), the raster pads them to 4 bytes (C0135D40) -- 10/14 bit with a
+width 8 mod 16. A real Sensor Lab 6048x4040 14-bit frame round-trips bit-exactly
+through the tiling, the LJ92 format and `header_tag.c` (LibRaw decode). On the
+camera 2026-11-10 (SD): 1936x1090 14-bit 63/63 frames compressed (~2.0:1) and
+6048x4040 14-bit 41/41 (~2.3:1), 0 faults; decoded frames match the uncompressed
+first frame. SSD and 6K at the highest frame rate not yet tested. Details, throughput and open questions: [LOSSLESS_14BIT.md](LOSSLESS_14BIT.md).
+The 10/12-bit wording below is the earlier state.
+
 ## 2026-10-12: independent lossless module with adaptive batch count
 
 The current builders produce an **offline development candidate**, including

@@ -100,7 +100,7 @@ class ControlTests(unittest.TestCase):
                 self.assertEqual(self.lib.fpl_can_enable(ct.byref(self.c)), expected)
 
     def test_every_target_predicate_is_required(self):
-        wrong = {'firmware': 501, 'cine': 0, 'compression': 7, 'bits': 14,
+        wrong = {'firmware': 501, 'cine': 0, 'compression': 7, 'bits': 16,
                  'width': 1937, 'height': 1089, 'fps_num': 0,
                  'fps_den': 0, 'media': 2}
         for field, value in wrong.items():
@@ -124,7 +124,7 @@ class ControlTests(unittest.TestCase):
                     self.assertEqual(bytes(self.s), before)
 
     def test_direct_entry_does_not_relax_format_or_explicit_interlock(self):
-        wrong = {'firmware': 501, 'cine': 0, 'compression': 7, 'bits': 14,
+        wrong = {'firmware': 501, 'cine': 0, 'compression': 7, 'bits': 16,
                  'width': 1937, 'height': 1089, 'fps_num': 0, 'fps_den': 0, 'media': 2}
         for field, value in wrong.items():
             c = eligible()
@@ -186,8 +186,9 @@ class ControlTests(unittest.TestCase):
     def test_requested_format_matrix_requires_its_own_readiness(self):
         # Synthetic candidate facts, NOT camera proof for these formats.
         shapes = ((1024, 576), (1920, 1080), (1936, 1090), (2048, 1152),
-                  (3856, 2170), (4096, 2160), (6064, 4042), (6144, 3456))
-        for bits in (10, 12):
+                  (3856, 2170), (4096, 2160), (6064, 4042), (6144, 3456),
+                  (6048, 4040), (5040, 2844), (3024, 2010))   # + Sensor Lab 1:1 14-bit
+        for bits in (10, 12, 14):
             for width, height in shapes:
                 for num, den in ((24000, 1001), (30000, 1001), (60000, 1001)):
                     with self.subTest(bits=bits, width=width, height=height,
@@ -211,8 +212,59 @@ class ControlTests(unittest.TestCase):
         c.height += 2  # 176 tiles, despite the raster still looking plausible
         self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), UNSUPPORTED)
 
+    def test_14bit_is_a_candidate_like_12(self):
+        # 2026-11-10: Sensor Lab 1:1 true 14 (Sigpro format 1). Still needs
+        # every readiness proof, exactly like 10 / 12.
+        for width, height in ((6048, 4040), (6048, 3412), (4112, 2170), (1936, 1090)):
+            with self.subTest(width=width, height=height):
+                c = Context(502, 1, 1, 14, width, height, 24000, 1001, 1, 127)
+                self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), OK)
+                c.ready = 126
+                self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), NOT_READY)
+                s = State()
+                self.lib.fpl_boot(ct.byref(s))
+                self.assertEqual(self.lib.fpl_begin_direct(ct.byref(s), ct.byref(c)), OK)
+                self.assertEqual(s.clip, LOSSLESS)
+
+    def test_rows_the_engine_would_misread_are_refused(self):
+        # The engine's row pitch is bits x width / 8, the raster's that
+        # rounded up to 4 bytes: at 10 / 14 bit a width 8 mod 16 differs.
+        for bits, width, expected in ((14, 1928, UNSUPPORTED), (14, 6056, UNSUPPORTED),
+                                      (10, 1928, UNSUPPORTED), (12, 1928, OK),
+                                      (14, 1936, OK), (10, 1936, OK), (14, 8, UNSUPPORTED),
+                                      (14, 16, OK)):
+            with self.subTest(bits=bits, width=width):
+                c = Context(502, 1, 1, bits, width, 1090, 24000, 1001, 1, 127)
+                self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), expected)
+
+    def test_the_pitch_test_switch_admits_unaligned_rows_and_nothing_else(self):
+        # Bei 2026-11-10: bit 30 of ready (card.c pitch_test == 1) is a test
+        # switch, not readiness. It skips only the row-pitch refusal.
+        sw = 1 << 30
+        for bits in (10, 14):
+            c = Context(502, 1, 1, bits, 1928, 1090, 24000, 1001, 1, 127 | sw)
+            self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), OK)
+            c.ready = 126 | sw
+            s = State(); self.lib.fpl_boot(ct.byref(s))
+            self.assertEqual(self.lib.fpl_begin_direct(ct.byref(s), ct.byref(c)), OK)
+            c.ready = 127
+            self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), UNSUPPORTED)
+        wrong = {'firmware': 501, 'cine': 0, 'compression': 7, 'bits': 16,
+                 'width': 1937, 'height': 1089, 'fps_num': 0, 'fps_den': 0, 'media': 2}
+        for field, value in wrong.items():
+            with self.subTest(field=field):
+                c = Context(502, 1, 1, 14, 1928, 1090, 24000, 1001, 1, 127 | sw)
+                setattr(c, field, value)
+                self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), UNSUPPORTED)
+        # not readiness: the switch alone readies nothing
+        c = Context(502, 1, 1, 14, 1928, 1090, 24000, 1001, 1, sw)
+        self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), NOT_READY)
+        c.ready = 127 | sw | (1 << 31)
+        s = State(); self.lib.fpl_boot(ct.byref(s))
+        self.assertEqual(self.lib.fpl_begin_direct(ct.byref(s), ct.byref(c)), FAULT)
+
     def test_unsupported_depths_do_not_inherit_codec_readiness(self):
-        for bits in (0, 8, 11, 14, 16, 32, 0xffffffff):
+        for bits in (0, 8, 11, 13, 16, 32, 0xffffffff):
             c = eligible()
             c.bits = bits
             self.assertEqual(self.lib.fpl_can_enable(ct.byref(c)), UNSUPPORTED)
@@ -223,8 +275,20 @@ class ControlTests(unittest.TestCase):
         for index, (before, after, context, expected) in enumerate((
             ('if ((c->ready & FPL_READY_ALL) != FPL_READY_ALL)', 'if (0)',
              Context(502, 1, 1, 10, 6064, 4042, 24000, 1001, 1, 0), NOT_READY),
-            ('(c->bits != 10 && c->bits != 12)', '0',
-             Context(502, 1, 1, 14, 1936, 1090, 24000, 1001, 1, 127), UNSUPPORTED),
+            ('(c->bits != 10 && c->bits != 12 && c->bits != 14)', '0',
+             Context(502, 1, 1, 16, 1936, 1090, 24000, 1001, 1, 127), UNSUPPORTED),
+            ('if (((c->width * c->bits) >> 3) & 3u && !(c->ready & FPL_TEST_PITCH))', 'if (0)',
+             Context(502, 1, 1, 14, 1928, 1090, 24000, 1001, 1, 127), UNSUPPORTED),
+            ('if (((c->width * c->bits) >> 3) & 3u && !(c->ready & FPL_TEST_PITCH))', 'if (0)',
+             Context(502, 1, 1, 10, 1928, 1090, 24000, 1001, 1, 127), UNSUPPORTED),
+            # the switch is ignored: switch-on must admit
+            ('if (((c->width * c->bits) >> 3) & 3u && !(c->ready & FPL_TEST_PITCH))',
+             'if (((c->width * c->bits) >> 3) & 3u)',
+             Context(502, 1, 1, 14, 1928, 1090, 24000, 1001, 1, 127 | (1 << 30)), OK),
+            # the switch also relaxes the depth check: 16-bit must stay refused
+            ('(c->bits != 10 && c->bits != 12 && c->bits != 14)',
+             '(c->bits != 10 && c->bits != 12 && c->bits != 14 && !(c->ready & FPL_TEST_PITCH))',
+             Context(502, 1, 1, 16, 1936, 1090, 24000, 1001, 1, 127 | (1 << 30)), UNSUPPORTED),
             ('if (columns * rows > FPL_TILE_MAX)', 'if (columns * rows > 0xffffffffu)',
              Context(502, 1, 1, 12, 0x4000, 0x4000, 24000, 1001, 1, 127), UNSUPPORTED),
         )):
@@ -295,7 +359,7 @@ class ControlTests(unittest.TestCase):
 
     def test_recheck_at_rec_after_switching_to_unsupported_depth(self):
         self.assertEqual(self.set_value(1), OK)
-        self.c.bits = 14
+        self.c.bits = 16
         before = bytes(self.s)
         self.assertEqual(self.begin(), UNSUPPORTED)
         self.assertEqual(bytes(self.s), before)

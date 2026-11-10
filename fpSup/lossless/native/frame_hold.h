@@ -131,6 +131,10 @@ struct fpl_frame_hold {
                                            every lane was busy */
     struct fpl_codec_input lane_in;
     uint32_t tile_force;                /* tile_grid.h; set before the take */
+    /* The row-pitch test switch for this take (card.c pitch_test, set before
+     * the take, 0 or 1) and the frames compressed with rows that were not
+     * 4-byte packed under it. */
+    uint32_t pitch_test, pitch_forced;
     /* Hold only frames whose header (frame+0x14C) is this many bytes: the
      * template that carries the take's prepared IFD (header_tag.h). The card
      * sets 0xFFFFFFFF at REC -- nothing held -- until the IFD is prepared.

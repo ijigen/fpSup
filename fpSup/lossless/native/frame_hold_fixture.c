@@ -59,18 +59,29 @@ static void wr_quiet(uintptr_t a, uint32_t v) { uint32_t *s = slot(a, 0); if (s)
 /* 520x368: like FHD, the engine is told 512 B MORE than the native frame
  * allocation holds (1 KiB rounding against 512 B rounding). */
 static uint32_t width = 520, height = 368, format = 0;
-static uint32_t told(void) { return fpl_codec_source_bytes(width, height, format); }
+static uint32_t fixture_pitch_test;   /* = hold.pitch_test after reset */
+static uint32_t told(void) { return fpl_codec_source_bytes_test(width, height, format, fixture_pitch_test); }
 /* the take's header bytes (frame+0x14C): 0x13400 stock, longer with the
  * card's tag (header_tag.h); the file starts that far before the raster */
 static uint32_t fixture_head = 0x13400u;
 #define FILE_AT (0x15400u - fixture_head)
 void fpl_fixture_head(uint32_t head) { fixture_head = head; }
 static uintptr_t frame_at(uint32_t id) { return FRAMES + id * 0x2000u; }
-/* C0135D40 for 12-bit */
-static uint32_t raster_bytes(void) {
-    uint32_t row = width * 3 / 2;
-    return (height - 1) * ((row + 3) & ~3u) + ((((width + 11) / 12 * 12) * 3 / 2 + 3) & ~3u);
+/* C0135D40 for Sigpro formats 0 (12), 1 (14) and 3 (10) bit */
+static uint32_t row_of(uint32_t w) {
+    return format == 1 ? w * 7 / 4 : format == 3 ? w * 5 / 4 : w * 3 / 2;
 }
+static uint32_t raster_bytes(void) {
+    return (height - 1) * ((row_of(width) + 3) & ~3u) + ((row_of((width + 11) / 12 * 12) + 3) & ~3u);
+}
+/* The geometry of the NEXT reset only (2026-11-10, 14 bit); then 520x368x12. */
+static uint32_t shape_w = 520, shape_h = 368, shape_f = 0;
+void fpl_fixture_shape(uint32_t w, uint32_t h, uint32_t f) { shape_w = w; shape_h = h; shape_f = f; }
+/* The row-pitch test switch for the NEXT reset only: bit 0 -> control's
+ * ready bit (FPL_TEST_PITCH), bit 1 -> the hold's pitch_test (card.c sets
+ * both from one word; separate here to test each guard alone). */
+static uint32_t shape_pitch = 0;
+void fpl_fixture_pitch(uint32_t v) { shape_pitch = v; }
 /* What C037A990 asks the allocator for: reserve + align512(raster). */
 static uint32_t native_allocation(void) {
     return 0x15400u + ((raster_bytes() + 0x1ffu) & ~0x1ffu);
@@ -274,6 +285,7 @@ static uintptr_t allocate(uint32_t id) {
 
 
 uint32_t fpl_fixture_reset(uint32_t latency_polls, uint32_t payload, uint32_t lossless) {
+    uint32_t pitch;
     struct fpl_context c;
     struct fpl_hold_workspace w;
     memset(mem, 0, sizeof mem);
@@ -293,19 +305,22 @@ uint32_t fpl_fixture_reset(uint32_t latency_polls, uint32_t payload, uint32_t lo
     writer_count = 1;
     mode = MODE_OK; latency = latency_polls; left = running = stuck = 0;
     payload_bytes = payload; open_ret = close_ret = 0; starts = closes = 0;
-    width = 520; height = 368; format = 0;
+    width = shape_w; height = shape_h; format = shape_f;
+    shape_w = 520; shape_h = 368; shape_f = 0;
+    pitch = shape_pitch; shape_pitch = 0;
+    fixture_pitch_test = 0;
     for (uint32_t n = 0; n < 18; ++n) descriptor[n] = 0x2000u + n;
     descriptor[0] = width; descriptor[1] = height; descriptor[8] = format;
     if (fpl_producer_facts_init(&facts) != FPL_OK) return 90;
     facts.seen.width = width; facts.seen.height = height; facts.seen.format = format;
-    facts.seen.bits = 12; facts.seen.raster = raster_bytes();
+    facts.seen.bits = format == 1 ? 14 : format == 3 ? 10 : 12; facts.seen.raster = raster_bytes();
     memcpy(facts.seen.descriptor, descriptor, sizeof descriptor);
     fpl_boot(&control);
     if (fpl_pipeline_init(&pipeline, 7) != FPL_OK) return 91;
     memset(&c, 0, sizeof c);
-    c.firmware = 502; c.cine = 1; c.compression = 1; c.bits = 12;
+    c.firmware = 502; c.cine = 1; c.compression = 1; c.bits = facts.seen.bits;
     c.width = width; c.height = height; c.fps_num = 24000; c.fps_den = 1001;
-    c.media = 1; c.ready = 0x7E;
+    c.media = 1; c.ready = 0x7E | (pitch & 1u ? FPL_TEST_PITCH : 0u);
     if (lossless && fpl_begin_direct(&control, &c) != FPL_OK) return 92;
     if (lossless && fpl_pipeline_begin(&pipeline, &control) != FPL_OK) return 93;
     w.output = no_output ? 0 : OUTPUT; w.table = TABLE;
@@ -313,7 +328,12 @@ uint32_t fpl_fixture_reset(uint32_t latency_polls, uint32_t payload, uint32_t lo
     w.spare.handle = use_spare ? EXTRA + (EXTRAS - 1) * 0x60000u : 0;
     w.spare.capacity = use_spare ? native_allocation() + 1024u : 0;
     w.spare.allocator_class = use_spare ? 10u : 0;
-    return fpl_hold_init(&hold, &pipeline, &facts, &w);
+    {
+        uint32_t r = fpl_hold_init(&hold, &pipeline, &facts, &w);
+        hold.pitch_test = (pitch >> 1) & 1u;
+        fixture_pitch_test = hold.pitch_test;
+        return r;
+    }
 }
 void fpl_fixture_mode(uint32_t m) { mode = m; }
 void fpl_fixture_open_fails(uint32_t v) { open_ret = v; }
@@ -486,6 +506,7 @@ uint32_t fpl_fixture_get(uint32_t field) {
     case 34: return dmas;
     case 35: return dma_bad;
     case 36: return hold.dma_failed;
+    case 37: return hold.pitch_forced;
     default: return 0xFFFFFFFFu;
     }
 }
@@ -510,7 +531,7 @@ void fpl_fixture_header(uint32_t id) {
     for (uint32_t i = 0; i < n; ++i) {
         uint8_t *e = p + 2 + 12 * i;
         uint32_t value = tags[i] == 256 ? width : tags[i] == 257 ? height :
-                         tags[i] == 258 ? 12 : tags[i] == 259 ? 1 :
+                         tags[i] == 258 ? facts.seen.bits : tags[i] == 259 ? 1 :
                          tags[i] == 273 ? fixture_head : tags[i] == 279 ? raster_bytes() :
                          tags[i] == FPL_HEADER_TAG ? FIXTURE_TAG_AT : 1;
         uint32_t count = tags[i] == FPL_HEADER_TAG ? FPL_HEADER_TAG_MAX : 1;

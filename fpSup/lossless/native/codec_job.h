@@ -55,6 +55,8 @@ struct fpl_codec_job {
      * frame (20261015-engine). */
     uint32_t keep_open;
     uint32_t reused;                    /* jobs started on a kept-open engine */
+    uint32_t misaligned;                /* this job's rows are not 4-byte packed
+                                           (only with pitch_any, 2026-11-10) */
 #ifdef FPL_DIAG_HOOK_TIME
     /* diagnostic only, sums in us: submit {F_INIT, open, band zero, submit,
      * reset+start}; finish {eoi+tiles, total, pad, table, close} */
@@ -74,6 +76,10 @@ struct fpl_codec_input {
     uintptr_t source, destination, table;
     uint32_t source_capacity, destination_capacity, table_capacity;
     uint32_t tile_force;                     /* tile_grid.h; 0 = the default */
+    /* 1: the row-pitch test switch -- do not refuse a 10/14-bit width whose
+     * packed row is not a multiple of 4 bytes (the engine then reads the
+     * raster's row padding as pixels). 0, the default: refuse. */
+    uint32_t pitch_any;
 };
 
 #if defined(FPL_CODEC_JOB_HOST_TEST)
@@ -101,6 +107,9 @@ uint32_t fpl_codec_job_init(struct fpl_codec_job *);
 /* The bytes the engine will be told it may read, for a caller that wants to
  * check its buffer before submitting. 0 means the shape is refused. */
 uint32_t fpl_codec_source_bytes(uint32_t width, uint32_t height, uint32_t format);
+/* The same; pitch_any == 1 skips only the row-pitch refusal (the test switch). */
+uint32_t fpl_codec_source_bytes_test(uint32_t width, uint32_t height, uint32_t format,
+                                     uint32_t pitch_any);
 uint32_t fpl_codec_job_submit(struct fpl_codec_job *, const struct fpl_codec_input *);
 /* FPL_BUSY while the engine runs; FPL_OK once finished and fixed up (total and
  * padded are then the payload); FPL_UNSUPPORTED when the engine refused the

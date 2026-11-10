@@ -186,10 +186,20 @@ class RecWorkspaceTests(unittest.TestCase):
         self.assertEqual(self.lib.fpl_fixture_reinit(), INVALID)
         self.assertEqual((self.read(1), self.read(3), self.read(2)), (1, 1, 0))
 
-    def test_14bit_budget_does_not_bypass_control_rejection(self):
-        self.lib.fpl_fixture_reset(6064, 4042, 14, 0)
-        self.assertEqual(self.prepare(), 0)
-        self.assertEqual((self.read(0), self.read(1), self.read(7)), (UNSUPPORTED, 0, 0))
+    def test_14bit_sensor_lab_6k_is_admitted_with_a_packed14_budget(self):
+        # 2026-11-10: control admits 14 (Sensor Lab 1:1 true 14, 6048x4040).
+        self.lib.fpl_fixture_reset(6048, 4040, 14, 0)
+        self.assertEqual(self.prepare(), 1)
+        self.assertEqual((self.read(0), self.read(1), self.read(7), self.read(8)), (OK, 1, 1, 2))
+        self.assertEqual(self.read(9), (6048 * 4040 * 14 // 8 + 1023) & ~1023)
+        self.assertEqual(self.read(4) % 1024, 0)
+
+    def test_14bit_rows_the_engine_would_misread_and_16bit_are_not_admitted(self):
+        for w, h, b in ((6056, 4040, 14), (6048, 4040, 16)):
+            with self.subTest(w=w, b=b):
+                self.lib.fpl_fixture_reset(w, h, b, 0)
+                self.assertEqual(self.prepare(), 0)
+                self.assertEqual((self.read(0), self.read(1), self.read(7)), (UNSUPPORTED, 0, 0))
 
     def test_missing_native_prepare_mutation_is_detected(self):
         self.mutant.fpl_fixture_reset(1936, 1090, 12, 0)

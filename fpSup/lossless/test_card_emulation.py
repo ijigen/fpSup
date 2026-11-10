@@ -342,6 +342,23 @@ class CardEmulationTests(unittest.TestCase):
         self.assertEqual(self.field(cam, 'rec_menu_off'), 1)
         self.assertEqual(cam.irq_depth, 0)
 
+    def test_the_pitch_test_switch_reaches_the_readiness_the_rec_path_reads(self):
+        # Bei 2026-11-10: the host-written word pitch_test (0 at boot) adds
+        # FPL_TEST_PITCH (bit 30) to the readiness producer_facts hands to
+        # control.c -- the card's own compiled function, called as the REC
+        # path calls it: readiness(readiness_context, reserved).
+        cam = self.armed()
+        state = cam.word(self.cave_block(cam) + 36)
+        self.assertEqual(self.field(cam, 'pitch_test'), 0, 'not zero at boot')
+        self.assertEqual(self.field(cam, 'rec.facts.readiness_context'), state)
+        fn = self.field(cam, 'rec.facts.readiness')
+        self.assertTrue(fn & 1, 'Thumb')
+        got = {}
+        for value in (0, 1, 2, 0xFFFFFFFF, 0):
+            self.put(cam, state + LAYOUT['pitch_test'], value)
+            got[value] = cam.call(fn, r0=state, r1=0, sp=T.STACK - 0x2000)[0]
+        self.assertEqual(got, {0: 0x7E, 1: 0x7E | (1 << 30), 2: 0x7E, 0xFFFFFFFF: 0x7E})
+
     def test_rec_never_touches_the_bulk_size(self):
         """2026-10-14 (user): the 64 MB bulk size is no longer LOSS's to set --
         the rec-core writer owns the file layer. REC leaves the word as found."""
@@ -680,6 +697,42 @@ class CardEmulationTests(unittest.TestCase):
         self.notify(cam, 3)
         self.assertEqual(bytes(cam.mu.mem_read(self.TEMPLATE, head)), live)
         self.assertEqual([o for o in cam.originals if o[0] == 'ORIG_tag_add'], [])
+
+    def test_a_14bit_sensor_lab_take_gets_its_ifd_with_bits_per_sample_14(self):
+        # 2026-11-10: the template of a Sensor Lab 1:1 true-14 take (6048x4040,
+        # 96 tiles of 512x512), through the card's compiled observer.
+        sys.path.insert(0, str(HERE / 'native'))
+        import test_header_tag as H
+        import test_lossless14_roundtrip as R
+        cam = self.armed()
+        stock = R.FRAME14.read_bytes()
+        size = H.tag_bytes(96)
+        tmpl, head = H.make_template(stock, size)
+        self.assertLessEqual(head, 0x15400)
+        cam.mu.mem_write(self.TEMPLATE, bytes(tmpl))
+        self.put(cam, self.TEMPLATE_PTR, self.TEMPLATE)
+        self.put(cam, self.TEMPLATE_LEN, head)
+        self.set_field(cam, 'tag_want', 1)
+        self.set_field(cam, 'tag_bytes', size)
+        self.set_field(cam, 'hold.require_head', 0xFFFFFFFF)
+        self.notify(cam, 0)
+        self.notify(cam, 2, 1)
+        self.assertEqual(self.field(cam, 'tag_prepare_result'), 0)
+        self.assertEqual((self.field(cam, 'tag_prepared'), self.field(cam, 'tag_head')), (1, head))
+        self.assertEqual(self.field(cam, 'hold.require_head'), head)
+        live = bytes(cam.mu.mem_read(self.TEMPLATE, head))
+        value_at = struct.unpack_from('<I', live, H.entry_at(live, 0x13400, 0xFD4C) + 8)[0]
+        ifd_at = (value_at + 3) & ~3
+        tags = {}
+        for e in H.entries_of(live, ifd_at):
+            tag, kind, n, v = struct.unpack('<HHII', e)
+            tags[tag] = v & 0xFFFF if kind == 3 else v
+        self.assertEqual((tags[256], tags[257], tags[258], tags[259]), (6048, 4040, 14, 7))
+        for t in (322, 323, 324, 325):
+            self.assertIn(t, tags)
+        for t in (273, 278, 279):
+            self.assertNotIn(t, tags)
+        self.assertEqual(live[:value_at], bytes(tmpl[:value_at]), 'wrote outside the tag')
 
     def test_a_take_it_did_not_admit_is_not_touched(self):
         cam = self.armed()

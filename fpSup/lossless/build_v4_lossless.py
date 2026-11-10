@@ -28,7 +28,7 @@ import build_card as C                                   # noqa: E402
 import build_v4 as B4                                    # noqa: E402
 import names_v4 as N                                     # noqa: E402
 
-NAME = N.file_name('LOSS')                               # Lossless_v0.3.0.BIN (names_v4)
+NAME = N.file_name('LOSS')                               # Lossless_v0.3.2test.BIN (names_v4)
 SUP_ID = L3.SUP_ID
 VERSION = 1
 DISPLAY = N.display('LOSS')
@@ -66,6 +66,23 @@ def main():
     with tempfile.TemporaryDirectory(prefix='fpl-v4-') as t:
         data, facts = sup_file(pathlib.Path(t))
     (out / NAME).write_bytes(data)
+    lay = facts['layout']
+    record = ('cave block from svc->cave_alloc (scan 0xC072E064..0xC072EFB4 for the word '
+              '"FLPC" 0x43504C46): +32 "FLPC", +36 card state, +40 resident base, +44 blob length')
+    (out / 'layout.json').write_text(json.dumps({
+        'record': record, 'state_bytes': facts['state_bytes'], 'fields': lay}, indent=1) + '\n')
+    # 2026-11-10 (Bei): the row-pitch test switch, a host-written word of the state
+    switch = {
+        'what': 'row-pitch test switch: 1 = compress 10/14-bit widths whose packed row is not a '
+                'multiple of 4 bytes (e.g. 1928) anyway; 0 = refuse them (the release behaviour). '
+                'Zero at every boot (state is zeroed by the launcher), never saved. Set it before REC.',
+        'find_state': record,
+        'pitch_test': f"state + 0x{lay['pitch_test']:X}",
+        'count': f"state + 0x{lay['hold.pitch_forced']:X} (lane A) + state + 0x{lay['hold_b.pitch_forced']:X} "
+                 f"(lane B): frames of the current/last take compressed with unaligned rows; zeroed at REC",
+        'latched': f"state + 0x{lay['hold.pitch_test']:X}: what the last take used",
+        'offsets': {k: lay[k] for k in ('pitch_test', 'hold.pitch_test', 'hold.pitch_forced',
+                                        'hold_b.pitch_forced')}}
     sources = [pathlib.Path(__file__), HERE / 'build_v3_lossless.py', HERE / 'build_card.py',
                HERE / 'native' / 'card.S', HERE / 'native' / 'menu_row4.c', HERE / 'native' / 'menu_row4.h',
                LOADER_V4 / 'sloader4.h'] + \
@@ -74,6 +91,7 @@ def main():
         'product': 'fpLossless, Loader v4 sup', 'file': NAME, 'sup_id': SUP_ID, 'version': VERSION,
         'blob': {k: v for k, v in facts.items() if k != 'layout'},
         'sha256': hashlib.sha256(data).hexdigest(),
+        'pitch_test_switch': switch,
         'sources': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                     for p in sorted(set(sources))},
         'written_to_card': False, 'camera_tested': False}, indent=1) + '\n')

@@ -90,16 +90,28 @@ uint32_t fpl_codec_job_init(struct fpl_codec_job *j) {
 
 /* C062F478 with its band rule, for one band: the engine is told
  * align_kib(bits * width * height / 8). */
-uint32_t fpl_codec_source_bytes(uint32_t width, uint32_t height, uint32_t format) {
+static uint32_t source_bytes(uint32_t width, uint32_t height, uint32_t format,
+                             uint32_t pitch_any) {
     uint32_t bits = depth_bits(format), row_band;
     if (!bits || width < 8 || width > 0x4000 || (width & 7u) ||
         height < 2 || height > 0x4000 || (height & 1u))
         return 0;
+    /* C062FFF8: the engine's row pitch is bits x width / 8 (300D006C), the
+     * raster's (C0135D40) that rounded up to 4 bytes. A frame where they
+     * differ (10 or 14 bit, width 8 mod 16) is refused, not misread. */
+    if (((bits * width) >> 3) & 3u && pitch_any != 1u) return 0;
     row_band = bits * width * FPL_TILE_HEIGHT / 8u;        /* one tile row */
     if (row_band > BAND_LIMIT) return 0;
     /* C062F478: rows per band = 64 MiB / row_band. One band only. */
     if ((uint64_t)row_band * ceil_div(height, FPL_TILE_HEIGHT) > BAND_LIMIT) return 0;
     return align_kib((uint32_t)(((uint64_t)bits * width * height) >> 3));
+}
+uint32_t fpl_codec_source_bytes(uint32_t width, uint32_t height, uint32_t format) {
+    return source_bytes(width, height, format, 0);
+}
+uint32_t fpl_codec_source_bytes_test(uint32_t width, uint32_t height, uint32_t format,
+                                     uint32_t pitch_any) {
+    return source_bytes(width, height, format, pitch_any);
 }
 
 static uint32_t fail(struct fpl_codec_job *j, uint32_t native) {
@@ -129,7 +141,8 @@ uint32_t fpl_codec_job_submit(struct fpl_codec_job *j, const struct fpl_codec_in
     if (!j || j->magic != FPL_CODEC_JOB_MAGIC || !in) return FPL_INVALID;
     if (j->phase == FPL_CODEC_RUNNING) return FPL_BUSY;
     if (j->phase == FPL_CODEC_FAILED) return FPL_FAULT;
-    source_bytes = fpl_codec_source_bytes(in->width, in->height, in->format);
+    source_bytes = fpl_codec_source_bytes_test(in->width, in->height, in->format,
+                                               in->pitch_any);
     if (!source_bytes) return refuse(j, FPL_UNSUPPORTED);
     if (!j->grid[0] || j->grid_for[0] != in->width || j->grid_for[1] != in->height ||
         j->grid_for[2] != in->tile_force) {
@@ -233,6 +246,7 @@ uint32_t fpl_codec_job_submit(struct fpl_codec_job *j, const struct fpl_codec_in
     j->height = in->height;
     j->format = in->format;
     j->depth = depth_bits(in->format);
+    j->misaligned = ((j->depth * in->width) >> 3) & 3u ? 1u : 0u;
     j->tiles = tiles;
     j->tile_width = tw;
     j->tile_height = th;

@@ -265,7 +265,8 @@ def worker_suite(text, mutant):
         def test_format_guards_and_candidate_formats(self):
             h = ArmControl(text)
             rejected = (dict(firmware=501), dict(cine=0), dict(compression=0),
-                        dict(bits=8), dict(bits=14), dict(width=0), dict(width=1937),
+                        dict(bits=8), dict(bits=16), dict(bits=14, width=1928),
+                        dict(bits=10, width=1928), dict(width=0), dict(width=1937),
                         dict(width=0x4008), dict(height=0), dict(height=1091),
                         dict(height=0x4002), dict(width=0x4000, height=0x4000),
                         dict(fps_num=0), dict(fps_den=0), dict(media=0))
@@ -273,8 +274,18 @@ def worker_suite(text, mutant):
                 with self.subTest(changes=changes):
                     h.context(CAPTURE, **changes)
                     self.unchanged_rejection(h, UNSUPPORTED)
+            # the row-pitch test switch (ready bit 30, Bei 2026-11-10): only that refusal
+            for bits in (10, 14):
+                with self.subTest(pitch_switch=bits):
+                    h.context(CAPTURE | (1 << 30), width=1928, bits=bits)
+                    self.assertEqual(h.call('begin_direct', STATE, CONTEXT), OK)
+                    self.assertEqual(h.call('end', STATE, 1), OK)
+            for changes in (dict(bits=16), dict(width=1937), dict(media=0)):
+                with self.subTest(pitch_switch_other=changes):
+                    h.context(CAPTURE | (1 << 30), **changes)
+                    self.unchanged_rejection(h, UNSUPPORTED)
             for width, height in ((1280, 720), (1936, 1090), (3840, 2160), (6000, 4000)):
-                for bits in (10, 12):
+                for bits in (10, 12, 14):
                     with self.subTest(width=width, height=height, bits=bits):
                         h.context(CAPTURE, width=width, height=height, bits=bits)
                         self.assertEqual(h.call('begin_direct', STATE, CONTEXT), OK)

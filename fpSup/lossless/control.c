@@ -23,16 +23,25 @@ static uint32_t capture_eligible(const struct fpl_context *c) {
     uint32_t columns, rows;
     if (!c) return FPL_INVALID;
     if (c->ready & FPL_BLOCK_REC) return FPL_FAULT;
-    /* Actual 10/12-bit CinemaDNG geometry, independent of a 1K/2K/4K/6K
+    /* Actual 10/12/14-bit CinemaDNG geometry, independent of a 1K/2K/4K/6K
      * menu label. The request ABI requires width divisible by 8 and even
      * height, both <= 0x4000. This is only candidate eligibility: the
      * adapter still has to prove packing, complete source coverage, bounded
-     * output, writer/metadata/lifetime and rate support for this tuple. */
+     * output, writer/metadata/lifetime and rate support for this tuple.
+     * 14 (2026-11-10, Sensor Lab 1:1 true 14, Sigpro format 1): the stock
+     * stills path feeds the same format-1 raster to the same engine. */
     if (c->firmware != 502 || c->cine != 1 || c->compression != 1 ||
-        (c->bits != 10 && c->bits != 12) ||
+        (c->bits != 10 && c->bits != 12 && c->bits != 14) ||
         c->width < 8 || c->width > 0x4000 || (c->width & 7u) ||
         c->height < 2 || c->height > 0x4000 || (c->height & 1u) ||
         !c->fps_num || !c->fps_den || c->media != 1)
+        return FPL_UNSUPPORTED;
+    /* The engine reads rows bits x width / 8 bytes apart (C062FFF8 sets
+     * 300D006C from bits x width); the raster's rows are that rounded up to
+     * 4 bytes (C0135D40). Only where the two agree are the pixels where the
+     * engine reads them: always at 12 bit, at 10 and 14 only for widths
+     * that are multiples of 16. */
+    if (((c->width * c->bits) >> 3) & 3u && !(c->ready & FPL_TEST_PITCH))
         return FPL_UNSUPPORTED;
     columns = (c->width + FPL_TILE_WIDTH - 1u) / FPL_TILE_WIDTH;
     rows = (c->height + FPL_TILE_HEIGHT - 1u) / FPL_TILE_HEIGHT;
@@ -41,11 +50,18 @@ static uint32_t capture_eligible(const struct fpl_context *c) {
     return FPL_OK;
 }
 
-uint32_t fpl_can_enable(const struct fpl_context *c) {
+/* Always inlined, so the menu entries below need no link-time relocation
+ * (the strict ARM extractor of tests/test_direct_control_arm.py). */
+__attribute__((always_inline))
+static inline uint32_t can_enable(const struct fpl_context *c) {
     uint32_t result = capture_eligible(c);
     if (result != FPL_OK) return result;
     if ((c->ready & FPL_READY_ALL) != FPL_READY_ALL) return FPL_NOT_READY;
     return FPL_OK;
+}
+
+uint32_t fpl_can_enable(const struct fpl_context *c) {
+    return can_enable(c);
 }
 
 uint32_t fpl_menu_value(const struct fpl_state *s) {
@@ -59,7 +75,7 @@ uint32_t fpl_set(struct fpl_state *s, uint32_t on,
     if (s->clip != FPL_IDLE) return FPL_BUSY;
     if (on) {
         if (s->fault) return FPL_FAULT;
-        result = fpl_can_enable(c);
+        result = can_enable(c);
         if (result) return result;
     }
     s->requested = on;
@@ -73,7 +89,7 @@ uint32_t fpl_begin(struct fpl_state *s, const struct fpl_context *c) {
     if (c && (c->ready & FPL_BLOCK_REC)) return FPL_FAULT;
     if (s->requested) {
         if (s->fault) return FPL_FAULT;
-        result = fpl_can_enable(c);
+        result = can_enable(c);
         if (result) return result; /* refuse unready ON; not an implicit OFF */
     }
     s->frames = 0;

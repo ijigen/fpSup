@@ -22,6 +22,11 @@
 /* A binding/port with uncertain visible state or in-flight teardown denies
  * ALL recording, including RAW with requested=0. This is not a readiness proof. */
 #define FPL_BLOCK_REC (1u << 31)
+/* NOT a readiness proof: the host-set row-pitch test switch (card.c
+ * pitch_test, 2026-11-10). With it, a 10/14-bit width whose packed row is
+ * not a multiple of 4 bytes is admitted anyway, to see on the camera what
+ * the engine makes of it. Every other format check still applies. */
+#define FPL_TEST_PITCH (1u << 30)
 
 enum fpl_result {
     FPL_OK = 0, FPL_INVALID = 1, FPL_BUSY = 2,

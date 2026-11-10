@@ -80,7 +80,8 @@ def build(directory, replace=None, name='hold.dylib'):
                            ('kick', 1, True), ('reenter', 1, False),
                            ('dma_fails', 1, False), ('pipeline_phase', 1, False),
                            ('task_in_sleep', 1, False), ('head', 1, False),
-                           ('require_head', 1, False)):
+                           ('require_head', 1, False), ('shape', 3, False),
+                           ('pitch', 1, False)):
         f = getattr(lib, 'fpl_fixture_' + fn)
         f.argtypes = [ct.c_uint32] * count
         f.restype = ct.c_uint32 if ret else None
@@ -345,6 +346,100 @@ class HoldTests(unittest.TestCase):
                 self.lib.fpl_fixture_arrive(1)
                 self.assertEqual(self.ids(), [1])
                 self.assertEqual(self.get(STARTS), 0)
+
+    # ---- 14 bit (2026-11-10: Sensor Lab 1:1 true 14, Sigpro format 1) ----
+    def shape14(self, latency=0):
+        self.lib.fpl_fixture_shape(512, 320, 1)
+        self.reset(latency=latency)
+
+    def test_a_14bit_take_tells_the_engine_the_packed_14_raster(self):
+        self.shape14()
+        self.assertEqual(self.get(RASTER), 319 * 896 + 904)   # C0135D40: the last row to 516 px
+        self.assertEqual(self.get(TOLD), (512 * 320 * 14 // 8 + 0x3FF) & ~0x3FF)
+        self.frames(1)
+        self.assertEqual(self.lib.fpl_fixture_arrive(1), 1)
+        self.assertEqual(self.get(STARTED_SOURCE), 0x100000 + 1 * 0x60000 + 0x15400)
+        self.assertGreaterEqual(self.get(SOURCE_CAPACITY), self.get(TOLD))
+
+    def test_a_14bit_take_compresses_every_frame_into_its_own_file(self):
+        for latency in (0, 2):
+            with self.subTest(latency=latency):
+                self.shape14(latency)
+                self.frames(1, 2, 3, 4, 5)
+                for i in (1, 2, 3, 4, 5):
+                    self.lib.fpl_fixture_arrive(i)
+                self.lib.fpl_fixture_stop()
+                self.assertEqual(sorted(self.ids()), [1, 2, 3, 4, 5])
+                self.assert_same_frame()
+                self.assertGreater(self.get(COMPRESSED), 0)
+                self.assertEqual(self.get(PASSED) + self.get(HELD_N), 5)
+                self.assertEqual(self.get(OOB), 0)
+                if not latency:
+                    self.assertEqual(self.get(COMPRESSED), 5)
+
+    def test_a_12bit_frame_in_a_14bit_take_is_not_held(self):
+        # the per-frame format word (descriptor +0x20, frame +0x30): 1 -> 0
+        self.shape14()
+        self.frames(1)
+        self.lib.fpl_fixture_frame_field(1, 0x30, 0)
+        self.lib.fpl_fixture_arrive(1)
+        self.assertEqual(self.ids(), [1])
+        self.assertEqual(self.get(STARTS), 0)
+
+    # ---- the row-pitch test switch (Bei 2026-11-10) ----------------------
+    PITCH_FORCED = 37
+
+    def test_the_pitch_switch_compresses_an_unaligned_14bit_take_and_counts_it(self):
+        self.lib.fpl_fixture_shape(520, 320, 1)              # 520 x 14 / 8 = 910: not 4-aligned
+        self.lib.fpl_fixture_pitch(3)                        # control and hold
+        self.reset()
+        self.assertEqual(self.get(TOLD), (520 * 320 * 14 // 8 + 0x3FF) & ~0x3FF)
+        self.frames(1, 2, 3)
+        for i in (1, 2, 3):
+            self.lib.fpl_fixture_arrive(i)
+        self.lib.fpl_fixture_stop()
+        self.assertEqual(self.ids(), [1, 2, 3])
+        self.assert_same_frame()
+        self.assertEqual(self.get(COMPRESSED), 3)
+        self.assertEqual(self.get(self.PITCH_FORCED), 3)
+        self.assertEqual(self.get(OOB), 0)
+
+    def test_without_the_switch_an_unaligned_take_is_not_admitted(self):
+        self.lib.fpl_fixture_shape(520, 320, 1)
+        self.lib.fpl_fixture_use_spare(self.SPARE)
+        self.assertEqual(self.lib.fpl_fixture_reset(0, SMALL_PAYLOAD, 1), 92)   # control refused
+        self.reset()                                          # and the switch did not linger
+        self.assertEqual(self.get(RASTER), (368 - 1) * 780 + 792)
+
+    def test_the_holds_own_guard_refuses_when_only_control_was_switched(self):
+        self.lib.fpl_fixture_shape(520, 320, 1)
+        self.lib.fpl_fixture_pitch(1)                        # control only
+        self.reset()
+        self.assertEqual(self.get(TOLD), 0)
+        self.frames(1)
+        self.lib.fpl_fixture_arrive(1)
+        # refused by the hold itself (not eligible: no told length), not only
+        # later by codec_job's own guard
+        self.assertEqual((self.get(HELD_N), self.get(PASSED), self.get(NOT_ELIGIBLE)), (0, 1, 1))
+        self.lib.fpl_fixture_stop()
+        self.assertEqual(self.ids(), [1])
+        self.assertEqual((self.get(STARTS), self.get(COMPRESSED), self.get(self.PITCH_FORCED)), (0, 0, 0))
+
+    def test_an_aligned_take_with_the_switch_counts_nothing(self):
+        self.lib.fpl_fixture_shape(512, 320, 1)
+        self.lib.fpl_fixture_pitch(3)
+        self.reset()
+        self.frames(1, 2)
+        for i in (1, 2):
+            self.lib.fpl_fixture_arrive(i)
+        self.lib.fpl_fixture_stop()
+        self.assertEqual(self.get(COMPRESSED), 2)
+        self.assertEqual(self.get(self.PITCH_FORCED), 0)
+
+    def test_the_14bit_shape_is_for_one_reset_only(self):
+        self.shape14()
+        self.reset()
+        self.assertEqual(self.get(RASTER), (368 - 1) * 780 + 792)   # 520x368 12-bit again
 
     def test_other_kinds_arguments_and_unknown_ids_pass_straight_through(self):
         self.frames(1, 2)
@@ -734,6 +829,16 @@ class HoldMutationTests(unittest.TestCase):
     MUTATIONS = {
         'the promise keeps the default grid': (
             '        c->tile_width = h->job.tile_width;', '        c->tile_width = FPL_TILE_WIDTH;'),
+        'the pitch switch never reaches the engine': (
+            '    in->pitch_any = h->pitch_test;', '    in->pitch_any = 0;'),
+        'the hold ignores its pitch switch': (
+            '                                       h->facts->seen.format, h->pitch_test);',
+            '                                       h->facts->seen.format, 0);'),
+        'the hold ignores its pitch switch being off': (
+            '                                       h->facts->seen.format, h->pitch_test);',
+            '                                       h->facts->seen.format, 1);'),
+        'unaligned frames are never counted': (
+            '        if (h->job.misaligned) saturate(&h->pitch_forced);', ''),
         'the force never reaches the engine': (
             '    in->tile_force = h->tile_force;', '    in->tile_force = 0;'),
         'services after the new frame instead of before': (

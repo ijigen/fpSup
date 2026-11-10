@@ -158,7 +158,7 @@ int binding_case(uint32_t number) {
         CHECK(fpl_binding_notify(&f.binding,&f.unknown,f.descriptor) == FPL_INVALID);
         CHECK(fpl_binding_notify(&f.binding,&f.first,0x9999) == FPL_INVALID); break;
     case 16: /* live context, not the snapshot from attach */
-        CHECK(attach(&f) == FPL_OK); f.context.bits = 14;
+        CHECK(attach(&f) == FPL_OK); f.context.bits = 16;   /* 14 is a candidate since 2026-11-10 */
         CHECK(change(&f,1) == FPL_UNSUPPORTED && f.value == 0);
         CHECK(f.shown.on_enabled == 0); break;
     case 17: /* STILL visibility never clears the retained preference */
