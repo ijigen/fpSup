@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sensor Lab-IMX410 — how to use it | fpSup</title>
+<meta name="description" content="Choose the SIGMA fp's sensor crop, resolution, frame rate and readout recipe from the Quick Set.">
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<div class="langbar"><div class="lang" role="group" aria-label="Language / 語言 / 语言">
+<button type="button" data-set="en" aria-pressed="true">EN</button>
+<button type="button" data-set="cn" aria-pressed="false">中</button>
+<button type="button" data-set="zh" aria-pressed="false">繁</button>
+</div></div>
+<a class="back" href="../tools/card-composer/">&larr; fpSup-Merge</a>
+<header class="hero"><h1>Sensor Lab-IMX410</h1>
+<p class="lede en">Choose the sensor crop, resolution, frame rate and readout recipe from the Quick Set. The camera records CinemaDNG in exactly that mode.</p>
+<p class="lede zh">在快速設定（QS）選感光元件裁切、解析度、幀率與讀取配方，相機就照這個模式錄 CinemaDNG。</p>
+<p><span class="en">Test build</span><span class="zh">測試版</span> · <a href="../sensor_lab_imx410/"><span class="en">Open the simulator</span><span class="zh">開啟模擬器</span> ↗</a></p></header>
+
+<h2><span class="en">What it is</span><span class="zh">產品介紹</span></h2>
+<p class="en">The SIGMA fp’s sensor, the Sony IMX410, can be read in many more ways than the stock menu offers. Sensor Lab opens them up: you pick the area of the sensor to use, the size to record, the frame rate and how the sensor is read, and the camera records CinemaDNG that way.</p>
+<p class="zh">SIGMA fp 的感光元件 Sony IMX410 能用的讀取方式，比原廠選單提供的多得多。Sensor Lab 把它們開放出來：你決定用感光元件的哪一塊、錄多大、幾格、怎麼讀，相機就照這樣錄 CinemaDNG。</p>
+<ul class="en">
+<li><b>Any crop</b> — open gate (full 3:2 sensor), HD, S35, APS-C, S16, square, or your own width and height.</li>
+<li><b>Any resolution</b> — common sizes from 1K to 6K, or your own width and height, down to the pixel grid the sensor allows.</li>
+<li><b>Real pixel merges</b> — 2x2, 3x3, 6x6, 1x2 and 1x3 for smaller files from the same field of view.</li>
+<li><b>Higher frame rates</b> — up to what each crop and size can reach, with fine-tuning.</li>
+<li><b>Readout recipes, including 14-bit</b> — choose how the sensor is read: 11, 12 or true 14-bit conversion, sensor and ISP merging, each with its rolling-shutter time.</li>
+<li><b>Recorded bit depth and data rate</b> — CinemaDNG 8, 10, 12 or 14-bit, with MB/s shown before you record.</li>
+<li><b>Simulator and QR</b> — plan a mode in the browser and send it to the camera with a QR code; scan the camera’s code to see the details of the current mode or share it.</li>
+</ul>
+<ul class="zh">
+<li><b>任意裁切</b>：Open Gate（整片 3:2 感光元件）、HD、S35、APS-C、S16、正方形，或自訂寬高。</li>
+<li><b>任意解析度</b>：1K 到 6K 的常用尺寸，或自訂寬高，細到感光元件允許的像素格。</li>
+<li><b>真正的像素合併</b>：2x2、3x3、6x6、1x2、1x3，同樣視野、檔案更小。</li>
+<li><b>更高的幀率</b>：開到每個裁切與尺寸能達到的上限，還能細調。</li>
+<li><b>讀取配方，含 14-bit</b>：自己選感光元件怎麼讀：11、12 或真 14-bit 轉換，感光元件與 ISP 的合併方式，各自顯示捲簾時間。</li>
+<li><b>錄製位元深度與資料率</b>：CinemaDNG 8、10、12、14-bit，錄之前就看得到 MB/s。</li>
+<li><b>模擬器與 QR</b>：先在瀏覽器規劃模式，再用 QR 碼送進相機；掃相機上的碼可查閱目前模式的細部資料，也能分享給別人。</li>
+</ul>
+
+<p class="warn en"><b>It is a laboratory.</b> Sensor Lab aims to open up every format the sensor can deliver and everything the ISP can do with it. It does not promise that the card’s write speed or the camera’s CPU can keep up with the mode you choose: some combinations drop frames, stop recording or cannot be recorded for long. Test a mode before you rely on it.</p>
+<p class="warn zh"><b>它是一間實驗室。</b>Sensor Lab 的目標是盡可能解放感光元件的所有格式與 ISP 的能力，但不保證卡片的寫入速度和相機 CPU 承受得了你選的模式：有些組合會掉幀、停錄，或錄不久。正式使用前請先試拍。</p>
+
+<h2><span class="en">Install</span><span class="zh">安裝</span></h2>
+<p class="en">Select <b>Sensor Lab-IMX410</b> in <a href="../tools/card-composer/#install">fpSup-Merge</a> and follow its installation steps. The page adds QS-Share, which Sensor Lab needs. SIGMA fp firmware Ver.5.02 only. It cannot run together with RES-Custom.</p>
+<p class="zh">在 <a href="../tools/card-composer/#install">fpSup-Merge</a> 勾選 <b>Sensor Lab-IMX410</b>，依頁面說明安裝。頁面會自動附上它需要的 QS-Share。只支援 SIGMA fp 韌體 Ver.5.02，不能和 RES-Custom 同時使用。</p>
+
+<h2><span class="en">1. The tiles on the Quick Set</span><span class="zh">1. 快速設定上的格子</span></h2>
+<p class="en">On the CINE Quick Set, the stock <b>DC</b>, <b>RES</b>, <b>FPS</b> and <b>FORMAT</b> tiles become Sensor Lab’s automatically. Three more are new and you add them yourself: <b>RECIPE</b>, <b>MB/s</b> and <b>QR</b>. Go to <b>MENU → SYSTEM → Custom QS [CINE]</b>, pick a slot, press OK and choose from the list. If you removed DC, RES, FPS or FORMAT from your Quick Set earlier, put them back the same way. CINE only.</p>
+<p class="zh">CINE 快速設定上原廠的 <b>DC</b>、<b>RES</b>、<b>FPS</b>、<b>FORMAT</b> 格會自動換成 Sensor Lab 版。另外三個是新增的，要自己加：<b>RECIPE</b>、<b>MB/s</b>、<b>QR</b>。到 <b>MENU → SYSTEM → Custom QS [CINE]</b>，選一格、按 OK，從清單挑。之前把 DC、RES、FPS、FORMAT 從快速設定拿掉的話，用同樣方式加回來。只有 CINE 模式有效。</p>
+
+<h2><span class="en">2. Set the mode in this order</span><span class="zh">2. 依這個順序設定</span></h2>
+<ul class="en">
+<li><b>DC</b> — the sensor crop: OG, HD, S35, APS-C, S16 or square. Changing DC resets RES.</li>
+<li><b>RES</b> — the recorded size. An entry whose hint shows a merge such as “2x2” or “3x3” is a real pixel merge; “+RW” means the camera’s scaler is used as well.</li>
+<li><b>FPS</b> — frame rates the chosen crop and size cannot reach are greyed.</li>
+<li><b>RECIPE</b> — the readout method for that size and frame rate, with its rolling-shutter time (RS).</li>
+<li><b>FORMAT</b> — the recorded bit depth. <b>MB/s</b> shows the data rate, so you can tell whether the card will keep up.</li>
+</ul>
+<ul class="zh">
+<li><b>DC</b>：感光元件裁切，有 OG、HD、S35、APS-C、S16、正方形。換 DC 會重設 RES。</li>
+<li><b>RES</b>：錄下的尺寸。提示寫著「2x2」「3x3」這類合併的項目是真正的像素合併；帶「+RW」表示還用到相機的縮放。</li>
+<li><b>FPS</b>：目前的裁切與尺寸達不到的幀率會反灰。</li>
+<li><b>RECIPE</b>：這個尺寸與幀率下的讀取方式，並顯示捲簾時間（RS）。</li>
+<li><b>FORMAT</b>：錄製的位元深度。<b>MB/s</b> 顯示資料率，可以先看卡片跟不跟得上。</li>
+</ul>
+<p class="en">Example: DC <b>OG</b>, then the RES entry marked “2x2” (3024×2020) records 3024×2014 with the scaler off. On <b>S16</b>, “2x2” records 1040×620.</p>
+<p class="zh">例：DC 選 <b>OG</b>，RES 選標著「2x2」的那項（3024×2020），錄出 3024×2014，不經縮放。<b>S16</b> 的「2x2」錄出 1040×620。</p>
+
+<h2><span class="en">Controls</span><span class="zh">操作</span></h2>
+<ul class="en">
+<li>Front dial: one step. Rear dial: ten steps. The list at the bottom holds the common values.</li>
+<li><b>AEL</b> on DC, RES or RECIPE opens more options (width, height, ratio lock, ADC, binning). AEL again goes back.</li>
+<li><b>AEL</b> on FPS fine-tunes the frame rate in place; the tuned value stays in the list in yellow.</li>
+<li>Every step takes effect at once. The mode is applied again each time the camera starts; you do not need to open the Quick Set.</li>
+</ul>
+<ul class="zh">
+<li>前轉盤一次一步，後轉盤一次十步。下方清單是常用值。</li>
+<li>在 DC、RES、RECIPE 按 <b>AEL</b> 進入更多選項（寬、高、比例鎖、ADC、合併方式）；再按 AEL 返回。</li>
+<li>在 FPS 按 <b>AEL</b> 是原地細調幀率；細調出的值會以黃色留在清單裡。</li>
+<li>每轉一步立刻生效。每次開機會自動再套用，不用先開快速設定。</li>
+</ul>
+
+<h2><span class="en">Simulator and QR</span><span class="zh">模擬器與 QR</span></h2>
+<p class="en">The <a href="../sensor_lab_imx410/">simulator</a> is the same Quick Set in a browser, with the full details of each mode. The <b>QR</b> tile on the camera shows a code; scan it with a phone to open the simulator with the camera’s current settings. Use it to look up the details of the mode you are in, or pass the link on to share that mode with someone else.</p>
+<p class="en">To send settings the other way, press <b>AEL</b> on the QR tile and point the camera at the simulator’s QR code. The settings apply at once. This does not work while recording.</p>
+<p class="zh"><a href="../sensor_lab_imx410/">模擬器</a>是瀏覽器裡的同一套快速設定，並列出每個模式的完整細節。相機上的 <b>QR</b> 格會顯示一個碼，用手機掃它，就以相機目前的設定打開模擬器。可以用來查閱目前模式的細部資料，也可以把連結傳給別人，分享這個模式。</p>
+<p class="zh">反過來要把設定送進相機：在 QR 格按 <b>AEL</b>，把相機對準模擬器上的 QR 碼，設定立刻套用。錄影中不能掃。</p>
+
+<h2><span class="en">Recording at high frame rates</span><span class="zh">高幀率錄影</span></h2>
+<p class="en">High frame rates are limited by the camera’s CPU as well as the card: each frame costs processing time whatever its size, so frames can drop or the recording can stop even when MB/s is within what the card can take. Try these in order:</p>
+<p class="zh">高幀率除了卡片速度，還會受相機 CPU 限制：不論畫面多小，每一幀都要花處理時間，所以即使 MB/s 在卡片能負擔的範圍內，仍可能掉幀或停錄。可以依序試：</p>
+<ol class="en">
+<li>Install <b>Early Flush</b> and <b>Unlock Writer</b> (tick them in <a href="../tools/card-composer/">fpSup-Merge</a>).</li>
+<li>Set Memory Media → USB Storage → <b>Write Mode</b> to <b>Custom</b>.</li>
+<li>Turn off all on-screen display.</li>
+<li>Turn off Gyro.</li>
+<li>Try a different SSD enclosure.</li>
+</ol>
+<ol class="zh">
+<li>安裝 <b>Early Flush</b> 和 <b>Unlock Writer</b>（在 <a href="../tools/card-composer/">fpSup-Merge</a> 勾選）。</li>
+<li>把 Memory Media → USB Storage → <b>Write Mode</b> 設成 <b>Custom</b>。</li>
+<li>關掉所有畫面顯示（UI）。</li>
+<li>關掉 Gyro。</li>
+<li>換一個 SSD 外接盒試試。</li>
+</ol>
+
+<h2><span class="en">Good to know</span><span class="zh">注意事項</span></h2>
+<ul class="en">
+<li>CINE with CinemaDNG only. If the camera is set to MOV the mode is not applied; switch to CinemaDNG.</li>
+<li>High data rates shorten how long an SD card can record; check MB/s.</li>
+<li>Some formats cannot be played back in the camera.</li>
+<li>Known issue: OG 6x6 can place its first frame about 2 rows off. Later frames are fine.</li>
+<li>Updating from SensorLab 0.7.x or QS Container: delete <code>SensorLab-IMX410_v0.7.*.BIN</code> and <code>QSContainer_v*.BIN</code> from the card’s <code>fpSup</code> folder first. Settings start from the defaults.</li>
+<li>In the Custom QS list, the RECIPE, MB/s and QR entries still show the DC icon. The Quick Set itself shows their names.</li>
+</ul>
+<ul class="zh">
+<li>只在 CINE 的 CinemaDNG 有效。相機設成 MOV 時不會套用，請改成 CinemaDNG。</li>
+<li>資料率高會縮短 SD 卡能錄的時間，請看 MB/s。</li>
+<li>部分格式無法在機內回放。</li>
+<li>已知問題：OG 6x6 的第一幀可能錯位約 2 列，之後的幀正常。</li>
+<li>從 SensorLab 0.7.x 或 QS Container 更新：先刪掉卡上 <code>fpSup</code> 資料夾裡的 <code>SensorLab-IMX410_v0.7.*.BIN</code> 與 <code>QSContainer_v*.BIN</code>。設定會回到預設。</li>
+<li>自訂 QS 的清單裡，RECIPE、MB/s、QR 三項的圖示仍是 DC 的；快速設定本身會顯示各自的名稱。</li>
+</ul>
+<footer><p><a href="../">fpSup</a> · <a href="../tools/card-composer/">fpSup-Merge</a> · <a href="../sensor_lab_imx410/"><span class="en">Simulator</span><span class="zh">模擬器</span></a></p></footer>
+<script src="../assets/lang.js?v=7c49866d" defer></script>
+</body></html>

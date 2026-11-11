@@ -108,7 +108,8 @@ PRODUCTS = {
                                        'with the data rate shown; the camera records exactly that mode.',
                                     zh='在快速設定選感光元件裁切、解析度、幀率與讀取配方，並顯示資料率；相機照選定的模式錄影。'),
                        excl=['res-custom'], requires=['qs-share'], author=AUTHOR, credits=[],
-                       guide_page='sensor_lab_imx410/index.html',
+                       # Bei 2026-11-11: two entries -- "More" = how to use it (guide/sensor-lab.html), and the simulator
+                       tool_page=dict(path='sensor_lab_imx410/index.html', en='Simulator', zh='模擬器'),
                        note=dict(en='Updating from an older SensorLab or QS Container: delete fpSup\\SensorLab-IMX410_v0.7.*.BIN '
                                     'and fpSup\\QSContainer_v*.BIN first. The old 0.7.x file would load instead of this version, '
                                     'and QSContainer is the same sup as QS-Share. Saved Sensor Lab / QS settings start from the defaults.',
@@ -290,7 +291,7 @@ def input_products(directory):
                  excl=list(spec['excl']), requires=spec.get('requires', []), links=spec.get('links', []), needs_manager=spec.get('needs_manager', False),
                  author=spec['author'], credits=spec['credits'], release=tag,
                  version=entry.get('version', str(version)),
-                 build_label=entry.get('build_label', dict(en='Development build', zh='開發版')), date=meta['date'], about=spec['summary'], guide=guide(key),
+                 build_label=entry.get('build_label', dict(en='Development build', zh='開發版')), date=meta['date'], about=spec['summary'], guide=guide(key), tool=tool(key),
                  provenance=dict(manifest=str(directory.relative_to(HERE) / 'manifest.json') if directory.is_relative_to(HERE) else str(directory / 'manifest.json'),
                                  source_sha256=meta['source_sha256']), data_files=[], support_files=[], **payload)
         for rel in entry.get('data_files', []):
@@ -329,6 +330,16 @@ def guide(key):
     if page:
         return f'../../{page}' if (FPSUP / page).exists() else ''
     return f'../../guide/{key}.html' if (GUIDE / f'{key}.html').exists() else ''
+
+
+def tool(key):
+    """A second link on the tile next to the guide: the product's own web tool (path from fpSup/)."""
+    page = PRODUCTS.get(key, {}).get('tool_page')
+    if not page:
+        return None
+    if not (FPSUP / page['path']).exists():
+        raise SystemExit(f"{key}: tool_page {page['path']} does not exist")
+    return dict(href=f"../../{page['path']}", en=page['en'], zh=page['zh'])
 
 
 def main():

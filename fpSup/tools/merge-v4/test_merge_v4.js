@@ -220,6 +220,19 @@ for (const p of [...CAT.products, ...(CAT.pending || [])]){
   else console.log(`todo ${p.id}: no guide page yet`);
 }
 
+// 6a. Sensor Lab has two entries (Bei 2026-11-11): the how-to page and the simulator, different pages that exist
+{
+  const sl = CAT.products.find(p => p.id === 'sensor-lab');
+  if (sl){
+    ok(sl.guide === '../../guide/sensor-lab.html' && sl.tool && sl.tool.href === '../../sensor_lab_imx410/index.html' &&
+       fs.existsSync(path.join(HERE, sl.tool.href)) && sl.tool.en === 'Simulator' && sl.tool.zh === '模擬器',
+       'Sensor Lab: More = guide page, Simulator = its own entry');
+    const g = fs.readFileSync(path.join(HERE, sl.guide), 'utf8');
+    ok(g.includes('../sensor_lab_imx410/') && g.includes('../tools/card-composer/'), 'Sensor Lab guide links the simulator and Merge');
+  }
+  ok(CAT.products.filter(p => p.tool).every(p => p.id === 'sensor-lab'), 'no other tile has a tool entry');
+}
+
 // 6b. everyone thanked on a product's guide page is thanked on its tile
 for (const p of [...CAT.products, ...(CAT.pending || [])]){
   if (!p.guide) continue;

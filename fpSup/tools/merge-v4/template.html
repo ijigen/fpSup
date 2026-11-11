@@ -92,8 +92,8 @@ details.dev[open]>summary::before{content:"▾ "}
 .tile .data label.on{border-color:var(--sig);color:var(--ink)}
 .tile .data input{width:13px;height:13px;margin:0}
 .tile .data small{font-size:.68rem;color:var(--dim);margin-left:.35em}
-.tile .guide{grid-column:2;font-family:var(--mono);font-size:.78rem;color:var(--info);text-decoration:none;
-  justify-self:start}
+.tile .guides{grid-column:2;justify-self:start;display:flex;flex-wrap:wrap;gap:.2em 1.2em}
+.tile .guide{font-family:var(--mono);font-size:.78rem;color:var(--info);text-decoration:none}
 .tile .guide:hover{text-decoration:underline}
 .tile .history{grid-column:2;min-width:0;margin:2px 0 0}
 .history>summary{color:var(--dim);font-size:.78rem}
@@ -798,8 +798,13 @@ function versionHistory(p, t){
   </details>`;
 }
 
-const more = (p, t) => p.guide
-  ? `<a class="guide" href="${esc(p.guide)}" target="_blank" rel="noopener">${esc(t.guide)} ↗</a>` : '';
+/* "More" = the guide page; a product with its own web tool (p.tool) gets a second entry (Bei 2026-11-11) */
+const more = (p, t) => {
+  const a = (href, text) => `<a class="guide" href="${esc(href)}" target="_blank" rel="noopener">${esc(text)} ↗</a>`;
+  const links = (p.guide ? a(p.guide, t.guide) : '')
+    + (p.tool ? a(p.tool.href, lang === 'en' ? p.tool.en : lang === 'cn' ? toCn(p.tool.zh) : p.tool.zh) : '');
+  return links ? `<span class="guides">${links}</span>` : '';
+};
 
 /* Authors other than the site's own, and credits.  The site's own sups carry
    no author (user 2026-10-07: it is me, no need to say so), so most tiles
