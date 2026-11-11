@@ -10,6 +10,9 @@ as in v3: the image's RAM has no GUI objects.  Added: the block runs at the
 cached alias; the save writes nothing into a file that is no longer this sup;
 the file object and the read-back are at the uncached alias.
 
+This is the 0.3.1 build (build(v4=True), no COL-Share); RAW-View 0.4.0test, the COL-Share
+client, is test_v4_cols_rawview.py.
+
 Emulated, not on the camera.
 """
 import pathlib

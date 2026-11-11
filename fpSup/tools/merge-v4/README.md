@@ -72,6 +72,16 @@ python3 -B tools/merge-v4/publish_releases.py            # 每個提供中的版
 - push 時 workflow 新建三個 Release(都是 prerelease)。這次只推頁面、快照與 `names_v4.py` 三行;Lossless／Sensor Lab／QS-Share 的原始碼
   由各自那條線另外同步進 repo(快照 `manifest.json` 的 `source_sha256` 記的是建檔當時的本機原始碼)。
 
+**2026-11-12 LUT 0.1.0test + COL-Share 0.0.1test + RAW-View 0.4.0test**(Bei 定;本機，未 commit、未發布):
+- 快照 `inputs/v4-20261112/`(`build_inputs_v4.py --only lut,col-share,raw-view`)。LUT 的 builder 是 `fpSup/lut/build_v4_lut.py`
+  (空的清單；`UI/COLOR.BIN` 是 support file,一定跟著);COL-Share 是 `infra`(像 QS-Share,LUT 與 RAW-View 都 `requires` 它)。
+- RAW-View 換成 0.4.0test(COL-Share 的客戶，`build_v4_rawview.py --cols`);names_v4 進版也讓 COL-Share 的 RAW-View 探測檔名跟著變。
+- LUT 的資料檔是 `fpSup/LUT/*.cube`(`fpSup/lut/looks/make_looks.py`)。**目前一支都不附**(Bei 2026-11-12):
+  LogC3、L-Log 的校準一步是 Luka/Midnite 的 v0.3(驗證對照 Ole Berek),拿到兩位同意前隱藏 ——
+  `make_looks.LOOKS` 註解掉、目錄 credits 清空、`guide/lut.html` 第 6 節包在註解裡;Spectral Film LUT 也不放,
+  `data.optional`:一支都不勾也是有效的卡(用戶自己放 .cube 就能用)。資料檔與 support file 的卡上路徑 = `fpSup/` + 快照裡的相對路徑。
+- 驗證：這組位元組還沒上機(manifest 的 validation 寫 PENDING)。
+
 和 v3 頁的差別：
 - **產品全部來自一份快照** `inputs/v4-20261025/`(2026-10-25:選單掉鍵修正、頁尾固定、sup 檔名帶版本):`build_inputs_v4.py` 跑各產品自己的 v4 builder
   (`loader-v4/ports.py`、`ports_jose.py`、`lossless/build_v4_lossless.py`、`screenflip/build_v4_flip.py`、

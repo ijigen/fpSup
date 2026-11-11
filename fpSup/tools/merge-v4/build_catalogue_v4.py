@@ -34,7 +34,8 @@ OUT = HERE / 'index.html'
 # replaces an earlier one's product of the same id (the earlier version stays on GitHub as its own release).
 INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107', HERE / 'inputs' / 'v4-20261110',
           HERE / 'inputs' / 'v4-20261110c', HERE / 'inputs' / 'v4-20261111',   # 20261111: Screen Flip 0.1.2
-          HERE / 'inputs' / 'v4-20261112b']   # 20261112b: RES-Custom 0.1.6 (files page paging)
+          HERE / 'inputs' / 'v4-20261112b',   # 20261112b: RES-Custom 0.1.6 (files page paging)
+          HERE / 'inputs' / 'v4-20261112']   # 20261112: LUT 0.1.0test + COL-Share 0.0.1test + RAW-View 0.4.0test
 sys.path.insert(0, str(FPSUP / 'fp_usb_shell'))
 from v3 import build_v3 as V3
 sys.path.insert(0, str(FPSUP / 'loader-v4'))
@@ -83,7 +84,7 @@ MANAGER = ['fpSup/SUPMGR.BIN', 'fpSup/UI/FPSUP.BIN', 'fpSup/UI/SUPMGR.BIN']
 CATEGORIES = ['format', 'focus', 'motion', 'monitor', 'control', 'development']
 # the page shows sups in this order (user 2026-10-07); the card's load order is
 # still the file names'
-ORDER = ['res-custom', 'sensor-lab', 'qs-share', 'res-lab', 'lossless', 'fcap', 'unlocked-writer', 'stopfx', 'split-record', 'hdrx', 'af', 'gyro2', 'raw-view', 'screenflip', 'desqueeze', 'tap-to-zoom', 'dial-fix', 'lut', 'usbshell']
+ORDER = ['res-custom', 'sensor-lab', 'qs-share', 'res-lab', 'lossless', 'fcap', 'unlocked-writer', 'stopfx', 'split-record', 'hdrx', 'af', 'gyro2', 'raw-view', 'col-share', 'screenflip', 'desqueeze', 'tap-to-zoom', 'dial-fix', 'lut', 'usbshell']
 AUTHOR = ''
 PRODUCTS = {
     # og3k / og2k: not this round (user 2026-10-07) -- the OG line ships as
@@ -158,7 +159,13 @@ PRODUCTS = {
                        category='format', excl=[], author='Ruari', credits=[]),
     'raw-view':   dict(name=N.display('RAWV'), sup_id='RAWV', file=N.file_name('RAWV'),
                        summary=dict(en='The screen shows the RAW about to be recorded: what clips on screen clips in the DNG.',
-                                    zh='螢幕顯示即將錄下的 RAW:畫面上過曝的地方，錄下來就是過曝。'), category='monitor', excl=[], author=AUTHOR, credits=['Ole Berek', 'Luka']),
+                                    zh='螢幕顯示即將錄下的 RAW:畫面上過曝的地方，錄下來就是過曝。'), category='monitor', excl=[],
+                       requires=['col-share'], author=AUTHOR, credits=['Ole Berek', 'Luka']),   # 0.4.0test: a COL-Share client
+    # 2026-11-07 (Bei): the native COLOR list's added rows belong to COL-Share; LUT and RAW-View hand it their rows
+    'col-share':  dict(name=N.display('COLS'), sup_id='COLS', file=N.file_name('COLS'), category='monitor', infra=True,
+                       summary=dict(en='Shared COLOR-list rows used by LUT and RAW-View.',
+                                    zh='LUT 與 RAW-View 共用的原生 COLOR 清單列。'),
+                       excl=[], author=AUTHOR, credits=[]),
     'screenflip': dict(name=N.display('FLIP'), sup_id='FLIP', file=N.file_name('FLIP'),
                        summary=dict(en='Flip the rear screen 180°, mirror it, or both.',
                                     zh='背螢幕翻轉 180°、左右鏡像，或兩者。'), category='monitor', excl=[], author=AUTHOR, credits=[]),
@@ -196,10 +203,19 @@ PRODUCTS = {
                        summary=dict(en='Better in-camera continuous autofocus while recording in CINE.',
                                     zh='改善 CINE 錄影時的機內連續自動對焦。'),
                        author=AUTHOR, credits=[]),
-    # Bei 2026-11-10: "Coming Soon" in its own category, not selectable (stage 'coming')
-    'lut':        dict(name='LUT', category='monitor', excl=[], stage='coming', pending=True,
-                       summary=dict(en='Load a .cube LUT and see its look simulated on the screen; recorded files are unchanged.',
-                                    zh='讀取 .cube LUT,在螢幕上模擬還原調色後的樣子;錄下的檔案不變。'),
+    # 2026-11-12 (Bei): released.  The looks are optional data files (fpSup/lut/looks): our two log
+    # conversions until the licences are settled (Bei 2026-11-12); no cube at all is fine -- any .cube copied to fpSup\LUT works.
+    'lut':        dict(name=N.display('LUT4'), sup_id='LUT4', file=N.file_name('LUT4'), category='monitor', excl=[],
+                       requires=['col-share'],
+                       summary=dict(en='Converts a .cube LUT for the camera\'s own colour hardware: the look shows on the screen and '
+                                       'is recorded into JPG and MOV (RAW stays RAW). Pick it in the native COLOR list.',
+                                    zh='把 .cube LUT 轉成相機自己的色彩硬體設定：螢幕上看得到，JPG 與 MOV 也會套用（RAW 不變）。'
+                                       '在原生 COLOR 清單裡選用。'),
+                       data=dict(dir='LUT', ext='.cube', optional=True,
+                                 title=dict(en='LUTs to put on the card', zh='要放進卡的 LUT'),
+                                 order=['LogC3', 'L-Log']),
+                       # the two log cubes (calibration Luka's, checked against Ole Berek's fp ADJ.cube) are hidden
+                       # until both agree (Bei 2026-11-12); put their credits back with them
                        author=AUTHOR, credits=[]),
     'usbshell':   dict(name=N.display('SHEL'), sup_id='SHEL', file=N.file_name('SHEL'),
                        summary=dict(en='A development tool: commands and memory access to the camera over USB.',
@@ -297,14 +313,16 @@ def input_products(directory):
                  version=entry.get('version', str(version)),
                  build_label=entry.get('build_label', dict(en='Development build', zh='開發版')), date=meta['date'], about=spec['summary'], guide=guide(key), tool=tool(key),
                  provenance=dict(manifest=str(directory.relative_to(HERE) / 'manifest.json') if directory.is_relative_to(HERE) else str(directory / 'manifest.json'),
-                                 source_sha256=meta['source_sha256']), data_files=[], support_files=[], **payload)
+                                 source_sha256=meta['source_sha256']), data_files=[], support_files=[],
+                 data_optional=spec.get('data', {}).get('optional', False), data_title=spec.get('data', {}).get('title'),
+                 **payload)
         for rel in entry.get('data_files', []):
             b = verified[rel]
-            target = 'fpSup/RESCUS/' + pathlib.PurePosixPath(rel).name
+            target = 'fpSup/' + rel            # the snapshot's <data dir>/<file> (RESCUS/, LUT/)
             p['data_files'].append(dict(label=label(spec, target), author=data_author(spec, target), path=target,
                                         **hosted(directory, rel, b, tag)))
         for rel in entry.get('support_files', []):
-            target = 'fpSup/RESCUS/' + pathlib.PurePosixPath(rel).name
+            target = 'fpSup/' + rel            # RESCUS/..., UI/COLOR.BIN
             p['support_files'].append(dict(path=target, **hosted(directory, rel, verified[rel], tag)))
         p['data_files'].sort(key=lambda d: data_rank(spec, d['path']))
         if entry.get('virtual'):

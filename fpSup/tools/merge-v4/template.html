@@ -422,7 +422,7 @@ function compose(picked){
     const data = withDisabled(files[at].data, listed);
     files[at] = {...files[at], data, sha256: sha256hex(data), disabled: listed};
   }
-  /* A sup's data files (res-custom's fpSup/RESCUS/*.RCD) stay in their own
+  /* A sup's data files (res-custom's fpSup/RESCUS/*.RCD, LUT's fpSup/LUT/*.cube) stay in their own
      folder even when the sup is parked: the loader never reads subfolders, so
      switching sups is still moving one .BIN. */
   for (const p of CAT.products){
@@ -442,7 +442,7 @@ function checks(picked){
   out.push({ok: on.length > 0 || managerEnabled(picked), what: 'at least one sup or the fpSup page'});
   for (const id of selected(picked)){
     const p = byId(id);
-    if ((p.data_files || []).length && !on.includes('res-lab'))
+    if ((p.data_files || []).length && !p.data_optional && !on.includes('res-lab'))
       out.push({ok: dataChosen(p, picked).length > 0, what: `${p.name}: at least one data file`});
     if (on.includes(id)) for (const required of (p.requires || []))
       out.push({ok: on.includes(required), what: `${p.name}: ${byId(required).name} runs`});
@@ -846,7 +846,8 @@ function byline(p, t){
 function dataChips(p, t){
   if (!(p.data_files || []).length || !selected(picked).includes(p.id)) return '';
   const offs = dataExcluded(p, picked);
-  return `<div class="data" role="group" aria-label="${esc(t.formats)}">${p.data_files.map(d => {
+  const title = p.data_title ? about({about: p.data_title}) : t.formats;
+  return `<div class="data" role="group" aria-label="${esc(title)}">${p.data_files.map(d => {
     const on = !offs.includes(d.path);
     return `<label class="${on ? 'on' : ''}"><input type="checkbox" data-file="${esc(d.path)}" data-of="${p.id}" ${on ? 'checked' : ''}>${esc(d.label)}${d.author ? `<small>${esc(t.by)} ${esc(d.author)}</small>` : ''}</label>`;
   }).join('')}</div>`;

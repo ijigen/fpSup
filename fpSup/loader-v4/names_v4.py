@@ -17,7 +17,7 @@ SUPS = {
     'ULWR': ('Unlock Writer', 'UnlockWriter', '0.1.0test'),
     'STFX': ('Stop-FX', 'Stop-FX', '0.1.0'),
     'GYR2': ('Gyro2', 'Gyro2', '0.2.1'),   # last release v0.2.0 (build 6, on main's releases/)
-    'RAWV': ('RAW-View', 'RAW-View', '0.3.1'),
+    'RAWV': ('RAW-View', 'RAW-View', '0.4.0test'),   # 2026-11-12: a COL-Share client (build_v4_rawview.py --cols)
     'FLIP': ('Screen Flip', 'ScreenFlip', '0.1.2'),   # 2026-11-10: the v4 task's stack 0x2000 (froze while saving on 0x1000)
     'DSQZ': ('Desqueeze', 'Desqueeze', '0.1.5'),
     'TAPZ': ('Tap To Zoom', 'TapToZoom', '0.1.1'),
@@ -31,6 +31,10 @@ SUPS = {
     # 2026-11-08 (Bei): Andy_hal9000's rear-wheel decoder v6 (fpSup/dialfix/reference/v6); the v1-based
     # DIALFIX.BIN was never released.  "test" until the sup form has been on the camera.
     'DIAL': ('Dial Fix', 'DialFix', '0.2.1test'),
+    # 2026-11-07 (Bei): the native COLOR list's added rows, shared by LUT / RAW-View (fpSup/colshare/DESIGN.md)
+    'COLS': ('COL-Share', 'COL-Share', '0.0.1test'),
+    # 2026-11-12 (Bei): LUT on the merge page (fpSup/lut/build_v4_lut.py)
+    'LUT4': ('LUT', 'LUT', '0.1.0test'),
 }
 
 DISPLAY_MAX = 23      # sloader4.c struct sup disp[24]

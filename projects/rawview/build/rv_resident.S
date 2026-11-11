@@ -117,7 +117,9 @@
 .equ OFF_QUAL,      0x788           /* CinemaDNG 位深(0 = 12-bit) */
 .equ NTHR,          30
 
+#if !COLS
 #include "rv_fv.inc"
+#endif
 .equ P_MAGIC, 0x00
 .equ P_FLAG,  0x04
 .equ P_EFF,   0x08
@@ -191,6 +193,19 @@
 #ifndef V3
 #define V3 0
 #endif
+#ifndef COLS
+#define COLS 0
+#endif
+/* COLS = 1(RAW-View 0.4,COL-Share 的客戶;fpSup/colshare/DESIGN.md P3,Bei 2026-11-07 §9.1):
+ *   COLOR 清單的列、GUI 表、setter、±框、ColorButtonMenu、AEL 頁上限、root 共用字都歸 COL-Share。
+ *   RAW 列的記錄 = {root+0x70 → mode 副本, root+0x08 → 矩陣副本}(兩個指標固定);
+ *   「RAW 在顯示」= root+0x70 是我們的 mode 副本(SHOWN)。stub_gs／stub_pq 不再寫 root,只改兩份副本
+ *   的 OFF 筆內容(生效:插槽與 sat_tab[sat];不生效／回放:原廠 82 與 sat_tab[0] = 原廠單位矩陣)。
+ *   沒有 stub_ma/mb/mc/mj/ml/ef/en/mo/mx/fv/ai/il(±框固定 0,Bei #7:SA/GA 字形不再需要)。
+ *   P_FLAG = 客戶記得的選擇(COL-Share on_pick / 開機的設定區),stub_sv 照舊存進自己的檔。 */
+.equ MODE_DELTA, 0x3E200 - 0x3E060   /* params(T0 + OFF_RES)− mode 副本(T0 + OFF_MODE);rv_launch.S 同一組 */
+.equ P_MODEN, 0x124                  /* COLS:OFF 筆指向插槽的 base(launcher 算) */
+.equ P_BOXP,  0x128                  /* COLS:&COL-Share ±框的 live 字(launcher 的 cb_state) */
 #if V3
 /* Loader v3(projects/usb-shell-sup/notes/LOADER_V3.md):
  *   - stub_pq/stub_ai/stub_sv 的呼叫點是 CHAIN:尾跳/呼叫 pq_next/ai_next/sv_next(launcher 填 chain_next,
@@ -227,6 +242,26 @@
 92:
 .endm
 
+/* COLS:r3 = params;Z = root 顯示 RAW 列(root+0x70 是我們的 mode 副本);只用 ip */
+.macro SHOWN
+    ldr     ip, =ROOT_P70
+    ldr     ip, [ip]
+    add     ip, ip, #MODE_DELTA
+    cmp     ip, r3
+.endm
+
+/* r3 = params;不是 RAW → 9f(COLS:root 沒顯示 RAW 列;舊版:flag 0) */
+.macro NOTRAW_9
+#if COLS
+    SHOWN
+    bne     9f
+#else
+    ldr     ip, [r3, #P_FLAG]
+    cmp     ip, #0
+    beq     9f
+#endif
+.endm
+
 params:
     .ascii  "RVW1"
     .word   0, 0, 0, 0, 0, 0
@@ -249,6 +284,143 @@ dbg:
 .align 3
 #include "rv_dngcm.inc"             /* cm_buf(初值 = 第 0 級 = 原廠 OFF 常數)、cm_tab */
 
+#if COLS
+stub_gs:
+    ldr     r2, [r5, #0xc]          /* 原指令 */
+    cmp     r2, #0
+    bxne    lr                      /* 不是待機:不動 */
+    PADR    r3
+
+    /* eff = root 顯示 RAW 列 && 色彩 OFF && CinemaDNG && 12-bit && 不是回放 */
+    mov     r0, #0
+    ldr     ip, =ROOT_P70
+    ldr     ip, [ip]
+    ldr     r1, [r3, #P_MODE]
+    cmp     ip, r1
+    bne     1f
+    ldr     ip, =SET_SEL
+    ldrb    ip, [ip]
+    cmp     ip, #0
+    ldreq   r1, =SET_BANK_A
+    ldrne   r1, =SET_BANK_B
+    ldr     ip, [r1, #OFF_COLOR]
+    cmp     ip, #0xC
+    bne     1f
+    ldr     ip, [r1, #OFF_FMT]
+    cmp     ip, #0
+    bne     1f
+    ldr     ip, [r1, #OFF_QUAL]
+    cmp     ip, #0
+    moveq   r0, #1
+    ldr     ip, =PQ_LASTCMD
+    ldr     ip, [ip]
+    sub     ip, ip, #0xB
+    cmp     ip, #2
+    movls   r0, #0
+1:  ldr     ip, [r3, #P_BOXP]       /* lat = COL-Share ±框(SA −5 / GA +5,每一步立刻寫) */
+    cmp     ip, #0
+    beq     3f
+    ldr     ip, [ip]
+    cmp     ip, #0
+    movgt   ip, #1
+    movle   ip, #0
+    str     ip, [r3, #P_VAR]
+3:  ldr     r1, [r3, #P_VAR]        /* key = lat | con << 1 | sat << 2 */
+    ldr     ip, [r3, #P_CON]
+    add     r1, r1, ip, lsl #1
+    ldr     ip, [r3, #P_SAT]
+    add     r1, r1, ip, lsl #2
+    ldr     ip, [r3, #P_EFF]
+    cmp     r0, ip
+    ldreq   ip, [r3, #P_VAPP]
+    cmpeq   r1, ip
+    beq     2f
+    str     r0, [r3, #P_EFF]        /* 改變:兩份副本的 OFF 筆(root 指標歸 COL-Share,不動) */
+    str     r1, [r3, #P_VAPP]
+    push    {r4, r5}
+    ldr     r4, [r3, #P_MODE]
+    cmp     r0, #0
+    ldrne   r1, [r3, #P_MODEN]      /* 生效:插槽 */
+    moveq   r1, #82                 /* 原廠 OFF 曲線 */
+    str     r1, [r4, #0x11C]
+    mov     r4, #0                  /* 矩陣:生效 sat_tab[sat],否則 sat_tab[0](原廠單位矩陣) */
+    cmp     r0, #0
+    ldrne   r4, [r3, #P_SAT]
+    cmp     r4, #SAT_MAX
+    movhi   r4, #0
+    add     r4, r4, r4, lsl #1
+    add     r5, r3, #P_SATTAB
+    add     r4, r5, r4, lsl #3
+    ldr     r1, [r3, #P_MAT]
+    add     r5, r1, #MAT_OFF
+    mov     r1, #6
+8:  ldr     ip, [r4], #4
+    str     ip, [r5], #4
+    subs    r1, r1, #1
+    bne     8b
+    mov     r4, #0                  /* DNG ColorMatrix:cm_buf = cm_tab[生效 ? sat : 0] */
+    cmp     r0, #0
+    ldrne   r4, [r3, #P_SAT]
+    cmp     r4, #SAT_MAX
+    movhi   r4, #0
+    mov     r5, #144
+    mul     r4, r4, r5
+    ldr     ip, =cm_tab - params
+    add     r4, r4, ip
+    add     r4, r4, r3
+    ldr     ip, =cm_buf - params
+    add     r5, r3, ip
+    mov     r1, #36
+10: ldr     ip, [r4], #4
+    str     ip, [r5], #4
+    subs    r1, r1, #1
+    bne     10b
+    pop     {r4, r5}
+    mov     r1, #0
+    str     r1, [r3, #P_LAST]
+    ldr     ip, =KEY_CTX0
+    mvn     r1, #0
+    str     r1, [ip]
+2:  cmp     r0, #0
+    bxeq    lr                      /* 不生效:原廠增益(r2 = 0) */
+
+    ldr     r0, [r3, #P_LAST]
+    cmp     r0, r6
+    beq     5f
+    str     r6, [r3, #P_LAST]
+    push    {r4, r5}
+    add     r4, r3, #P_THR
+    mov     r1, #0
+3:  ldr     ip, [r4, r1, lsl #2]
+    cmp     r6, ip
+    blo     4f
+    add     r1, r1, #1
+    cmp     r1, #NTHR
+    blo     3b
+4:  ldr     ip, [r3, #P_VAR]
+    tst     ip, #1
+    addne   r1, r1, #31             /* GA 組 */
+    ldr     ip, [r3, #P_CON]
+    cmp     ip, #0
+    addne   r1, r1, #62             /* 對比 1:原做法的兩組 */
+    cmp     r1, #62
+    addhs   r1, r1, #4              /* 表 62 起在常駐區之後 */
+    ldr     r0, [r3, #P_TAB]
+    add     r0, r0, r1, lsl #12     /* 表 k */
+    ldr     r4, [r3, #P_SLOTS]
+    mov     r1, #11
+6:  str     r0, [r4, #4]
+    add     r4, r4, #8
+    subs    r1, r1, #1
+    bne     6b
+    ldr     r4, =KEY_CTX0
+    mvn     r0, #0
+    str     r0, [r4]
+    pop     {r4, r5}
+5:  mov     r2, #7                  /* movie_raw_12bit */
+    bx      lr
+
+#else
 stub_gs:
     ldr     r2, [r5, #0xc]          /* 原指令 */
     cmp     r2, #0
@@ -380,6 +552,7 @@ stub_gs:
 5:  mov     r2, #7                  /* movie_raw_12bit */
     bx      lr
 
+#endif
 stub_dg:
     ldr     r6, [ip]                /* 原指令 */
     ldr     r0, params + P_EFF
@@ -404,12 +577,26 @@ stub_pq:                            /* 取代 0xC02B8E64 `bl FUN_c02b97a8`:r0 = 
     sub     ip, r1, #0xB
     cmp     ip, #2
     bhi     8f                      /* 不是回放／顯影 */
+#if COLS
+    ldr     r0, [r4, #P_MODE]       /* 副本的 OFF 筆換回原廠(root 指標歸 COL-Share);清兩個通道的 tone 快取鍵 */
+    mov     r1, #82
+    str     r1, [r0, #0x11C]
+    ldr     r0, [r4, #P_MAT]
+    add     r0, r0, #MAT_OFF
+    add     r1, r4, #P_SATTAB       /* sat_tab[0] = 原廠單位矩陣 */
+    mov     r2, #6
+7:  ldr     r3, [r1], #4
+    str     r3, [r0], #4
+    subs    r2, r2, #1
+    bne     7b
+#else
     ldr     r0, =ROOT_P70           /* 換回原廠 tone、矩陣表;清兩個通道的 tone 快取鍵 */
     ldr     r1, =ROOT_P70_ORIG
     str     r1, [r0]
     ldr     r0, =ROOT_P08
     ldr     r1, =ROOT_P08_ORIG
     str     r1, [r0]
+#endif
     ldr     r0, =KEY_CTX0
     mvn     r1, #0
     str     r1, [r0]
@@ -424,6 +611,7 @@ pq_next: .word PQ_ORIG
     ldr     pc, =PQ_ORIG
 #endif
 
+#if !COLS
 stub_mj:
     ldr     ip, =GUI_TO_ENUM_AJ
     b       1f
@@ -530,9 +718,7 @@ stub_ml:
 
 stub_ef:
     PADR    r3
-    ldr     ip, [r3, #P_FLAG]
-    cmp     ip, #0
-    beq     9f
+    NOTRAW_9
     ldr     r2, [r3, #P_VAR]        /* 目前顯示值:SA = −5、GA = +5 */
     cmp     r2, #0
     mvneq   r2, #4
@@ -563,9 +749,7 @@ stub_ef:
 
 stub_en:
     PADR    r3
-    ldr     ip, [r3, #P_FLAG]
-    cmp     ip, #0
-    beq     9f
+    NOTRAW_9
     cmp     r7, #0xC
     bne     9f
     ldr     r0, [r3, #P_VAR]
@@ -575,6 +759,7 @@ stub_en:
     bx      lr
 9:  ldr     pc, =EN_CONV
 
+#endif
 /* 調整值 UI → 存值(RAW 時):r1 = UI 值,夾到 0..max 存 slot;lr 是 FIX 回呼 → 也存 fix(確認值);
  * 捲動(AJ)被夾時以 PUBLISH 把 AJ 變數設回夾後的值(刻度停在範圍內;不發布 FIX,以免變成「確認」);回 0 */
 .macro ADJ slot, fix, fix_ret, name, max
@@ -603,17 +788,13 @@ stub_en:
 
 stub_sa:
     PADR    r3
-    ldr     ip, [r3, #P_FLAG]
-    cmp     ip, #0
-    beq     9f
+    NOTRAW_9
     ADJ     P_SAT, P_SATF, SA_FIX_RET, S_COLAJ_SAT, SAT_MAX
 9:  ldr     pc, =SA_CONV
 
 stub_sn:
     PADR    r3
-    ldr     ip, [r3, #P_FLAG]
-    cmp     ip, #0
-    beq     9f
+    NOTRAW_9
     ldr     ip, =SN_FIX_RET
     cmp     lr, ip
     ldreq   r0, [r3, #P_SATF]       /* CM_COLFIX_Saturation */
@@ -624,9 +805,7 @@ stub_sn:
 /* RAW 時回 0;lr == aj_ret 且 r1 ≠ 0 → 發布 name = 0。否則尾跳 conv */
 .macro ZLOCK conv, aj_ret, name
     PADR    r3
-    ldr     ip, [r3, #P_FLAG]
-    cmp     ip, #0
-    beq     9f
+    NOTRAW_9
     ldr     ip, =\aj_ret
     cmp     lr, ip
     bne     5f
@@ -646,9 +825,7 @@ stub_sn:
 
 .macro ZSHOW conv
     PADR    r3
-    ldr     ip, [r3, #P_FLAG]
-    cmp     ip, #0
-    beq     9f
+    NOTRAW_9
     mov     r0, #0
     bx      lr
 9:  ldr     pc, =\conv
@@ -656,18 +833,14 @@ stub_sn:
 
 stub_zc:                            /* 對比度 0..1(使用者 2026-09-26):選曲線做法 */
     PADR    r3
-    ldr     ip, [r3, #P_FLAG]
-    cmp     ip, #0
-    beq     9f
+    NOTRAW_9
     ADJ     P_CON, P_CONF, ZC_FIX_RET, S_COLAJ_CONTRAST, 1
 9:  ldr     pc, =ZC_CONV
 stub_zs:
     ZLOCK   ZS_CONV, ZS_AJ_RET, S_COLAJ_SHARP
 stub_znc:
     PADR    r3
-    ldr     ip, [r3, #P_FLAG]
-    cmp     ip, #0
-    beq     9f
+    NOTRAW_9
     ldr     ip, =ZNC_FIX_RET
     cmp     lr, ip
     ldreq   r0, [r3, #P_CONF]       /* CM_COLFIX_Contrast */
@@ -677,6 +850,7 @@ stub_znc:
 stub_zns:
     ZSHOW   ZNS_CONV
 
+#if !COLS
 stub_ai:
     push    {r4, r5}
     PADR    r3
@@ -730,6 +904,7 @@ ai_next: .word AI_ORIG
     ldr     pc, =AI_ORIG
 #endif
 
+#endif
 #if V3
 stub_sv:
     push    {r0-r3, r5-r7, lr}      /* 8 個:stack 對齊不變 */
@@ -914,6 +1089,7 @@ stub_sv:
     pop     {r5, pc}
 
 #endif
+#if !COLS
 stub_il:
     push    {r4-r6, lr}
     ldrb    r4, [r0, #5]
@@ -998,6 +1174,9 @@ stub_fv:
 3:  str     r0, [r5, #4]            /* 原指令 str r0,[r5,#4] */
     ldr     pc, =0xC05E5BF1         /* 回 Thumb */
 
+#endif
 .ltorg
+#if !COLS
 #include "rv_csv.inc"
+#endif
 res_end:

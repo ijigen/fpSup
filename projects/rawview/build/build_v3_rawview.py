@@ -61,6 +61,19 @@ ALLOC = 0x82000                                           # rv_launch.S ALLOC
 KEEP = ('LOADER.BIN', '00SHELL.BIN', '10LOSS.BIN')
 STEP2_CARD = ROOT / 'projects/usb-shell-sup/cards/20261006-v3-step4-og3k'   # LOADER.BIN with service v2
 
+# RAW-View 0.4 (cols=True): a COL-Share client (fpSup/colshare/DESIGN.md P3).  The header version is
+# what COL-Share's old-RAW-View check reads (colshare_ui.RAWVIEW_CLIENT = 0x000400: maj<<16|min<<8|patch).
+COLS_VERSION = 0x000400
+COLS_VERSION_TEXT = '0.4.0test'
+COLS_FILE = f'RAW-View_v{COLS_VERSION_TEXT}.BIN'      # names_v4 still says 0.3.1: the coordinator bumps it
+# its own sites only: gain A/B (RAW_CORR 0xC032F728 too -- EXCL for now, LUT may want it later), saturation x4,
+# contrast / sharpness x8, the DNG writer's OFF constants x4, CHAIN power-off save and picture-quality command
+COLS_KEEP = {0xC0313244, 0xC032F728, 0xC056D5F8, 0xC056D498, 0xC059588C, 0xC05959E4,
+             0xC056D548, 0xC056D3E8, 0xC056D5A0, 0xC056D440, 0xC059581C, 0xC0595974, 0xC0595854, 0xC05959AC,
+             0xC02C4BE4, 0xC02C4BE8, 0xC02C4C98, 0xC02C4C9C, 0xC0088C60, 0xC02B8E64}
+COLS_STUBS = ('stub_gs', 'stub_dg', 'stub_sa', 'stub_sn', 'stub_zc', 'stub_zs', 'stub_znc', 'stub_zns',
+              'stub_sv', 'stub_pq')
+
 H1_SITE = 0xC05E5BEC
 ADV_SITE = 0xC1D6ED48
 # the call sites whose stubs only pass through to what was there (resident *_next)
@@ -110,6 +123,27 @@ def claim_rows(ui_sites):
     return sorted(rows)
 
 
+def claim_rows_cols():
+    """RAW-View 0.4: only what no other sup uses (COL-Share has the COLOR list and the root words)."""
+    rows = [(a, w, CHAIN if a in CHAIN_SITES else EXCL) for a, w, _ in R.hook_sites() if a in COLS_KEEP]
+    if {a for a, *_ in rows} != COLS_KEEP:
+        raise BuildError('a COL-Share client site is not declared in build_rawview')
+    for a, s, _ in rows:
+        if B.stock(a, 4) != s:
+            raise BuildError(f'0x{a:08X}: stock is not the reference image')
+    return sorted(rows)
+
+
+def write_icon_inc():
+    """rv_launch.S (COLS): the RAW row's icon, handed to COL-Share by cb_icon (rv_uidata is the one source)."""
+    data = rv_uidata.ICONS[0][3].read_bytes()
+    out = ['/* 由 build_v3_rawview.py 產生,勿手改 */', 'cb_icon_data:']
+    for j in range(0, len(data), 16):
+        out.append('    .byte ' + ', '.join(f'0x{b:02X}' for b in data[j:j + 16]))
+    (HERE / 'rv_icon.inc').write_text('\n'.join(out) + '\n')
+    return len(data)
+
+
 def claims_table(rows):
     """count, {addr, len, kind, stock_off from the table}, then the stock bytes."""
     base = 4 + 16 * len(rows)
@@ -120,9 +154,10 @@ def claims_table(rows):
     return head + data
 
 
-def check_calls(code):
+def check_calls(code, cols=False):
     """The V3 launcher's calls: allowed firmware routines, the service table, uia_apply.
-    No direct bl."""
+    No direct bl.  cols: COL-Share's api / the service table through any register
+    (`ldr ip, [rN, #off]`), and `bl` only inside the launcher (rv_install)."""
     import capstone
     md = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
     lo = hi = None
@@ -135,7 +170,9 @@ def check_calls(code):
             hi, last = int(ops.split('#')[1], 0), ('fw' if last == 'movw' else 'odd')
         elif i.mnemonic == 'ldr' and ops.startswith('ip, [r0, #'):
             off = int(ops.split('#')[1].rstrip(']'), 0)
-            last = 'svc' if off in SVC_OFFS else 'odd'
+            last = 'svc' if off in SVC_OFFS or cols else 'odd'
+        elif cols and i.mnemonic == 'ldr' and ops.startswith('ip, [r') and ', #' in ops:
+            last = 'svc'
         elif i.mnemonic == 'add' and ops == 'ip, r6, ip':
             last = 'ui' if last == 'fw' else 'odd'
         elif i.mnemonic == 'blx':
@@ -145,22 +182,28 @@ def check_calls(code):
                 raise BuildError(f'launcher calls 0x{(hi << 16) | lo:08X} at {i.address:#x}')
             if last not in ('fw', 'svc', 'ui'):
                 raise BuildError(f'blx ip at {i.address:#x}: ip from {last}')
+        elif i.mnemonic == 'bl' and cols and 0 <= int(ops.lstrip('#'), 0) < len(code):
+            pass
         elif i.mnemonic == 'bl':
             raise BuildError(f'launcher has a direct bl at {i.address:#x}')
         elif ops.startswith('ip,') and i.mnemonic not in ('movw', 'movt'):
             last = 'other'
 
 
-def build(v4=False, name=b''):
+def build(v4=False, name=b'', cols=False):
     """v4 (build_v4_rawview.py): the FSB4 header (48 B, the record after it),
     rv_*.S V4=1 (file_is before a save, the record reaching memory first),
-    fpsup-ui's section for the row; `name` (the display name) ends the file."""
+    fpsup-ui's section for the row; `name` (the display name) ends the file.
+    cols (v4 only, RAW-View 0.4): a COL-Share client -- no UI section, no COLOR points."""
+    if cols and not v4:
+        raise BuildError('cols needs v4')
     HL = 48 if v4 else B.SL_HEADER_LEN
     for w in (R.write_csv_inc, R.write_page_inc, R.write_mat_inc, R.write_sat_inc,
               R.write_dngcm_inc):
         w()
     res_src = HERE / 'rv_resident.S'
-    rdefs = ['V3=1'] + (['V4=1'] if v4 else [])
+    rdefs = ['V3=1'] + (['V4=1'] if v4 else []) + (['COLS=1'] if cols else [])
+    icon_len = write_icon_inc() if cols else 0
     res = assemble(res_src, rdefs)
     rs = symbols(res_src, rdefs)
     if rs['params'] != 0 or rs['sat_tab'] != 0x1D0:
@@ -169,8 +212,12 @@ def build(v4=False, name=b''):
     if 0x3E200 + len(res) > 0x40800:
         raise BuildError(f'resident {len(res)} B runs into the matrix copy')
     tdata = R.rv_tables.blob()
-    sec, ui = ui_section(v4)
-    rows = claim_rows(ui['sites'])
+    if cols:
+        sec, ui = b'', {}
+        rows = claim_rows_cols()
+    else:
+        sec, ui = ui_section(v4)
+        rows = claim_rows(ui['sites'])
     ctab = claims_table(rows)
 
     sec_off = (len(res) + len(tdata) + 3) & ~3
@@ -181,12 +228,20 @@ def build(v4=False, name=b''):
     name_at = len(tail)
     tail += name
 
-    stub = {k: rs[k] for k in ('stub_gs', 'stub_dg', 'stub_ma', 'stub_mb', 'stub_mc', 'stub_fv',
+    stub = {k: rs[k] for k in (COLS_STUBS if cols else
+                               ('stub_gs', 'stub_dg', 'stub_ma', 'stub_mb', 'stub_mc', 'stub_fv',
                                'stub_ml', 'stub_ef', 'stub_en', 'stub_sa', 'stub_sn', 'stub_mj',
                                'stub_mo', 'stub_mx', 'stub_zc', 'stub_zs', 'stub_znc', 'stub_zns',
-                               'stub_ai', 'stub_sv', 'stub_pq')}
+                               'stub_ai', 'stub_sv', 'stub_pq'))}
 
     def defines(scr_off):
+        if cols:
+            d = [f'RES_LEN=0x{len(res):X}', f'TDATA_OFF=0x{len(res):X}',
+                 f'CMBUF=0x{rs["cm_buf"]:X}', f'CMTAB=0x{rs["cm_tab"]:X}',
+                 'UISHARE=1', 'V3=1', 'V4=1', 'COLS=1', f'SCR_OFF=0x{scr_off:X}',
+                 f'CLAIMS_OFF=0x{claims_off:X}', f'SAT_MAX={rv_color.SAT_MAX}', f'ICON_LEN={icon_len}',
+                 f'NEXT_SV=0x{rs["sv_next"]:X}', f'NEXT_PQ=0x{rs["pq_next"]:X}', f'NEXT_SVC=0x{rs["sv_svc"]:X}']
+            return d + [f'{k.upper()}=0x{v:X}' for k, v in stub.items()]
         d = [f'RES_LEN=0x{len(res):X}', f'TDATA_OFF=0x{len(res):X}',
              f'CMBUF=0x{rs["cm_buf"]:X}', f'CMTAB=0x{rs["cm_tab"]:X}',
              'UISHARE=1', 'V3=1', f'SCR_OFF=0x{scr_off:X}', f'CLAIMS_OFF=0x{claims_off:X}',
@@ -204,7 +259,7 @@ def build(v4=False, name=b''):
     ls = symbols(src, defines(file_len))
     if len(launch) != len(probe) or ls['blob'] != len(launch) or ls['entry'] != 0:
         raise BuildError('the launcher moved when the offsets went in')
-    check_calls(launch)
+    check_calls(launch[:ls['cb_data']] if cols else launch, cols)
     cfg = struct.pack('<8I', CFG_MAGIC, 0, 0, 0, 0, 0, 0, 0)
     body = cfg + launch + tail
     block = file_len + 0xFFF + ALLOC
@@ -212,7 +267,8 @@ def build(v4=False, name=b''):
     if v4:
         sys.path.insert(0, str(FPSUP / 'loader-v4'))
         import build_v4 as B4
-        data = bytearray(B4.make_sup(body, HL + CFG_LEN, SUP_ID, version=VERSION, block_size=block,
+        data = bytearray(B4.make_sup(body, HL + CFG_LEN, SUP_ID, version=COLS_VERSION if cols else VERSION,
+                                     block_size=block,
                                      min_svc=5, flags=B4.SL_F_CACHED_OK))
         if name:
             struct.pack_into('<I', data, 44, HL + CFG_LEN + len(launch) + name_at)
@@ -226,7 +282,9 @@ def build(v4=False, name=b''):
              'tables': len(tdata), 'ui_section': len(sec), 'claims': len(rows),
              'entry': HL + CFG_LEN, 'cfg_off': HL,
              'blob_off': HL + CFG_LEN + len(launch),
-             'res_syms': {k: rs[k] for k in ('sv_next', 'pq_next', 'ai_next', 'stub_sv', 'stub_gs')},
+             'res_syms': {k: rs[k] for k in ('sv_next', 'pq_next', 'stub_sv', 'stub_gs') +
+                          (('stub_pq', 'stub_sa', 'stub_zc', 'stub_dg') if cols else ('ai_next',))},
+             'launch_syms': {k: ls[k] for k in ('cb_state', 'rv_install')} if cols else {},
              'defines': defines(file_len),
              'claims_list': [{'address': f'0x{a:08X}', 'bytes': len(s),
                               'kind': {CHAIN: 'CHAIN', EXCL: 'EXCL', SHARED_UI: 'SHARED_UI'}[k]}

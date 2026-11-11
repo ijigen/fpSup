@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>fpSup-LUT — how to use it | fpSup</title>
+<meta name="description" content="Make a .cube LUT for the SIGMA fp in DaVinci Resolve and use it in the camera: on the screen, in JPG and in MOV.">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ijigen.github.io/fpSup/guide/lut.html">
+<meta property="og:title" content="fpSup-LUT — how to use it">
+<meta property="og:description" content="Make a .cube LUT for the SIGMA fp in DaVinci Resolve and use it in the camera: on the screen, in JPG and in MOV.">
+<meta property="og:image" content="https://ijigen.github.io/fpSup/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="../assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+.credit{background:var(--sig-soft); border:1px solid var(--line); border-left:4px solid var(--sig);
+  border-radius:4px; padding:18px 20px; margin:22px 0 30px}
+.credit-kicker{font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--sig); margin:0 0 4px}
+.credit-h{font-size:1.35rem; line-height:1.3; margin:0 0 6px; color:var(--ink);
+  font-family:var(--sans); text-transform:none; letter-spacing:0}
+.credit p:last-child{margin-bottom:0}
+ol.steps{padding-left:1.3em}
+ol.steps > li{margin:0 0 18px}
+.pair{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+@media (max-width:640px){.pair{grid-template-columns:1fr}}
+.pair figure.shot{margin:8px 0}
+</style>
+</head>
+<body>
+
+<div class="langbar">
+  <div class="lang" role="group" aria-label="Language / 語言 / 语言">
+    <button type="button" data-set="en" aria-pressed="true">EN</button>
+    <button type="button" data-set="cn" aria-pressed="false">中</button>
+    <button type="button" data-set="zh" aria-pressed="false">繁</button>
+  </div>
+</div>
+<a class="back" href="../guide.html">&larr; <span class="en">How to use fpSup</span><span class="zh">fpSup 怎麼用</span></a>
+
+<header class="hero">
+  <h1>fpSup-LUT</h1>
+  <p class="lede en">Put a <b>.cube LUT</b> on the card and the fp turns it into settings for its own
+  colour hardware. The look appears on the screen and is <b>recorded into JPG and MOV</b>;
+  DNG and CinemaDNG stay RAW. You pick it in the camera's own <b>COLOR</b> list, next to the stock modes.</p>
+  <p class="lede zh">把 <b>.cube LUT</b> 放進卡，fp 會把它轉成相機自己色彩硬體的設定。
+  螢幕上看得到，<b>JPG 與 MOV 也會套用</b>；DNG 與 CinemaDNG 仍是 RAW。
+  在相機原本的 <b>COLOR</b> 清單裡選用，和原廠色彩模式並列。</p>
+</header>
+
+<div class="warn en"><b>This is a test build (0.1.0test).</b> Try it on something you do not need before you shoot something that matters.</div>
+<div class="warn zh"><b>這是測試版（0.1.0test）。</b>拍重要的東西之前，先拿不重要的東西試過。</div>
+
+<!-- 1. INSTALL -->
+<h2 id="install"><span class="en">1. Install</span><span class="zh">1. 安裝</span></h2>
+<p class="en">Tick <b>LUT</b> in <a href="../tools/card-composer/">fpSup-Merge</a>. <b>COL-Share</b>, which adds the rows
+to the COLOR list, comes with it automatically. Download and put the files on
+the card as the Merge page says.</p>
+<p class="zh">在 <a href="../tools/card-composer/">fpSup-Merge</a> 勾選 <b>LUT</b>。負責在 COLOR 清單加列的
+<b>COL-Share</b> 會自動附上。下載後照 Merge 頁的說明放進卡。</p>
+
+<!-- 2. MAKE A LUT -->
+<h2 id="make"><span class="en">2. Make a LUT in DaVinci Resolve</span><span class="zh">2. 在 DaVinci Resolve 做 LUT</span></h2>
+<p class="en">Make the LUT from an fp DNG in DaVinci Resolve. Whatever <b>Color Space</b> and <b>Gamma</b> you decode the DNG
+with in Camera Raw, set the same two in the camera (step 4), and the camera feeds the LUT the same picture Resolve did &mdash;
+so it matches what you saw. The example below uses <b>P3 D60 / Linear</b>; any pair the camera lists works.</p>
+<p class="zh">用 fp 的 DNG 在 DaVinci Resolve 裡做 LUT。Camera Raw 用什麼 <b>Color Space</b> 和 <b>Gamma</b> 解碼，
+相機上（第 4 步）就設同樣兩項，相機送進 LUT 的畫面就和 Resolve 一樣，看到的結果也就一致。
+下面的例子用 <b>P3 D60 / Linear</b>；相機清單裡有的組合都可以。</p>
+
+<ol class="steps">
+  <li><span class="en"><b>Project settings &rarr; Color Management:</b> Color science <b>DaVinci YRGB</b> (not colour managed),
+  timeline and output colour space <b>Rec.709 (Scene)</b>.</span><span class="zh"><b>專案設定 &rarr; Color Management：</b>
+  Color science 選 <b>DaVinci YRGB</b>（不使用色彩管理），Timeline 與 Output color space 都是 <b>Rec.709 (Scene)</b>。</span>
+    <figure class="shot"><img class="actual" src="../assets/guide/11-lut-project.webp" width="443" height="120"
+      alt="Color science DaVinci YRGB, timeline and output colour space Rec.709 (Scene)"></figure></li>
+
+  <li><span class="en"><b>Camera Raw</b> (Color page, the clip's Camera Raw panel): Decode Using <b>Clip</b>,
+  White Balance <b>As shot</b>, Highlight Recovery and Apply Pre Tone Curve <b>off</b>, and a Color Space / Gamma the camera
+  also offers (here <b>P3 D60</b> / <b>Linear</b>). Note which pair you used.</span><span class="zh"><b>Camera Raw</b>（調色頁、該片段的 Camera Raw 面板）：
+  Decode Using 選 <b>Clip</b>、White Balance 選 <b>As shot</b>，Highlight Recovery 與 Apply Pre Tone Curve <b>不勾</b>，
+  Color Space／Gamma 選相機也有的組合（這裡是 <b>P3 D60</b>／<b>Linear</b>）。記下你用的是哪一組。</span>
+    <figure class="shot"><img class="actual" src="../assets/guide/11-lut-cameraraw.webp" width="253" height="240"
+      alt="Camera Raw: Decode Using Clip, White Balance As shot, Color Space P3 D60, Gamma Linear"></figure>
+    <div class="note en"><b>Camera Raw Exposure does not go into the LUT.</b> Generate LUT exports only the nodes, so the
+    same grade exported at Exposure &minus;2.4 or 0 gives the very same .cube. Exposure only changes what you see while
+    grading: at <b>0</b> the viewer shows the brightness the camera gives the LUT (Resolve already applies the DNG's
+    BaselineExposure), so that is the setting to judge the look with. Brightness you want in the LUT goes in a node.</div>
+    <div class="note zh"><b>Camera Raw 的曝光不會進到 LUT。</b>Generate LUT 只匯出節點，同樣的調色在曝光 &minus;2.4 或 0
+    匯出，得到的是一模一樣的 .cube。曝光只改變你調色時看到的畫面：設在 <b>0</b> 時，畫面就是相機送進 LUT 的亮度
+    （Resolve 已經套用 DNG 的 BaselineExposure），所以用 0 來判斷效果最準。要讓 LUT 本身變亮或變暗，請放在節點裡。</div></li>
+
+  <li><span class="en"><b>Grade with nodes.</b> Everything in the node tree becomes the LUT. In the example below, which our
+  ARRI LUT was made with, one node holds DaVinci's built-in <b>Arri Alexa LogC to Rec709</b> LUT.</span>
+  <span class="zh"><b>用節點調色。</b>節點樹裡的全部內容就是 LUT。下面是我們做 ARRI LUT 時用的例子，
+  其中一個節點放 DaVinci 內建的 <b>Arri Alexa LogC to Rec709</b> LUT。</span>
+    <figure class="shot"><img src="../assets/guide/11-lut-nodes.webp" width="2102" height="666"
+      alt="An fp DNG in the viewer and a five-node tree"></figure>
+    <figure class="shot"><img class="actual" src="../assets/guide/11-lut-node-lut.webp" width="576" height="184"
+      alt="Node 02 holds the LUT Arri Alexa LogC to Rec709"></figure></li>
+
+  <li><span class="en"><b>Export:</b> right-click the clip &rarr; <b>Generate LUT</b> &rarr; <b>33 Point Cube</b> or
+  <b>65 Point Cube</b>. 65 is finer; both work.</span><span class="zh"><b>匯出：</b>在片段上按右鍵 &rarr;
+  <b>Generate LUT</b> &rarr; <b>33 Point Cube</b> 或 <b>65 Point Cube</b>。65 比較細，兩種都能用。</span>
+    <figure class="shot"><img class="actual" src="../assets/guide/11-lut-generate.webp" width="446" height="191"
+      alt="Clip menu, Generate LUT, 17 / 33 / 65 Point Cube"></figure></li>
+</ol>
+
+<p class="en"><b>Optional, for LUT authors.</b> Two comment lines near the top of the .cube tell the camera which input
+the LUT expects, so the user does not have to set it. For P3 D60 / Linear:</p>
+<p class="zh"><b>選用，給 LUT 作者。</b>在 .cube 開頭附近加兩行註解，告訴相機這支 LUT 要的輸入，用戶就不必自己設。
+以 P3 D60／Linear 為例：</p>
+<pre><code># FPSUP_INPUT_COLOR_SPACE p3-d60
+# FPSUP_INPUT_GAMMA linear</code></pre>
+<p class="en">Other values &mdash; colour space: <code>aces</code> <code>adobe-rgb</code> <code>blackmagic-design</code>
+<code>p3-d60</code> <code>p3-d65</code> <code>rec2020</code> <code>rec709</code> <code>srgb</code>; gamma: <code>adobe-rgb</code>
+<code>gamma24</code> <code>gamma26</code> <code>linear</code> <code>rec709</code> <code>srgb</code> <code>blackmagic-film</code>
+<code>blackmagic-extended-video</code>.</p>
+<p class="zh">其他可用的值 —— 色域：<code>aces</code> <code>adobe-rgb</code> <code>blackmagic-design</code>
+<code>p3-d60</code> <code>p3-d65</code> <code>rec2020</code> <code>rec709</code> <code>srgb</code>；Gamma：<code>adobe-rgb</code>
+<code>gamma24</code> <code>gamma26</code> <code>linear</code> <code>rec709</code> <code>srgb</code> <code>blackmagic-film</code>
+<code>blackmagic-extended-video</code>。</p>
+
+<!-- 3. CARD -->
+<h2 id="card"><span class="en">3. Put the .cube on the card</span><span class="zh">3. 把 .cube 放進卡</span></h2>
+<p class="en">Copy the files into <code>\fpSup\LUT\</code>. Only <code>.cube</code> files directly in that folder are read.
+The COLOR list shows the first <b>8 characters</b> of the file name, so keep names short
+(<code>ARRI_709.cube</code>, <code>Fuji_3513.cube</code>).</p>
+<p class="zh">把檔案複製到 <code>\fpSup\LUT\</code>。只讀這個資料夾裡（不含子資料夾）的 <code>.cube</code>。
+COLOR 清單只顯示檔名的<b>前 8 個字</b>，名字取短一點（<code>ARRI_709.cube</code>、<code>Fuji_3513.cube</code>）。</p>
+<figure class="shot"><img src="../assets/guide/11-lut-card.webp" width="1276" height="214"
+  alt="The card: fpSup, LUT folder with four .cube files"></figure>
+
+<!-- 4. CAMERA -->
+<h2 id="camera"><span class="en">4. Convert it in the camera</span><span class="zh">4. 在相機上轉檔</span></h2>
+<ol class="steps">
+  <li><span class="en"><b>MENU &rarr; SYSTEM</b>, go past the last page to the <b>fpSup</b> page, open <b>LUT manager</b>.</span>
+  <span class="zh"><b>MENU &rarr; SYSTEM</b>，翻過最後一頁到 <b>fpSup</b> 頁，打開 <b>LUT manager</b>。</span>
+    <figure class="shot"><img src="../assets/guide/11-lut-fpsup.webp" width="1024" height="682"
+      alt="The fpSup page with the LUT manager row"></figure></li>
+
+  <li><span class="en">Every .cube in the folder is a row. Choose the one you want; <b>do not turn it on yet</b>.</span>
+  <span class="zh">資料夾裡每支 .cube 是一列。選你要的那一列，<b>先不要開啟</b>。</span></li>
+
+  <li><span class="en"><b>First set its input: AEL &rarr; Further Options.</b> The conversion uses these settings, so set them
+  before converting. If the .cube carries the author lines above, they are already right &mdash; check and go on.</span>
+  <span class="zh"><b>先設定輸入：AEL &rarr; 更多選項。</b>轉檔會用這些設定，所以要在轉檔之前設好。
+  如果 .cube 有上面那兩行作者註解，這裡已經設好了 —— 確認一下就可以繼續。</span>
+    <ul>
+      <li><span class="en"><b>Color space</b> and <b>Gamma</b>: the same pair you decoded with in Camera Raw (step 2) &mdash;
+      <b>P3 D60</b> and <b>Linear</b> in the example.</span><span class="zh"><b>Color space</b> 與 <b>Gamma</b>：
+      跟第 2 步 Camera Raw 解碼用的同一組 —— 例子裡是 <b>P3 D60</b> 與 <b>Linear</b>。</span></li>
+      <li><span class="en"><b>Color matrix</b>: <b>OFF</b> if the LUT was made from a clip shot in COLOR <b>OFF</b>,
+      <b>Standard</b> if it was shot in one of the colour modes.</span><span class="zh"><b>Color matrix</b>：
+      做 LUT 用的片段是 COLOR <b>OFF</b> 拍的就選 <b>OFF</b>；用色彩模式拍的就選 <b>Standard</b>。</span></li>
+    </ul>
+    <div class="pair">
+      <figure class="shot"><img src="../assets/guide/11-lut-colorspace.webp" width="1024" height="682"
+        alt="Further Options: Color space list, P3 D60 selected"></figure>
+      <figure class="shot"><img src="../assets/guide/11-lut-gamma.webp" width="1024" height="682"
+        alt="Further Options: Gamma list, Linear selected; title ARRI_709.cube 91% match"></figure>
+    </div>
+    <figure class="shot"><img class="actual" src="../assets/guide/11-lut-matrix.webp" width="512" height="341"
+      alt="Further Options: Color matrix, Standard or OFF, OFF selected"></figure>
+    <p class="en">Press <b>MENU</b> to go back to the list.</p>
+    <p class="zh">按 <b>MENU</b> 回到清單。</p></li>
+
+  <li><span class="en"><b>Then turn it on:</b> press <b>OK</b> and choose <b>On</b>. The title counts how many are on: up to
+  <b>12</b> at once.</span><span class="zh"><b>再開啟：</b>按 <b>OK</b>，選 <b>開啟</b>。標題的數字是目前開了幾支：最多同時 <b>12</b> 支。</span>
+    <figure class="shot"><img src="../assets/guide/11-lut-manager.webp" width="1024" height="682"
+      alt="LUT (0/12) list: ARRI_709, Fuji_3513, Kodak_2383, RED_LC_Soft, with the On / Off choice open"></figure></li>
+
+  <li><span class="en">Turning a LUT on the first time <b>converts</b> it. The chart shows the cube's colours (top half
+  of each patch) and the camera's version (bottom half); <b>Match</b> is how close they are. Wait until it finishes.
+  It is done once: the result is saved in <code>\fpSup\LUTDATA\</code>, and the Further Options title then shows the match
+  (e.g. <i>ARRI_709.cube 91% match</i>).</span><span class="zh">第一次開啟會<b>轉檔</b>。
+  色卡每一格的上半是 cube 的顏色、下半是相機做出來的顏色，<b>Match</b> 是兩者的接近程度。等它跑完。
+  只需要轉一次：結果存在 <code>\fpSup\LUTDATA\</code>，之後「更多選項」的標題會顯示相符度（例如 <i>ARRI_709.cube 91% match</i>）。</span>
+    <figure class="shot"><img src="../assets/guide/11-lut-converting.webp" width="1024" height="682"
+      alt="Converting 6%, Match 34%, a 24-patch chart"></figure>
+    <p class="en">Changed Color space, Gamma or Color matrix later? The LUT converts again. <b>Color chart</b> in Further Options
+    shows the last conversion's chart again.</p>
+    <p class="zh">之後改了 Color space、Gamma 或 Color matrix，LUT 會重新轉檔。「更多選項」裡的 <b>Color chart</b>
+    可以再看一次上次轉檔的色卡。</p></li>
+</ol>
+
+<!-- 5. USE -->
+<h2 id="use"><span class="en">5. Use it</span><span class="zh">5. 使用</span></h2>
+<p class="en">Open the camera's <b>COLOR</b> list as usual: every LUT that is on is a tile right after <b>OFF</b>, named after its
+file. Pick it like any colour mode. It applies to the live view, to JPG and to MOV. DNG and CinemaDNG are still RAW &mdash;
+grade them in Resolve with the same LUT.</p>
+<p class="zh">照平常打開相機的 <b>COLOR</b> 清單：每支已開啟的 LUT 都是接在 <b>OFF</b> 後面的一格，名字取自檔名。
+像選色彩模式一樣選它。即時畫面、JPG、MOV 都會套用。DNG 與 CinemaDNG 仍是 RAW —— 在 Resolve 裡套同一支 LUT 調色。</p>
+<figure class="shot"><img src="../assets/guide/11-lut-color-list.webp" width="1024" height="682"
+  alt="The COLOR list: after OFF come the LUT tiles; Fuji_3513 selected">
+  <figcaption class="en">The LUT tiles come right after <b>OFF</b>. A tile shows the first 8 characters; the full name appears above while it is selected.</figcaption>
+  <figcaption class="zh">LUT 的圖磚接在 <b>OFF</b> 後面。圖磚只顯示前 8 個字，選到的時候上方會顯示完整名稱。</figcaption>
+</figure>
+
+<!-- 6. BUNDLED - HIDDEN (Bei 2026-11-12): the two log LUTs and their credits come back once Luka (Midnite)
+     and Ole Berek agree.  Remove this wrapper, and put LOOKS / credits back in make_looks.py and the merge catalogue.
+
+<h2 id="bundled"><span class="en">The two log LUTs on the Merge page</span><span class="zh">Merge 頁附的兩支 log LUT</span></h2>
+<p class="en"><b>LogC3</b> (ARRI Wide Gamut 3 / LogC3) and <b>L-Log</b> (Leica L-Gamut / L-Log) turn the fp's picture into a log
+image for grading later: flat on purpose. They already carry the author lines, so they convert with nothing to set.</p>
+<p class="zh"><b>LogC3</b>（ARRI Wide Gamut 3 / LogC3）與 <b>L-Log</b>（Leica L-Gamut / L-Log）把 fp 的畫面轉成給後期調色用的 log 畫面：
+本來就是灰平的。檔頭已經有作者註解，轉檔時不用設定。</p>
+<p class="en"><b>Restoring the log in Resolve:</b> right-click a MOV or JPG recorded with one of them &rarr; <b>Input Color Space</b>
+&rarr; the matching log (here <b>ARRI &rarr; ARRI LogC3</b>), then grade it like footage from that camera.</p>
+<p class="zh"><b>在 Resolve 還原 log：</b>在用它們錄的 MOV 或 JPG 上按右鍵 &rarr; <b>Input Color Space</b> &rarr; 選對應的 log
+（這裡是 <b>ARRI &rarr; ARRI LogC3</b>），之後就像那台攝影機的素材一樣調色。</p>
+<figure class="shot"><img class="actual" src="../assets/guide/11-lut-input-space.webp" width="497" height="472"
+  alt="Clip menu, Input Color Space, ARRI, ARRI LogC3 ticked"></figure>
+
+<section class="credit" id="credits" aria-labelledby="credits-h">
+  <p class="credit-kicker"><span class="en">Thanks</span><span class="zh">致謝</span></p>
+  <h2 id="credits-h" class="credit-h"><span class="en">Thank you, Luka (Midnite) and Ole Berek</span><span class="zh">感謝 Luka（Midnite）與 Ole Berek</span></h2>
+  <p class="en">The log curves themselves &mdash; ARRI LogC3 and Leica L-Log &mdash; are ARRI's and Leica's published formulas.
+  What comes before them, the fp's colour correction from the COLOR OFF picture to DaVinci Wide Gamut, is
+  <b>Luka (Midnite)</b>'s chart calibration; we checked it against <b>Ole Berek</b>'s fp LUT.</p>
+  <p class="zh">log 曲線本身 —— ARRI LogC3 與 Leica L-Log —— 是 ARRI、Leica 公開的公式。
+  在它之前的那一步，把 fp 的 COLOR OFF 畫面校正到 DaVinci Wide Gamut 的色彩校準，是 <b>Luka（Midnite）</b>做的色卡校準；
+  我們拿 <b>Ole Berek</b> 的 fp LUT 當對照驗證過它。</p>
+</section>
+
+-->
+
+<!-- 7. GOOD TO KNOW -->
+<h2 id="notes"><span class="en">Good to know</span><span class="zh">注意事項</span></h2>
+<ul>
+  <li><span class="en"><b>Highlights stop where the LUT stops.</b> A LUT made for Linear input covers values up to 1.0.
+  Anything brighter takes the LUT's brightest value; the camera adds no clipping of its own. This is the LUT's own
+  behaviour, the same as in Resolve.</span><span class="zh"><b>高光停在 LUT 的上限。</b>Linear 輸入的 LUT 只涵蓋到 1.0，
+  更亮的地方就是 LUT 最亮的那個值；相機自己不另外裁切。這是 LUT 本身的行為，和在 Resolve 裡一樣。</span></li>
+  <li><span class="en"><b>Changed the .cube?</b> A file whose size changed is treated as new and converted again when you turn it on.</span>
+  <span class="zh"><b>改過 .cube？</b>檔案大小變了就當成新的，開啟時會重新轉檔。</span></li>
+  <li><span class="en"><b>Deleted <code>\fpSup\LUTDATA\</code>?</b> The camera notices after the next restart; then turn the LUT on to convert again.</span>
+  <span class="zh"><b>刪了 <code>\fpSup\LUTDATA\</code>？</b>相機要重開機後才會發現；之後把 LUT 開啟就會重新轉檔。</span></li>
+  <li><span class="en"><b>After updating LUT</b> to a new version, convert your LUTs again: each version keeps its settings in its own file.</span>
+  <span class="zh"><b>LUT 更新版本後</b>要重新轉檔：每個版本的設定存在自己的檔案裡。</span></li>
+  <li><span class="en">Conversion does not run while recording.</span><span class="zh">錄影中不會轉檔。</span></li>
+</ul>
+
+<!-- 8. REMOVE -->
+<h2 id="remove"><span class="en">Remove</span><span class="zh">移除</span></h2>
+<p class="en">Delete <code>\fpSup\LUT_v*.BIN</code>, <code>\fpSup\UI\COLOR.BIN</code> and the <code>LUT</code> and
+<code>LUTDATA</code> folders (and the COL-Share file if nothing else uses it), then restart. LUT keeps nothing in the
+camera's own settings. <a href="../guide.html#remove">More on removing</a>.</p>
+<p class="zh">刪掉 <code>\fpSup\LUT_v*.BIN</code>、<code>\fpSup\UI\COLOR.BIN</code> 以及 <code>LUT</code>、<code>LUTDATA</code>
+兩個資料夾（沒有其他功能在用的話，COL-Share 的檔案也可以刪），然後重開機。LUT 不在相機自己的設定裡存任何東西。
+<a href="../guide.html#remove">移除的詳細說明</a>。</p>
+
+<!-- 9. TROUBLE -->
+<h2 id="trouble"><span class="en">If something does not work</span><span class="zh">如果有東西不能用</span></h2>
+<div class="scroll">
+<table>
+  <thead><tr><th><span class="en">what happens</span><span class="zh">發生什麼</span></th><th><span class="en">what to do</span><span class="zh">怎麼辦</span></th></tr></thead>
+  <tbody>
+    <tr><td><span class="en">No LUT manager on the fpSup page</span><span class="zh">fpSup 頁沒有 LUT manager</span></td>
+        <td><span class="en">The card did not load LUT; see <a href="../guide.html#trouble">general problems</a>.</span>
+        <span class="zh">卡沒有載入 LUT；見<a href="../guide.html#trouble">一般問題</a>。</span></td></tr>
+    <tr><td><span class="en">My .cube is not in the list</span><span class="zh">清單裡沒有我的 .cube</span></td>
+        <td><span class="en">It must be directly in <code>\fpSup\LUT\</code> and end in <code>.cube</code>.</span>
+        <span class="zh">要直接放在 <code>\fpSup\LUT\</code>，副檔名是 <code>.cube</code>。</span></td></tr>
+    <tr><td><span class="en">The LUT is on but not in the COLOR list</span><span class="zh">LUT 開了，COLOR 清單卻沒有</span></td>
+        <td><span class="en">COL-Share is missing: get the card again from fpSup-Merge.</span>
+        <span class="zh">少了 COL-Share：從 fpSup-Merge 重新下載。</span></td></tr>
+    <tr><td><span class="en">Brighter or darker than in Resolve</span><span class="zh">比 Resolve 裡亮或暗</span></td>
+        <td><span class="en">Compare with Resolve at Camera Raw Exposure 0: that is what the camera shows (step 2).</span>
+        <span class="zh">在 Resolve 用 Camera Raw 曝光 0 來比對，那才是相機上的樣子（第 2 步）。</span></td></tr>
+    <tr><td><span class="en">Colours off, low Match</span><span class="zh">顏色不對、Match 偏低</span></td>
+        <td><span class="en">Check Color space, Gamma and Color matrix under AEL &rarr; Further Options.</span>
+        <span class="zh">檢查 AEL &rarr; 更多選項 裡的 Color space、Gamma、Color matrix。</span></td></tr>
+    <tr><td><span class="en">The camera does not respond</span><span class="zh">相機沒反應</span></td>
+        <td><span class="en">Take the battery out (USB unplugged). Bring what you saw to the
+        <a href="https://discord.gg/XeFK5zNZpT">Discord</a>.</span><span class="zh">把電池拿出來（不插 USB 線）。
+        把你看到的情況帶到 <a href="https://discord.gg/XeFK5zNZpT">Discord</a>。</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note en"><i>And if anything is wrong, it's definitely AI's fault.</i></p>
+<p class="note zh"><i>如果有哪裡不對，那一定是 AI 的錯。</i></p>
+
+<footer>
+  <p><a href="../">fpSup</a> &middot; <a href="../guide.html"><span class="en">How to use fpSup</span><span class="zh">fpSup 怎麼用</span></a> &middot; <a href="../tools/card-composer/">fpSup-Merge</a> &middot; <a href="https://discord.gg/XeFK5zNZpT">Discord</a></p>
+</footer>
+
+<script src="../assets/lang.js?v=7c49866d" defer></script>
+</body>
+</html>

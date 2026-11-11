@@ -18,6 +18,7 @@ replace that box in `guide.html` with one line.
 | `07-gyroflow.mp4`    | 7 | **done** — loading a DNG sequence into Gyroflow and syncing |
 | `07-resolve.mp4`     | 7 | **done** — the same clip stabilised in DaVinci Resolve |
 | `08-reset.webp`      | 8 | **done** — the same screen back on FHD |
+| `11-lut-*.webp`      | guide/lut.html | 2026-11-12, Bei's screenshots (incl. the COLOR list with LUT tiles): Resolve project / Camera Raw / nodes / Generate LUT / the card's LUT folder, and the camera's fpSup page, LUT manager, conversion and Further Options |
 
 Two things the step 6 footage settled, which the written guide had wrong:
 

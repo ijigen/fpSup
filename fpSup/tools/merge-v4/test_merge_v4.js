@@ -210,7 +210,11 @@ for (const p of CAT.products.filter(p => (p.data_files || []).length)){
   const z = unzip(zipFor([p.id]));
   ok(has(z) === n - 1 && !z[root + p.data_files[0].path], `${p.id}: unticked ${p.data_files[0].label} is left out`);
   DATA_OFF[p.id] = p.data_files.map(d => d.path);
-  ok(checks([p.id]).some(r => !r.ok), `${p.id}: no data file ticked is refused`);
+  if (p.data_optional){       // LUT (2026-11-12): any .cube the user copies works, so none is a valid card
+    const z0 = unzip(zipFor([p.id]));
+    ok(checks([p.id]).every(r => r.ok) && has(z0) === 0 && z0[root + 'fpSup/' + p.file],
+       `${p.id}: no data file ticked is a valid card without them`);
+  } else ok(checks([p.id]).some(r => !r.ok), `${p.id}: no data file ticked is refused`);
   delete DATA_OFF[p.id];
 }
 
@@ -236,7 +240,8 @@ for (const p of [...CAT.products, ...(CAT.pending || [])]){
 // 6b. everyone thanked on a product's guide page is thanked on its tile
 for (const p of [...CAT.products, ...(CAT.pending || [])]){
   if (!p.guide) continue;
-  const g = fs.readFileSync(path.join(HERE, p.guide), 'utf8');
+  // hidden parts of the page (HTML comments, e.g. LUT's log LUTs until their authors agree) thank no one
+  const g = fs.readFileSync(path.join(HERE, p.guide), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
   // every "Thank you, ..." box on the page, not just the first
   const names = [...g.matchAll(/credit-h"><span class="en">Thank you, ([^<]+)</g)]
     .flatMap(m => m[1].split(/,\s*|\s+and\s+/)).map(x => x.trim()).filter(Boolean);

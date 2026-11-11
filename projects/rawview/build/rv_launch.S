@@ -89,6 +89,65 @@
 #ifndef V3
 #define V3 0
 #endif
+#ifndef COLS
+#define COLS 0
+#endif
+#if COLS
+/* RAW-View 0.4(V3 && V4 && COLS):COL-Share 的客戶(fpSup/colshare/colshare.h API 1;DESIGN.md P3)。
+ *   entry:找得到 COL-Share(晚到,一般情況)→ rv_install(準備:claim、守衛、表格、常駐、veneer;
+ *          任一失敗 → RELEASE,韌體一個字都沒寫)→ api->add(client);COL-Share 叫 attached() →
+ *          rv_install(寫韌體)→ set_record(RAW 列的記錄)。
+ *          找不到(早到,或卡上沒有 COL-Share)→ provide(COLS_TAG('RAWV'), client)、LOAD.LOG 一行、
+ *          fpSup 頁一列「RAW-View  needs COL-Share」;COL-Share 之後在它的 entry 撈到我們 → attached()
+ *          做全部(claim 記在 COL-Share 名下,同 LUT),那一列的值清掉。沒來就什麼點都不裝、沒有 RAW 列。
+ *   只 claim 自己專屬的點:增益 SITE_A/B(RAW_CORR 0xC032F728:LUT 以後也許要用,先 EXCL)、飽和度 ×4、
+ *   對比/清晰 ×8、DNG writer OFF 常數 movw/movt ×4、CHAIN 關機存檔 SV 與畫質指令 PQ。
+ *   COLOR 清單的點、root 字、±框與字形的 hook 都歸 COL-Share(API 2,Bei 11-08):RAW 列的框只停 −5 / +5
+ *   (COLS_R_SNAP),每一步立刻寫 CB_BOX(stub_gs 由它得 SA/GA),字形表 kigou_06 → S、kigou_07 → G、LB_5 → A
+ *   (0.3.1 的 stub_ai 同一組),選單關閉(不在錄影)時 strength_set 定下,stub_sv 存進自己的檔。 */
+.equ SVC_LOG,      28
+.equ SVC_PROVIDE,  56
+.equ SVC_FIND,     60
+.equ SVC_PAGE_ADD, 64
+.equ SVC_PAGE_REFRESH, 68
+.equ COLS_ID,      0x534C4F43       /* "COLS" */
+.equ RAWV_ID,      0x56574152       /* "RAWV" */
+.equ COLS_TAG_RAWV, RAWV_ID ^ 0xC0C0C0C0
+.equ CLA1,         0x31414C43
+.equ CLC1,         0x31434C43
+.equ API_ADD,      8
+.equ API_CHANGED,  12
+.equ API_SET_RECORD, 16
+.equ SET_SEL,      0xC31B954C
+.equ SET_BANK_A,   0xC31B32BC
+.equ SET_BANK_B,   0xC31B8B84
+.equ P_FLAG_R,     0x04             /* 常駐 params:客戶記得的選擇(stub_sv 存) */
+.equ P_MODEN,      0x124
+/* cb_state 的欄位(rv_launch.S 尾端,在塊內;早到時常駐還沒複製,狀態只能放這裡) */
+.equ CB_BLOCK, 0
+.equ CB_SVC, 4
+.equ CB_PATH, 8
+.equ CB_API, 12
+.equ CB_ATT, 16
+.equ CB_FAILED, 20
+.equ CB_PREP, 24
+.equ CB_PICKED, 28
+.equ CB_PARAMS, 32
+.equ CB_T0, 36
+.equ CB_VEN, 40
+.equ CB_RES, 44
+.equ CB_ROWIDX, 48
+.equ CB_ROWED, 52
+.equ CB_CLIENT, 56                  /* struct cols_client(API 2:52 B) */
+.equ CB_REC, 108                    /* struct cols_rec(4 + 8 × 12) */
+.equ CB_ROW, 208                    /* struct sl_row(32 B) */
+.equ CB_BOX, 240                    /* ±框的值:SA −5、GA +5(COL-Share 每一步寫;stub_gs 由它得 lat) */
+.equ CB_BOXD, 244                   /* struct cols_box {live, glyphs} */
+.equ CB_GLYPHS, 252                 /* {3, (原圖名, 新圖名) × 3}:字串池位移 */
+.equ P_VAR_R,      0x1A4
+.equ P_BOXP,       0x128            /* 常駐 params:&CB_BOX */
+.equ STOCK_POOL,   0xC18C0474
+#endif
 #if V3
 /* Loader v3(projects/usb-shell-sup/notes/LOADER_V3.md §4):entry(r0 = 塊, r1 = 服務表, r2 = 自己的檔案路徑)
  * 回 0 KEEP / 1 RELEASE。檔案 = [FSB1 檔頭 32][設定區 32][本 launcher][常駐][表格資料][UI 段落];
@@ -226,6 +285,28 @@
     str     r0, [r1]
 .endm
 
+#if COLS
+/* reg = cb_state(PC 相對) */
+.macro CBS reg
+    ldr     \reg, 91f
+90: add     \reg, pc, \reg
+    b       92f
+91: .word   cb_state - (90b + 8)
+92:
+.endm
+.equ NVEN_C, 10                     /* COLS 的 veneer:增益 2、飽和度 2、對比/清晰 4、SV、PQ */
+.equ V_GS, 0
+.equ V_DG, 1
+.equ V_SA, 2
+.equ V_SN, 3
+.equ V_ZC, 4
+.equ V_ZS, 5
+.equ V_ZNC, 6
+.equ V_ZNS, 7
+.equ V_SV, 8
+.equ V_PQ, 9
+#endif
+
 /* veneer n → 常駐 + off;r9 = 常駐,r5 = veneer 起點,r2 = VENEER_LDR */
 .macro VEN n, off
     LDA     r0, \off
@@ -235,10 +316,138 @@
 .endm
 
 entry:
+#if COLS
+    push    {r4-r8, lr}
+    CBS     r7
+    stmia   r7, {r0-r2}             @ 塊、服務表、路徑
+    mov     r4, r0
+    mov     r5, r1
+    mov     r6, r2
+    add     r0, r7, #CB_CLIENT      @ client 與 fpSup 頁列的指標欄:位移 → 絕對位址
+    mov     r1, #7
+30: ldr     r2, [r0, #16]           @ rows, icon, picked, on_pick, strength_get/set, attached
+    add     r2, r2, r7
+    str     r2, [r0, #16]
+    add     r0, r0, #4
+    subs    r1, r1, #1
+    bne     30b
+    add     r0, r7, #CB_CLIENT
+    str     r7, [r0, #44]           @ arg = cb_state
+    ldr     r2, [r0, #48]
+    add     r2, r2, r7
+    str     r2, [r0, #48]           @ box (API 2)
+    add     r2, r7, #CB_BOX
+    str     r2, [r7, #CB_BOXD]      @ live
+    add     r2, r7, #CB_GLYPHS
+    str     r2, [r7, #CB_BOXD + 4]  @ glyphs
+    add     r0, r7, #CB_ROW
+    ldr     r2, [r0, #4]
+    add     r2, r2, r7
+    str     r2, [r0, #4]            @ title
+    ldr     r2, [r0, #8]
+    add     r2, r2, r7
+    str     r2, [r0, #8]            @ value
+    ldr     r2, [r0, #24]
+    add     r2, r2, r7
+    str     r2, [r0, #24]           @ open
+    str     r7, [r0, #28]           @ arg
+    /* 客戶記得的選擇(picked):設定區 magic、flag 開、色彩仍是 OFF;±框:lat(GA +5、否則 SA −5) */
+    mov     r3, #0
+    mvn     r1, #4
+    str     r1, [r7, #CB_BOX]
+    add     r0, r4, #CFG_OFF
+    ldr     r1, [r0]
+    LDA     r2, CFG_MAGIC
+    cmp     r1, r2
+    bne     31f
+    ldr     r1, [r0, #8]
+    tst     r1, #1
+    movne   r1, #5
+    strne   r1, [r7, #CB_BOX]
+    ldr     r1, [r0, #4]
+    cmp     r1, #0
+    beq     31f
+    LDA     ip, SET_SEL
+    ldrb    ip, [ip]
+    cmp     ip, #0
+    LDA     r1, SET_BANK_A
+    LDA     r2, SET_BANK_B
+    movne   r1, r2
+    ldr     r1, [r1, #0x12C]
+    cmp     r1, #0xC
+    moveq   r3, #1
+31: str     r3, [r7, #CB_PICKED]
+    mov     r0, r5
+    LDA     r1, COLS_ID
+    ldr     ip, [r0, #SVC_FIND]
+    blx     ip
+    movs    r8, r0
+    beq     33f
+    ldr     r1, [r8]
+    LDA     r2, CLA1
+    cmp     r1, r2
+    bne     33f
+    ldr     r1, [r8, #4]
+    cmp     r1, #2                  @ API 2:框的描述(SA/GA)
+    blo     33f
+    /* 晚到(一般情況):準備在自己的 entry 裡做,被拒就 RELEASE */
+    mov     r0, r4
+    mov     r1, r5
+    mov     r2, r6
+    mov     r3, #1
+    bl      rv_install
+    cmp     r0, #0
+    bne     34f
+    mov     r0, r8
+    add     r1, r7, #CB_CLIENT
+    ldr     ip, [r8, #API_ADD]      @ attached() 在裡面:寫韌體、交記錄
+    blx     ip
+    cmp     r0, #0
+    bne     34f                     @ 沒收下:attached 沒跑,韌體沒寫
+    mov     r0, #0
+    pop     {r4-r8, pc}
+33: /* 早到或沒有 COL-Share:等它撈;在那之前沒有 RAW 列 */
+    mov     r0, r5
+    LDA     r1, COLS_TAG_RAWV
+    add     r2, r7, #CB_CLIENT
+    ldr     ip, [r0, #SVC_PROVIDE]
+    blx     ip
+    cmp     r0, #0
+    bne     34f
+    mov     r0, r5
+    ldr     r1, cb_log_rel
+35: add     r1, pc, r1
+    ldr     ip, [r0, #SVC_LOG]
+    blx     ip
+    mov     r0, r5
+    add     r1, r7, #CB_ROW
+    ldr     ip, [r0, #SVC_PAGE_ADD]
+    blx     ip
+    str     r0, [r7, #CB_ROWIDX]
+    cmp     r0, #0
+    movge   r0, #1
+    movlt   r0, #0
+    str     r0, [r7, #CB_ROWED]
+    mov     r0, #0
+    pop     {r4-r8, pc}
+34: mov     r0, #1                  @ RELEASE
+    pop     {r4-r8, pc}
+cb_log_rel: .word cb_log - (35b + 8)
+
+/* rv_install(塊, 服務表, 路徑, what):what bit 0 = 準備(claim → 守衛 → 表格、常駐、veneer),
+ * bit 1 = 寫韌體。回 0 成功、1 失敗(失敗時韌體一個字都沒寫)。 */
+rv_install:
+#endif
     push    {r4-r11, ip, lr}        @ 十個:stack 保持 8-byte 對齊
     sub     sp, sp, #16             @ allocator descriptor(不釋放);V3:[sp] 塊、[sp+4] 服務表、[sp+8] 路徑
 #if V3
+#if COLS
+    stmia   sp, {r0-r3}             @ [sp+12] what
+    tst     r3, #1
+    beq     60f
+#else
     stmia   sp, {r0-r2}
+#endif
 
     /* 0. claim:{位址, 長度, 種類, 原廠值位移(相對表)} × n */
     ldr     r6, claims_rel
@@ -272,6 +481,7 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     /* 1. 原廠值檢查 */
     GUARD   SITE_A, ORIG_A
     GUARD   SITE_B, ORIG_B
+#if !COLS                           /* COL-Share 的點 */
     GUARD   GET_MOVW, 0xE30122BC
     GUARD   GET_MOVT, 0xE34C22E4
     GUARD   GET_COUNT, 0xE3A02010
@@ -280,8 +490,11 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     GUARD   SITE_MA3, 0xEB04FB96
     GUARD   SITE_MB, 0xEB04AC0B
     GUARD   SITE_MC, 0xE15A0006
+#endif
+#if !COLS                           /* COL-Share 的點 */
 #if UISHARE
     GUARD   ADV_SITE, ADV_OLD
+#endif
 #endif
 #if !UISHARE
     /* UISHARE=1(2026-10-03):COLOR 的第 17 列、三個 CSV、圖示、頁面上限與 H1 取檔
@@ -300,17 +513,23 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
 15:
     GUARD   H1_SITE, 0x60681840
 #endif
+#if !COLS                           /* COL-Share 的點 */
     GUARD   SITE_ML, 0xEB048B51
+#endif
 #if !V3                             /* V3:CHAIN,下層可能已改過;改由 chain_next 接 */
     GUARD   AI_SITE, 0xFCDAF7F4
     GUARD   SITE_SV, ORIG_SV
     GUARD   SITE_PQ, ORIG_PQ
 #endif
+#if !COLS                           /* COL-Share 的點 */
     GUARD   SITE_EF, 0xEB0560B7
     GUARD   SITE_MJ, 0xEB055F8E
     GUARD   SITE_EN_FIX, 0xEB04AD6E
+#endif
     GUARD   DNG_CM1_MOVW, 0xE30F2D74
+#if !COLS                           /* COL-Share 的點 */
     GUARD   CBM_VT_V25, 0xC05687E0
+#endif
     GUARD   SITE_ZC_AJ, 0xEB054E5C
     GUARD   SITE_ZC_FIX, 0xEB054EB4
     GUARD   SITE_ZS_AJ, 0xEB054E7A
@@ -319,17 +538,23 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     GUARD   SITE_ZNC_AJ, 0xEB04AD65
     GUARD   SITE_ZNS_FIX, 0xEB04ADE1
     GUARD   SITE_ZNS_AJ, 0xEB04AD8B
+#if !COLS                           /* COL-Share 的點 */
     GUARD   CBM_VT_V26, 0xC0568888
+#endif
     GUARD   DNG_CM1_MOVT, 0xE34C2096
     GUARD   DNG_CM2_MOVW, 0xE30F2CE4
     GUARD   DNG_CM2_MOVT, 0xE34C2096
+#if !COLS                           /* COL-Share 的點 */
     GUARD   SITE_EN, 0xEB04AD18
+#endif
     GUARD   SITE_SA_AJ, 0xEB054E98
     GUARD   SITE_SA_FIX, 0xEB054EF0
     GUARD   SITE_SN_FIX, 0xEB04AE07
     GUARD   SITE_SN_AJ, 0xEB04ADB1
+#if !COLS                           /* COL-Share 的點 */
     GUARD   ROOT_P08, MAT_TAB
     GUARD   ROOT_P08 + 4, 35
+#endif
     LDA     r0, MAT_OFF_REC         @ OFF 那筆必須是原廠單位矩陣
     ldr     r1, mat_rel1
 22: add     r1, pc, r1              @ r1 = mat_stock
@@ -505,7 +730,9 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     sub     r1, r10, r1
     asr     r1, r1, #3
     add     r1, r1, #5
+#if !COLS                           /* COLS:OFF 筆維持原廠 82,base 存在 P_MODEN(步驟 5),RAW 生效時 stub_gs 才換 */
     str     r1, [r11, #0x11C]
+#endif
 
     /* 5. 常駐程式與參數 */
     LDA     r0, OFF_RES
@@ -529,7 +756,15 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     str     r3, [r0], #4
     subs    r2, r2, #1
     bne     6b
+#if COLS
+    LDA     r1, CURVE_ENTRIES
+    sub     r1, r10, r1
+    asr     r1, r1, #3
+    add     r1, r1, #5
+    str     r1, [r9, #P_MODEN]
+#endif
 
+#if !COLS
     /*    色彩模式 {enum, gui}:原廠 16 筆 + {0xC, 16} */
     LDA     r1, GUI_TAB
     add     r0, r9, #P_GUI
@@ -546,6 +781,7 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     cmp     r2, #17
     blo     8b
 
+#endif
     /*    色彩矩陣表副本(OFF 那筆換成校色矩陣) */
     LDA     r0, OFF_MAT
     add     r0, r4, r0              @ r0 = 副本
@@ -556,6 +792,7 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     str     r3, [r0], #4
     subs    r2, r2, #4
     bne     20b
+#if !COLS                           /* COLS:副本 = 原廠;RAW 生效時 stub_gs 寫 sat_tab[sat] */
     LDA     r1, MAT_OFF_REC - MAT_TAB
     ldr     r0, [r9, #P_MAT]
     add     r0, r0, r1
@@ -566,6 +803,7 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     str     r3, [r0], #4
     subs    r2, r2, #1
     bne     21b
+#endif
 
     /* 6. veneer(五個,取自 cave 的 bump 配置器) */
 #if V3
@@ -588,6 +826,7 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     beq     9f
     LDA     r1, NEXT_PQ
     str     r0, [r9, r1]
+#if !COLS
     ldr     r0, [sp, #4]
     LDA     r1, AI_SITE
     mov     r2, #1
@@ -597,6 +836,7 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     beq     9f
     LDA     r1, NEXT_AI
     str     r0, [r9, r1]
+#endif
     ldr     r0, [sp]
     str     r0, [r9, #P_BLOCK]      @ 設定區寫回用
     ldr     r0, [sp, #8]
@@ -607,11 +847,16 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     str     r0, [r9, r1]            @ stub_sv: svc->file_is before a save
 #endif
     ldr     r0, [sp, #4]            @ veneer
+#if COLS
+    mov     r1, #NVEN_C * 8
+#else
     mov     r1, #NVEN * 8
+#endif
     ldr     ip, [r0, #SVC_CAVE]
     blx     ip
     movs    r5, r0
     beq     9f
+#if !COLS
     ldr     r6, blob_rel3           @ RAW 列(uishare):失敗 → RELEASE(之前沒寫過韌體)
 27: add     r6, pc, r6              @ r6 = blob
     LDA     r0, UI_BLOCK
@@ -624,6 +869,7 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     blx     ip
     cmp     r0, #0
     bne     9f
+#endif
 #else
     LDA     r7, CAVE_BUMP
     ldr     r5, [r7]                @ r5 = veneer 起點
@@ -633,6 +879,19 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     bhi     9f                      @ cave 滿了:不裝(記憶體留著,重開機釋放)
     str     r1, [r7]
 #endif
+#if COLS
+    LDA     r2, VENEER_LDR
+    VEN     V_GS, STUB_GS
+    VEN     V_DG, STUB_DG
+    VEN     V_SA, STUB_SA
+    VEN     V_SN, STUB_SN
+    VEN     V_ZC, STUB_ZC
+    VEN     V_ZS, STUB_ZS
+    VEN     V_ZNC, STUB_ZNC
+    VEN     V_ZNS, STUB_ZNS
+    VEN     V_SV, STUB_SV
+    VEN     V_PQ, STUB_PQ
+#else
     LDA     r2, VENEER_LDR
     VEN     0, STUB_GS
     VEN     1, STUB_DG
@@ -664,10 +923,92 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     VEN     17, STUB_SV
     VEN     18, STUB_PQ
 
+#endif
+#if COLS
+    /* 設定區:lat / con / sat(magic 對就還原;RAW 開不開是 picked,COL-Share 管) */
+    ldr     r0, [sp]
+    add     r0, r0, #CFG_OFF
+    ldr     r1, [r0]
+    LDA     r2, CFG_MAGIC
+    cmp     r1, r2
+    bne     36f
+    ldr     r1, [r0, #8]
+    and     r1, r1, #1
+    str     r1, [r9, #P_VAR]
+    ldr     r1, [r0, #12]
+    and     r1, r1, #1
+    str     r1, [r9, #P_CON]
+    str     r1, [r9, #P_CONF]
+    ldr     r1, [r0, #16]
+    cmp     r1, #SAT_MAX
+    movhi   r1, #0
+    str     r1, [r9, #P_SAT]
+    str     r1, [r9, #P_SATF]
+36: CBS     r7
+    ldr     r0, [r7, #CB_PICKED]
+    str     r0, [r9, #P_FLAG_R]     @ stub_sv 存的
+    str     r9, [r7, #CB_PARAMS]
+    add     r0, r7, #CB_BOX
+    str     r0, [r9, #P_BOXP]
+    str     r4, [r7, #CB_T0]
+    str     r5, [r7, #CB_VEN]
+    str     r9, [r7, #CB_RES]
+    add     r0, r7, #CB_REC         @ RAW 列的記錄:{root+0x70 → mode 副本, root+0x08 → 矩陣副本}
+    mov     r1, #2
+    str     r1, [r0]
+    mov     r1, #0x70
+    str     r1, [r0, #4]
+    ldr     r1, [r9, #0x18]
+    str     r1, [r0, #8]
+    mov     r1, #0x08
+    str     r1, [r0, #12]
+    ldr     r1, [r9, #P_MAT]
+    str     r1, [r0, #16]
+    mov     r0, #1
+    str     r0, [r7, #CB_PREP]
+#endif
     LDA     ip, F_DCACHE            @ 表(DMA 讀)、常駐程式、veneer
     blx     ip
     LDA     ip, F_ICACHE
     blx     ip
+#if COLS
+    ldr     r0, [sp, #12]
+    tst     r0, #2
+    beq     59f
+60: CBS     r7
+    ldr     r4, [r7, #CB_T0]
+    ldr     r5, [r7, #CB_VEN]
+    ldr     r9, [r7, #CB_RES]
+    /* DNG writer:OFF 常數位址 → 常駐 cm_buf(CM1)、cm_buf + 72(CM2) */
+    LDA     r3, CMBUF
+    add     r3, r9, r3
+    MOVWT_R2 DNG_CM1_MOVW, DNG_CM1_MOVT
+    add     r3, r3, #72
+    MOVWT_R2 DNG_CM2_MOVW, DNG_CM2_MOVT
+    ARM     SITE_A, V_GS
+    ARM     SITE_B, V_DG
+    ARM     SITE_SA_AJ, V_SA
+    ARM     SITE_SA_FIX, V_SA
+    ARM     SITE_SN_FIX, V_SN
+    ARM     SITE_SN_AJ, V_SN
+    ARM     SITE_ZC_AJ, V_ZC
+    ARM     SITE_ZC_FIX, V_ZC
+    ARM     SITE_ZS_AJ, V_ZS
+    ARM     SITE_ZS_FIX, V_ZS
+    ARM     SITE_ZNC_FIX, V_ZNC
+    ARM     SITE_ZNC_AJ, V_ZNC
+    ARM     SITE_ZNS_FIX, V_ZNS
+    ARM     SITE_ZNS_AJ, V_ZNS
+    ARM     SITE_SV, V_SV
+    ARM     SITE_PQ, V_PQ
+    LDA     ip, F_DCACHE
+    blx     ip
+    LDA     ip, F_ICACHE
+    blx     ip
+59: add     sp, sp, #16
+    mov     r0, #0
+    pop     {r4-r11, ip, pc}
+#else
 
     /* getter:表位址 = 常駐 + P_GUI(movw/movt r2),筆數 17 */
     add     r3, r9, #P_GUI
@@ -747,7 +1088,9 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
     LDA     ip, F_ICACHE
     blx     ip
 
+#endif  /* COLS */
 #if V3
+#if !COLS
     /* 7. 開機還原 RAW:設定區(stub_sv 關機時寫回本檔)flag 開且色彩仍是 OFF → 還原 lat/con/sat;
      *    否則若工作設定還留著舊版卡存的 0x10–0x17 → 照舊版解碼(順便經 setter 改回 0xC,清掉舊殘留)。 */
     ldr     r0, [sp]
@@ -806,6 +1149,7 @@ claims_rel: .word blob + CLAIMS_OFF - (24b + 8)
 54: add     sp, sp, #16
     mov     r0, #0                  @ KEEP
     pop     {r4-r11, ip, pc}
+#endif  /* !COLS */
 
 9:  add     sp, sp, #16
     mov     r0, #1                  @ RELEASE:韌體一個字都還沒寫
@@ -854,12 +1198,153 @@ page_rel2:  .word page_tab - (16b + 8)
 #include "rv_page.inc"
 #endif
 mat_rel1:   .word mat_stock - (22b + 8)
+#if !COLS
 mat_rel2:   .word mat_new - (23b + 8)
+#endif
 #include "rv_mat.inc"
-#if V3
+#if V3 && !COLS
 blob_rel3:  .word blob - (27b + 8)
 #endif
 blob_rel1:  .word blob - (11b + 8)
 blob_rel2:  .word blob - (12b + 8)
+#if COLS
+/* ---- COL-Share 客戶(colshare.h API 1)。回呼在 UI 執行緒或某個 sup 的 entry 裡;r0 = cb_state。 ---- */
+cb_rows:                            /* (arg, out, max):一列 {key 0, "RAW", −5..+5, COLS_R_SNAP}(SA/GA) */
+    ldr     r3, [r0, #CB_FAILED]
+    cmp     r3, #0
+    movne   r0, #0
+    bxne    lr
+    cmp     r2, #0
+    moveq   r0, #0
+    bxeq    lr
+    mov     r3, #0
+    str     r3, [r1]
+    LDA     r3, 0x000105FB          @ eff_min −5、eff_max +5、flags COLS_R_SNAP
+    str     r3, [r1, #8]
+    add     r3, r0, #(cb_name - cb_state)
+    str     r3, [r1, #4]
+    mov     r0, #1
+    bx      lr
+cb_icon:                            /* (arg, key, &len):RAW 圖示(86 × 74 XCI,常駐在塊內) */
+    LDA     r3, ICON_LEN
+    str     r3, [r2]
+    ldr     r3, cb_icon_rel
+    add     r0, r0, r3
+    bx      lr
+cb_icon_rel: .word cb_icon_data - cb_state
+cb_picked:                          /* key + 1:1 = RAW */
+    ldr     r0, [r0, #CB_PICKED]
+    bx      lr
+cb_on_pick:                         /* (arg, key):COLS_NONE = 離開 RAW 列 */
+    cmp     r1, #0
+    moveq   r2, #1
+    movne   r2, #0
+    str     r2, [r0, #CB_PICKED]
+    ldr     r3, [r0, #CB_PARAMS]
+    cmp     r3, #0
+    strne   r2, [r3, #P_FLAG_R]     @ stub_sv 關機時存進自己的檔
+    bx      lr
+cb_noop:
+    mov     r0, #0
+    bx      lr
+cb_sget:                            /* (arg, key):框的值 */
+    ldr     r0, [r0, #CB_BOX]
+    cmp     r0, #0
+    movgt   r0, #5
+    mvnle   r0, #4
+    bx      lr
+cb_sset:                            /* (arg, key, v):選單關閉、不在錄影;lat 給 stub_sv 存 */
+    cmp     r2, #0
+    movgt   r2, #5
+    mvnle   r2, #4
+    str     r2, [r0, #CB_BOX]
+    ldr     r3, [r0, #CB_PARAMS]
+    cmp     r3, #0
+    bxeq    lr
+    cmp     r2, #0
+    movgt   r2, #1
+    movle   r2, #0
+    str     r2, [r3, #P_VAR_R]
+    bx      lr
+cb_box:                             /* (arg, key):struct cols_box */
+    add     r0, r0, #CB_BOXD
+    bx      lr
+cb_attached:                        /* (arg, api):寫韌體(早到:全部),再交記錄 */
+    push    {r4-r6, lr}
+    mov     r4, r0
+    mov     r5, r1
+    ldr     r0, [r4, #CB_ATT]
+    cmp     r0, #0
+    bne     39f
+    mov     r0, #1
+    str     r0, [r4, #CB_ATT]
+    str     r5, [r4, #CB_API]
+    ldr     r3, [r4, #CB_PREP]
+    cmp     r3, #0
+    moveq   r3, #3
+    movne   r3, #2
+    ldmia   r4, {r0-r2}
+    bl      rv_install
+    cmp     r0, #0
+    bne     38f
+    mov     r0, r5
+    LDA     r1, RAWV_ID
+    mov     r2, #0
+    add     r3, r4, #CB_REC
+    ldr     ip, [r5, #API_SET_RECORD]
+    blx     ip
+    cmp     r0, #0
+    bne     38f
+    ldr     r0, [r4, #CB_ROWED]     @ 早到時加的 fpSup 頁列:COL-Share 來了,值清掉
+    cmp     r0, #0
+    beq     39f
+    mov     r0, #0
+    str     r0, [r4, #CB_ROW + 8]
+    ldr     r0, [r4, #CB_SVC]
+    ldr     r1, [r4, #CB_ROWIDX]
+    ldr     ip, [r0, #SVC_PAGE_REFRESH]
+    blx     ip
+    b       39f
+38: mov     r0, #1                  @ 裝不起來:沒有列
+    str     r0, [r4, #CB_FAILED]
+    mov     r0, r5
+    LDA     r1, RAWV_ID
+    ldr     ip, [r5, #API_CHANGED]
+    blx     ip
+39: pop     {r4-r6, pc}
+cb_data:
+    .align  3
+cb_state:
+    .space  CB_CLIENT
+    .word   CLC1, 2, RAWV_ID, 0     /* cols_client:magic, api, sup_id, order 0(RAW 最前,Bei #3) */
+    .word   cb_rows - cb_state, cb_icon - cb_state, cb_picked - cb_state, cb_on_pick - cb_state
+    .word   cb_sget - cb_state, cb_sset - cb_state, cb_attached - cb_state, 0   /* arg = cb_state(entry 填) */
+    .word   cb_box - cb_state       /* API 2 */
+.if (. - cb_state) != CB_REC
+.error "cb_state: CB_REC moved"
+.endif
+    .space  CB_ROW - CB_REC
+    .short  4, 0                    /* sl_row:SL_ROW_ACTION */
+    .word   cb_title - cb_state, cb_reason - cb_state, 0, 0, 0, cb_noop - cb_state, 0
+.if (. - cb_state) != CB_BOX
+.error "cb_state: CB_BOX moved"
+.endif
+    .word   0                       /* CB_BOX */
+    .word   0, 0                    /* CB_BOXD:live, glyphs(entry 填) */
+.if (. - cb_state) != CB_GLYPHS
+.error "cb_state: CB_GLYPHS moved"
+.endif
+    .word   3                       /* CB_GLYPHS:0.3.1 stub_ai 的三組 */
+    .word   0xC18E6BA0 - STOCK_POOL, 0xC18E6A80 - STOCK_POOL   /* font_menu_LB_kigou_06(−)→ id_S */
+    .word   0xC18E6BB8 - STOCK_POOL, 0xC18E6990 - STOCK_POOL   /* kigou_07(+)→ id_G */
+    .word   0xC18E67B0 - STOCK_POOL, 0xC18E6918 - STOCK_POOL   /* LB_5 → id_A */
+cb_name:    .asciz "RAW"
+cb_title:   .asciz "RAW-View"
+cb_reason:  .asciz "needs COL-Share"
+cb_log:     .asciz "RAW-View: no COL-Share (yet), no RAW row in COLOR"
+    .align  2
+#include "rv_icon.inc"
+    .align  2
+#endif
 blob:
     /* build_rawview.py 在這裡接上:常駐程式 | 表格資料 */

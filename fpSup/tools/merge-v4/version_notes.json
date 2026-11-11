@@ -518,5 +518,35 @@
    "其他行為不變；已存的翻轉設定會保留。",
    "Loader v4 上機（2026-11-11）：改值並存檔 19 次、STILL／CINE 切換 25 次都沒有凍結；DISP 鍵切換由手動確認。"
   ]
+ },
+ "fpsup-lut-v0.1.0test": {
+  "en": [
+   "First release. Put .cube files in fpSup\\LUT\\; in the fpSup page's LUT manager, set each one's input, then turn it on: the camera converts it once for its own colour hardware.",
+   "A LUT that is on is a tile in the native COLOR list, right after OFF. The look shows on the screen and is recorded into JPG and MOV; DNG and CinemaDNG stay RAW.",
+   "Up to 12 LUTs on at once, 32 in the folder. Needs COL-Share, which comes with it."
+  ],
+  "zh": [
+   "第一版。把 .cube 放進 fpSup\\LUT\\；在 fpSup 頁的 LUT manager 先設定每支的輸入，再開啟：相機會把它轉成自己色彩硬體的設定，只轉一次。",
+   "開啟的 LUT 會出現在原生 COLOR 清單、接在 OFF 後面。螢幕上看得到，JPG 與 MOV 也會套用；DNG 與 CinemaDNG 仍是 RAW。",
+   "最多同時開 12 支，資料夾最多 32 支。需要 COL-Share，會自動附上。"
+  ]
+ },
+ "fpsup-col-share-v0.0.1test": {
+  "en": [
+   "First release. Shared plumbing: it owns the rows LUT and RAW-View add to the native COLOR list, so both can be on one card."
+  ],
+  "zh": [
+   "第一版。共用元件：LUT 與 RAW-View 加進原生 COLOR 清單的列都由它管理，兩者可以裝在同一張卡。"
+  ]
+ },
+ "fpsup-raw-view-v0.4.0test": {
+  "en": [
+   "RAW-View now hands its COLOR row to COL-Share instead of changing the list itself, so it works on the same card as LUT. COL-Share comes with it.",
+   "What it shows is unchanged."
+  ],
+  "zh": [
+   "RAW-View 改成把它的 COLOR 列交給 COL-Share，不再自己改清單，所以能和 LUT 裝在同一張卡。COL-Share 會自動附上。",
+   "畫面顯示的內容不變。"
+  ]
  }
 }

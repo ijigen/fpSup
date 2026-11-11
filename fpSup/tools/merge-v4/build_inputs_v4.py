@@ -24,12 +24,18 @@ BUILDS = {
     'jose': ([FPSUP / 'loader-v4/ports_jose.py'], 'fpSup'),
     'loss': ([FPSUP / 'lossless/build_v4_lossless.py'], '.'),
     'flip': ([FPSUP / 'screenflip/build_v4_flip.py'], '.'),
-    'rawv': ([ROOT / 'projects/rawview/build/build_v4_rawview.py'], '.'),
+    'rawv': ([ROOT / 'projects/rawview/build/build_v4_rawview.py', '--cols'], '.'),   # 0.4.0test: a COL-Share client
     'rescus': ([ROOT / 'projects/open-gate/build/res-custom-v4/build_v4_rescustom.py'], '.'),
     'slqs': ([ROOT / 'projects/sensorlab-imx410/qs/build_slqs.py'], 'fpSup'),
     'qsct': ([ROOT / 'projects/qs-container/build_qsct.py'], 'fpSup'),
     'dial': ([FPSUP / 'dialfix/build_dialfix.py'], 'fpSup'),
+    'lut': ([FPSUP / 'lut/build_v4_lut.py'], 'fpSup'),
+    'cols': ([FPSUP / 'colshare/build_colshare.py'], '.'),
 }
+# builders whose --out is the file itself, not a folder (build_colshare.py)
+OUT_IS_FILE = {'cols': 'COLS'}
+# product id -> files beside the sup it always needs (not a choice), relative to the builder's output
+SUPPORT = {'lut': ['UI/COLOR.BIN']}
 # product id -> (build, sup_id, data dir or None); the file is names_v4's
 # <base>_v<version>.BIN (the user 2026-10-25)
 PRODUCTS = {
@@ -49,6 +55,9 @@ PRODUCTS = {
     'qs-share': ('qsct', 'QSCT', None),
     # 2026-11-08 (Bei): Andy_hal9000's rear-wheel decoder v6 as a v4 sup
     'dial-fix': ('dial', 'DIAL', None),
+    # 2026-11-12 (Bei): LUT, the COL-Share it needs (the COLOR list's rows; RAW-View 0.4 needs it too), and its looks
+    'lut': ('lut', 'LUT4', 'LUT'),
+    'col-share': ('cols', 'COLS', None),
 }
 SOURCES = [
     'fpSup/loader-v4/ports.py', 'fpSup/loader-v4/ports_jose.py', 'fpSup/loader-v4/build_v4.py',
@@ -66,11 +75,25 @@ SOURCES = [
     'projects/qs-container/editor_data.py', 'projects/qs-container/editor_title.py', 'projects/qs-container/qs_page_data.py',
     'fpSup/dialfix/build_dialfix.py', 'fpSup/dialfix/dialfix.c', 'fpSup/dialfix/reference/v6/dial2_fast.S',
     'fpSup/dialfix/reference/v6/AutoRun.txt',
+    'fpSup/lut/build_v4_lut.py', 'fpSup/lut/build_sup.py', 'fpSup/lut/checker_q20.bin', 'fpSup/lut/looks/make_looks.py',
+    'fpSup/lut/native/lut4.c', 'fpSup/lut/native/lvb.c', 'fpSup/lut/native/jfit.c', 'fpSup/lut/native/conv.c',
+    'fpSup/lut/native/import.c', 'fpSup/lut/native/cols.c', 'fpSup/lut/color_ui.py',
+    'fpSup/colshare/build_colshare.py', 'fpSup/colshare/colshare.c', 'fpSup/colshare/colshare_ui.py',
 ]
 VALIDATION = ('fpSup/loader-v4/README.md "已上線 sup 的 v4 第一次上機(2026-10-24)": all eleven load, '
               'menus and saving checked on the camera; recording (ULWR, Gyro2, Lossless compression) not yet.')
 VALIDATION_OF = {
     'res-custom': ("projects/open-gate/build/res-custom-v4/test_v4_rescustom.py: 85 tests pass (2026-11-12). Change from 0.1.5: the files page is built with manage_page.row_visible (a watcher under the page root shows / hides each row) and ogc_files.c sends Visible=1 before a row's words, Visible=0 after them; reported and fixed independently by Ruari (2026-11-11). On the camera 2026-11-12 under Loader v4 (LOAD.LOG 0A), 16 format files = 4 pages, the last with one row: paged to 4 and back to 3, 2, 1, every row shown (screenshots). The five .RCD files are 0.1.5's bytes. Not checked: recording, switching a format on / off, the selection across power-off."),
+    # 2026-11-12: filled in after the merge-page card's own camera check (README "LUT on the merge page")
+    'lut': ('fpSup/lut tests (test_jfit 25, test_lvb_native 31, test_conv_native 20, test_sup_native 13, '
+            'test_library_native 25, test_dng_native 5, test_clist_native 12, test_import_native 9) OK; JFIT v7 on the '
+            'camera 2026-11-12 as LUT.BIN (projects/lut-sup/validation/20261111-cknee-live).  This file, with this COL-Share and '
+            'RAW-View, on Bei\'s camera 2026-11-12 (card written from this snapshot, sha256 checked): Bei\'s check passed.'),
+    'col-share': ('fpSup/colshare test_colshare + test_capacity 12 OK; on the camera with LUT 2026-11-11/12 (the names_v4 '
+                  'RAW-View probe list was 0.3.1-based then); this file on Bei\'s camera 2026-11-12 with LUT 0.1.0test and RAW-View '
+                  '0.4.0test: Bei\'s check passed.'),
+    'raw-view': ('projects/rawview/build test_v4_cols_rawview; 0.4.0test was on the camera 2026-11-10 with the 4-row '
+                 'COL-Share; with this COL-Share and LUT 0.1.0test on Bei\'s camera 2026-11-12: Bei\'s check passed.'),
     'sensor-lab': ('projects/sensorlab-imx410/validation/20261105-cpux2-removed: v0.7.39test offline full suite and '
                    'on the camera 2026-11-05 (boot apply, QS and RECIPE display, CPU x2 settings -> ISP HBIN 1); '
                    '0.0.1test = the same body, only the header display name changed (2026-11-07, offline).'),
@@ -108,7 +131,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix='mergev4-') as t:
         t = pathlib.Path(t)
         for key, (cmd, sub) in builds.items():
-            r = subprocess.run([sys.executable, '-B', *map(str, cmd), '--out', str(t / key)],
+            dest = t / key / N.file_name(OUT_IS_FILE[key]) if key in OUT_IS_FILE else t / key
+            r = subprocess.run([sys.executable, '-B', *map(str, cmd), '--out', str(dest)],
                                capture_output=True, text=True, cwd=FPSUP)
             if r.returncode:
                 raise SystemExit(f'{key}: builder failed\n{r.stderr[-3000:]}')
@@ -130,6 +154,12 @@ def main():
                     (out / rel).write_bytes(f.read_bytes())
                     files[rel] = dict(size=f.stat().st_size, sha256=sha(f.read_bytes()))
                     entry['data_files'].append(rel)
+            for rel in SUPPORT.get(pid, []):
+                (out / rel).parent.mkdir(parents=True, exist_ok=True)
+                b = (src / rel).read_bytes()
+                (out / rel).write_bytes(b)
+                files[rel] = dict(size=len(b), sha256=sha(b))
+                entry.setdefault('support_files', []).append(rel)
             products[pid] = entry
     meta = dict(date=f'{datetime.date.today():%Y-%m-%d}',
                 source_sha256={s: sha((ROOT / s).read_bytes()) for s in SOURCES},
