@@ -637,7 +637,7 @@ const T = {
     swap: '改開這個', turnOff: '改關這個', selAll: '全選', selNone: '全部取消',
     ok: n => '已準備好，可以下載。', fail: w => `檢查失敗:${w}`, inactive: '未啟用',
     fetching: n => `正在取得 ${n} 個檔案…`, fetchFail: w => `取得檔案失敗：${w}。請檢查網路後重試。`, retry: '重試',
-    downloads: n => `下載 ${n} 次`, downloadsOf: (v, n) => `各版本合計；v${v}:${n} 次`,
+    downloads: n => `下載 ${n} 次`, downloadsOf: (v, n, m) => `各版本合計；v${v}:${n} 次` + (m == null ? '' : `；其中鏡像站 ${m} 次`),
     nOff: n => `${n} 個 sup 已安裝但關閉。之後要換：在相機的 SupManager 關掉開著的那個、打開想用的，重開機(兩個不相容的別同時開)。`,
   },
   en: {
@@ -683,7 +683,7 @@ const T = {
     swap: 'Turn this one on', turnOff: 'Turn this one off', selAll: 'Select all', selNone: 'Clear all',
     ok: n => 'Ready to download.', fail: w => `Check failed: ${w}`, inactive: 'not enabled',
     fetching: n => `Getting ${n} file(s)…`, fetchFail: w => `Could not get ${w}. Check the connection and retry.`, retry: 'Retry',
-    downloads: n => `${n} downloads`, downloadsOf: (v, n) => `all versions; v${v}: ${n}`,
+    downloads: n => `${n} downloads`, downloadsOf: (v, n, m) => `all versions; v${v}: ${n}` + (m == null ? '' : `; ${m} of all through the mirror`),
     nOff: n => `${n} sup(s) are installed but off. To switch later: in the camera's SupManager turn the running one off and the one you want on, then restart (never both of two that clash).`,
   },
 };
@@ -737,37 +737,64 @@ function ensure(picked){
 }
 const hostedPage = () => typeof location !== 'undefined' && /^https?:$/.test(location.protocol)
   && !/^(localhost$|127\.|\[::1\]$)/.test(location.hostname);
-/* GitHub counts a release asset when it is requested.  The page cannot read
-   the answer (no CORS header there), and does not need to: the bytes on the
-   card are the ones checked above.  Once per asset per visit, and only from
-   the published site. */
+/* The mirror (CAT.mirror.host) is there for people who cannot reach GitHub, so
+   it keeps its own count and serves the totals itself. */
+const onMirror = () => hostedPage() && !!CAT.mirror && location.hostname === CAT.mirror.host;
+/* A download is counted once per file per visit, and only from the published
+   site.  On GitHub Pages: GitHub counts a release asset when it is requested;
+   the page cannot read the answer (no CORS header there) and does not need to,
+   the bytes on the card are the ones checked above.  On the mirror: a POST to
+   its /count/<tag>/<file>, which the mirror adds up itself. */
 const COUNTED = new Set();
 function countDownloads(picked){
   if (!hostedPage()) return;
   for (const url of assets(picked)){
     if (COUNTED.has(url)) continue;
     COUNTED.add(url);
-    fetch(url, {mode: 'no-cors', cache: 'no-store'}).catch(() => {});
+    if (onMirror()) fetch('/count/' + url.split('/releases/download/')[1], {method: 'POST', cache: 'no-store', keepalive: true}).catch(() => {});
+    else fetch(url, {mode: 'no-cors', cache: 'no-store'}).catch(() => {});
   }
 }
-/* Download counts, from GitHub's public API (it does send CORS headers):
-   every release of a sup is tagged fpsup-<id>-v<version>, and the count is its
-   .BIN's.  COUNTS[id] = {total, byTag}.  No answer (offline, rate limit): no
-   number shown. */
+/* Download counts.  Every release of a sup is tagged fpsup-<id>-v<version>,
+   and the count is its .BIN's.  COUNTS[id] = {total, byTag, mirror}.  First
+   the mirror's counts.json = {github: {tag/file: n}, mirror: {tag/file: n}}
+   (GitHub's numbers, fetched there, plus the mirror's own; readable where
+   GitHub is not).  Failing that, GitHub's public API (it does send CORS
+   headers), and `mirror` stays undefined.  No answer at all: no number shown. */
 const COUNTS = {};
 async function loadCounts(){
   if (!hostedPage() || !CAT.repo) return;
   const ids = CAT.products.map(p => p.id).sort((a, b) => b.length - a.length);
+  const add = (tag, n, mirror) => {
+    const id = ids.find(id => new RegExp(`^fpsup-${id}-v\\d`).test(tag));
+    if (!id) return;
+    const c = COUNTS[id] || (COUNTS[id] = {total: 0, byTag: {}});
+    c.total += n; c.byTag[tag] = (c.byTag[tag] || 0) + n;
+    if (mirror != null) c.mirror = (c.mirror || 0) + mirror;
+  };
+  if (CAT.mirror){
+    try {
+      const res = await fetch(onMirror() ? '/counts.json' : CAT.mirror.counts, {cache: 'no-store'});
+      const d = res.ok ? await res.json() : null;
+      if (d && d.github && d.mirror){
+        for (const from of ['github', 'mirror'])
+          for (const [key, n] of Object.entries(d[from])){
+            const [tag, name] = key.split('/');
+            if (/\.BIN$/i.test(name || '') && Number.isFinite(n)) add(tag, n, from === 'mirror' ? n : 0);
+          }
+        render();
+        return;
+      }
+    } catch (e) {}
+    for (const id in COUNTS) delete COUNTS[id];
+  }
   for (let page = 1; page <= 5; page++){
     const res = await fetch(`https://api.github.com/repos/${CAT.repo}/releases?per_page=100&page=${page}`);
     if (!res.ok) break;
     const list = await res.json();
     for (const rel of list){
-      const id = ids.find(id => new RegExp(`^fpsup-${id}-v\\d`).test(rel.tag_name));
-      if (!id || rel.draft) continue;
-      const n = (rel.assets || []).filter(a => /\.BIN$/i.test(a.name)).reduce((s, a) => s + a.download_count, 0);
-      const c = COUNTS[id] || (COUNTS[id] = {total: 0, byTag: {}});
-      c.total += n; c.byTag[rel.tag_name] = n;
+      if (rel.draft) continue;
+      add(rel.tag_name, (rel.assets || []).filter(a => /\.BIN$/i.test(a.name)).reduce((s, a) => s + a.download_count, 0));
     }
     if (list.length < 100) break;
   }
@@ -777,7 +804,7 @@ function downloads(p, t){
   const c = COUNTS[p.id];
   if (!c) return '';
   const n = x => Number(x).toLocaleString('en-US');
-  return ` · <span class="dls" title="${esc(t.downloadsOf(p.version, n(c.byTag[p.release] || 0)))}">↓ ${esc(t.downloads(n(c.total)))}</span>`;
+  return ` · <span class="dls" title="${esc(t.downloadsOf(p.version, n(c.byTag[p.release] || 0), c.mirror == null ? null : n(c.mirror)))}">↓ ${esc(t.downloads(n(c.total)))}</span>`;
 }
 
 function versionHistory(p, t){

@@ -13,6 +13,18 @@ python3 -B -m unittest discover -s tools/merge-v4 -p "test_*.py"
 python3 -B tools/merge-v4/publish_releases.py            # 每個提供中的版本在 GitHub 上是不是 Release(只讀)
 ```
 
+**2026-11-11 鏡像站自己計數**(Bei 定：`fpsup.ijigen.xyz` 是給連不到 GitHub 的人用的，下載次數另外算):
+- 頁面在鏡像網域(`CAT.mirror.host`)上按「下載 zip」時，對同網域 `POST /count/<tag>/<檔名>`(每檔每次造訪一次),
+  **不碰 GitHub**;在 GitHub Pages 上照舊請求 Release asset。兩邊不重複，合計 = GitHub + 鏡像。
+- 下載數兩個網域都先讀鏡像站的 `/counts.json` = `{updated, since, github:{tag/檔名:n}, mirror:{tag/檔名:n}}`
+  (GitHub 的數字由鏡像站代抓，所以連不到 GitHub 也看得到);讀不到才退回 GitHub API(那時沒有鏡像的數字)。
+  磚上的數字是合計，滑過去多一句「其中鏡像站 N 次」。
+- 鏡像站那一側**不在 repo 裡**,在 CT124:nginx `conf.d/fpsup-count.conf` + site 的 `/count/`(只記一行、回 204、
+  每來源 2 次/秒)與 `/counts.json`;`/usr/local/bin/fpsup-counts.py` 由 `fpsup-counts.timer` 每 5 分鐘彙總：
+  只認部署頁面裡現有的 tag/檔名、只認 POST、同一來源同一檔一小時算一次(來源只以加鹽雜湊暫存);
+  累計值在 `/var/lib/fpsup-counts/state.json`(刪掉就歸零),2026-11-11 起算。
+- 測試：`test_lazy_v4.js` 第 6、7 段(兩個網域讀 counts.json、鏡像上只發 POST 不連 GitHub)。
+
 **2026-11-10 下載量：每個版本一個 GitHub Release、頁面不內嵌 sup**(Bei 定):
 - **頁面不再帶 sup 的位元組**(index.html 2.26 MB → 0.91 MB;剩下的是四組開機檔與 splash)。目錄裡每個 sup／資料檔只有
   `size`、`sha256`、`src`(網站上的位置 = `inputs/<快照>/<檔>`,本來就隨 Pages 發布)、`asset`(Release 資產網址)。

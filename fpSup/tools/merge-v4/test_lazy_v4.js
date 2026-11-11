@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path'), assert = require('assert');
 const page = fs.readFileSync(process.env.MERGE_INDEX || __dirname + '/index.html', 'utf8');
 const grab = id => page.match(new RegExp(`<script id="${id}"[^>]*>([\\s\\S]*?)</script>`))[1];
 
-function boot({served = '', corrupt = null, down = false, hosted = true, api = null} = {}){
+function boot({served = '', corrupt = null, down = false, hosted = true, api = null, host = 'ijigen.github.io', counts = null} = {}){
   const elements = new Map(), handlers = new Map(), calls = [], clicked = [];
   const el = id => {
     if (!elements.has(id)) elements.set(id, {innerHTML:'', textContent:'', style:{}, dataset:{}, disabled:false, setAttribute(){}, click(){}});
@@ -16,7 +16,7 @@ function boot({served = '', corrupt = null, down = false, hosted = true, api = n
   const g = {
     atob: s => Buffer.from(s, 'base64').toString('binary'), btoa: s => Buffer.from(s, 'binary').toString('base64'),
     localStorage: {getItem: k => k === 'fpsup-lang' ? 'en' : null, setItem(){}},
-    location: hosted ? {protocol: 'https:', hostname: 'ijigen.github.io'} : {protocol: 'file:', hostname: ''},
+    location: hosted ? {protocol: 'https:', hostname: host} : {protocol: 'file:', hostname: ''},
     Blob: class { constructor(parts){ this.parts = parts; } },
     URL: {createObjectURL: () => 'blob:x', revokeObjectURL(){}},
     setTimeout: () => 0,
@@ -34,6 +34,11 @@ function boot({served = '', corrupt = null, down = false, hosted = true, api = n
         if (!api) return {ok: false, status: 403};
         return {ok: true, json: async () => api(url)};
       }
+      if (url === '/counts.json' || url === 'https://fpsup.ijigen.xyz/counts.json'){
+        if (!counts) throw new TypeError('Failed to fetch');
+        return {ok: true, json: async () => counts};
+      }
+      if (url.startsWith('/count/')) return {ok: true, status: 204};
       if (url.startsWith('https://github.com/')) return {type: 'opaque', ok: false, status: 0};
       if (down) throw new TypeError('Failed to fetch');
       if (!url.startsWith(served)) return {ok: false, status: 404};
@@ -53,7 +58,7 @@ function boot({served = '', corrupt = null, down = false, hosted = true, api = n
     click: target => handlers.get('click')({target: {closest: () => target}}),
     settle: async () => { for (let i = 0; i < 50; i++) await new Promise(r => setImmediate(r)); }};
 }
-const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://'));
+const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://') && !c.url.startsWith('/count'));
 
 (async () => {
   // 1. nothing is in the page, nothing is fetched until a tile is ticked
@@ -156,5 +161,31 @@ const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://'));
   p = boot();
   await p.settle();
   assert(!p.el('tiles').innerHTML.includes('class="dls"'));
-  console.log('lazy fetch, sha256 gate, release counting, download counts: ok');
+
+  // 6. the mirror's counts.json (GitHub's numbers + the mirror's own) is read first, from either site
+  const both = {github: {'fpsup-lossless-v0.3.2test/Lossless_v0.3.2test.BIN': 100, 'fpsup-lossless-v0.3.1test/Lossless_v0.3.1test.BIN': 20,
+                         'fpsup-res-custom-v0.1.0/OG3K.RCD': 5000},
+                mirror: {'fpsup-lossless-v0.3.2test/Lossless_v0.3.2test.BIN': 7, 'fpsup-nope-v1/X.BIN': 9}};
+  for (const host of ['ijigen.github.io', 'fpsup.ijigen.xyz']){
+    p = boot({host, counts: both, api: () => { throw new Error('GitHub is not asked when the mirror answered'); }});
+    await p.settle();
+    const t = p.el('tiles').innerHTML;
+    assert(/title="all versions; v0\.3\.2test: 107; 7 of all through the mirror">↓ 127 downloads/.test(t), host + ': ' + (t.match(/class="dls"[^<]*<\/span>/) || [t.slice(0, 200)])[0]);
+    assert((t.match(/class="dls"/g) || []).length === 1 && !/5,000/.test(t), 'data files and unknown tags are not counted');
+    assert(p.calls.some(c => c.url === (host === 'fpsup.ijigen.xyz' ? '/counts.json' : 'https://fpsup.ijigen.xyz/counts.json')));
+  }
+  // 7. on the mirror a download is counted by the mirror, and GitHub is never contacted
+  p = boot({host: 'fpsup.ijigen.xyz', counts: both});
+  await p.settle();
+  p.change({id: 'stopfx'}, true);
+  p.change({id: 'lossless'}, true);
+  await p.settle();
+  p.click({id: 'dl', dataset: {}});
+  p.click({id: 'dl', dataset: {}});
+  assert.deepStrictEqual(p.calls.filter(c => c.url.startsWith('/count/')).map(c => c.opt.method + ' ' + c.url).sort(), [
+    'POST /count/fpsup-fcap-v0.1.0/EarlyFlush_v0.1.0.BIN',
+    'POST /count/fpsup-lossless-v0.3.2test/Lossless_v0.3.2test.BIN',
+    'POST /count/fpsup-stopfx-v0.1.0/Stop-FX_v0.1.0.BIN']);
+  assert(!p.calls.some(c => /github\.com/.test(c.url)), 'nothing on the mirror depends on GitHub');
+  console.log('lazy fetch, sha256 gate, release counting, download counts, mirror counts: ok');
 })().catch(e => { console.error(e); process.exit(1); });

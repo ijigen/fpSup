@@ -52,6 +52,9 @@ REPO = 'ijigen/fpSup'
 # where `src` resolves from: this folder, and from tools/card-composer/ (the
 # site's entry, a copy of this page)
 SRC_BASES = ['', '../merge-v4/']
+# The mirror for people who cannot reach GitHub (CT124).  It counts its own downloads (POST /count/<tag>/<file>)
+# and serves /counts.json = GitHub's counts + its own; the page on either site reads that first.
+MIRROR = dict(host='fpsup.ijigen.xyz', counts='https://fpsup.ijigen.xyz/counts.json')
 ASSET_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')     # GitHub rewrites anything else
 
 SPLASH = [f'fpSup/UI/{i}.BIN' for i in range(5)]
@@ -421,7 +424,7 @@ def main():
     cat = dict(categories=CATEGORIES, t2s=t2s, shared=boot_shared, boot=boot,
                products=sorted(products, key=lambda p: p['file']),
                pending=sorted(pending, key=lambda p: p['file']),
-               order=ORDER, loader_svc=B4.SL4_LOADER_SVC, repo=REPO, src_bases=SRC_BASES)
+               order=ORDER, loader_svc=B4.SL4_LOADER_SVC, repo=REPO, src_bases=SRC_BASES, mirror=MIRROR)
     attach_history(cat, RELEASES)
     page = TEMPLATE.read_text(encoding='utf-8')
     if page.count('@@CATALOGUE@@') != 1:
