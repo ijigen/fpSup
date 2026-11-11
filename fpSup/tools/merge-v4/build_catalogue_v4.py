@@ -33,7 +33,8 @@ OUT = HERE / 'index.html'
 # 2026-11-10: Lossless 0.3.2test, Sensor Lab 0.0.6test, QS-Share 0.0.2test in v4-20261110c.  A later snapshot
 # replaces an earlier one's product of the same id (the earlier version stays on GitHub as its own release).
 INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107', HERE / 'inputs' / 'v4-20261110',
-          HERE / 'inputs' / 'v4-20261110c', HERE / 'inputs' / 'v4-20261111']   # 20261111: Screen Flip 0.1.2
+          HERE / 'inputs' / 'v4-20261110c', HERE / 'inputs' / 'v4-20261111',   # 20261111: Screen Flip 0.1.2
+          HERE / 'inputs' / 'v4-20261112b']   # 20261112b: RES-Custom 0.1.6 (files page paging)
 sys.path.insert(0, str(FPSUP / 'fp_usb_shell'))
 from v3 import build_v3 as V3
 sys.path.insert(0, str(FPSUP / 'loader-v4'))

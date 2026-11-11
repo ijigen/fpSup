@@ -12,7 +12,7 @@ LOADER.BIN, UI\\*.BIN and the data folders (RESCUS\\, LUT\\) keep their names.""
 # byte-identical ports -- Unlock Writer, Stop-FX, Early Flush, USB-Shell -- keep theirs)
 SUPS = {
     'BKLT': ('LCD Backlight', 'Backlight', '0.1.0test'),
-    'RCUS': ('RES-Custom', 'RES-Custom', '0.1.5'),
+    'RCUS': ('RES-Custom', 'RES-Custom', '0.1.6'),
     'LOSS': ('Lossless', 'Lossless', '0.3.2test'),   # 2026-11-10: 14 bit (Sensor Lab 1:1 true 14)
     'ULWR': ('Unlock Writer', 'UnlockWriter', '0.1.0test'),
     'STFX': ('Stop-FX', 'Stop-FX', '0.1.0'),

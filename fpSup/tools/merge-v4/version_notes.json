@@ -83,6 +83,18 @@
    "修正：相機（SupManager）顯示的名稱自 v0.2.1 起誤為「font_menu_SB_kigou_09」，現在是「QS-Share」。"
   ]
  },
+ "fpsup-res-custom-v0.1.6": {
+  "en": [
+   "Fixes the RES-Custom files page: after paging to a last page with fewer rows and paging back, the earlier pages showed only their top row until the page was left and reopened. Reported, with the fix confirmed on his camera, by Ruari.",
+   "Nothing else changes; the format files (OG2K, OG3K, OG3.5K, OG4K, S16) are the same as 0.1.5's.",
+   "On the camera with Loader v4 (2026-11-12): 16 format files on four pages, paged to the last and back, every row shown. Recording and keeping the selection across power-off are still not tested."
+  ],
+  "zh": [
+   "修正 RES-Custom 檔案頁：翻到列數較少的最後一頁再翻回來，前面各頁只剩第一列，要離開再進來才恢復。由 Ruari 回報，並在他的相機上確認修法。",
+   "其他行為不變；格式檔（OG2K、OG3K、OG3.5K、OG4K、S16）與 0.1.5 相同。",
+   "Loader v4 上機（2026-11-12）：16 個格式檔共四頁，翻到最後一頁再翻回，每一列都顯示。錄影、關機後保留選擇仍未測。"
+  ]
+ },
  "fpsup-res-custom-v0.1.5": {
   "en": [
    "Rebuilt for Loader v4: one file per sup, named with its version. Delete the whole old fpSup folder before updating the card.",

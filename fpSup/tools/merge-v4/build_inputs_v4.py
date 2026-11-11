@@ -70,6 +70,7 @@ SOURCES = [
 VALIDATION = ('fpSup/loader-v4/README.md "已上線 sup 的 v4 第一次上機(2026-10-24)": all eleven load, '
               'menus and saving checked on the camera; recording (ULWR, Gyro2, Lossless compression) not yet.')
 VALIDATION_OF = {
+    'res-custom': ("projects/open-gate/build/res-custom-v4/test_v4_rescustom.py: 85 tests pass (2026-11-12). Change from 0.1.5: the files page is built with manage_page.row_visible (a watcher under the page root shows / hides each row) and ogc_files.c sends Visible=1 before a row's words, Visible=0 after them; reported and fixed independently by Ruari (2026-11-11). On the camera 2026-11-12 under Loader v4 (LOAD.LOG 0A), 16 format files = 4 pages, the last with one row: paged to 4 and back to 3, 2, 1, every row shown (screenshots). The five .RCD files are 0.1.5's bytes. Not checked: recording, switching a format on / off, the selection across power-off."),
     'sensor-lab': ('projects/sensorlab-imx410/validation/20261105-cpux2-removed: v0.7.39test offline full suite and '
                    'on the camera 2026-11-05 (boot apply, QS and RECIPE display, CPU x2 settings -> ISP HBIN 1); '
                    '0.0.1test = the same body, only the header display name changed (2026-11-07, offline).'),
