@@ -1,0 +1,22 @@
+# LExpo 40-500 s first suite (fp 5.02).
+#
+# Phase 1 limit: the physical shutter is operated by hand. The harness can read
+# the patch words over the fpSup shell, but it cannot press the shutter or mount
+# the SD card, so the `prompt` step hands control to the operator for the
+# capture and the `wait` step allows the exposure plus dark frame to finish.
+name: lexpo-fp502
+description: LExpo 40-500 s shutter patch, hook self-disarm, fp 5.02 only
+steps:
+  - kind: shell
+    command: version
+    expect_contains: "5.02.0"
+  - kind: mem_expect
+    addr: "0xC007F324"
+    value: "0xE309C6FC"
+  - kind: mem_expect_any
+    addr: "0xC02BAD0C"
+    values: ["0xE24DD064", "0xEB11CCD5"]
+  - kind: prompt
+    message: "Set M mode and 40 s, press the shutter, wait for the capture, then press Enter"
+  - kind: wait
+    seconds: 90
