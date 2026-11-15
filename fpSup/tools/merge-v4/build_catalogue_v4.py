@@ -35,7 +35,8 @@ OUT = HERE / 'index.html'
 INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107', HERE / 'inputs' / 'v4-20261110',
           HERE / 'inputs' / 'v4-20261110c', HERE / 'inputs' / 'v4-20261111',   # 20261111: Screen Flip 0.1.2
           HERE / 'inputs' / 'v4-20261112b',   # 20261112b: RES-Custom 0.1.6 (files page paging)
-          HERE / 'inputs' / 'v4-20261112']   # 20261112: LUT 0.1.0test + COL-Share 0.0.1test + RAW-View 0.4.0test
+          HERE / 'inputs' / 'v4-20261112',   # 20261112: LUT 0.1.0test + COL-Share 0.0.1test + RAW-View 0.4.0test
+          HERE / 'inputs' / 'v4-20261115']   # 20261115: RES-Custom 0.1.7 + QS-Share 0.0.3test (fpsup-ui: no 1474 with an SSD)
 sys.path.insert(0, str(FPSUP / 'fp_usb_shell'))
 from v3 import build_v3 as V3
 sys.path.insert(0, str(FPSUP / 'loader-v4'))

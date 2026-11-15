@@ -365,6 +365,8 @@ static void rv_refresh(struct rc_ui *u)
                 u32 len=slen((u32)(uintptr_t)name);name[len++]='.';name[len++]='R';name[len++]='C';name[len]='D';
             }
         }
+        /* shown before its words, hidden after them: a hidden row is not told (supmgr.c refresh, 2026-11-10) */
+        if(f>=0||none)rc_int(u,rv_vslot(RV_VISIBLE,k),1);
         for(u32 pp=RP_RED;pp<=RP_VER;pp++) {
             const char *t=f<0?(none&&pp==RP_GREY?rc_text(u,RT_NONE):rc_text(u,RT_BLANK))
                 :pp==RP_GREEN?rc_text(u,RT_BLANK)                 /* On / Off says it (RV_TON) */
@@ -375,12 +377,12 @@ static void rv_refresh(struct rc_ui *u)
         }
         rc_int(u,RV_TOFF+k,f>=0&&!on);rc_int(u,RV_TON+k,f>=0&&on);
         rc_int(u,RV_GSHOW+k,(f>=0&&!on)||none);rc_int(u,RV_RSHOW+k,f>=0&&now!=on);
-        rc_int(u,rv_vslot(RV_VISIBLE,k),f>=0||none);
         rc_int(u,rv_vslot(RV_LOCK,k),f<0);
         rc_int(u,rv_vslot(RV_MORE,k),0);
         rc_int(u,rv_vslot(RV_DEFAULT,k),f>=0&&!on);
         rc_int(u,rv_vslot(RV_SELECTED,k),f>=0&&!on);
         rc_int(u,rv_vslot(RV_VERSION_X,k),49u);
+        if(!(f>=0||none))rc_int(u,rv_vslot(RV_VISIBLE,k),0);
     }
     rv_hint(u);
 }

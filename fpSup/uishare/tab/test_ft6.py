@@ -24,10 +24,14 @@ GUI_OBJECT, NBR_LOAD, SITE = 0xC37B7048, 0xC05E84D8, 0xC056461C
 FAKE = 0xC3F00000                       # the fake UI app and its vectors
 APP, SCREENS, SCREEN0, READER, MACHS, NAMES, NEW_RD = (FAKE + o for o in (
     0x0, 0x1000, 0x2000, 0x3000, 0x4000, 0x5000, 0x6000))
+GROUP, LANG_RES = FAKE + 0x7000, FAKE + 0x7800     # [APP+0x888], the language resource [GROUP+0x5C]
 STOCK_MACHINES = 17
 _img, _base, _rows, (POOL_AT, POOL_LEN) = _N.load_sets()
 VAR_REGISTER, VAR_SUBSCRIBE, POST_INT, POST_STR, F_RENAME = (
     0xC05DB308, 0xC0560FB0, 0xC0593F30, 0xC0593FE0, 0xC0366508)
+LANG_STALE = 0xC05DE6B0                 # stock: mark the language stale (texts bound again on the GUI pass)
+UI_BUSY, LANG_APPLY = 0xC05DCCB8, 0xC05DE5B8   # stock: a GUI pass is running / translate the stale texts now
+SLEEP_MS = 0xC01F89C4                   # stock tk_dly_tsk(ms)
 
 
 class Cam(T.Camera):
@@ -38,9 +42,18 @@ class Cam(T.Camera):
         self.nbr_calls, self.vars, self.subs, self.posts, self.renames = [], {}, [], [], []
         self.mu.mem_write(NBR_LOAD, struct.pack('<H', 0x4770))     # Thumb bx lr
         self.mu.mem_write(VAR_REGISTER, struct.pack('<H', 0x4770))
+        for a in (LANG_STALE, UI_BUSY, LANG_APPLY):
+            self.mu.mem_write(a, struct.pack('<H', 0x4770))
+        self.lang_stale, self.lang_apply = [], []                  # (app, pack loads so far)
+        self.ui_busy = getattr(self, 'ui_busy', 0)                 # sleeps until the GUI is idle again
+        self.sleeps = []
+        self.mu.mem_write(SLEEP_MS, struct.pack('<I', 0xE12FFF1E))   # ARM bx lr
         for a in (VAR_SUBSCRIBE, POST_INT, POST_STR, F_RENAME):
             self.mu.mem_write(a, struct.pack('<I', 0xE12FFF1E))   # ARM bx lr
         self.put(GUI_OBJECT, APP)
+        self.put(APP + 0x888, GROUP)
+        self.put(GROUP + 0x5C, LANG_RES)
+        self.gui_trace = []                             # 'busy?', 'sleep', 'load', 'stale', 'apply' in order
         self.put(APP + 0x80, 221)
         self.put(APP + 0x84, 224)
         self.put(APP + 0x8C, SCREENS)
@@ -65,6 +78,22 @@ class Cam(T.Camera):
     def _hook(self, mu, addr, size, data):
         r0, r1, r2, r3 = (self.r(x) for x in (T.UC_ARM_REG_R0, T.UC_ARM_REG_R1,
                                                T.UC_ARM_REG_R2, T.UC_ARM_REG_R3))
+        if addr == SLEEP_MS:
+            self.sleeps.append(r0)
+            self.gui_trace.append('sleep')
+            self.ui_busy = max(0, self.ui_busy - 1)
+            return self._ret(0)
+        if addr == LANG_STALE:
+            self.gui_trace.append('stale')
+            self.lang_stale.append((r0, len(self.nbr_calls)))
+            return self._ret(0)
+        if addr == UI_BUSY:
+            return self._ret(1 if self.ui_busy else 0)
+        if addr == LANG_APPLY:
+            self.gui_trace.append('apply')
+            self.lang_apply.append((r0, len(self.nbr_calls), len(self.lang_stale)))
+            self.texts_bound = True
+            return self._ret(0)
         if addr == VAR_REGISTER:
             for i in range(r1):
                 ty, name, first = struct.unpack('<3I', bytes(mu.mem_read(r2 + 12 * i, 12)))
@@ -86,6 +115,9 @@ class Cam(T.Camera):
         if addr == T.F['F_WRITE'] and not self.write_ok:
             return self._ret(0)
         if addr == NBR_LOAD:
+            self.gui_trace.append('load')
+            self.bound_at_load = getattr(self, 'bound_at_load', []) + [getattr(self, 'texts_bound', True)]
+            self.texts_bound = False            # stock C05E0940: every resource unbound
             sp = self.r(T.UC_ARM_REG_SP)
             self.nbr_calls.append(([r0, r1, r2, r3], sp, bytes(mu.mem_read(r1, r2))))
             if self.nbr_result == 0:

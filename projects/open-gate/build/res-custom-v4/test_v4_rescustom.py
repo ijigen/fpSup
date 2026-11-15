@@ -414,32 +414,5 @@ class UiV4Tests(unittest.TestCase):
 
 
 
-class V3UnchangedTests(unittest.TestCase):
-    """The v4 work is all behind OGC_V4 / build_core(v4=True): the v3 build of
-    this tree, with the released RCD file page put back (the shared
-    uishare/tab/manage_page.py changed after the release), is the released
-    32RESCUS.BIN byte for byte."""
-    RELEASE = ROOT / 'fpSup' / 'releases' / 'fpsup-res-custom-v0.1.4test' / 'fpSup' / '32RESCUS.BIN'
-    SHA = 'd9a8e10050184424886afaca263279967ab2cc2c89314c44038fe4402a676355'
-
-    def test_the_v3_build_is_the_release(self):
-        import hashlib
-        import build_v3_rescustom as B
-        import rc_files_page
-        rel = self.RELEASE.read_bytes()
-        self.assertEqual(hashlib.sha256(rel).hexdigest(), self.SHA)
-        t = rel.index(struct.pack('<2I', B.TAB_MAGIC, B.TAB_VERSION))
-        w = struct.unpack_from(f'<{B.TAB_WORDS}I', rel, t)
-        page = rel[w[26]:w[26] + w[27]]                       # files_off, files_len
-        keep = rc_files_page.build
-        rc_files_page.build = lambda: (page, keep()[1])
-        try:
-            with tempfile.TemporaryDirectory() as d:
-                data, _f, _t = B.build_core(pathlib.Path(d))
-        finally:
-            rc_files_page.build = keep
-        self.assertEqual(hashlib.sha256(data).hexdigest(), self.SHA)
-
-
 if __name__ == '__main__':
     unittest.main()

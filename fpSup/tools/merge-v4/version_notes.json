@@ -1,4 +1,28 @@
 {
+ "fpsup-res-custom-v0.1.7": {
+  "en": [
+   "Fixes the white screen some cameras showed when switching formats with 0.1.6. 0.1.7 goes back to 0.1.5's code and keeps only the files-page paging fix; 0.1.6's reload-and-return step is gone.",
+   "Fixes “1474” appearing for about half a second when the camera is switched on with an SSD attached (the “Now Connecting...” message drawn as its number). All sups that add menu pages are rebuilt for this; update them together.",
+   "The format files (OG2K, OG3K, OG3.5K, OG4K, S16) are the same as 0.1.5's.",
+   "On the camera with Loader v4 (2026-11-15): no white screen when switching resolution; no 1474 at power-on with an SSD. That the white screen came from the reload step is inferred from its absence. Recording is not tested."
+  ],
+  "zh": [
+   "修正 0.1.6 部分相機切換格式時出現白畫面。0.1.7 退回 0.1.5 的程式，只保留檔案頁翻頁的修正；0.1.6 的「重新載入後返回」步驟已移除。",
+   "修正插著 SSD 開機時畫面出現「1474」約半秒（「Now Connecting...」訊息被畫成編號）。所有會新增選單頁的 sup 都為此重建，請一起更新。",
+   "格式檔（OG2K、OG3K、OG3.5K、OG4K、S16）與 0.1.5 相同。",
+   "Loader v4 上機（2026-11-15）：切換解析度沒有白畫面；插 SSD 開機沒有 1474。白畫面來自重新載入步驟是由「拿掉後不再出現」推定。錄影未測。"
+  ]
+ },
+ "fpsup-qs-share-v0.0.3test": {
+  "en": [
+   "Fixes “1474” appearing for about half a second when the camera is switched on with an SSD attached. Nothing else changes from 0.0.2test (API 9).",
+   "On the camera 2026-11-15: no 1474 at power-on with an SSD."
+  ],
+  "zh": [
+   "修正插著 SSD 開機時畫面出現「1474」約半秒。其他與 0.0.2test 相同（API 9）。",
+   "2026-11-15 上機：插 SSD 開機沒有 1474。"
+  ]
+ },
  "fpsup-sensor-lab-v0.0.6test": {
   "en": [
    "Pixel merge made easy: every format offers 2x2, 3x3 and 6x6, plus 1x2 and 1x3, as RES presets.",

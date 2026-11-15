@@ -83,7 +83,7 @@ SOURCES = [
 VALIDATION = ('fpSup/loader-v4/README.md "已上線 sup 的 v4 第一次上機(2026-10-24)": all eleven load, '
               'menus and saving checked on the camera; recording (ULWR, Gyro2, Lossless compression) not yet.')
 VALIDATION_OF = {
-    'res-custom': ("projects/open-gate/build/res-custom-v4/test_v4_rescustom.py: 85 tests pass (2026-11-12). Change from 0.1.5: the files page is built with manage_page.row_visible (a watcher under the page root shows / hides each row) and ogc_files.c sends Visible=1 before a row's words, Visible=0 after them; reported and fixed independently by Ruari (2026-11-11). On the camera 2026-11-12 under Loader v4 (LOAD.LOG 0A), 16 format files = 4 pages, the last with one row: paged to 4 and back to 3, 2, 1, every row shown (screenshots). The five .RCD files are 0.1.5's bytes. Not checked: recording, switching a format on / off, the selection across power-off."),
+    'res-custom': ("projects/open-gate/build/res-custom-v4/test_v4_rescustom.py: 78 tests, 76 pass, 2 skipped where the private raw-profiles.json is absent (both pass where it is present) (2026-11-15). 0.1.7 is 0.1.5's source with the files-page paging fix (Visible=1 before a row's words, Visible=0 after them) and without 0.1.6's reload-and-return flow, after which a white screen was reported when switching formats; plus the shared fpsup-ui change (a page pack load waits for the GUI to be idle, then translates). On the camera 2026-11-14/15 under Loader v4 (Bei): no white screen when switching resolution; booting with an SSD attached no longer shows 1474. The five .RCD files are 0.1.5's bytes. Not checked: that the white screen came from the reload flow (inferred from its absence), recording."),
     # 2026-11-12: filled in after the merge-page card's own camera check (README "LUT on the merge page")
     'lut': ('fpSup/lut tests (test_jfit 25, test_lvb_native 31, test_conv_native 20, test_sup_native 13, '
             'test_library_native 25, test_dng_native 5, test_clist_native 12, test_import_native 9) OK; JFIT v7 on the '
@@ -97,9 +97,7 @@ VALIDATION_OF = {
     'sensor-lab': ('projects/sensorlab-imx410/validation/20261105-cpux2-removed: v0.7.39test offline full suite and '
                    'on the camera 2026-11-05 (boot apply, QS and RECIPE display, CPU x2 settings -> ISP HBIN 1); '
                    '0.0.1test = the same body, only the header display name changed (2026-11-07, offline).'),
-    'qs-share': ('projects/qs-container v0.3.8 (API 8): offline suites, on the camera with SensorLab v0.7.39test '
-                 '2026-11-05; 0.0.1test = the v0.3.8 code with the header display name fixed to "QS-Share" '
-                 '(state/DMA offsets 64 B lower); not yet on the camera under this name.'),
+    'qs-share': ("projects/qs-container tests: 134 run, 133 pass, 1 skipped (2026-11-15). Change from 0.0.2test: the shared fpsup-ui only (a page pack load waits for the GUI to be idle, then marks the language stale and translates). On the camera 2026-11-15 (Bei) with this code under the 0.0.2test file name: booting with an SSD attached no longer shows 1474. Not on the camera under the 0.0.3test name."),
     'screenflip': ("fpSup/screenflip/test_v4_flip.py + test_v3_flip.py (the task is created with stksz 0x2000; v3's 40FLIP.BIN keeps 0x1000 and its bytes). On the camera 2026-11-11, loaded under Loader v4: 19 value changes from the TOOLS row (19 saves, 0 failed, file = table each time), 25 STILL/CINE switches (25 applies; 0x30190044 = 0x00333000 at 180, 0 at Off), no freeze; DISP switching checked by hand by Bei. Not checked: a non-Off value across a restart; the old 0x1000 stack's depth was never measured."),
     'dial-fix': ('fpSup/dialfix/test_dialfix.py: 9 unicorn tests (his v6 words = his AutoRun = clang of his .S; '
                  'sup copy and his in-place code reached through the stock edge handlers agree over 600 random steps; '

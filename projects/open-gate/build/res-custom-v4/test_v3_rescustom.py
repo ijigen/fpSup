@@ -120,6 +120,13 @@ def thumb_bw(site, to):
     return hw1 | hw2 << 16
 
 
+# og3k_plan reads the stock per-mode profile table from a private file that is not in
+# every checkout (a worktree has none): those tests are skipped there, not failed.
+needs_raw_profiles = unittest.skipUnless(
+    (pathlib.Path(__file__).resolve().parents[4] / 'research/other/external/FP3K-technical-handoff-2026-09-10'
+     / 'analysis/firmware/raw-profiles.json').exists(), 'needs the private raw-profiles.json')
+
+
 class Cam(T.Camera):
     def __init__(self, files, dirs, core_facts, fmt=CINEMADNG, res=2, csv_rows=2, uia_fail=(),
                  vr=False, b25_off=0x19C130, fr=1, **kw):
@@ -899,6 +906,8 @@ class CoreTests(unittest.TestCase):
                 self.assertEqual([tuple(p) for p in row['ent_canvas'][0]['pairs']],
                                  [tuple(p) for p in x['hirate_100p']])
                 self.assertEqual([tuple(p) for p in x['hirate_100p']], J_S16100)
+
+    @needs_raw_profiles
 
     def test_jose_formats_declare_the_stock_engine_frame_rate(self):
         """layer 2 (data): every S16 / OG3.5K / OG4K entry's engfps (canvas +0x30, the
@@ -1804,6 +1813,8 @@ class CoreTests(unittest.TestCase):
         bound = hm if tail - hm < L.MIN_TAIL else hm // 2 + 1
         self.assertLessEqual(abs(hm * vm - cyc), bound, what)
         self.assertLessEqual(abs(hm * vm - cyc), abs(hm * (old[1] & 0xFFFF) - cyc), what + ' worse than today')
+
+    @needs_raw_profiles
 
     def test_same_timing_and_canvas_as_todays_opengate(self):
         sys.path.insert(0, str(BUILD))

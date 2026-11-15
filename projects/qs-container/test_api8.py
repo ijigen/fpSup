@@ -272,6 +272,8 @@ class DialGuide(unittest.TestCase):
     def test_old_containers_ignore_the_bit(self):
         """v0.3.7 / v0.3.2 / v0.2.3 as deployed: the flagged functions register as before, the dials and arrows
         work, nothing of the guide exists."""
+        if not all((HERE / 'out' / 'fpSup' / name).exists() for name in OLD):
+            self.skipTest('needs the old containers as deployed (out/fpSup, not in every checkout)')
         for name, sha in OLD.items():
             blob = (HERE / 'out' / 'fpSup' / name).read_bytes()
             self.assertEqual(hashlib.sha256(blob).hexdigest(), sha, name)

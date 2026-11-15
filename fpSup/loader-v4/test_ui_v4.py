@@ -406,6 +406,45 @@ class SupManagerPageTests(unittest.TestCase):
         self.assertEqual(cam.machines()[:2], [FP4.HOME_MACHINE, FP4.SUPMGR_MACHINE])   # the last in, first
         self.assertEqual(cam.page_id('FT_LIST'), 21)
 
+    def test_every_page_pack_load_binds_the_texts_again(self):
+        # the stock load unbinds the localised texts already handed out; a dialog that is
+        # on screen through the boot then draws its key ("1474" with an SSD attached,
+        # camera 2026-11-14).  Each sup binds them again right after its own load, as
+        # stock does after its loads -- at once, not on the next GUI pass.
+        cam = self.boot_sm()
+        loads = list(range(1, len(cam.nbr_calls) + 1))        # page packs and the logo pack alike
+        self.assertEqual(len([c for c in cam.nbr_calls if not c[2].startswith(F6.F.NBR.MAGIC)]), 2)
+        self.assertGreater(len(loads), 2)                     # the fpSup page's logo pack is one of them
+        self.assertEqual(cam.lang_stale, [(F6.APP, k) for k in loads])
+        self.assertEqual(cam.lang_apply, [(F6.APP, k, k) for k in loads])
+        self.assertEqual(cam.bound_at_load, [True] * len(loads))   # no load starts with the texts unbound
+        self.assertTrue(cam.texts_bound)
+
+    def test_a_load_waits_for_the_gui_to_finish_a_screen_change(self):
+        # booting with an SSD attached the GUI is in a screen change when some sups load;
+        # stock does not translate then, and the keys stayed up until it was done (camera
+        # 2026-11-15).  The load waits for it instead, and then translates as always.
+        F6.Cam.ui_busy = 3
+        try:
+            cam = self.boot_sm()
+        finally:
+            del F6.Cam.ui_busy
+        loads = len(cam.nbr_calls)
+        self.assertEqual(cam.sleeps, [5, 5, 5])
+        self.assertEqual(cam.gui_trace, ['sleep'] * 3 + ['load', 'stale', 'apply'] * loads)
+        self.assertTrue(cam.texts_bound)
+
+    def test_a_gui_that_stays_busy_does_not_hold_the_boot(self):
+        F6.Cam.ui_busy = 10 ** 6                              # never idle
+        try:
+            cam = self.boot_sm()
+        finally:
+            del F6.Cam.ui_busy
+        loads = len(cam.nbr_calls)
+        self.assertEqual(len(cam.sleeps), 100 * loads)        # half a second a load, no more
+        self.assertEqual(len(cam.lang_stale), loads)          # the GUI translates when it is done
+        self.assertEqual(cam.lang_apply, [])                  # stock C05DE718: not during a screen change
+
     def test_list_without_the_core(self):
         cam = self.boot_sm(('B.BIN', ts('BBBB', [])))
         cam.press(41)                           # opening it lists again: at its entry, later sups were not loaded yet
