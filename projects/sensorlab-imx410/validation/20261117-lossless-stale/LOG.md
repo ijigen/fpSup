@@ -69,3 +69,28 @@ Compressed frames per take: 40 of 40 in 20 takes, partly in 14, **0 of 40 in 44 
 
 Not tested: lit scenes, long takes, SSD, in-camera playback of these clips, DaVinci on the new 1024-wide grid,
 `native/test_native_variable.py` (25 errors, not investigated, not known whether older than this change).
+
+## 22:20 — why the small RWZM outputs are never compressed (offline, firmware reading)
+
+The takes with 0 compressed frames are exactly the small rasters: 1024x678 (1,041,420 B), 1008x662, 656x426.
+The smallest that compresses is 1024x1024 (1,572,864 B).
+
+Firmware: `FUN_c062f5a8` (F_INIT) sets the destination length to align_kib(bits x w x h / 8) -- the raw size.
+`FUN_c062fff8` (the engine set-up) writes the output limit register
+`300D0090 = (dst + dst_len + 0xBFF00000) >> 10`, where the other address registers use `+ 0xC0000000`:
+**the engine's output limit is 1 MiB before the end of the room it is told.** So
+
+    room = raw size - 1 MiB
+
+- raw size <= 1 MiB: room <= 0, every frame is refused at once (codec job 2.3 ms where the model gives ~9 ms).
+  This is 1024x678, 1008x662, 656x426: 40 of the 80 takes.
+- Prediction, NOT measured (lens cap on): a frame is also refused when its compressed size > raw - 1 MiB.
+  1024x1024 12-bit: refused above 33 % of raw; 1312x874: above 39 %; 1968x1312: above 73 %. A lit scene
+  usually compresses to 50-65 %, so the first two would probably not compress in real use either.
+- Not known: whether the limit is exact or the engine can run past it (why stock keeps 1 MiB).
+
+Ways out (not done; makes formats compress that did not -- Bei decides):
+- B (keeps the stock margin): for small rasters, do not swap; encode into an own buffer of raw + 1 MiB and copy
+  the payload into the frame (the non-swapping path exists). Cost: 1 MiB per lane, one copy of < 1 MB per frame.
+- A (no memory, no copy): tell the engine length + 1 MiB so the limit lands on the true end. Only after
+  measuring on the camera that the engine never writes past the limit.
