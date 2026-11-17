@@ -151,3 +151,19 @@ test_tile_grid, test_rec_workspace, test_rec_hook OK.
 
 Not tested: compressed = uncompressed bit for bit; the steady check with a controlled light; SSD; long takes;
 playback in camera; DaVinci; the 0.3.7test dark run (black level) -- the last dark run is 0.3.5test.
+
+## 11-18 — dark acceptance on Lossless 0.3.7test (`dark037/`, `dark037.log`; one trial take in `dark037a/`)
+
+80 takes (40 recipes x ISO 100 / 3200), lens cap on, SD.
+
+- 79 pass. decode: every fetched clip; fresh: no repeats.
+- steady: largest frame-to-frame deviation 0.011 DN12 (gate 0.15).
+- black: largest |mean - tag| 0.258 DN12 (s-2x2---11-iso3200); largest channel spread 0.422 (s-12fastW---RWZM-iso3200).
+- compressed: 0 of 40 only on the late-data recipes (f12v3 and 3x3fast, 1:1 and RWZM; f12h2v3 RWZM; 3x6fast RWZM);
+  every other RWZM recipe 40 of 40. The large 1:1 / full-height recipes are partly compressed as in the 0.3.5test
+  run (for example 28 of 40 at 6048-wide 1:1, about half at full height).
+- the 1 failure: s-12fastW---11-iso100, 0 frames fetched. This recipe keeps 1-2 frames on SD (known; the same take
+  failed the same way in accept035.log) and the tool reads from frame 2. Not a 0.3.7test change.
+- s-3x6fast---RWZM-iso3200, which gave no clip once in the lit run, has 40 frames here.
+
+Not tested: compressed = uncompressed bit for bit; SSD; long takes; playback in camera; DaVinci.
