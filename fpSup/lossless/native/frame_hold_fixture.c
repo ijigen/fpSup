@@ -12,7 +12,9 @@
 #include "flush_site.h"
 
 #define MEM        0x10000000u
-#define MEM_SIZE   (16u << 20)
+#define MEM_SIZE   (24u << 20)
+#define MARGIN_OUT (MEM + 0x1000000u)     /* two own outputs with the engine's 1 MiB behind a frame */
+#define MARGIN_CAP 0x200000u
 #define UNCACHED   0x40000000u
 #define FRAMES     (MEM + 0x000000u)      /* struct i at +i*0x2000 */
 #define BUFFERS    (MEM + 0x100000u)      /* handle i at +i*0x60000 */
@@ -157,6 +159,9 @@ const struct fpl_hold_natives fpl_hold_test_natives = {
 enum { MODE_OK, MODE_REFUSE, MODE_WAIT_ERROR, MODE_NEVER, MODE_NEVER_ONCE };
 static uint32_t mode, latency, left, running, payload_bytes, open_ret, close_ret, stuck;
 static uintptr_t started_source, started_dest, band_table;
+static uint32_t started_len, engine_limit;
+/* 1: the fake engine keeps the real one's rule (C062FFF8): its output limit is 1 MiB before the told end */
+void fpl_fixture_engine_limit(uint32_t v) { engine_limit = v; }
 static uint32_t starts, closes;
 
 static uint32_t bswap(uint32_t v) {
@@ -173,7 +178,7 @@ static uint32_t c_flag(void) { return 42; }
 static uint32_t c_clr(uint32_t f, uint32_t p) { (void)f; (void)p; return 0; }
 static uint32_t c_open(void) { return open_ret; }
 static uint32_t c_submit(const uint32_t *r) {
-    started_source = r[5]; started_dest = r[7]; band_table = r[9];
+    started_source = r[5]; started_dest = r[7]; band_table = r[9]; started_len = r[8];
     return 0;
 }
 static void c_reset(void) {}
@@ -200,6 +205,7 @@ static uint32_t c_twai(uint32_t f, uint32_t w, uint32_t m, uint32_t *p, uint32_t
         left = 0;
     }
     if (mode == MODE_REFUSE) { *p = 5; return 0; }
+    if (engine_limit && started_len < 0x100000u + payload_bytes) { *p = 5; return 0; }
     /* "encode": the source's marker, then filler, into our output */
     /* compressed marker 0xC00000id, carrying the SOURCE frame's id */
     wr_quiet(started_dest, 0xC0000000u | (rd_quiet(started_source) & 0xFFFFu));
@@ -257,7 +263,9 @@ static uint32_t published(void) {
     return n;
 }
 static uint32_t descriptor[18];
-static uint32_t use_spare;
+static uint32_t use_spare, use_margin;
+/* The next reset gives each lane an own output of MARGIN_CAP and no spare (card.c, small rasters). */
+void fpl_fixture_use_margin(uint32_t v) { use_margin = v; }
 /* The next reset gives the adapter a spare allocation for the buffer swap. */
 void fpl_fixture_use_spare(uint32_t v) { use_spare = v; }
 static uint32_t no_output;
@@ -328,6 +336,11 @@ uint32_t fpl_fixture_reset(uint32_t latency_polls, uint32_t payload, uint32_t lo
     w.spare.handle = use_spare ? EXTRA + (EXTRAS - 1) * 0x60000u : 0;
     w.spare.capacity = use_spare ? native_allocation() + 1024u : 0;
     w.spare.allocator_class = use_spare ? 10u : 0;
+    if (use_margin) {
+        w.output = MARGIN_OUT; w.output_capacity = MARGIN_CAP;
+        w.spare.handle = w.spare.capacity = w.spare.allocator_class = 0;
+    }
+    started_len = 0;
     {
         uint32_t r = fpl_hold_init(&hold, &pipeline, &facts, &w);
         hold.pitch_test = (pitch >> 1) & 1u;
@@ -387,6 +400,10 @@ uint32_t fpl_fixture_lanes(uint32_t second) {
     w.spare.handle = EXTRA + (EXTRAS - 2) * 0x60000u;
     w.spare.capacity = native_allocation() + 1024u;
     w.spare.allocator_class = 10u;
+    if (use_margin) {
+        w.output = MARGIN_OUT + MARGIN_CAP; w.output_capacity = MARGIN_CAP;
+        w.spare.handle = w.spare.capacity = w.spare.allocator_class = 0;
+    }
     return fpl_hold_init(&hold_b, &pipeline_b, &facts, &w);
 }
 uint32_t fpl_fixture_lane_arrive(uint32_t id) { return fpl_lanes_arrive(lanes, CREATOR, id, 1); }
@@ -520,6 +537,9 @@ uint32_t fpl_fixture_get(uint32_t field) {
     case 41: return hold.late_dropped + hold_b.late_dropped;
     case 42: return hold.late_checked;
     case 43: return hold.late_unknown;
+    case 44: return started_len;
+    case 45: return hold.margin_jobs + hold_b.margin_jobs;
+    case 46: return hold.copied_dma + hold_b.copied_dma;
     default: return 0xFFFFFFFFu;
     }
 }

@@ -120,6 +120,7 @@ uint32_t fpl_fixture_reset(uint32_t width, uint32_t height, uint32_t format) {
     input.table_capacity = sizeof tbl;
     input.tile_force = 0;
     input.pitch_any = 0;
+    input.destination_margin = 0;
     return fpl_codec_job_init(&job);
 }
 void fpl_fixture_set(uint32_t knob, uint32_t value) {
@@ -144,6 +145,7 @@ void fpl_fixture_set(uint32_t knob, uint32_t value) {
     case 17: input.tile_force = value; break;
     case 18: job.keep_open = value; break;
     case 20: input.pitch_any = value; break;
+    case 21: input.destination_margin = value; break;
     case 19:                                        /* a finished job's set-up */
         for (uint32_t n = 0; n < 19; ++n) devregs[0x40 / 4 + n] |= value;
         break;

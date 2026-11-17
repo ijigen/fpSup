@@ -408,6 +408,45 @@ class CodecJobTests(unittest.TestCase):
         self.assertNotIn(C_CLOSE, self.calls()[mark:])
         self.assertEqual(self.get(PHASE), FAILED)
 
+    # ---- the engine's 1 MiB (2026-11-17): C062FFF8 puts the output limit 1 MiB before the told end
+    K_MARGIN, MIB = 21, 0x100000
+
+    def test_no_margin_tells_the_engine_one_raw_frame(self):
+        self.lib.fpl_fixture_submit()
+        self.assertEqual(self.request()[8], 0x2000)
+
+    def test_a_margin_tells_the_engine_one_mib_more_so_its_limit_is_the_frame(self):
+        self.set(K_DSTCAP, 0x2000 + self.MIB)
+        self.set(self.K_MARGIN, self.MIB)
+        self.assertEqual(self.lib.fpl_fixture_submit(), OK)
+        self.assertEqual(self.request()[8], 0x2000 + self.MIB)
+        self.assertEqual(self.request()[8] - self.MIB, 0x2000)      # where 300D0090 lands
+
+    def test_a_margin_the_destination_does_not_hold_is_never_started(self):
+        for capacity in (0x2000, 0x2000 + self.MIB - 0x400):
+            with self.subTest(capacity=capacity):
+                self.lib.fpl_fixture_reset(*FHD)
+                self.set(K_DSTCAP, capacity)
+                self.set(self.K_MARGIN, self.MIB)
+                self.assertEqual(self.lib.fpl_fixture_submit(), NOT_READY)
+                self.assertEqual(self.calls(), [C_INIT])
+
+    def test_only_the_engines_own_margin_is_taken(self):
+        for margin in (0x400, self.MIB - 0x400, 2 * self.MIB):
+            with self.subTest(margin=margin):
+                self.lib.fpl_fixture_reset(*FHD)
+                self.set(K_DSTCAP, 0x2000 + 4 * self.MIB)
+                self.set(self.K_MARGIN, margin)
+                self.assertEqual(self.lib.fpl_fixture_submit(), NOT_READY)
+                self.assertEqual(self.calls(), [C_INIT])
+
+    def test_the_margin_does_not_widen_what_a_total_may_be(self):
+        self.set(K_DSTCAP, 0x2000 + self.MIB)
+        self.set(self.K_MARGIN, self.MIB)
+        self.assertEqual(self.lib.fpl_fixture_submit(), OK)
+        self.set(K_TOTAL, 0x2001)
+        self.assertEqual(self.lib.fpl_fixture_poll(), FAULT)
+
     def test_an_impossible_total_is_not_trusted(self):
         for total in (0, 0x2001):
             with self.subTest(total=total):
@@ -529,6 +568,17 @@ class MutationTests(unittest.TestCase):
                                          "    j->misaligned = 0;"),
         'submit ignores the input switch': ('                                               in->pitch_any);',
                                             '                                               0);'),
+        'tells the engine one frame despite the margin': (
+            '    j->request[8] = engine[3] + in->destination_margin;', '    j->request[8] = engine[3];'),
+        'takes a margin the destination does not hold': (
+            '        in->destination_margin > in->destination_capacity - engine[3] ||', ''),
+        'takes any margin': (
+            '        (in->destination_margin && in->destination_margin != FPL_CODEC_ENGINE_MARGIN) ||', ''),
+        'the margin widens the output bound': (
+            '    j->destination_bytes = engine[3];', '    j->destination_bytes = engine[3] + in->destination_margin;'),
+        'always adds the margin': (
+            '    j->request[8] = engine[3] + in->destination_margin;',
+            '    j->request[8] = engine[3] + FPL_CODEC_ENGINE_MARGIN;'),
         'clears the flag on a timeout': (
             '    if (native == E_TMOUT) return FPL_BUSY;          /* still encoding */',
             '    if (native == E_TMOUT) { native_clr_flg(j->flag, 0); return FPL_BUSY; }'),

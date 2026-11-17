@@ -290,6 +290,12 @@ struct fpl_card {
     uint32_t stops, finishes, finish_busy, last_finish;
     /* the take's spare for the buffer swap: asked, granted, given back */
     uint32_t spare_bytes, spare_failed, spares_freed;
+    /* Small rasters (2026-11-17): the engine keeps 1 MiB before the end of the room it is told (codec_job.h),
+     * so in a frame's own allocation a raster under 1 MiB is never compressed and one under 2 MiB only when it
+     * compresses very well. Such a take gets one output buffer a lane, raw + 1 MiB, instead of the spares; the
+     * payload is copied into the frame. small_bytes: each buffer, 0 = the take swaps as before. */
+    struct { uintptr_t handle; uint32_t capacity, allocator_class; } small_out[2];
+    uint32_t small_bytes, small_failed;
     uint32_t stale_promises;            /* forgotten at a new take, see start_hold */
     uint32_t take_frames;               /* CinemaDNG arrivals, also when OFF */
     uintptr_t task_entry;               /* card.S task_shim */
@@ -464,6 +470,34 @@ USED uint32_t fpl_card_init(struct fpl_card *c, uintptr_t base, uint32_t block_b
     return FPL_OK;
 }
 
+#define CARD_SMALL_RASTER 0x200000u     /* told length under 2 MiB: room in a frame would be under half */
+static void free_small(struct fpl_card *c) {
+    for (uint32_t n = 0; n < 2; ++n) {
+        if (c->small_out[n].handle) card_free_spare(&c->small_out[n]);
+        c->small_out[n].handle = c->small_out[n].capacity = c->small_out[n].allocator_class = 0;
+    }
+    c->small_bytes = 0;
+}
+/* 1: both lanes' output buffers are held and small_bytes says how large each is */
+static uint32_t get_small(struct fpl_card *c) {
+    uint32_t told = fpl_codec_source_bytes_test(c->rec.facts.seen.width, c->rec.facts.seen.height,
+                                                c->rec.facts.seen.format,
+                                                *(volatile uint32_t *)&c->pitch_test == 1u);
+    free_small(c);
+    if (!told || told >= CARD_SMALL_RASTER) return 0;
+    for (uint32_t n = 0; n < 2; ++n) {
+        card_get_spare(&c->small_out[n], told + FPL_CODEC_ENGINE_MARGIN);
+        if (!c->small_out[n].handle || (c->small_out[n].handle & 0x3ffu) ||
+            c->small_out[n].capacity < told + FPL_CODEC_ENGINE_MARGIN) {
+            free_small(c);
+            card_saturate(&c->small_failed);
+            return 0;
+        }
+    }
+    c->small_bytes = told + FPL_CODEC_ENGINE_MARGIN;
+    return 1;
+}
+
 /* The second lane: a spare like the first, and a table of its own (the
  * engine writes its size table there while the other lane's is read).
  * 0: not made, nothing of it held. */
@@ -475,12 +509,17 @@ static uint32_t start_lane_b(struct fpl_card *c, const struct fpl_hold_workspace
     c->table_b.handle = c->table_b.capacity = c->table_b.allocator_class = 0;
     card_get_spare(&c->table_b, ws.table_capacity);
     ws.spare.handle = ws.spare.capacity = ws.spare.allocator_class = 0;
-    card_get_spare(&ws.spare, c->spare_bytes);
+    if (c->small_bytes) {
+        ws.output = c->small_out[1].handle;
+        ws.output_capacity = c->small_bytes;
+    } else {
+        card_get_spare(&ws.spare, c->spare_bytes);
+    }
     ws.table = c->table_b.handle;
     if (!c->table_b.handle || (c->table_b.handle & 0x3ffu) ||
         c->table_b.capacity < ws.table_capacity ||
-        !ws.spare.handle || ws.spare.allocator_class != 10u ||
-        ws.spare.capacity < c->spare_bytes ||
+        (!c->small_bytes && (!ws.spare.handle || ws.spare.allocator_class != 10u ||
+                             ws.spare.capacity < c->spare_bytes)) ||
         fpl_pipeline_begin(&c->pipe_b, &c->rec.workspace.control) != FPL_OK) {
         if (ws.spare.handle) card_free_spare(&ws.spare);
         if (c->table_b.handle) card_free_spare(&c->table_b);
@@ -492,7 +531,7 @@ static uint32_t start_lane_b(struct fpl_card *c, const struct fpl_hold_workspace
         /* the pipeline began: end it, it never held anything */
         fpl_pipeline_stop(&c->pipe_b);
         fpl_pipeline_finish(&c->pipe_b, 1);
-        card_free_spare(&ws.spare);
+        if (ws.spare.handle) card_free_spare(&ws.spare);
         card_free_spare(&c->table_b);
         c->table_b.handle = 0;
         card_saturate(&c->lane_b_failed);
@@ -535,16 +574,22 @@ static uint32_t start_hold(struct fpl_card *c) {
      * back into its own frame. */
     ws.spare.handle = ws.spare.capacity = ws.spare.allocator_class = 0;
     c->spare_bytes = 0x15400u + ((c->rec.facts.seen.raster + 0x1ffu) & ~0x1ffu);
-    card_get_spare(&ws.spare, c->spare_bytes);
-    if (!ws.spare.handle || ws.spare.allocator_class != 10u ||
-        ws.spare.capacity < c->spare_bytes) {
-        if (ws.spare.handle) card_free_spare(&ws.spare);
-        ws.spare.handle = ws.spare.capacity = ws.spare.allocator_class = 0;
-        card_saturate(&c->spare_failed);
+    if (get_small(c)) {
+        ws.output = c->small_out[0].handle;          /* no spare: the copy-back, with the engine's margin */
+        ws.output_capacity = c->small_bytes;
+    } else {
+        card_get_spare(&ws.spare, c->spare_bytes);
+        if (!ws.spare.handle || ws.spare.allocator_class != 10u ||
+            ws.spare.capacity < c->spare_bytes) {
+            if (ws.spare.handle) card_free_spare(&ws.spare);
+            ws.spare.handle = ws.spare.capacity = ws.spare.allocator_class = 0;
+            card_saturate(&c->spare_failed);
+        }
     }
-    if (c->task_id < 1 || !ws.spare.handle ||
+    if (c->task_id < 1 || (!ws.spare.handle && !c->small_bytes) ||
         fpl_hold_init(&c->hold, &w->pipeline, &c->rec.facts, &ws) != FPL_OK) {
         if (ws.spare.handle) card_free_spare(&ws.spare);
+        free_small(c);
         card_saturate(&c->hold_init_failed);
         fpl_rec_workspace_finish(w, w->pipeline.take, 1);     /* the take is stock */
         return 0;
@@ -579,6 +624,7 @@ static void release_spare(struct fpl_card *c) {
         card_free_spare(&c->table_b);
         c->table_b.handle = 0;
     }
+    free_small(c);
 }
 
 HOOK_DEF uint32_t HOOK(fpl_card_rec)(uintptr_t camera, const uint32_t *request, struct fpl_card *c) {

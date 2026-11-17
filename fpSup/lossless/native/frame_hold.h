@@ -102,6 +102,8 @@ struct fpl_frame_hold {
     uint32_t arrivals, held, passed, compressed, refused, no_benefit;
     uint32_t not_eligible, drained, faults, last_result;
     uint32_t direct;                    /* frames the engine read in place */
+    uint32_t copied_dma;                /* payloads copied into their frame by the firmware's DMA */
+    uint32_t margin_jobs;               /* jobs given the engine's 1 MiB behind their output */
     uint32_t swapping;                  /* the held frame's output is in the spare */
     uint32_t swapped, swap_declined, swap_undone;  /* released by swap; held
                                            without a spare that fits; spare

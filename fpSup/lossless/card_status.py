@@ -185,6 +185,14 @@ def main():
               f'results dropped {v["hold.late_dropped"] + v.get("hold_b.late_dropped", 0)}, '
               f'frames not held {v["hold.late_passed"]}, first-frame probes compared {v["hold.late_checked"]}, '
               f'not comparable {v["hold.late_unknown"]}')
+    if 'small_bytes' in v:
+        # small_bytes is only non-zero while a take is live: the jobs tell what the last take did
+        jobs = v['hold.margin_jobs'] + v.get('hold_b.margin_jobs', 0)
+        print(f'  small raster (own output of raw + 1 MiB, payload copied into the frame): '
+              f'{"YES" if jobs else "no (buffer swap)"}; jobs with the engine margin {jobs}, '
+              f'buffers refused {v["small_failed"]}, held now {v["small_bytes"]:,} B a lane; '
+              f'payload copies by DMA {v["hold.copied_dma"] + v.get("hold_b.copied_dma", 0)}, '
+              f'DMA refused (CPU copy) {v["hold.dma_failed"] + v.get("hold_b.dma_failed", 0)}')
     print(f'  stop: stops {v["stops"]}, finished {v["finishes"]}, busy {v["finish_busy"]}, '
           f'lanes now {v["hold.lane"]}/{v["hold_b.lane"]}, result {v["lane_stop_result"]}')
     pwhy = ['slot', 'not tiff', 'root', 'format', 'tiles', 'ifd0', 'room', 'order', 'scratch',

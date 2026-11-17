@@ -71,6 +71,7 @@ struct fpl_codec_job {
  * design, so work that will not fit is refused by the engine rather than
  * overrunning. `table`/`table_capacity` hold the size table AND the band's
  * temporary copy that follows it, as C062F6F8 lays them out. */
+#define FPL_CODEC_ENGINE_MARGIN 0x100000u
 struct fpl_codec_input {
     uint32_t width, height, format;          /* Sigpro format 0..3 */
     uintptr_t source, destination, table;
@@ -80,6 +81,13 @@ struct fpl_codec_input {
      * packed row is not a multiple of 4 bytes (the engine then reads the
      * raster's row padding as pixels). 0, the default: refuse. */
     uint32_t pitch_any;
+    /* 0, or FPL_CODEC_ENGINE_MARGIN when `destination_capacity` really holds that much past one raw frame.
+     * The engine's set-up (C062FFF8, 300D0090) puts its output limit 1 MiB BEFORE the end of the length it is
+     * told, so told one raw frame it has raw - 1 MiB of room: nothing at all for a raster of 1 MiB or less
+     * (1024x678 and smaller were never compressed, 2026-11-17), and a third of the frame at 1024x1024. With
+     * the margin the engine is told raw + 1 MiB: its limit is one raw frame, the stock distance from the end
+     * of memory we own. */
+    uint32_t destination_margin;
 };
 
 #if defined(FPL_CODEC_JOB_HOST_TEST)

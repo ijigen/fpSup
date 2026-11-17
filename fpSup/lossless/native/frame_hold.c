@@ -324,8 +324,17 @@ static uint32_t handoff(void *context, const struct fpl_frame_lease *lease,
 #if defined(FPL_DIAG_HOOK_TIME) && !defined(FPL_FRAME_HOLD_HOST_TEST)
             uint32_t copy_t = tick_us();
 #endif
-            bulk_copy(uncached(lease->buffer + h->head), uncached(output->bytes),
-                      output->length);
+            /* 2026-11-17: by the firmware's DMA copy, as the header in the swap. The CPU copy through the
+             * uncached alias runs at about 70 MB/s (44.9 ms for an FHD frame, 2026-09): with 1 MB payloads it
+             * held the arrival side so long that frames came in bunches and every third found both lanes
+             * busy (1312x874 ISO 3200: 27 of 40 compressed). The CPU copy only if the DMA refuses. */
+            if (header_dma(lease->buffer + h->head, output->bytes, output->length) != 0) {
+                bulk_copy(uncached(lease->buffer + h->head), uncached(output->bytes),
+                          output->length);
+                saturate(&h->dma_failed);
+            } else {
+                saturate(&h->copied_dma);
+            }
 #if defined(FPL_DIAG_HOOK_TIME) && !defined(FPL_FRAME_HOLD_HOST_TEST)
             h->diag_copy_us += tick_us() - copy_t;
             h->diag_copy_n++;
@@ -561,6 +570,12 @@ static uint32_t admit(struct fpl_frame_hold *h, uintptr_t creator, uint32_t nati
                                   : h->workspace.output;
     in->destination_capacity = h->swapping ? readable(h->workspace.spare.capacity)
                                            : h->workspace.output_capacity;
+    /* an own output span with the engine's 1 MiB behind one raw frame (codec_job.h): the engine gets the
+     * whole frame as room. The spare is a frame's allocation and has no such tail. */
+    in->destination_margin =
+        in->destination_capacity >= told_source(h) &&
+        in->destination_capacity - told_source(h) >= FPL_CODEC_ENGINE_MARGIN ? FPL_CODEC_ENGINE_MARGIN : 0u;
+    if (in->destination_margin) saturate(&h->margin_jobs);
     in->table = h->workspace.table;
     in->table_capacity = h->workspace.table_capacity;
     in->tile_force = h->tile_force;

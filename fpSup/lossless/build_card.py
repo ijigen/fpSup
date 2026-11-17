@@ -124,6 +124,8 @@ FIELDS += ['engine_release', 'hold.job.reused', 'hold_b.job.reused', 'tag_tiles'
            'tag_added', 'tag_add_result', 'tag_add_failed', 'tag_prepared', 'tag_prepare_failed',
            'tag_prepare_result', 'tag_head',
            'tag_want', 'tag_pending', 'tag_live', 'tag_index']   # header_tag.h
+FIELDS += ['small_bytes', 'small_failed', 'hold.margin_jobs', 'hold_b.margin_jobs',
+           'hold.copied_dma', 'hold_b.copied_dma', 'hold.dma_failed', 'hold_b.dma_failed']   # 2026-11-17 small rasters
 FIELDS += ['hold.late', 'hold.late_by', 'hold.late_passed', 'hold.late_dropped', 'hold.late_checked',
            'hold.late_unknown', 'hold_b.late', 'hold_b.late_by', 'hold_b.late_dropped']   # 2026-11-17 late data (frame_hold.h)
 FIELDS += ['record_diag.' + name for name in (

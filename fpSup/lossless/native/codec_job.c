@@ -188,6 +188,8 @@ uint32_t fpl_codec_job_submit(struct fpl_codec_job *j, const struct fpl_codec_in
     if (engine[0] != (uint32_t)in->source || engine[2] != (uint32_t)in->destination ||
         engine[4] != (uint32_t)in->table ||
         engine[3] > in->destination_capacity || (engine[3] & 0x3ffu) || !engine[3] ||
+        (in->destination_margin && in->destination_margin != FPL_CODEC_ENGINE_MARGIN) ||
+        in->destination_margin > in->destination_capacity - engine[3] ||
         !engine[5] || engine[5] < tiles * 4u ||
         band_table + engine[5] > in->table + in->table_capacity ||
         band_table + engine[5] < band_table)
@@ -210,7 +212,7 @@ uint32_t fpl_codec_job_submit(struct fpl_codec_job *j, const struct fpl_codec_in
     j->request[5] = engine[0];
     j->request[6] = source_bytes;
     j->request[7] = engine[2];
-    j->request[8] = engine[3];
+    j->request[8] = engine[3] + in->destination_margin;   /* limit = this - 1 MiB */
     j->request[9] = (uint32_t)band_table;
     j->request[10] = engine[5];
     j->request[11] = STOCK_CALLBACK;

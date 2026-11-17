@@ -94,3 +94,60 @@ Ways out (not done; makes formats compress that did not -- Bei decides):
   the payload into the frame (the non-swapping path exists). Cost: 1 MiB per lane, one copy of < 1 MB per frame.
 - A (no memory, no copy): tell the engine length + 1 MiB so the limit lands on the true end. Only after
   measuring on the camera that the engine never writes past the limit.
+
+## 22:40-00:30 — small rasters compressed: Lossless 0.3.6test (test build), 0.3.7test
+
+Bei: do B; lens cap off (room light, static scene).
+
+**The prediction, measured on 0.3.5test with light** (`lit035/`, compressed frames of 40):
+
+| recipe | ISO 100 | ISO 3200 |
+|---|---|---|
+| 1024x1024 (s-12---RWZM) | 40 | **0** |
+| 1312x874 (s-3x3---11) | 40 | **0** |
+| 1968x1312 (s-2x2---11) | 40 | 40 |
+| 1024x678 (s-12v2---RWZM) | 0 | 0 |
+
+So with noise or detail the engine refuses 1024x1024 and 1312x874 too, as the 1 MiB rule says.
+
+**0.3.6test** (never committed; `build036/`): a take whose told length is under 2 MiB gets one output buffer a lane
+of raw + 1 MiB (class 10, the frames' allocator) instead of the spares; the engine is told raw + 1 MiB
+(`destination_margin`, codec_job) so its limit is one raw frame and the stock 1 MiB stays behind it in memory we
+own; the payload is copied into the frame's own raster (the copy-back path). Takes of 2 MiB and more swap as before.
+- `lit036a/`: 1024x678 ISO 3200: 40 of 40 compressed, engine refused 0, 62 margin jobs.
+- `lit036/`: 1008x662, 656x426, 1024x678, 1968x1312 all 40 of 40 at both ISOs; **1024x1024 ISO 3200 36 of 40,
+  1312x874 ISO 3200 27 of 40** (`lit036b/`: 20 of 64 frames "both lanes busy", each lane starting a job every
+  123 ms = 3 frame periods, engine job 8.2 ms). The CPU copy through the uncached alias (about 70 MB/s, 44.9 ms
+  for an FHD frame, BUFFER_RESEARCH.md) held the arrival side so long that frames came in bunches.
+
+**0.3.7test** (`build037/`, sha256 0464758b4d65869d): the payload copy is the firmware's DMA copy C00FBB90 (the
+one the swap moves the header with); the CPU copy only if it refuses.
+- `lit037a/`: 1312x874 ISO 3200: **40 of 40**, both lanes busy 0, 61 DMA copies, 0 refused, lane B not needed.
+
+Steadiness on the lit scene: several takes fail the 0.15 DN12 step gate (1 to 8 frames of 40) -- the same takes
+fail it uncompressed on 0.3.5test (s-12v2---RWZM ISO 3200: 8 of 40 both times), and compressed and uncompressed
+frames follow the same curve (s-12---RWZM ISO 3200: scene drift 489..511). Read as room light / scene, not judged.
+
+Offline: test_frame_hold 234 OK (MarginTests, MarginLaneTests, 6 margin mutants; the copy-back tests now ask for
+the DMA), test_codec_job 48 OK (5 margin tests, 5 mutants), test_card_emulation 34 OK, test_v4_lossless 10 OK,
+test_tile_grid, test_rec_workspace, test_rec_hook OK.
+
+## 11-18 00:30-02:10 — full acceptance on Lossless 0.3.7test, lit scene (`accept037/`, `accept037.log`)
+
+80 takes (40 recipes x ISO 100 / 3200), lens cap off, static lit scene, SD.
+
+- decode: every fetched clip decodes; fresh: no repeats in any take; no take with a flat row.
+- compressed, against 0.3.5test (`accept035.log`, dark): every RWZM recipe that was 0 of 40 is 40 of 40 at both
+  ISOs, except the late-data ones, which stay 0 by design: f12v3 (1:1 and RWZM), 3x3fast (1:1 and RWZM),
+  f12h2v3 RWZM, 3x6fast RWZM (status after a 3x6fast take: "late data: YES", found on the first frame).
+- 1 of 80 with no clip: s-3x6fast---RWZM-iso3200 (A001_296, 0 frames fetched). Recorded again alone
+  (`lit037b/`): 40 frames, passes. Cause not found (not reproduced once).
+- steady: 26 takes fail (1-16 of 40 frames step > 0.15 DN12), all but two at ISO 3200, on compressed and
+  uncompressed takes alike (f12v3 1:1 ISO 3200, 0 compressed, fails too). Read as the lit scene, as before;
+  NOT proven -- this check was made for a capped lens.
+- s-14---11-iso3200 (6048x4040 14 bit): 16 of 40 compressed here, 28 of 40 in the dark run. Not looked into
+  (a lit scene compresses less and takes longer; this format is not touched by the small-raster path).
+- black: not judged (not dark).
+
+Not tested: compressed = uncompressed bit for bit; the steady check with a controlled light; SSD; long takes;
+playback in camera; DaVinci; the 0.3.7test dark run (black level) -- the last dark run is 0.3.5test.

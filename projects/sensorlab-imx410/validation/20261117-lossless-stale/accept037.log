@@ -1,0 +1,83 @@
+bei-14v2-full-iso100: pass  clip: 16 frames fetched  decode: 16 frames  steady: max deviation 0.021  fresh: no repeats  black: not dark: not judged  note: 8 of 16 compressed
+bei-14v2-full-iso3200: pass  clip: 11 frames fetched  decode: 11 frames  steady: only 11 frames: not judged  fresh: no repeats  black: not dark: not judged  note: 5 of 11 compressed
+bei-12v2-full-iso100: pass  clip: 24 frames fetched  decode: 24 frames  steady: max deviation 0.038  fresh: no repeats  black: not dark: not judged  note: 12 of 24 compressed
+bei-12v2-full-iso3200: pass  clip: 22 frames fetched  decode: 22 frames  steady: max deviation 0.134  fresh: no repeats  black: not dark: not judged  note: 11 of 22 compressed
+bei-12v2-hd-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.034  fresh: no repeats  black: not dark: not judged  note: 24 of 40 compressed
+bei-12v2-hd-iso3200: FAIL steady  clip: 32 frames fetched  decode: 32 frames  steady: 8 of 32 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 19 of 32 compressed
+hd-14v2-iso100: pass  clip: 29 frames fetched  decode: 29 frames  steady: max deviation 0.033  fresh: no repeats  black: not dark: not judged  note: 17 of 29 compressed
+hd-14v2-iso3200: pass  clip: 22 frames fetched  decode: 22 frames  steady: max deviation 0.128  fresh: no repeats  black: not dark: not judged  note: 13 of 22 compressed
+s-12---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.035  fresh: no repeats  black: not dark: not judged  note: 28 of 40 compressed
+s-12---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 6 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 28 of 40 compressed
+s-12---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.040  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 1 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12fast---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.041  fresh: no repeats  black: not dark: not judged  note: 28 of 40 compressed
+s-12fast---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 3 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 28 of 40 compressed
+s-12fast---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.034  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12fast---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 1 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12fastW---11-iso100: pass  clip: 1 frames fetched  decode: 1 frames  steady: only 1 frames: not judged  fresh: no repeats  black: not dark: not judged  note: 1 of 1 compressed
+s-12fastW---11-iso3200: pass  clip: 1 frames fetched  decode: 1 frames  steady: only 1 frames: not judged  fresh: no repeats  black: not dark: not judged  note: 1 of 1 compressed
+s-12fastW---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.026  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12fastW---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 2 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12h2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.033  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12h2---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 3 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12h2v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.028  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12h2v3---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 4 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12h3v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.034  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12h3v2---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 2 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12v2---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.040  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12v2---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 6 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.126  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12v2---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 5 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12v3---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.051  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12v3---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 4 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.029  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-12v3---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 7 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.139  fresh: no repeats  black: not dark: not judged  note: 28 of 40 compressed
+s-14---11-iso3200: FAIL steady  clip: 24 frames fetched  decode: 24 frames  steady: 3 of 24 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 16 of 24 compressed
+s-14---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.052  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 1 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14v2---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.038  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14v2---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 4 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.054  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14v2---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 3 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14v3---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.054  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14v3---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 7 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.054  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-14v3---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 2 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-2x2---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.041  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-2x2---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 6 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-2x2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.052  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-2x2---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 7 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-2x2fast---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.035  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-2x2fast---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 16 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-2x2fast---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.050  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-2x2fast---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 3 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-3x3---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.037  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-3x3---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 1 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-3x3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.199  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-3x3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.122  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-3x3fast---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.019  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-3x3fast---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.087  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-3x3fast---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.025  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-3x3fast---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.134  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-3x6---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.019  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-3x6---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.110  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-3x6fast---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.020  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-3x6fast---RWZM-iso3200: FAIL clip  clip: 0 frames fetched
+s-f12h2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.023  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-f12h2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.102  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-f12h2v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.015  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-f12h2v3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.153  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-f12h3v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.030  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-f12h3v2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.200  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-f12v2---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.086  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-f12v2---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.286  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-f12v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.024  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-f12v2---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 4 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+s-f12v3---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.039  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-f12v3---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 2 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-f12v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.030  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+s-f12v3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.393  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+restored True
+27 failing takes
+exit 0

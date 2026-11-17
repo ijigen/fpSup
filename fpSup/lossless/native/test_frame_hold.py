@@ -81,7 +81,8 @@ def build(directory, replace=None, name='hold.dylib'):
                            ('dma_fails', 1, False), ('pipeline_phase', 1, False),
                            ('task_in_sleep', 1, False), ('head', 1, False),
                            ('require_head', 1, False), ('shape', 3, False),
-                           ('pitch', 1, False), ('probe', 1, False), ('capture', 2, False)):
+                           ('pitch', 1, False), ('probe', 1, False), ('capture', 2, False),
+                           ('use_margin', 1, False), ('engine_limit', 1, False)):
         f = getattr(lib, 'fpl_fixture_' + fn)
         f.argtypes = [ct.c_uint32] * count
         f.restype = ct.c_uint32 if ret else None
@@ -219,12 +220,27 @@ class HoldTests(unittest.TestCase):
         self.assertEqual(self.lib.fpl_fixture_flush(3, 1), SMALL_PAYLOAD)
 
     def test_the_copy_back_goes_through_the_uncached_alias_and_publishes_behind_barriers(self):
+        # 2026-11-17: the payload goes by the firmware's DMA (cached addresses, its own cache maintenance), not
+        # word by word through the uncached alias; the promise is still published behind barriers
         self.frames(1, 2)
         self.lib.fpl_fixture_arrive(1)
-        before = self.get(UNCACHED_HITS), self.get(BARRIERS)
+        before = self.get(DMAS), self.get(BARRIERS), self.get(UNCACHED_HITS)
         self.lib.fpl_fixture_arrive(2)
-        self.assertGreaterEqual(self.get(UNCACHED_HITS) - before[0], SMALL_PAYLOAD // 4 * 2)
+        self.assertEqual(self.get(DMAS) - before[0], 1)
+        self.assertEqual(self.get(DMA_BAD), 0)
         self.assertGreaterEqual(self.get(BARRIERS) - before[1], 2)
+        self.assertLess(self.get(UNCACHED_HITS) - before[2], 0x400, 'copied by the CPU')
+
+    def test_a_dma_that_refuses_copies_through_the_uncached_alias(self):
+        self.frames(1, 2)
+        self.lib.fpl_fixture_arrive(1)
+        self.lib.fpl_fixture_dma_fails(1)
+        before = self.get(UNCACHED_HITS)
+        self.lib.fpl_fixture_arrive(2)
+        self.lib.fpl_fixture_dma_fails(0)
+        if not self.SPARE:
+            self.assertGreaterEqual(self.get(UNCACHED_HITS) - before, SMALL_PAYLOAD // 4 * 2)
+        self.assertEqual(tuple(self.queued()[0][:2]), (1, packed(1)))
 
     def test_the_payload_is_fenced_before_the_promise_is_published(self):
         """The flush runs on another task: it must never see a promise whose
@@ -712,7 +728,7 @@ class NoOutputTests(unittest.TestCase):
         self.lib.fpl_fixture_arrive(1)
         self.lib.fpl_fixture_frame_field(1, 0x1114, 1)
         self.lib.fpl_fixture_arrive(2)
-        self.assertEqual(self.queued()[0], (1, packed(1)))
+        self.assertEqual(tuple(self.queued()[0][:2]), (1, packed(1)))
         self.assertEqual(self.get(SWAP_UNDONE), 1)
 
 
@@ -977,6 +993,151 @@ LATE_MUTATIONS = {
 }
 
 
+STARTED_LEN, MARGIN_JOBS, COPIED_DMA, MIB = 44, 45, 46, 0x100000
+
+
+class MarginTests(unittest.TestCase):
+    """2026-11-17: the engine's output limit is 1 MiB before the end of the length it is told (C062FFF8), and
+    the fake engine keeps that rule here. A 520x368 frame is 287,744 B told: in a frame's own allocation there
+    is no room at all -- as 1024x678 and smaller on the camera, never compressed."""
+    MARGIN, LANES = 1, 0
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix='fpl-margin-')
+        cls.lib = build(cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.restore(cls.lib)
+        cls.tmp.cleanup()
+
+    @staticmethod
+    def restore(lib):
+        lib.fpl_fixture_no_output(0); lib.fpl_fixture_use_spare(0)
+        lib.fpl_fixture_use_margin(0); lib.fpl_fixture_engine_limit(0)
+
+    def start(self, margin, spare=0, payload=SMALL_PAYLOAD):
+        self.lib.fpl_fixture_no_output(1 if spare else 0)
+        self.lib.fpl_fixture_use_spare(spare)
+        self.lib.fpl_fixture_use_margin(margin)
+        self.lib.fpl_fixture_engine_limit(1)
+        self.assertEqual(self.lib.fpl_fixture_reset(0, payload, 1), OK)
+        if self.LANES:
+            self.assertEqual(self.lib.fpl_fixture_lanes(1), OK)
+
+    def tearDown(self):
+        self.restore(self.lib)
+
+    def get(self, f): return self.lib.fpl_fixture_get(f)
+
+    def queued(self):
+        return [(self.get(1000 + k), self.get(2000 + k)) for k in range(self.get(ENQ_N))]
+
+    def run_frames(self, *ids):
+        for i in ids:
+            self.lib.fpl_fixture_frame(i, GRANTED_EXTRA)
+        for i in ids:
+            if self.LANES:
+                self.lib.fpl_fixture_lane_arrive(i)
+                self.lib.fpl_fixture_task()
+                self.lib.fpl_fixture_task()
+            else:
+                self.lib.fpl_fixture_arrive(i)
+
+    def test_in_a_frames_own_allocation_the_engine_has_no_room(self):
+        self.start(margin=0, spare=1)
+        self.run_frames(1, 2, 3)
+        self.assertEqual(self.queued(), [(1, raw(1)), (2, raw(2))])
+        self.assertEqual(self.get(STARTED_LEN), self.get(TOLD))
+        self.assertEqual(self.get(MARGIN_JOBS), 0)
+
+    def test_an_own_output_with_the_tail_gets_one_whole_frame_of_room(self):
+        self.start(margin=1)
+        self.run_frames(1, 2, 3)
+        self.assertEqual(self.queued(), [(1, packed(1)), (2, packed(2))])
+        self.assertEqual(self.get(STARTED_LEN), self.get(TOLD) + MIB)
+        self.assertEqual(self.get(MARGIN_JOBS), 3 if self.LANES else 2 + (self.get(HELD_N) > 2))
+        self.assertEqual(self.get(OOB), 0)
+
+    def test_the_payload_is_copied_into_the_frames_own_raster(self):
+        self.start(margin=1)
+        self.run_frames(1, 2)
+        self.assertEqual(self.lib.fpl_fixture_file_word(1, 0x13400), packed(1))
+        self.assertEqual(self.lib.fpl_fixture_file_word(1, 0x13400 + 16), 0x11111111)
+
+    def test_the_copy_is_one_firmware_dma_a_frame_through_cached_addresses(self):
+        self.start(margin=1)
+        self.run_frames(1, 2, 3)
+        self.assertEqual(self.get(DMAS), 2)
+        self.assertEqual(self.get(COPIED_DMA), 2)
+        self.assertEqual((self.get(DMA_BAD), self.get(DMA_FAILED)), (0, 0))
+
+    def test_a_dma_that_refuses_leaves_the_cpu_copy(self):
+        self.start(margin=1)
+        self.lib.fpl_fixture_dma_fails(1)
+        self.run_frames(1, 2, 3)
+        self.assertEqual(self.queued(), [(1, packed(1)), (2, packed(2))])
+        self.assertEqual(self.lib.fpl_fixture_file_word(1, 0x13400), packed(1))
+        self.assertEqual(self.lib.fpl_fixture_file_word(1, 0x13400 + 16), 0x11111111)
+        self.assertEqual((self.get(COPIED_DMA), self.get(DMA_FAILED)), (0, 2))
+
+    def test_more_than_one_frame_is_still_refused(self):
+        self.start(margin=1, payload=HUGE_PAYLOAD + 0x400)
+        self.run_frames(1, 2, 3)
+        self.assertEqual(self.queued(), [(1, raw(1)), (2, raw(2))])
+
+    def test_an_own_output_without_the_tail_is_told_one_frame(self):
+        self.start(margin=0)                         # the fixture's 0x80000 output: no 1 MiB behind a frame
+        self.run_frames(1, 2)
+        self.assertEqual(self.get(STARTED_LEN), self.get(TOLD))
+        self.assertEqual(self.get(MARGIN_JOBS), 0)
+
+
+class MarginLaneTests(MarginTests):
+    """as the card runs it: two lanes, each with its own output"""
+    LANES = 1
+
+
+MARGIN_MUTATIONS = {
+    'never asks for the margin': ('FPL_CODEC_ENGINE_MARGIN ? FPL_CODEC_ENGINE_MARGIN : 0u;',
+                                  'FPL_CODEC_ENGINE_MARGIN ? 0u : 0u;'),
+    'asks for a margin the output does not hold': (
+        '        in->destination_capacity - told_source(h) >= FPL_CODEC_ENGINE_MARGIN ?', '        1 ?'),
+    'copies by cpu only': ('            if (header_dma(lease->buffer + h->head, output->bytes, output->length) != 0) {',
+                           '            if (1) {'),
+    'no cpu copy when the dma refuses': (
+        '                bulk_copy(uncached(lease->buffer + h->head), uncached(output->bytes),\n'
+        '                          output->length);\n                saturate(&h->dma_failed);',
+        '                saturate(&h->dma_failed);'),
+    'dma through the uncached alias': (
+        '            if (header_dma(lease->buffer + h->head, output->bytes, output->length) != 0) {',
+        '            if (header_dma(uncached(lease->buffer + h->head), uncached(output->bytes), output->length) != 0) {'),
+    'does not count margin jobs': ('    if (in->destination_margin) saturate(&h->margin_jobs);', ''),
+}
+
+
+class MarginMutationTests(unittest.TestCase):
+    def test_every_margin_mutation_is_caught(self):
+        suites = (MarginTests, MarginLaneTests)
+        with tempfile.TemporaryDirectory(prefix='fpl-margin-mut-') as tmp:
+            for index, (name, seam) in enumerate(MARGIN_MUTATIONS.items()):
+                with self.subTest(mutation=name):
+                    lib = build(tmp, seam, f'm{index}.dylib')
+                    bad = 0
+                    for suite in suites:
+                        saved = suite.setUpClass, suite.tearDownClass
+                        suite.setUpClass = classmethod(lambda cls, lib=lib: setattr(cls, 'lib', lib))
+                        suite.tearDownClass = classmethod(lambda cls: None)
+                        try:
+                            result = unittest.TextTestRunner(stream=open('/dev/null', 'w')).run(
+                                unittest.defaultTestLoader.loadTestsFromTestCase(suite))
+                        finally:
+                            suite.setUpClass, suite.tearDownClass = saved
+                        bad += not result.wasSuccessful()
+                    self.assertTrue(bad, f'{name} was not caught')
+
+
 class LateMutationTests(unittest.TestCase):
     def test_every_late_data_mutation_is_caught(self):
         suites = (LateDataTests, LateDataCopyTests, LateDataLaneTests)
@@ -1126,8 +1287,11 @@ class HoldMutationTests(unittest.TestCase):
         'does not mark the frame pending': (
             '    poke(frame + FRAME_STATE, STATE_PENDING);', ''),
         'copies into the NEXT frame': (
-            '        bulk_copy(uncached(lease->buffer + h->head), uncached(output->bytes),',
-            '        bulk_copy(uncached(lease->buffer + 0x60000u + h->head), uncached(output->bytes),'),
+            '            if (header_dma(lease->buffer + h->head, output->bytes, output->length) != 0) {',
+            '            if (header_dma(lease->buffer + 0x60000u + h->head, output->bytes, output->length) != 0) {'),
+        'the cpu copy goes into the NEXT frame': (
+            '                bulk_copy(uncached(lease->buffer + h->head), uncached(output->bytes),',
+            '                bulk_copy(uncached(lease->buffer + 0x60000u + h->head), uncached(output->bytes),'),
         'skips the format check': (
             '    if (!fpl_producer_facts_match(h->facts, descriptor)) {',
             '    if (0 && !fpl_producer_facts_match(h->facts, descriptor)) {'),
@@ -1647,7 +1811,7 @@ class LaneTests(unittest.TestCase):
         self.assertEqual(self.lane(0, L_STATE), FINISHED_L)
         self.lib.fpl_fixture_reenter(1)                 # stop's wait comes in mid-collect
         self.lib.fpl_fixture_lane_arrive(2)
-        self.assertEqual(self.queued()[0], (1, packed(1)))
+        self.assertEqual(tuple(self.queued()[0][:2]), (1, packed(1)))
         self.assertEqual(self.lane(0, L_FAULTS), 0)
         self.lib.fpl_fixture_lane_stop()
         self.assertEqual(sorted(i for i, _ in self.queued()), [1, 2])
