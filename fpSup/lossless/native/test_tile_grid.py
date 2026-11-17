@@ -46,6 +46,8 @@ def build(directory, header=None):
 def reference(w, h):
     best = None
     for tw in range(32, 513, 32):
+        if w == 2 * tw:                      # LibRaw misplaces the rows of exactly two tiles across
+            continue
         for th in range(16, 513, 16):
             kx, ky = math.ceil(w / tw), math.ceil(h / th)
             if kx * ky > TILE_MAX:
@@ -82,6 +84,16 @@ class GridTests(unittest.TestCase):
         self.assertEqual(self.grid(3840, 2160), (480, 432))     # UHD: exact, 40 tiles
         self.assertEqual(self.grid(1936, 1090), (512, 368))     # FHD: as before
 
+    def test_never_exactly_two_tiles_across(self):
+        # SQ 1024x1024 took 512x512 and LibRaw read it with every other row misplaced (2026-11-17)
+        self.assertEqual(self.grid(1024, 1024), reference(1024, 1024))
+        self.assertNotEqual(self.grid(1024, 1024)[0], 512)
+        for w in range(64, 1025, 64):
+            for h in (64, 678, 1024, 2010):
+                with self.subTest(w=w, h=h):
+                    self.assertNotEqual(2 * self.grid(w, h)[0], w)
+        self.assertEqual(self.grid(1024, 1024, 512 << 16 | 512), (512, 512), 'a force is still a force')
+
     def test_the_c_is_the_rule(self):
         shapes = SHAPES + [(w, h) for w in range(8, 6200, 296) for h in range(2, 4100, 214)]
         for w, h in shapes:
@@ -113,6 +125,7 @@ class MutationTests(unittest.TestCase):
         'heights not a multiple of 16': ('h += 16u', 'h += 2u'),
         'force not checked': ('if (force && fpl_tile_legal(width, height, fw, fh))', 'if (force)'),
         'too many tiles allowed': ('if (tiles > FPL_TILE_MAX) continue;', ''),
+        'two tiles across allowed': ('        if (width == 2u * w) continue;\n', ''),
         'no search': ('    for (uint32_t w = 32u; w <= 512u; w += 32u) {',
                       '    for (uint32_t w = 32u; w < 32u; w += 32u) {'),
     }

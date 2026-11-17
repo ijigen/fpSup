@@ -220,6 +220,55 @@ static uint32_t swap_allowed(const struct fpl_frame_hold *h, uintptr_t frame) {
            h->workspace.spare.capacity >= peek(frame + FRAME_CAPACITY);
 }
 
+/* ---- late data (frame_hold.h) -------------------------------------------
+ * FPL_LATE_WORDS words spread over the raster, through the alias DMA uses. */
+#define STATE_WRITTEN     0xdu
+static void late_sample(const struct fpl_frame_hold *h, uintptr_t raster, uint32_t *out) {
+    uint32_t step = (h->facts->seen.raster / (FPL_LATE_WORDS + 1u)) & ~3u;
+    for (uint32_t n = 0; n < FPL_LATE_WORDS; ++n)
+        out[n] = peek(uncached(raster + (n + 1u) * step));
+}
+static uint32_t late_changed(const struct fpl_frame_hold *h, uintptr_t raster, const uint32_t *was) {
+    uint32_t now[FPL_LATE_WORDS], changed = 0;
+    late_sample(h, raster, now);
+    for (uint32_t n = 0; n < FPL_LATE_WORDS; ++n) changed |= now[n] ^ was[n];
+    return changed != 0;
+}
+
+void fpl_hold_probe(struct fpl_frame_hold *h, uint32_t native_id) {
+    uintptr_t frame, handle;
+    if (!hold_valid(h) || h->facts->seen.raster < 4u * (FPL_LATE_WORDS + 1u)) return;
+    frame = native_frame(native_id);
+    if (!frame || peek(frame + FRAME_KIND) != KIND_CINEMADNG) return;
+    handle = peek(frame + FRAME_HANDLE);
+    if (!handle || (handle & 0x3ffu) || peek(frame + FRAME_RASTER) != handle + HEADER_RESERVE) return;
+    h->probe_frame = frame;
+    h->probe_handle = handle;
+    h->probe_id = native_id;
+    late_sample(h, handle + HEADER_RESERVE, h->probe);
+}
+
+/* Before a frame is admitted: has the data of an earlier one changed since it arrived? */
+static void late_check(struct fpl_frame_hold *h) {
+    if (h->probe_frame) {
+        uintptr_t frame = h->probe_frame;
+        h->probe_frame = 0;
+        /* only while that frame is still the firmware's unwritten frame in the same allocation: once it
+         * is written the allocation may already be the next capture's */
+        if (native_frame(h->probe_id) == frame && peek(frame + FRAME_KIND) == KIND_CINEMADNG &&
+            peek(frame + FRAME_HANDLE) == h->probe_handle &&
+            peek(frame + FRAME_STATE) < STATE_WRITTEN) {
+            saturate(&h->late_checked);
+            if (late_changed(h, h->probe_handle + HEADER_RESERVE, h->probe)) {
+                h->late = 1;
+                h->late_by = 1;
+            }
+        } else {
+            saturate(&h->late_unknown);
+        }
+    }
+}
+
 /* ---- the handoff: this frame's result into this frame, then queue it ---- */
 static uint32_t handoff(void *context, const struct fpl_frame_lease *lease,
                         const struct fpl_frame_output *output, uint32_t *proofs) {
@@ -325,6 +374,17 @@ static uint32_t service_done(struct fpl_frame_hold *h, struct fpl_pipeline *p,
                              uint32_t result) {
     struct fpl_frame_output out = {0, 0, 0, 0};
 
+    /* LATE DATA (frame_hold.h): the raster changed between the admission and now, so the engine read what was
+     * in the buffer before this frame's pixels. The result is dropped exactly as a refusal is -- the frame goes
+     * out as the firmware has it now -- and nothing more is held this take. */
+    if (result == FPL_OK && h->frame && h->held_source &&
+        late_changed(h, h->held_source, h->held_words)) {
+        h->late = 1;
+        h->late_by = 2;
+        saturate(&h->late_dropped);
+        result = FPL_UNSUPPORTED;
+    }
+    h->held_source = 0;
     if (result == FPL_OK) {
         out.bytes = h->swapping ? h->workspace.spare.handle + HEADER_RESERVE
                                 : h->workspace.output;
@@ -462,6 +522,12 @@ static uint32_t admit(struct fpl_frame_hold *h, uintptr_t creator, uint32_t nati
         saturate(&h->passed);
         return 0;
     }
+    late_check(h);
+    if (h->late) {
+        saturate(&h->late_passed);
+        saturate(&h->passed);
+        return 0;
+    }
     for (uint32_t n = 0; n < sizeof(lease); ++n) ((volatile unsigned char *)&lease)[n] = 0;
     ok = eligible(h, frame, &lease);
     lease.token.session = h->pipeline->session;
@@ -487,6 +553,8 @@ static uint32_t admit(struct fpl_frame_hold *h, uintptr_t creator, uint32_t nati
     in->format = h->facts->seen.format;
     in->source = lease.buffer + h->head;
     in->source_capacity = readable(peek(frame + FRAME_CAPACITY));
+    h->held_source = in->source;         /* late data: what the engine is about to read */
+    late_sample(h, h->held_source, h->held_words);
     h->swapping = swap_allowed(h, frame);
     if (!h->swapping && h->workspace.spare.handle) saturate(&h->swap_declined);
     in->destination = h->swapping ? h->workspace.spare.handle + HEADER_RESERVE
@@ -769,6 +837,12 @@ uint32_t fpl_lanes_arrive(struct fpl_frame_hold *const lane[2], uintptr_t creato
          * Waiting frames have not touched the failed engine and go RAW. */
         if (first->lane == FPL_LANE_HELD) fpl_hold_abandon(first);
         if (second && second->lane == FPL_LANE_HELD) fpl_hold_abandon(second);
+        return native_enqueue(creator, native_id, argument);
+    }
+    /* late data found by either lane: neither holds another frame this take */
+    if (lane[0]->late || (hold_valid(lane[1]) && lane[1]->late)) {
+        lane[0]->late = 1;
+        saturate(&lane[0]->late_passed);
         return native_enqueue(creator, native_id, argument);
     }
     order = (second && second->order > first->order ? second->order : first->order) + 1u;

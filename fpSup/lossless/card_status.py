@@ -178,6 +178,13 @@ def main():
     print(f'  zero copy: swapped {sum(v[f"{x}.swapped"] for x in lanes)}, declined '
           f'{v["hold.swap_declined"]}, undone {v["hold.swap_undone"]}; spare '
           f'{v["spare_bytes"]:,} B, failed {v["spare_failed"]}, freed {v["spares_freed"]}')
+    if 'hold.late' in v:
+        late = v['hold.late'] or v.get('hold_b.late', 0)
+        print(f'  late data (frames queued before their pixels): {"YES -- the take went out uncompressed from there" if late else "no"}'
+              f'; found by {max(v["hold.late_by"], v.get("hold_b.late_by", 0))} (1 first frame, 2 a held frame), '
+              f'results dropped {v["hold.late_dropped"] + v.get("hold_b.late_dropped", 0)}, '
+              f'frames not held {v["hold.late_passed"]}, first-frame probes compared {v["hold.late_checked"]}, '
+              f'not comparable {v["hold.late_unknown"]}')
     print(f'  stop: stops {v["stops"]}, finished {v["finishes"]}, busy {v["finish_busy"]}, '
           f'lanes now {v["hold.lane"]}/{v["hold_b.lane"]}, result {v["lane_stop_result"]}')
     pwhy = ['slot', 'not tiff', 'root', 'format', 'tiles', 'ifd0', 'room', 'order', 'scratch',

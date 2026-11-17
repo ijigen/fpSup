@@ -13,7 +13,9 @@ LOADER.BIN, UI\\*.BIN and the data folders (RESCUS\\, LUT\\) keep their names.""
 SUPS = {
     'BKLT': ('LCD Backlight', 'Backlight', '0.1.0test'),
     'RCUS': ('RES-Custom', 'RES-Custom', '0.1.7'),
-    'LOSS': ('Lossless', 'Lossless', '0.3.2test'),   # 2026-11-10: 14 bit (Sensor Lab 1:1 true 14)
+    # LOSS 0.3.5test (2026-11-17): frames queued before their pixels (Sensor Lab fast AD x V3 1:1) go out uncompressed
+    # instead of as stale images; never two tiles exactly across (LibRaw). 0.3.3test / 0.3.4test were diagnostic builds.
+    'LOSS': ('Lossless', 'Lossless', '0.3.5test'),   # 2026-11-10: 14 bit (Sensor Lab 1:1 true 14)
     'ULWR': ('Unlock Writer', 'UnlockWriter', '0.1.0test'),
     'STFX': ('Stop-FX', 'Stop-FX', '0.1.0'),
     'GYR2': ('Gyro2', 'Gyro2', '0.2.1'),   # last release v0.2.0 (build 6, on main's releases/)

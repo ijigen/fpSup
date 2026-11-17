@@ -57,6 +57,8 @@ struct fpl_hold_commit {
     uint32_t tile_bytes[FPL_CODEC_TILE_MAX];   /* host order */
 };
 
+#define FPL_LATE_WORDS 16u                 /* raster words sampled by each late-data check */
+
 struct fpl_hold_workspace {
     uintptr_t output, table;            /* 1 KiB aligned, ours */
     uint32_t output_capacity, table_capacity;
@@ -140,6 +142,25 @@ struct fpl_frame_hold {
      * sets 0xFFFFFFFF at REC -- nothing held -- until the IFD is prepared.
      * 0: no requirement (host tests of this module alone). */
     uint32_t require_head;
+    /* LATE DATA (2026-11-17, Sensor Lab fast AD x V3 1:1: 3952x874, 1312x874). In those modes the firmware
+     * queues a CinemaDNG frame 20..40 ms BEFORE its pixels are in the buffer; the stock writer reads it later
+     * still, so stock files are right, but a frame compressed on arrival is the buffer's OLD content (measured:
+     * every compressed frame of such a take was a stale image, many with an earlier frame's payload on top).
+     * Two checks, both reads of a raster the firmware still holds: the take's first frame (never held) is
+     * sampled when it arrives and again when the next frame arrives; and every held frame's source is sampled
+     * at its admission and again when its job is collected (the next arrival, a frame period later). A change
+     * means the pixels came after the arrival: that frame's result is dropped (it goes out as it is by then,
+     * like a refusal), `late` is set and nothing more is held this take. NOT covered: data landing after the
+     * collect (a frame collected at stop, sooner than a frame period). */
+    uint32_t late;                      /* this take's frames arrive before their data */
+    uint32_t late_by;                   /* 1 the first frame's probe, 2 a held frame's source */
+    uint32_t late_passed;               /* frames not held because of it */
+    uint32_t late_dropped;              /* results dropped: their source changed under the engine */
+    uint32_t late_checked, late_unknown;/* first-frame probes compared; not comparable */
+    uintptr_t probe_frame, probe_handle;
+    uint32_t probe_id;
+    uintptr_t held_source;              /* the held frame's raster as admitted, 0 = none */
+    uint32_t probe[FPL_LATE_WORDS], held_words[FPL_LATE_WORDS];
 #ifdef FPL_DIAG_HOOK_TIME
     uint32_t diag_enq_n, diag_enq_us, diag_enq_max_us;  /* C037DD50 calls */
     /* lanes arrive split (us sums, calls): collect the finished frame (its
@@ -182,6 +203,9 @@ uint32_t fpl_hold_init(struct fpl_frame_hold *, struct fpl_pipeline *,
  * 1 when this call held the frame instead; C038BD98 ignores the value. */
 uint32_t fpl_hold_arrive(struct fpl_frame_hold *, uintptr_t creator,
                          uint32_t native_id, uint32_t argument);
+
+/* The take's first frame, which is never held: sample its raster before it is queued (late data, above). */
+void fpl_hold_probe(struct fpl_frame_hold *, uint32_t native_id);
 
 /* Before native stop's check (cDevt_stop -> C0398D88). Idempotent. */
 uint32_t fpl_hold_stop(struct fpl_frame_hold *);

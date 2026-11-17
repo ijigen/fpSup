@@ -654,7 +654,28 @@ HOOK_DEF uint32_t HOOK(fpl_card_arrive)(uintptr_t creator, uint32_t id, uint32_t
         t[2] = c->record_diag.writer_calls;
         t[3] = (card_pool_left() & 0xffffu) | (c->hold.lane & 0xffu) << 16 |
                (c->hold_b.lane & 0xffu) << 24;
+#if defined(FPL_DIAG_BUF) && defined(__arm__)
+        /* 2026-11-17 (stale frames with fast AD x V3, Sensor Lab): which record and which allocation each
+         * arrival is, and what the spare is at that moment.  Reads only. */
+        {
+            typedef uintptr_t (*registry)(void);
+            typedef uintptr_t (*lookup)(uintptr_t, uint32_t);
+            uintptr_t f = ((lookup)0xc03753c0u)(((registry)0xc0374220u)(), id);
+            t[2] = f ? *(volatile const uint32_t *)(f + 0x1100u) : 0;
+            t[4] = (uint32_t)f;
+            t[5] = f ? *(volatile const uint32_t *)(f + 0x68u) : 0;
+            t[6] = (uint32_t)c->hold.workspace.spare.handle;
+            t[7] = f ? (*(volatile const uint32_t *)(f + 0x1118u) & 0xffffu) |
+                       *(volatile const uint32_t *)(f + 0x1114u) << 16 : 0;            /* is the frame's data there when it arrives?  two words of the raster through the uncached alias
+             * (what the engine's DMA will read), to compare with the file written later */
+            if (t[5] >= 0x40000000u && t[5] < 0x80000000u) {
+                t[2] = *(volatile const uint32_t *)((uintptr_t)t[5] + 0x14400u);
+                t[3] = *(volatile const uint32_t *)((uintptr_t)t[5] + 0x14400u + 0x300000u);
+            }
+        }
+#else
         card_registry(t + 4);
+#endif
     }
 #endif
     if (!c->hold_live) return CARD_ENQ(c, creator, id, argument);
@@ -663,8 +684,10 @@ HOOK_DEF uint32_t HOOK(fpl_card_arrive)(uintptr_t creator, uint32_t id, uint32_t
      * mixes compressed and uncompressed frames only when that one is
      * uncompressed (reported by users, 2026-10-02). It is queued at once, so
      * it is the clip's first file. */
-    if (first)
+    if (first) {
+        fpl_hold_probe(&c->hold, id);            /* late data (frame_hold.h): sampled before it is queued */
         return CARD_ENQ(c, creator, id, argument);
+    }
     return fpl_lanes_arrive(c->lane, creator, id, argument);
 }
 

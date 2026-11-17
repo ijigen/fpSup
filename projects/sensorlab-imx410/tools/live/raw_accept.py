@@ -8,6 +8,8 @@ Per recipe x ISO: set the recipe over USB, record 3 s, fetch N consecutive frame
   decode    every fetched frame decodes; no flat (noise-free) row inside the DefaultCrop margin
   steady    the frame mean has no step: |mean - median of its 8 neighbours| <= 0.15 DN12 on every frame
             (the 14-bit clamp-off flicker was 0.25 = 1 DN14 on ~50 % of the frames)
+  fresh     no two fetched frames are the same picture (11-17: with Lossless 0.3.2test the fast AD x V3 1:1
+            recipes recorded old buffer contents: repeated frames, an earlier frame's payload as garbage)
   black     lens capped only (p99.9 - tag < 64): |mean - tag| <= the gate (default 0.66 = the 0.0.8test worst case)
             and the four CFA channels within 0.5 of each other
 NOT tested here (say so in any report): lit-scene colour and linearity, frames beyond the N fetched, clips longer
@@ -39,6 +41,9 @@ def judge(rows, gate=0.66):
     else:
         out['steady'] = (not steps, f'{len(steps)} of {len(m)} frames step > 0.15 DN12' if steps else
                          f'max deviation {max(abs(v - statistics.median(m)) for v in m):.3f}')
+    keys = [(round(r['mean'], 9),) + tuple(round(v, 9) for v in r['means'].values()) for r in rows]
+    rep = len(keys) - len(set(keys))
+    out['fresh'] = (rep == 0, f'{rep} repeated frames' if rep else 'no repeats')
     dark = all((r['p_hi'] - r['tag']) / s < 64 for r in rows)
     if dark:
         err = statistics.fmean((r['mean'] - r['tag']) / s for r in rows)
@@ -59,7 +64,8 @@ def frame_stats(path):
     h, w = v.shape
     c = v[h // 8:h - h // 8, w // 8:w - w // 8]
     rs = v.std(1)
-    return dict(mean=float(c.mean()), tag=tag, p_hi=float(np.percentile(c, 99.9)),
+    comp = subprocess.run(['exiftool', '-s3', '-Compression', str(path)], capture_output=True, text=True).stdout.strip()
+    return dict(mean=float(c.mean()), tag=tag, p_hi=float(np.percentile(c, 99.9)), compressed=comp != 'Uncompressed',
                 means={f'{y}{x}': float(c[y::2, x::2].mean()) for y in (0, 1) for x in (0, 1)},
                 flat_inside=bool(any(5 <= i < h - 5 for i in np.nonzero(rs == 0)[0])))
 
@@ -141,6 +147,8 @@ def main():
                     if rows:
                         rec['checks'].update(judge(rows, a.gate))
                         rec['bits'] = 14 if rows[0]['tag'] > 600 else 12
+                        rec['compressed'] = sum(r['compressed'] for r in rows)
+                        rec['checks']['note'] = (None, f"{rec['compressed']} of {len(rows)} compressed")
                         (d / 'frames.json').write_text(json.dumps(rows))
                 except SystemExit as e:
                     rec['checks']['recipe'] = (False, str(e)[:160])

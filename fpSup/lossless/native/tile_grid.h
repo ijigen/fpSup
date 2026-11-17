@@ -49,6 +49,11 @@ static inline void fpl_tile_grid(uint32_t width, uint32_t height, uint32_t force
     *th = FPL_TILE_HEIGHT;
     if (!width || !height || width > 0x4000u || height > 0x4000u) return;
     for (uint32_t w = 32u; w <= 512u; w += 32u) {
+        /* 2026-11-17: never two tiles exactly across. LibRaw (lossless_dng_load_raw) treats a 2-component
+         * tile with 2 x tile width == image width as one row holding both halves, and puts our rows in the
+         * wrong place -- SQ 1024x1024 at 512x512 read back with rows 1, 3, 7, 11 ... empty, while the stream
+         * itself decodes right (an independent decoder; validation/20261117-lossless-stale). */
+        if (width == 2u * w) continue;
         uint32_t across = fpl_tile_steps(width, w);
         for (uint32_t h = 16u; h <= 512u; h += 16u) {
             uint32_t down = fpl_tile_steps(height, h), tiles = across * down, cost;

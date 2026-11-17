@@ -124,6 +124,8 @@ FIELDS += ['engine_release', 'hold.job.reused', 'hold_b.job.reused', 'tag_tiles'
            'tag_added', 'tag_add_result', 'tag_add_failed', 'tag_prepared', 'tag_prepare_failed',
            'tag_prepare_result', 'tag_head',
            'tag_want', 'tag_pending', 'tag_live', 'tag_index']   # header_tag.h
+FIELDS += ['hold.late', 'hold.late_by', 'hold.late_passed', 'hold.late_dropped', 'hold.late_checked',
+           'hold.late_unknown', 'hold_b.late', 'hold_b.late_by', 'hold_b.late_dropped']   # 2026-11-17 late data (frame_hold.h)
 FIELDS += ['record_diag.' + name for name in (
     'event_calls', 'raw_errors', 'capture_limits', 'completion_errors', 'lookup_missing',
     'last_event', 'last_result', 'last_slot', 'last_generation', 'last_state',

@@ -81,7 +81,7 @@ def build(directory, replace=None, name='hold.dylib'):
                            ('dma_fails', 1, False), ('pipeline_phase', 1, False),
                            ('task_in_sleep', 1, False), ('head', 1, False),
                            ('require_head', 1, False), ('shape', 3, False),
-                           ('pitch', 1, False)):
+                           ('pitch', 1, False), ('probe', 1, False), ('capture', 2, False)):
         f = getattr(lib, 'fpl_fixture_' + fn)
         f.argtypes = [ct.c_uint32] * count
         f.restype = ct.c_uint32 if ret else None
@@ -717,6 +717,285 @@ class NoOutputTests(unittest.TestCase):
 
 
 TAG_IFD_AT = 0x400                 # frame_hold_fixture.c FIXTURE_TAG_AT
+
+
+LATE, LATE_BY, LATE_PASSED, LATE_DROPPED, LATE_CHECKED, LATE_UNKNOWN = range(38, 44)
+
+
+class LateDataTests(unittest.TestCase):
+    """2026-11-17, Sensor Lab fast AD x V3 1:1: the firmware queues a frame before its pixels are in the buffer.
+    A frame whose raster changed while it was held goes out as it is (its picture, uncompressed), and nothing
+    more is held that take. With the spare (the card's zero-copy setting) and without."""
+    SPARE = 1
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix='fpl-late-')
+        cls.lib = build(cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.lib.fpl_fixture_use_spare(0)
+        cls.tmp.cleanup()
+
+    def setUp(self):
+        self.lib.fpl_fixture_use_spare(self.SPARE)
+        self.assertEqual(self.lib.fpl_fixture_reset(0, SMALL_PAYLOAD, 1), OK)
+
+    def get(self, f): return self.lib.fpl_fixture_get(f)
+    def handle(self, i): return self.get(8000 + i)
+
+    def frames(self, *ids):
+        for i in ids:
+            self.lib.fpl_fixture_frame(i, GRANTED_EXTRA)
+
+    def queued(self):
+        return [(self.get(1000 + k), self.get(2000 + k)) for k in range(self.get(ENQ_N))]
+
+    def test_a_frame_whose_data_was_there_is_compressed_as_before(self):
+        self.frames(1, 2, 3)
+        for i in (1, 2, 3):
+            self.lib.fpl_fixture_arrive(i)
+        self.assertEqual(self.queued(), [(1, packed(1)), (2, packed(2))])
+        self.assertEqual((self.get(LATE), self.get(LATE_DROPPED), self.get(LATE_PASSED)), (0, 0, 0))
+        self.assertEqual(self.get(COMPRESSED), 2)
+
+    def test_a_frame_with_a_picture_in_it_is_compressed_when_nothing_changes(self):
+        # a raster full of pixels before the frame arrives (every real frame): unchanged = not late
+        self.frames(1, 2, 3)
+        for i in (1, 2, 3):
+            self.lib.fpl_fixture_capture(i, 0x01010000 * i)
+        for i in (1, 2, 3):
+            self.lib.fpl_fixture_arrive(i)
+        self.assertEqual(self.queued(), [(1, packed(1)), (2, packed(2))])
+        self.assertEqual((self.get(LATE), self.get(LATE_DROPPED)), (0, 0))
+
+    def test_the_samples_are_read_through_the_alias_dma_uses(self):
+        self.frames(1)
+        before = self.get(UNCACHED_HITS)
+        self.lib.fpl_fixture_probe(1)
+        self.assertEqual(self.get(UNCACHED_HITS) - before, 16)
+
+    def test_pixels_that_land_while_the_frame_is_held_drop_its_result(self):
+        self.frames(1, 2)
+        a1 = self.handle(1)
+        self.lib.fpl_fixture_arrive(1)
+        self.assertEqual(self.get(HELD_N), 1)
+        self.lib.fpl_fixture_capture(1, 0x5A5A0000)      # the frame's pixels arrive now
+        self.lib.fpl_fixture_arrive(2)
+        # frame 1 went out as it is -- its own raster, not the engine's output -- and frame 2 was not held
+        self.assertEqual(self.queued(), [(1, raw(1)), (2, raw(2))])
+        self.assertEqual(self.handle(1), a1, 'swapped anyway')
+        self.assertEqual(self.lib.fpl_fixture_file_word(1, 0x13400 + 16), 0x5A5A0000 ^ 16)
+        self.assertEqual((self.get(LATE), self.get(LATE_BY), self.get(LATE_DROPPED)), (1, 2, 1))
+        self.assertEqual((self.get(COMPRESSED), self.get(SWAPPED), self.get(HELD_N)), (0, 0, 1))
+        self.assertEqual(self.get(LATE_PASSED), 1)
+        self.assertEqual(self.get(OOB), 0)
+
+    def test_one_changed_word_anywhere_sampled_is_enough(self):
+        raster = self.get(RASTER)
+        step = (raster // 17) & ~3
+        for n in (1, 8, 16):
+            with self.subTest(sample=n):
+                self.setUp()
+                self.frames(1, 2)
+                self.lib.fpl_fixture_arrive(1)
+                self.lib.fpl_fixture_file_poke(1, 0x13400 + n * step, 0x77)
+                self.lib.fpl_fixture_arrive(2)
+                self.assertEqual(self.queued()[0], (1, raw(1)))
+                self.assertEqual(self.get(LATE), 1)
+
+    def test_after_late_data_no_frame_of_the_take_is_held(self):
+        self.frames(1, 2, 3, 4)
+        self.lib.fpl_fixture_arrive(1)
+        self.lib.fpl_fixture_capture(1, 0x11110000)
+        for i in (2, 3, 4):
+            self.lib.fpl_fixture_arrive(i)
+        self.assertEqual(self.queued(), [(i, raw(i)) for i in (1, 2, 3, 4)])
+        self.assertEqual((self.get(HELD_N), self.get(LATE_PASSED)), (1, 3))
+        self.assertEqual(self.lib.fpl_fixture_stop(), OK)
+
+    def test_the_next_take_starts_clean(self):
+        self.frames(1, 2)
+        self.lib.fpl_fixture_arrive(1)
+        self.lib.fpl_fixture_capture(1, 0x22220000)
+        self.lib.fpl_fixture_arrive(2)
+        self.assertEqual(self.get(LATE), 1)
+        self.setUp()                                    # REC again: the card zeroes the hold
+        self.frames(1, 2)
+        self.lib.fpl_fixture_arrive(1)
+        self.lib.fpl_fixture_arrive(2)
+        self.assertEqual(self.queued(), [(1, packed(1))])
+        self.assertEqual(self.get(LATE), 0)
+
+    def test_the_first_frame_probe_finds_it_before_any_frame_is_held(self):
+        self.frames(1, 2, 3)
+        self.lib.fpl_fixture_probe(1)                   # frame 1 is never held (card.c)
+        self.lib.fpl_fixture_capture(1, 0x33330000)
+        self.lib.fpl_fixture_arrive(2)
+        self.lib.fpl_fixture_arrive(3)
+        self.assertEqual(self.queued(), [(2, raw(2)), (3, raw(3))])
+        self.assertEqual((self.get(LATE), self.get(LATE_BY), self.get(LATE_CHECKED)), (1, 1, 1))
+        self.assertEqual((self.get(HELD_N), self.get(LATE_DROPPED), self.get(LATE_PASSED)), (0, 0, 2))
+
+    def test_an_unchanged_first_frame_changes_nothing(self):
+        self.frames(1, 2, 3)
+        self.lib.fpl_fixture_probe(1)
+        self.lib.fpl_fixture_arrive(2)
+        self.lib.fpl_fixture_arrive(3)
+        self.assertEqual(self.queued(), [(2, packed(2))])
+        self.assertEqual((self.get(LATE), self.get(LATE_CHECKED), self.get(LATE_UNKNOWN)), (0, 1, 0))
+
+    def test_a_first_frame_that_is_no_longer_the_firmwares_unwritten_frame_is_not_judged(self):
+        # written (state 0xD), its allocation moved, or the record gone: the buffer may be the next capture's
+        for what in ('written', 'handle', 'gone', 'kind'):
+            with self.subTest(what=what):
+                self.setUp()
+                self.frames(1, 2, 3)
+                self.lib.fpl_fixture_probe(1)
+                self.lib.fpl_fixture_capture(1, 0x44440000)
+                if what == 'written':
+                    self.lib.fpl_fixture_frame_field(1, 0x1104, 0xD)
+                elif what == 'handle':
+                    self.lib.fpl_fixture_frame_field(1, 0x68, 0x10000000 + self.handle(3))
+                elif what == 'gone':
+                    self.lib.fpl_fixture_present(1, 0)
+                else:
+                    self.lib.fpl_fixture_frame_field(1, 0x04, 2)
+                self.lib.fpl_fixture_arrive(2)
+                self.lib.fpl_fixture_arrive(3)
+                self.assertEqual(self.queued(), [(2, packed(2))])
+                self.assertEqual((self.get(LATE), self.get(LATE_CHECKED), self.get(LATE_UNKNOWN)), (0, 0, 1))
+
+    def test_the_probe_is_used_once(self):
+        self.frames(1, 2, 3, 4)
+        self.lib.fpl_fixture_probe(1)
+        self.lib.fpl_fixture_arrive(2)
+        self.lib.fpl_fixture_capture(1, 0x55550000)      # frame 1's buffer reused later: not late data
+        self.lib.fpl_fixture_arrive(3)
+        self.lib.fpl_fixture_arrive(4)
+        self.assertEqual(self.get(LATE), 0)
+        self.assertEqual(self.get(LATE_CHECKED), 1)
+
+
+class LateDataCopyTests(LateDataTests):
+    """the same without a spare: the result would be copied into the frame's own raster"""
+    SPARE = 0
+
+    def test_pixels_that_land_while_the_frame_is_held_drop_its_result(self):
+        self.frames(1, 2)
+        self.lib.fpl_fixture_arrive(1)
+        self.lib.fpl_fixture_capture(1, 0x5A5A0000)
+        self.lib.fpl_fixture_arrive(2)
+        self.assertEqual(self.queued(), [(1, raw(1)), (2, raw(2))])
+        self.assertEqual(self.lib.fpl_fixture_file_word(1, 0x13400 + 16), 0x5A5A0000 ^ 16, 'payload copied over it')
+        self.assertEqual((self.get(LATE), self.get(LATE_BY), self.get(LATE_DROPPED)), (1, 2, 1))
+
+
+class LateDataLaneTests(unittest.TestCase):
+    """as the card runs it: two lanes, the codec task"""
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix='fpl-late-lanes-')
+        cls.lib = build(cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.lib.fpl_fixture_no_output(0)
+        cls.lib.fpl_fixture_use_spare(0)
+        cls.tmp.cleanup()
+
+    def setUp(self):
+        self.lib.fpl_fixture_no_output(1)
+        self.lib.fpl_fixture_use_spare(1)
+        self.assertEqual(self.lib.fpl_fixture_reset(0, SMALL_PAYLOAD, 1), OK)
+        self.assertEqual(self.lib.fpl_fixture_lanes(1), OK)
+
+    def get(self, f): return self.lib.fpl_fixture_get(f)
+
+    def queued(self):
+        return [(self.get(1000 + k), self.get(2000 + k)) for k in range(self.get(ENQ_N))]
+
+    def frames(self, *ids):
+        for i in ids:
+            self.lib.fpl_fixture_frame(i, GRANTED_EXTRA)
+
+    def test_lanes_compress_as_before_when_the_data_was_there(self):
+        self.frames(1, 2, 3)
+        for i in (1, 2, 3):
+            self.lib.fpl_fixture_lane_arrive(i)
+            self.lib.fpl_fixture_task()
+            self.lib.fpl_fixture_task()
+        self.assertEqual(self.queued(), [(1, packed(1)), (2, packed(2))])
+        self.assertEqual(self.get(LATE), 0)
+
+    def test_late_data_in_a_lane_drops_that_result_and_neither_lane_holds_again(self):
+        self.frames(1, 2, 3, 4)
+        self.lib.fpl_fixture_lane_arrive(1)
+        self.lib.fpl_fixture_task()
+        self.lib.fpl_fixture_task()
+        self.lib.fpl_fixture_capture(1, 0x66660000)
+        for i in (2, 3, 4):
+            self.lib.fpl_fixture_lane_arrive(i)
+            self.lib.fpl_fixture_task()
+            self.lib.fpl_fixture_task()
+        self.assertEqual(self.queued(), [(i, raw(i)) for i in (1, 2, 3, 4)])
+        self.assertEqual(self.get(LATE) & 1, 1)
+        self.assertEqual(self.get(LATE_DROPPED), 1)
+        self.assertEqual(self.get(LATE_PASSED), 3)
+        self.assertEqual(self.lib.fpl_fixture_lane_stop(), OK)
+        self.assertEqual(self.get(OOB), 0)
+
+    def test_late_data_found_in_the_second_lane_stops_the_first_too(self):
+        self.frames(1, 2, 3, 4)
+        self.lib.fpl_fixture_lane_arrive(1)              # lane A, held (the task has not run)
+        self.lib.fpl_fixture_lane_arrive(2)              # lane B, held
+        for _ in range(4):
+            self.lib.fpl_fixture_task()
+        self.lib.fpl_fixture_capture(2, 0x77770000)      # only frame 2's data was late
+        self.lib.fpl_fixture_lane_arrive(3)
+        self.lib.fpl_fixture_lane_arrive(4)
+        self.assertEqual(self.queued(), [(1, packed(1)), (2, raw(2)), (3, raw(3)), (4, raw(4))])
+        self.assertEqual(self.get(LATE) & 1, 1, 'lane A still holds frames')
+
+
+LATE_MUTATIONS = {
+    'no check at the collect': ('        late_changed(h, h->held_source, h->held_words)) {', '        0) {'),
+    'the result kept': ('        saturate(&h->late_dropped);\n        result = FPL_UNSUPPORTED;', '        saturate(&h->late_dropped);'),
+    'late not remembered': ('        h->late = 1;\n        h->late_by = 2;', '        h->late_by = 2;'),
+    'late frames held': ('    if (h->late) {\n        saturate(&h->late_passed);', '    if (0) {\n        saturate(&h->late_passed);'),
+    'samples not taken at admission': ('    late_sample(h, h->held_source, h->held_words);', ''),
+    'one sample only': ('    for (uint32_t n = 0; n < FPL_LATE_WORDS; ++n) changed |= now[n] ^ was[n];', '    changed = now[0] ^ was[0];'),
+    'samples through the cached alias': ('        out[n] = peek(uncached(raster + (n + 1u) * step));', '        out[n] = peek(raster + (n + 1u) * step);'),
+    'probe judged when written': ('            peek(frame + FRAME_STATE) < STATE_WRITTEN) {', '            1) {'),
+    'probe judged in another allocation': ('            peek(frame + FRAME_HANDLE) == h->probe_handle &&', ''),
+    'probe judged when the record is gone': ('        if (native_frame(h->probe_id) == frame && peek(frame + FRAME_KIND) == KIND_CINEMADNG &&', '        if (frame && peek(frame + FRAME_KIND) == KIND_CINEMADNG &&'),
+    'probe never compared': ('            if (late_changed(h, h->probe_handle + HEADER_RESERVE, h->probe)) {', '            if (0) {'),
+    'probe kept': ('        h->probe_frame = 0;\n        /* only while', '        /* only while'),
+    'lane B not told': ('    if (lane[0]->late || (hold_valid(lane[1]) && lane[1]->late)) {', '    if (lane[0]->late) {'),
+    'lanes hold after late': ('    if (lane[0]->late || (hold_valid(lane[1]) && lane[1]->late)) {\n        lane[0]->late = 1;', '    if (0) {\n        lane[0]->late = 1;'),
+}
+
+
+class LateMutationTests(unittest.TestCase):
+    def test_every_late_data_mutation_is_caught(self):
+        suites = (LateDataTests, LateDataCopyTests, LateDataLaneTests)
+        with tempfile.TemporaryDirectory(prefix='fpl-late-mut-') as tmp:
+            for index, (name, seam) in enumerate(LATE_MUTATIONS.items()):
+                with self.subTest(mutation=name):
+                    lib = build(tmp, seam, f'l{index}.dylib')
+                    bad = 0
+                    for suite in suites:
+                        saved = suite.setUpClass, suite.tearDownClass
+                        suite.setUpClass = classmethod(lambda cls, lib=lib: setattr(cls, 'lib', lib))
+                        suite.tearDownClass = classmethod(lambda cls: None)
+                        try:
+                            result = unittest.TextTestRunner(stream=open('/dev/null', 'w')).run(
+                                unittest.defaultTestLoader.loadTestsFromTestCase(suite))
+                        finally:
+                            suite.setUpClass, suite.tearDownClass = saved
+                        bad += not result.wasSuccessful()
+                    self.assertTrue(bad, f'{name} was not caught')
 
 
 class FlushSiteTests(HoldTests):

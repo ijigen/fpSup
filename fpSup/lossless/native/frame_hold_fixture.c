@@ -364,6 +364,13 @@ void fpl_fixture_frame(uint32_t id, uint32_t spare_capacity) {
     wr_quiet(raster_of(id), 0xF0000000u | id);          /* this frame's picture */
     wr_quiet(raster_of(id) + 4, 0xFEEDFACEu);
 }
+/* late data (frame_hold.h): the take's first frame is probed; a frame's pixels land in its raster (every word
+ * but the first, which stays the marker the tests read: the picture changes, the frame's identity does not) */
+void fpl_fixture_probe(uint32_t id) { fpl_hold_probe(&hold, id); }
+void fpl_fixture_capture(uint32_t id, uint32_t seed) {
+    uintptr_t r = raster_of(id);
+    for (uint32_t off = 8; off + 4 <= raster_bytes(); off += 4) wr_quiet(r + off, seed ^ off);
+}
 void fpl_fixture_frame_field(uint32_t id, uint32_t offset, uint32_t value) {
     wr_quiet(frame_at(id) + offset, value);
 }
@@ -507,6 +514,12 @@ uint32_t fpl_fixture_get(uint32_t field) {
     case 35: return dma_bad;
     case 36: return hold.dma_failed;
     case 37: return hold.pitch_forced;
+    case 38: return hold.late | hold_b.late << 1;
+    case 39: return hold.late_by | hold_b.late_by << 8;
+    case 40: return hold.late_passed;
+    case 41: return hold.late_dropped + hold_b.late_dropped;
+    case 42: return hold.late_checked;
+    case 43: return hold.late_unknown;
     default: return 0xFFFFFFFFu;
     }
 }
