@@ -64,7 +64,8 @@ class Cam(Q.Cam):
                        (0x34,0xC05F4941),(0x38,0xC05F4959)):
             self.put(self.iface + off,a)
         # Preserve the container's existing page entries and add our stock pages.
-        pages = ('B2_5','MainB2','Playback')
+        import slm_lv_page as LV
+        pages = ('B2_5','MainB2','Playback',*LV.PAGES)
         old = self.w(Q.F6.READER + 0xAC); count = self.w(Q.F6.READER + 0xA8)
         table, names = 0xC3FB0000, 0xC3FB1000
         self.mu.mem_write(table, bytes(self.mu.mem_read(old, 44 * count)))
@@ -72,6 +73,7 @@ class Cam(Q.Cam):
         import pb_page as PB
         offsets = {name:P.B.SETS[name][0]-0xC18C0460 for name in pages[:2]}
         offsets['Playback'] = PB.source()[1] - 0xC18C0460
+        offsets.update({name:LV._set(name)['start']-0xC18C0460 for name in LV.PAGES})   # 0.0.7test: the live view's frame rate
         for i,name in enumerate(pages):
             e = table + (count+i)*44
             self.mu.mem_write(e, bytes(44)); self.mu.mem_write(names+i*32,name.encode()+b'\0')
@@ -107,6 +109,7 @@ class Cam(Q.Cam):
             return super()._hook(mu,addr,size,data)
         if addr == Q.F6.NBR_LOAD and b'SLM_RES' in bytes(mu.mem_read(r1,r2)):
             self.nbr_calls.append(([r0,r1,r2,r3],self.r(R.UC_ARM_REG_SP),bytes(mu.mem_read(r1,r2))))
+            self.gui_trace.append('slm load'); self.texts_bound=False   # stock C05E0940: every resource unbound
             self.put(r3,Q.F6.NEW_RD); return self._ret(0)
         if addr in (Q.F6.POST_INT,Q.F6.POST_STR):
             d=self.descriptors.get(self.cstr(r1))

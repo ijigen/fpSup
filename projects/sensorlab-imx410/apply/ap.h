@@ -124,6 +124,9 @@ const void *ap_trace_info(void *mem);    /* v0.7.27test: the first-frame trace (
 #ifdef AP_REC_DELAY_TEST
 int ap_rd_attach(void *mem, void *rd);    /* 0.0.2test TEST build: the REC-start delay control + ring (struct ap_rd) */
 #endif
+#ifdef AP_BLK_SNAP_TEST
+int ap_bs_attach(void *mem, void *bs);    /* BLK-SNAP TEST build: the BlackLevel loop snapshot ring (struct ap_bs) */
+#endif
 uint32_t ap_pb_ctl(void *mem, uint32_t which, uint32_t value);
 
 #endif

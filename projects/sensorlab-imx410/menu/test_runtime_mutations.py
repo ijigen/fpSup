@@ -46,6 +46,19 @@ MUTANTS=(
     # v0.7.2test (live2 SS2784): a 4-digit row text is a .nloc string id (1000 = Off)
     ('4-digit FPS row text sent as a string id','    if (n != 4u || t[n]) return t;\n','    return t;\n',
      'test_native_models_private_confirm_and_silent_sync'),
+    # 0.0.7test: the stock load unbinds the texts on screen ("1474"); the shared fpui_load_now binds them again
+    ('menu pack loaded without binding the texts again',
+     'fpui_load_now(app, (const uint8_t *)SLM_PACK, sizeof SLM_PACK, &m->reader)',
+     'FPUI_FW(FPUI_NBR_LOAD, fpui_fn4)((uint32_t)app, (uint32_t)(uintptr_t)SLM_PACK, sizeof SLM_PACK, (uint32_t)(uintptr_t)&m->reader)',
+     'test_the_menu_pack_load_binds_the_texts_again'),
+    # 0.0.7test: the live view's frame rate
+    ('live-view rate written into the bank the GUI is showing','    u32 bank = m->lv_bank ^ 1u;','    u32 bank = m->lv_bank;',
+     'test_live_view_frame_rate_is_the_fps_rows_text_as_stock_digit_images'),
+    ('live-view decimal point drawn as a digit image',
+     'if (dot) { const char *k = "kigou_01"; while (*k) d[n++] = *k++; } else d[n++] = *v;','d[n++] = *v;',
+     'test_live_view_frame_rate_is_the_fps_rows_text_as_stock_digit_images'),
+    ('live-view pages never installed','            m->lv_on = m->lv_result == UIA_OK;','            m->lv_on = 0;',
+     'test_live_view_frame_rate_is_the_fps_rows_text_as_stock_digit_images'),
     ('pause not honoured','    if (st->push_pause) { st->lt[15]++; return; }','    if (st->push_pause) { st->lt[15]++; }',
      'test_pause_keeps_stock_across_layouts','slqs.c'),
 )

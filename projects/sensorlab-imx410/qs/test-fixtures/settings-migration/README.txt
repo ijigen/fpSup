@@ -58,3 +58,5 @@ fine, QS-Share API 9; offline fixtures only, not live-tested). Older fixtures re
 unchanged; offline fixture only, not live-tested).
 
 2026-11-10: added SensorLab-IMX410_v0.0.6test.BIN 36f24a1267596cafaa99ed24830f3d4d9df20e58282e2da57661483edc470b83 (default build; exact merges + 1x2 / 1x3 presets + RES menu page 12 rows, validation/20261110-binning-exact; offline fixture only). Older fixtures retained.
+
+2026-11-16: added SensorLab-IMX410_v0.0.8test.BIN 6abc1e9bd6770c112a701f569ec880ce10bc64f3e7c36cde5c67f6ca3eac8369 (default build: 0.0.7test + H_BLV, the DNG BlackLevel value correction, validation/20261116-blk-snap; live-verified as the BLK-SNAP test build, this product build pending its own live check). 0.0.7test retained.

@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include "ap.h"
 #include "sloader4.h"
+#include "fpui_load.h"                          /* ../../../fpSup/fpsup-ui: the stock pack load + the texts bound again */
 #include "ap_calc.c"
 #include "pb_glyph.h"
 
@@ -141,7 +142,7 @@ enum { K_ENTRY = 0, K_MID = 1, K_BL = 2, K_TADD = 3 }; /* K_TADD: Thumb BLX; han
 enum { H_LK0 = 0, H_LK_R10 = 7, H_AC38, H_ACD8, H_ZG, H_V32, H_PICK, H_VPRO, H_CANVAS, H_GS, H_RECRATE,
        H_BINPATH, H_BINK1, H_BINK2, H_OUT, H_ASP1, H_ASP2, H_RATIO, H_FRMAX, H_FRCLASS, H_BLK6, H_BLK,
        H_PBTAG, H_PBNAME, H_DSCALE, H_PBW, H_PBH, H_PBRES, H_PBPREP1, H_PBPREP2, H_FIT, H_YUV32, H_YUV_FALLBACK, H_PBHEADER,
-       H_PBRING, H_PBRAW14, H_PBOWN, H_DEFC, H_FFARM, H_FFFIX, H_FFDONE, H_RESYNC, H_RESYNC2,
+       H_PBRING, H_PBRAW14, H_PBOWN, H_DEFC, H_FFARM, H_FFFIX, H_FFDONE, H_RESYNC, H_RESYNC2, H_BLV,
 #ifdef AP_REC_DELAY_TEST
        H_RECDLY,
 #endif
@@ -225,6 +226,12 @@ static const struct ap_site AP_SITES[AP_NHOOK] = {
      * controller task's message 1 (FUN_c030d0c0: FUN_c030ce00 posts it and waits for its event) runs SetImgMode_s with
      * the message's +0x1BC; ContSet_Adr1 then finds the mode already current and skips its own switch */
     {0xC030D168u, 0xEB0018A4u, K_BL},      /* resync2: bl SetImgMode_s(FUN_c03133a0(), [r4, #0x1bc]) (ImgCtrl task) */
+    /* 2026-11-16 (validation/20261116-blk-snap, 225 lens-capped takes): the DNG BlackLevel's VALUE.  FUN_c02ca190 hands
+     * FUN_c05a4bc0 four rationals {num, 0x400} at [sp + 4] (num = the sensor black, DN x 1024 at the tag's depth, the
+     * same for all four).  Its formula assumes the black is 256 when the video clamp locks; the clamp's init has moved
+     * the CRCT pedestal (0x300F0318) by -3..0 DN14 by then, and a 1:1 12-bit record truncates 14 -> 12 bits (-0.375).
+     * Our recipes only: num += (pedestal - 1024) DN14, and -0.375 DN12 for a 12-bit 1:1 record. */
+    {0xC02CA2A0u, 0xEB0B6A46u, K_BL},      /* blv: bl FUN_c05a4bc0(hdr, tagkind, 0xC61A, 5, 4, rationals) */
 #ifdef AP_REC_DELAY_TEST
     /* 0.0.2test TEST build only (validation/20261107-rec-delay): FUN_c0378a50 (CinemaDNG REC start) calls FUN_c030cf98
      * (desc copy -> ContSet_Adr1: mode switch, VD waits, BUFA1 arm / start) here; sleep N ms first */
@@ -267,6 +274,8 @@ struct ap_slot {
     u32 isp[65], mask[3];
     u32 sb_w, sb_h, asp[2], is169, box_w, box_h, det_h;
     u32 dng_n, dng_d, binfilt, fast, rec14, sok;
+    u32 blv_bits;                     /* 2026-11-16: apc_out.blv_bits / blv_tab (H_BLV looks the correction up) */
+    s32 blv_tab[16];
     u32 ds_on, ds[4];                 /* the DNG DefaultScale (apc_dscale) */
     u32 entry[4];                     /* {5, pid, mode, key}: what the firmware reads */
     char key[16];
@@ -351,6 +360,39 @@ _Static_assert(sizeof(struct ap_rdrec) == 16u * 4u, "rd record");
 #else
 _Static_assert(sizeof(struct ap_rdrec) == 12u * 4u, "rd record");
 #endif
+#endif
+
+#ifdef AP_BLK_SNAP_TEST
+/* BLK-SNAP TEST build only (2026-11-16, the 12-bit vs true-14 BlackLevel offset; tools/live/blk_snap.py decodes it).
+ * The BlackLevel hook (H_BLK6 / H_BLK: once per DNG header) copies the video clamp loop's state into a 32-entry ring:
+ * loads and stores only -- no firmware call, no allocation, no wait.  Everything it reads is static firmware state or a
+ * register the firmware itself reads every frame (FUN_c0633688 / FUN_c06336b0 / FUN_c0634580's pair).  It lives at the
+ * END of the client's state (slqs.c struct st; sq_test 50 returns its address), attached by ap_bs_attach after ap_init.
+ * Word offsets of a record (AP_BS_WORDS; build json blk_snap.rec_fields is this list):
+ *   0 seq (1..)                 1 hook (0 = H_BLK6, 1 = H_BLK)   2 the site's r0 (the plane code handed down)
+ *   3 bits from the firmware    4 bits answered                  5 A->pick_bits
+ *   6 rec14 (live slot; 0xFFFFFFFF = no live slot)               7 *0xC343B590 (the mode in use)
+ *   8..11  0x300F0250 / 0270 / 0290 / 02B0   (OB averages, FUN_c0633688: v35's first operand)
+ *  12..15  0x300F02C0 / 02C4 / 02C8 / 02CC   (OB averages, FUN_c06336b0: the loop's input)
+ *  16..17  0x300F0318 / 031C                 (the pedestal pair FUN_c0634580 writes)
+ *  18..19  DAT_C2F1E1E4 / DAT_C2F1E1E8       (the loop's target / current pedestal)
+ *  20..23  0xC343A6F8 / A6D0 / A6C8 / A6D4   (locked average, average at lock, previous pedestal, init counter)
+ *  24..27  0xC343A974 + 0 / 4 / 8 / 0xC      (the flags that pick the init branch)
+ *  28..37  0xC343A84C .. +0x24               (the clamp object's 10 black values, 0xC343A78C + 0xC0: DN12 x 1024)
+ *  38      0xC343A8C4                        (its write index, 0xC343A78C + 0x138)
+ *  39      0xC343B5AC                        (the IMX410 object 0xC343B588 + 0x24: v35's gain test, 0x500 < g <= 0x800)
+ *  40      0x300F0310 (CRCT gain)            41 0x30100588 (TG frame)   42 0x30100590 (TG line)
+ *  43..47  0 */
+#define AP_BS_MAGIC   0x504E5342u     /* "BSNP" */
+#define AP_BS_N       32u             /* a power of two: the ring index is n & (AP_BS_N - 1) */
+#define AP_BS_WORDS   48u
+struct ap_bsrec { u32 w[AP_BS_WORDS]; };
+struct ap_bs {
+    u32 magic, ver, rec_words, nmax;  /* "BSNP", 1, AP_BS_WORDS, AP_BS_N */
+    u32 n, pad[3];                    /* records written since boot (the newest is r[(n - 1) & (AP_BS_N - 1)]) */
+    struct ap_bsrec r[AP_BS_N];
+};
+_Static_assert(sizeof(struct ap_bs) == 32u + AP_BS_N * AP_BS_WORDS * 4u, "blk snap ring");
 #endif
 
 #ifdef AP_PURPLE_TEST
@@ -441,8 +483,15 @@ struct ap {
      * (TAB1 / TAB2 / TAB3; 0 = none yet).  Stock runs the SAME sensor mode in all three tables (only the profile differs:
      * the canvas plane codes), so the slot is one; the canvas takes the table's plane codes (notes/BITDEPTH_8_10.md). */
     u32 pick_bits, low_picks;
+    /* 2026-11-16 (H_BLK -> H_BLV, the same FUN_c02ca190 call): the tag depth H_BLK answered and whether the slot was
+     * ours then; H_BLV's corrections made and the last one (DN x 1024 at that depth) */
+    u32 blk_bits, blk_ours, blv_n, blv_skip;
+    s32 blv_last;
 #ifdef AP_REC_DELAY_TEST
     struct ap_rd *rd;                 /* 0.0.2test TEST build: ap_rd_attach (0 = the hook passes straight down) */
+#endif
+#ifdef AP_BLK_SNAP_TEST
+    struct ap_bs *bs;                 /* BLK-SNAP TEST build: ap_bs_attach (0 = nothing is recorded) */
 #endif
 #ifdef AP_PURPLE_TEST
     u32 pt_sw, pt_ours, pt_from, pt_to, pt_sw_us;   /* SetImgMode_s since the last REC start: calls, into ours, the last */
@@ -604,8 +653,8 @@ static int ap_glyph_add(struct ap *A, u32 v)
     uint8_t *pk = A->glyph[P->gn];
     ap_glyph_build(pk, v);
     P->gval[P->gn++] = v;
-    u32 reader = 0;
-    if (((ap_fw4)AP_NBR_LOAD)(app, (u32)(uintptr_t)pk, AP_GLYPH_PACK_LEN, (u32)(uintptr_t)&reader)) {
+    uintptr_t reader = 0;
+    if (fpui_load_now(app, pk, AP_GLYPH_PACK_LEN, &reader)) {
         P->gval[P->gn - 1u] = 0; P->gfail++;
         return -1;
     }
@@ -969,6 +1018,34 @@ static const u32 *ap_pb_pair(const struct ap *A)
     return P->active && !P->is169 && P->asp[0] && P->asp[1] ? P->asp : 0;
 }
 
+#ifdef AP_BLK_SNAP_TEST
+/* BLK-SNAP TEST build: one record per BlackLevel hook call (struct ap_bs above).  Loads and stores only. */
+static void ap_bs_snap(struct ap *A, u32 id, u32 r0, u32 down, u32 out, const struct ap_slot *s)
+{
+    struct ap_bs *B = A->bs;
+    if (!B || B->magic != AP_BS_MAGIC) return;                       /* not attached */
+    u32 n = B->n;
+    volatile u32 *w = B->r[n & (AP_BS_N - 1u)].w;
+    w[0] = n + 1u;
+    w[1] = id == H_BLK6 ? 0u : 1u;
+    w[2] = r0; w[3] = down; w[4] = out; w[5] = A->pick_bits;
+    w[6] = s ? s->rec14 : 0xFFFFFFFFu;
+    w[7] = AP_W(0xC343B590u);
+    w[8] = AP_W(0x300F0250u); w[9] = AP_W(0x300F0270u); w[10] = AP_W(0x300F0290u); w[11] = AP_W(0x300F02B0u);
+    w[12] = AP_W(0x300F02C0u); w[13] = AP_W(0x300F02C4u); w[14] = AP_W(0x300F02C8u); w[15] = AP_W(0x300F02CCu);
+    w[16] = AP_W(0x300F0318u); w[17] = AP_W(0x300F031Cu);
+    w[18] = AP_W(0xC2F1E1E4u); w[19] = AP_W(0xC2F1E1E8u);
+    w[20] = AP_W(0xC343A6F8u); w[21] = AP_W(0xC343A6D0u); w[22] = AP_W(0xC343A6C8u); w[23] = AP_W(0xC343A6D4u);
+    w[24] = AP_W(0xC343A974u); w[25] = AP_W(0xC343A978u); w[26] = AP_W(0xC343A97Cu); w[27] = AP_W(0xC343A980u);
+    for (u32 i = 0; i < 10u; i++) w[28u + i] = AP_W(0xC343A84Cu + 4u * i);
+    w[38] = AP_W(0xC343A8C4u);
+    w[39] = AP_W(0xC343B5ACu);
+    w[40] = AP_W(0x300F0310u); w[41] = AP_W(0x30100588u); w[42] = AP_W(0x30100590u);
+    w[43] = 0; w[44] = 0; w[45] = 0; w[46] = 0; w[47] = 0;
+    B->n = n + 1u;                                                   /* last: a reader sees whole records only */
+}
+#endif
+
 static u32 ap_hook(struct ap *A, u32 *f, u32 id)
 {
     if (id < H_LK_R10 || id == H_LK_R10) {                          /* the eight lookups: (obj, mode id) */
@@ -1221,11 +1298,38 @@ static u32 ap_hook(struct ap *A, u32 *f, u32 id)
         f[1] = ap_gate(A, H_FRCLASS, f[1]);
         return 0;
     case H_BLK6: case H_BLK: {                                       /* the bits of the BlackLevel shift */
+#ifdef AP_BLK_SNAP_TEST
+        u32 bs_r0 = f[0];
+#endif
         u32 r = ((ap_fw4)A->ven[id][V_DOWN])(f[0], f[1], f[2], f[3]);
         struct ap_slot *s = ap_live(A);
+#ifdef AP_BLK_SNAP_TEST
+        u32 bs_down = r;
+#endif
         if (s && s->rec14 && ap_rec_picked(A) && A->pick_bits == 12u) { r = 14u; A->blacks++; }   /* 0.0.3test: TAB3 only */
+#ifdef AP_BLK_SNAP_TEST
+        ap_bs_snap(A, id, bs_r0, bs_down, r, s);
+#endif
+        A->blk_bits = r & 0xFFFFu;                                   /* FUN_c02ca190 keeps uxth(r0): what H_BLV sees */
+        A->blk_ours = s && ap_rec_picked(A) && A->pick_bits == 12u;
         f[0] = r;
         return 1;
+    }
+    case H_BLV: {                                                    /* 2026-11-16: the BlackLevel value (AP_SITES) */
+        struct ap_slot *s = ap_live(A);
+        u32 bits = A->blk_bits, ours = A->blk_ours;
+        A->blk_ours = 0;                                             /* one H_BLK per H_BLV: never a stale answer */
+        if (!ours || !s || (bits != 12u && bits != 14u)) return 0;   /* stock, 8 / 10 bit: untouched */
+        u32 *v = (u32 *)(uintptr_t)f[15];                            /* [sp + 4]: the four {num, den} */
+        if (f[14] != 4u || !v || ((uintptr_t)v & 3u) || v[1] != 0x400u || v[3] != 0x400u || v[5] != 0x400u ||
+            v[7] != 0x400u || v[0] != v[2] || v[0] != v[4] || v[0] != v[6]) { A->blv_skip++; return 0; }
+        /* data only (Bei 11-16: no formula in a consumer core): the slot's table, made by ap_calc for this recipe */
+        u32 idx = (AP_W(0x300F0318u) & 0x3FFFu) - APC_BLV_BASE;      /* the CRCT pedestal now, DN14 */
+        if (bits != s->blv_bits || idx >= 16u) { A->blv_skip++; return 0; }
+        s32 d = s->blv_tab[idx];
+        for (u32 i = 0; i < 8u; i += 2u) v[i] = (u32)((s32)v[i] + d);
+        A->blv_n++; A->blv_last = d;
+        return 0;                                                    /* down: FUN_c05a4bc0 writes the corrected tag */
     }
     case H_PBHEADER: {
         struct ap_pb *P = &A->pb;
@@ -1702,6 +1806,8 @@ static int ap_commit(struct ap *A)
         }
     s->donor = o->donor; s->carrier = o->carrier; s->rank = o->rank; s->engine = o->engine; s->fast = o->fast;
     s->rec14 = o->rec14; s->sok = o->sok;
+    s->blv_bits = o->blv_bits;
+    for (u32 i = 0; i < 16u; i++) s->blv_tab[i] = o->blv_tab[i];
     s->sfx_len = o->sfx_len;
     for (u32 i = 0; i < 6u; i++) s->sfx[i] = o->sfx[i];
     s->base_row = AP_W(AP_MAPPING + 4u * AP_BASE_PID);
@@ -1927,6 +2033,20 @@ int ap_rd_attach(void *mem, void *rd)
     R->rec_words = sizeof(struct ap_rdrec) / 4u; R->nmax = AP_RD_N;
     R->magic = AP_RD_MAGIC;
     A->rd = R;
+    return AP_OK;
+}
+#endif
+
+#ifdef AP_BLK_SNAP_TEST
+/* BLK-SNAP TEST build: the ring (bs: 8-aligned, resident, zeroed by the caller) */
+int ap_bs_attach(void *mem, void *bs)
+{
+    struct ap *A = (struct ap *)mem;
+    struct ap_bs *B = (struct ap_bs *)bs;
+    if (!A || A->magic != AP_MAGIC || !B) return AP_E_ABI;
+    B->ver = 1u; B->rec_words = AP_BS_WORDS; B->nmax = AP_BS_N; B->n = 0;
+    B->magic = AP_BS_MAGIC;
+    A->bs = B;
     return AP_OK;
 }
 #endif

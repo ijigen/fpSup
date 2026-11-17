@@ -86,7 +86,14 @@ struct apc_out {
      * 1671..1686 over a 1702-row source) in standby and recording, 6 of 6 pass.  sok (with the cap) stays the MOV-table
      * standby's gate (its base row is the stock standby profile 5). */
     u32 rok;
+    /* 2026-11-16 (last: hosts read the fields above by offset): the DNG BlackLevel correction AS DATA (Bei: a
+     * consumer core -- ap.c here, RES-Custom later through an RCD section -- holds no formula, it looks values up).
+     * blv_bits = the tag depth the table is for (12 / 14); blv_tab[i] = what to add to each BlackLevel numerator
+     * (DN x 1024 at that depth) when the CRCT pedestal reads APC_BLV_BASE + i.  Filled by apc_blv_table below. */
+    u32 blv_bits;
+    s32 blv_tab[16];
 };
+#define APC_BLV_BASE 1012u                    /* pedestals 1012..1027 (DN14); seen 1021..1024 in 225 takes */
 
 enum { APC_OK = 0, APC_E_RECIPE = -4, APC_E_CORE = -5, APC_E_ISP = -6, APC_E_RATE = -7 };
 
@@ -270,6 +277,21 @@ static int apc_build(u32 dcw, u32 dch, u32 rw, u32 rh, s32 key, s32 hbin, s32 vb
     if (w->spec.bits == 14 && !(w->spec.zh == 1024 && w->spec.zv == 1024 && w->spec.hbin == 1 && w->spec.vbin == 1))
         w->spec.bits = 12;
     o->rec14 = w->spec.bits == 14;
+    {   /* the BlackLevel table (validation/20261116-blk-snap, 225 lens-capped takes; the producer's formula):
+         * firmware tag = 256 + (OB drift since the clamp locked); the data = the CRCT pedestal / 4, so the tag misses
+         * (pedestal - 1024) / 4 DN12 -- the clamp's init moves the pedestal by -3..0 DN14 -- and a 1:1 12-bit record
+         * (no RWZM, no CRCT bin) truncates 14 -> 12 bits: -0.375 DN12.  Units: DN x 1024 at the tag's depth. */
+        /* 431 takes x 6 ISOs (validation/20261116-blk-snap/LOG.md): the truncation term for EVERY 12-bit 1:1 record,
+         * normal or fast AD, at every gain.  Exceptions tried 11-16 (fast AD, the v35 gain band) came from a few
+         * consecutive takes and made the whole set worse (27 vs 11 takes worse than stock): no exceptions without
+         * a replay of all the takes (tools/live/blk_replay.py). */
+        u32 one = w->spec.zh == 1024 && w->spec.zv == 1024 && w->spec.hbin == 1 && w->spec.vbin == 1;
+        o->blv_bits = w->spec.bits;
+        for (u32 i = 0; i < 16u; i++) {
+            s32 dped = (s32)(APC_BLV_BASE + i) - 1024;
+            o->blv_tab[i] = w->spec.bits == 14 ? dped * 1024 : dped * 256 - (one ? 384 : 0);
+        }
+    }
     rc = core_isp_plan(&w->spec, &w->isp);
     if (rc) { o->detail = w->isp.why; return APC_E_ISP; }
     for (u32 i = 0; i < 65u; i++) o->isp[i] = w->isp.words[i];

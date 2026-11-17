@@ -174,12 +174,57 @@ static void slm_sync(struct st *st)
     }
     slm_publish(st, lock);
 }
+/* 0.0.7test (Bei 11-15): the live view's frame rate.  Stock draws one of ten bitmaps picked by LV_FrameRate, which
+ * follows the carrier -- the nearest stock rate, never 57.123.  The two CINE live-view pages (slm_lv_page.py) draw a
+ * string variable in its place instead, written here as the stock digit images, the way stock writes the remaining
+ * time (LV_RemainingRecTimeStringS / M).  The rate: SensorLab's own (the FPS row's text); the stock one while the
+ * format locks SensorLab out (MOV).  Posts only queue a pointer, so the bank the GUI is not showing is written. */
+static const char SLM_LVFPS[2][12] = {"SLM_LvFpsS", "SLM_LvFpsM"};
+static const char SLM_STOCK_RATE[9][8] = {"23.98", "24", "25", "29.97", "48", "50", "59.94", "100", "119.88"};   /* APC_RATES order */
+static void slm_lv_text(char *d, const char *v, char size)
+{
+    u32 n = 0, ok = 0;
+    for (; *v; v++) {
+        int dot = *v == '.';
+        if (!dot && (*v < '0' || *v > '9')) { ok = 0; break; }          /* "--", CUSTOM ...: no number to draw */
+        if (n + 26u > SLM_LVTEXT) break;
+        const char *head = "<!font_";
+        while (*head) d[n++] = *head++;
+        d[n++] = size; d[n++] = '_';
+        if (dot) { const char *k = "kigou_01"; while (*k) d[n++] = *k++; } else d[n++] = *v;
+        const char *tail = ",BOTTOM>";
+        while (*tail) d[n++] = *tail++;
+        ok = 1;
+    }
+    if (!ok) { d[0] = ' '; n = 1; }
+    d[n] = 0;
+}
+static void slm_lv_post(struct st *st)
+{
+    struct slm_state *m = &st->menu;
+    if (!m->lv_on) return;
+    const char *v = m->summary[m->bank][2];
+    if (slm_format_locked()) {
+        u32 en = ((ap_fw1)AP_FR_GET)(((ap_fw0)AP_GET_OBJ)());
+        v = "";
+        for (u32 i = 0; i < 9u; i++) if (APC_RATES[i].en == en) v = SLM_STOCK_RATE[i];
+    }
+    u32 bank = m->lv_bank ^ 1u;
+    slm_lv_text(m->lvfps[bank][0], v, 'S');
+    slm_lv_text(m->lvfps[bank][1], v, 'M');
+    m->lv_bank = bank;
+    for (u32 i = 0; i < 2u; i++)
+        ((slm_fn3)0xC0593FE0u)(0, (uintptr_t)SLM_LVFPS[i], (uintptr_t)m->lvfps[bank][i]);
+    m->lv_posts++;
+}
+
 /* the private variables for the rows slm_build / slm_model just made (v0.7.0test: split out of slm_sync so the
  * first-MENU setup does not build and write both native models a second time) */
 static void slm_publish(struct st *st, u32 lock)
 {
     struct slm_state *m = &st->menu;
     for (u32 k = 0; k < 3u; k++) slm_post(SLM_LOCK[k], lock);
+    slm_lv_post(st);                                  /* also while locked: MOV shows the stock rate */
     if (lock) return;
     for (u32 k = 0; k < 3u; k++) {
         slm_post(SLM_COUNT[k], m->count[k] - 1u); /* native List.max-value: last valid index */
@@ -233,6 +278,7 @@ static int slm_pick(struct st *st, u32 k, u32 row)
     slm_summaries(st, m->bank ^ 1u);
     for (u32 j = 0; j < 3u; j++)                      /* queued string posts: the rows read the new values */
         ((slm_fn3)0xC0593FE0u)(0, (uintptr_t)SLM_SUMMARY[j], (uintptr_t)m->summary[m->bank][j]);
+    slm_lv_post(st);
     return 1;
 }
 
@@ -290,8 +336,8 @@ static void slm_idle(struct st *st)
     }
     if (!slm_variable(app, "SLM_FpsFocus", 0, 0) || !slm_variable(app, "SLM_Go", 0, 0) ||
         !slm_variable(app, "SLM_Refresh", 0, 0xFFFFFFFFu)) { m->result = 51; return; }
-    typedef u32 (*load_fn)(uintptr_t, const void *, u32, uintptr_t *);
-    if (((load_fn)0xC05E84D9u)(app, SLM_PACK, sizeof SLM_PACK, &m->reader) || !m->reader) { m->result = 52; return; }
+    /* fpui_load.h: the load unbinds the texts already on screen; they are bound again at once ("1474", 2026-11-15) */
+    if (fpui_load_now(app, (const uint8_t *)SLM_PACK, sizeof SLM_PACK, &m->reader) || !m->reader) { m->result = 52; return; }
     t_x = ap_now_us();
     m->result = slm_model(st, 1);
     if (!m->result) m->result = slm_model(st, 2);
@@ -309,6 +355,19 @@ static void slm_idle(struct st *st)
         struct uia_outcome pb;
         st->pb_ui_result = fpui_stock_apply(st->svc, AP_PB_PAGE, sizeof AP_PB_PAGE, &pb);
         if (st->pb_ui_result == UIA_OK) ap_pb_ctl(st->ap_mem, 2, AP_PB_PAGE_FRAME);
+    }
+    /* 0.0.7test: the live view's frame rate (slm_lv_post).  Its own result, as the Playback page's: a failure
+     * leaves the stock bitmap and never the menu. */
+    if (!m->lv_on) {
+        for (u32 i = 0; i < 2u; i++) { m->lvfps[0][i][0] = ' '; m->lvfps[0][i][1] = 0; }
+        if (slm_variable(app, SLM_LVFPS[0], 2, (u32)(uintptr_t)m->lvfps[0][0]) &&
+            slm_variable(app, SLM_LVFPS[1], 2, (u32)(uintptr_t)m->lvfps[0][1])) {
+            struct uia_outcome lv;
+            m->lv_result = fpui_stock_apply(st->svc, SLM_LV_PAGE, sizeof SLM_LV_PAGE, &lv);
+            m->lv_on = m->lv_result == UIA_OK;
+        } else {
+            m->lv_result = 51u;
+        }
     }
     *slm_request() = 0; /* type3 change events fire again on page construction */
     for (u32 k = 0; k < 3u; k++)

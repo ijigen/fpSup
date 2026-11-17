@@ -385,14 +385,15 @@ class SourceTests(unittest.TestCase):
     def test_sites_are_the_images_words_and_kinds_fit(self):
         src = (HERE / 'ap.c').read_text()
         sites = re.findall(r'\{0x([0-9A-F]{8})u, 0x([0-9A-F]{8})u, (K_\w+)\}', src)
-        self.assertEqual(len(sites), 50)                              # 0.0.2test: + the TEST build's recdly (ifdef)
+        self.assertEqual(len(sites), 51)                              # 0.0.2test: + the TEST build's recdly (ifdef)
+                                                                      # 11-16: + blv (the BlackLevel value)
         for a, w, kind in sites:
             a, w = int(a, 16), int(w, 16)
             self.assertEqual(iw(a), w, f'{a:#x}')
             branch = (w & 0x0E000000) == 0x0A000000
             self.assertEqual(branch, a in (0xC031B660, 0xC032DDF0, 0xC032DE70, 0xC02CA1C0, 0xC02CA21C, 0xC05BDE80,
                                            0xC05BDFE8, 0xC05BDC9C, 0xC05C2DE8, DEFC_SITE, FF_ARM, FF_FIX, RS_SITE, RS_SITE2,
-                                           0xC0379180), f'{a:#x}')
+                                           0xC0379180, 0xC02CA2A0), f'{a:#x}')
             if kind == 'K_MID':
                 self.assertIn(w, (0xE3A00002, 0xE3A00003, 0xE1A01004, 0xE1A00001, 0xE300EE04, 0xE28D102C))
 
@@ -447,7 +448,7 @@ class InstallTests(unittest.TestCase):
             self.assertIn(w >> 24, (0xEA, 0xEB), f'{a:#x}')
             self.assertEqual(w >> 24 == 0xEB, a in (0xC031B660, 0xC032DDF0, 0xC032DE70, 0xC043A18C, 0xC043A19C, 0xC02CA1C0,
                                                     0xC02CA21C, 0xC05BDE80, 0xC05BDFE8, 0xC05BDC9C, 0xC05C2DE8, DEFC_SITE,
-                                                    FF_ARM, FF_FIX, RS_SITE, RS_SITE2))
+                                                    FF_ARM, FF_FIX, RS_SITE, RS_SITE2, 0xC02CA2A0))
             cave = (a + 8 + ((w & 0xFFFFFF) << 8 >> 6 if not w & 0x800000 else ((w & 0xFFFFFF) | ~0xFFFFFF) << 2)) & 0xFFFFFFFF
             self.assertEqual(cam.w(cave), 0xE51FF004)
             self.assertTrue(MEM <= cam.w(cave + 4) < MEM + 0x8000)
@@ -1407,6 +1408,7 @@ PB = dict(TAG_E40=0xC05C1E40, TAG_DB8=0xC05C1DB8, TAG_ED0=0xC05C1ED0, TAG_458=0x
           TAG_SET=0xC00BA310, VAR_INT=0xC059F618, VAR_FLAG=0xC059F718, VAR_SET=0xC059F5C8, LOG0=0xC0019DC0,
           LOG1=0xC001A0D8)
 NBR_LOAD, GUI_OBJECT, KEYBLD_FN, EMITTER = 0xC05E84D8, 0xC37B7048, 0xC043BC68, 0xC0437B48
+LANG = {'LANG_STALE': 0xC05DE6B0, 'UI_BUSY': 0xC05DCCB8, 'LANG_APPLY': 0xC05DE5B8}
 PBTAG, DSCALE, PBW, PBH, PBRES = 0xC05C1A58, 0xC02C43C0, 0xC059F8B8, 0xC059F8F8, 0xC05A1500
 TIFF, P_CROP, P_RAS, KOBJ, KVT, KPAR, APP = 0x48170000, 0x48170100, 0x48170200, 0x48170300, 0x48170400, 0x48170500, 0x48170600
 PB_KEYS = ('magic mode glyph_on res_val cw ch en seq active ras_w ras_h bits is169 asp_n asp_d box_w box_h det_h '
@@ -1450,6 +1452,11 @@ class PbCam(Cam):
         self.mu.mem_write(NBR_LOAD, struct.pack('<H', 0x4770))          # Thumb bx lr
         self.by_addr[NBR_LOAD] = 'NBR_LOAD'
         self.mu.hook_add(UC_HOOK_CODE, self._hook, begin=NBR_LOAD, end=NBR_LOAD)
+        # fpui_load.h: after the load the language is marked stale and translated (the stock load unbinds the texts)
+        for n, a in LANG.items():
+            self.mu.mem_write(a, struct.pack('<H', 0x4770))
+            self.by_addr[a] = n
+            self.mu.hook_add(UC_HOOK_CODE, self._hook, begin=a, end=a)
         # P_CROP/P_RAS/KPAR already lie in Cam's WORK mapping.
         self.put(GUI_OBJECT, APP)
         self.put(KOBJ + 8, KVT)
@@ -1457,9 +1464,14 @@ class PbCam(Cam):
 
     def _hook(self, mu, addr, size, data):
         name = self.by_addr.get(addr)
-        if name not in PB and name != 'NBR_LOAD':
+        if name not in PB and name != 'NBR_LOAD' and name not in LANG:
             return Cam._hook(self, mu, addr, size, data)
         try:
+            if name in LANG:
+                self.calls.append((name, self.r(UC_ARM_REG_R0), 0))
+                self.mu.reg_write(UC_ARM_REG_R0, 0)                  # UI_BUSY: the GUI is idle
+                self.mu.reg_write(UC_ARM_REG_PC, self.r(UC_ARM_REG_LR))
+                return
             r0, r1, r2, r3 = (self.r(x) for x in (UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3))
             sp = self.r(UC_ARM_REG_SP)
             self.calls.append((name, r0, r1))
@@ -1722,6 +1734,10 @@ class PlaybackTests(unittest.TestCase):
         self.assertTrue(nums)
         self.assertEqual(sorted(int(re.search(rb'font_S_imageSize_(\d+)\0', pk).group(1)) for *_, pk in live.packs),
                          sorted(nums))
+        # 0.0.7test (fpui_load.h): each load unbinds the texts on screen; the language is marked stale and translated
+        # right after it ("1474", camera 2026-11-15)
+        order = [n for n, *_ in live.calls if n == 'NBR_LOAD' or n in LANG]
+        self.assertEqual(order, ['NBR_LOAD', 'LANG_STALE', 'UI_BUSY', 'LANG_APPLY'] * len(live.packs))
         for app, at, n, pk in live.packs:
             self.assertEqual((app, n), (APP, len(G.template()[0])))
             inv = nbr.inspect(pk)

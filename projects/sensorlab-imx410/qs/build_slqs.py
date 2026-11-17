@@ -6,6 +6,8 @@ of the QS container (API 6, v0.3.1+ (v0.3.2: AEL on the first QS open): native-s
     # Optional: --settings-from old.BIN preserves its validated settings record in the new build.
     python3 -B build_slqs.py --rec-delay-test --out out-rec-delay-test   # TEST build (-DAP_REC_DELAY_TEST): the same
     # file name, so only into a directory whose name says rec-delay (validation/20261107-rec-delay/README.md)
+    python3 -B build_slqs.py --blk-snap-test --out out-blk-snap-test   # TEST build (-DAP_BLK_SNAP_TEST): the BlackLevel loop
+                                             # snapshot ring (sq_test 50; tools/live/blk_snap.py)
     python3 -B build_slqs.py --purple-test --out out-purple-test   # TEST build (+ -DAP_PURPLE_TEST: the REC-delay build plus
     # the first-frame toggles; only into a *purple* directory; validation/20261108-purple-stock-diff/README.md)
 
@@ -37,7 +39,7 @@ SUP_ID = 'SL41'
 # 2026-11-07 (Bei): 'Sensor Lab-IMX410' 0.0.1test = the v0.7.39test content renamed (names_v4.py).  The card
 # file's version is what the loader compares (sloader4.c cand_cmp); the header's version word is informational
 # only (sups_list), so it stays a plain build number, not derived from the version string.
-VERSION = '0.0.6test'                      # a literal: preview/server.py and build_web.py read it with ast
+VERSION = '0.0.8test'                      # a literal: preview/server.py and build_web.py read it with ast
 if VERSION != N.version(SUP_ID):
     raise ImportError(f'build_slqs VERSION {VERSION} != names_v4 {N.version(SUP_ID)}')
 NAME = N.display(SUP_ID)
@@ -45,7 +47,7 @@ HEADER_VERSION = 20
 SOURCE = HERE / 'slqs.c'
 CFG_MAGIC = 0x32344C53                     # "SL42"
 CFG_WORDS = 5
-STATE_RESERVE = 143360 + 0x37000 + 0x3200 + 0x40 + 0x2800            # sizeof(struct st), including v0.6 playback/HUD storage
+STATE_RESERVE = 143360 + 0x37000 + 0x3200 + 0x40 + 0x2800 + 0x340    # sizeof(struct st), including v0.6 playback/HUD storage; 0x340 = 0.0.7test's live-view frame-rate text (slm_state.h)
                                                             # and (v0.7.25test) ap.h AP_MEM_BYTES 0x16000 -> 0x36000: defect tables
                                                             # and (v0.7.26test) + 0x40: struct ap_status +7 words (AP_ABI 3)
                                                             # and (v0.7.27test) AP_MEM_BYTES 0x36000 -> 0x37000: the trace
@@ -261,15 +263,32 @@ PURPLE_DEFINE = '-DAP_PURPLE_TEST=1'           # 0.0.3test: + the first-frame to
 PURPLE_RESERVE = 0xC00                         # struct ap_rd ver 2: 64 + 16 x 64 B
 PURPLE_FIELDS = ['seq', 'ms', 't0', 't1', 't2', 'rc', 'line0', 'line2', 'arm_us', 'arm_line', 'ff', 'pad',
                  'bits', 'sw', 'sw_dt', 'cur']
+BLK_SNAP_DEFINE = '-DAP_BLK_SNAP_TEST=1'       # 2026-11-16: the BlackLevel loop snapshot TEST build (apply/ap.c ap_bs_snap)
+BLK_SNAP_RESERVE = 0x1900                      # struct ap_bs: 32 + 32 x 48 x 4 B = 6176, 8-aligned slack
+BLK_SNAP_FIELDS = (['seq', 'hook', 'site_r0', 'bits_fw', 'bits_out', 'pick_bits', 'rec14', 'cur_mode']
+                   + [f'ob_a{i}' for i in range(4)] + [f'ob_b{i}' for i in range(4)] + ['ped_reg0', 'ped_reg1']
+                   + ['ped_target', 'ped_cur', 'avg_locked', 'avg_at_lock', 'ped_prev', 'init_count']
+                   + [f'flag{i}' for i in range(4)] + [f'black{i}' for i in range(10)] + ['black_idx', 'sensor_gain']
+                   + ['crct_gain', 'tg_frame', 'tg_line'] + [f'pad{i}' for i in range(5)])
+BLK_SNAP_ADDRS = ([None] * 7 + ['0xC343B590'] + ['0x300F0250', '0x300F0270', '0x300F0290', '0x300F02B0']
+                  + ['0x300F02C0', '0x300F02C4', '0x300F02C8', '0x300F02CC', '0x300F0318', '0x300F031C']
+                  + ['0xC2F1E1E4', '0xC2F1E1E8', '0xC343A6F8', '0xC343A6D0', '0xC343A6C8', '0xC343A6D4']
+                  + ['0xC343A974', '0xC343A978', '0xC343A97C', '0xC343A980']
+                  + [f'0x{0xC343A84C + 4 * i:08X}' for i in range(10)] + ['0xC343A8C4', '0xC343B5AC']
+                  + ['0x300F0310', '0x30100588', '0x30100590'] + [None] * 5)
+assert len(BLK_SNAP_FIELDS) == len(BLK_SNAP_ADDRS) == 48
 
 
-def build(src=None, *, settings_from=None, rec_delay=False, purple=False):
+def build(src=None, *, settings_from=None, rec_delay=False, purple=False, blk_snap=False):
     record, settings = settings_record(settings_from) if settings_from is not None else (bytes(4 * REC_WORDS), None)
     src = src or os.environ.get('SLQS_SRC') or SOURCE
     rec_delay = rec_delay or purple
+    if blk_snap and rec_delay:
+        raise BuildError('--blk-snap-test does not combine with the REC-delay / purple TEST builds')
     reserve = STATE_RESERVE + (PURPLE_RESERVE if purple else REC_DELAY_RESERVE if rec_delay else 0)
-    text = compile_text(pathlib.Path(src), ([REC_DELAY_DEFINE] if rec_delay else []) + ([PURPLE_DEFINE] if purple else []),
-                        reserve)
+    reserve += BLK_SNAP_RESERVE if blk_snap else 0
+    text = compile_text(pathlib.Path(src), ([REC_DELAY_DEFINE] if rec_delay else []) + ([PURPLE_DEFINE] if purple else [])
+                        + ([BLK_SNAP_DEFINE] if blk_snap else []), reserve)
     hdr = B.SL4_HEADER_LEN
     lead = 4 * CFG_WORDS
     lead += -(hdr + lead) % 8                  # the code (and its folded data) 8-aligned in the block
@@ -311,6 +330,11 @@ def build(src=None, *, settings_from=None, rec_delay=False, purple=False):
                               commits_off=state_off + 48, sw_total_off=state_off + 52,
                               bits={'TWIN': 1, 'NOWIN': 2, 'ROWS': 4, 'RWZM': 8, 'SBSTOCK': 16},
                               smodes=[7, 101, 123, 151], recommit='sq_test 30 1, then sq_test 30 0')
+    if blk_snap:                               # struct ap_bs is struct st's LAST member: its address comes from sq_test 50
+        info['blk_snap'] = dict(test_build=True, define=BLK_SNAP_DEFINE, sites=['0xC02CA1C0', '0xC02CA21C'],
+                                sq_test_op=50, magic='0x504E5342', ver=1, header_words=8, n_word=4,
+                                rec_words=48, nmax=32, ring_off_in_struct=32, struct_bytes=32 + 32 * 48 * 4,
+                                rec_fields=BLK_SNAP_FIELDS, rec_addrs=BLK_SNAP_ADDRS)
     return blob, info
 
 
@@ -320,6 +344,8 @@ def main():
     ap.add_argument('--settings-from', type=pathlib.Path, help='validated complete saved BIN; copy its settings record')
     ap.add_argument('--purple-test', action='store_true',
                     help='TEST build: --rec-delay-test + the first-frame toggles (--out must name a purple directory)')
+    ap.add_argument('--blk-snap-test', action='store_true',
+                    help='TEST build: the BlackLevel loop snapshot ring (--out must name a blk-snap directory)')
     ap.add_argument('--rec-delay-test', action='store_true',
                     help='TEST build: the REC-start delay hook (same file name: --out must name a rec-delay directory)')
     a = ap.parse_args()
@@ -328,10 +354,13 @@ def main():
         raise BuildError('--purple-test writes the product file name: --out must be a directory named *purple*')
     if a.rec_delay_test and 'rec-delay' not in out.resolve().name:
         raise BuildError('--rec-delay-test writes the product file name: --out must be a directory named *rec-delay*')
+    if a.blk_snap_test and 'blk-snap' not in out.resolve().name:
+        raise BuildError('--blk-snap-test writes the product file name: --out must be a directory named *blk-snap*')
     if a.settings_from is not None and (out / 'fpSup' / file_name()).resolve() == a.settings_from.resolve():
         raise BuildError('output would overwrite the settings source')
     (out / 'fpSup').mkdir(parents=True, exist_ok=True)
-    blob, info = build(settings_from=a.settings_from, rec_delay=a.rec_delay_test, purple=a.purple_test)
+    blob, info = build(settings_from=a.settings_from, rec_delay=a.rec_delay_test, purple=a.purple_test,
+                       blk_snap=a.blk_snap_test)
     (out / 'fpSup' / file_name()).write_bytes(blob)
     fns = info.pop('functions')
     info['sq_test_off'] = info['code_off'] + fns['sq_test']        # v0.5.0test: block + this (Thumb) = sq_test

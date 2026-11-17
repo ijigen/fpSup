@@ -75,6 +75,22 @@ A separate sup, **QS container** (`../qs-container`), owns the native QS/editor 
 - **Freeze lessons**: OSD is triple-buffered (draw only in the presenting group 2/3). A menu change event must not rebuild lists.
 
 ## Current state (update when it changes)
+- **BLK-SNAP TEST build (11-16, offline; not deployed)**: 12-bit records ~1.1 DN12 below true 14-bit (same `BlackLevel`
+  tag) when the video clamp is on (`core.c` `d.hd`, sensor aspect 1.7–2.0) and the take is 1:1 → dark-green shadows
+  (Bei's SSD A001_003 vs A001_002). `build_slqs.py --blk-snap-test --out out-blk-snap-test`: the BlackLevel hook
+  copies the clamp loop's registers/state into a 32-record ring (sq_test 50); `tools/live/blk_snap.py` reads it after
+  the stop and puts it through FUN_c031a2a0 / v35 / FUN_c0313ec0. Product BIN byte-identical without the flag
+  (66801912…). Tests: `apply/test_blk_snap.py` 18 + 19/19 mutants. Formula notes: memory `blacklevel-video-clamp-formula`.
+  Coverage: `tools/live/blk_plan.py` stratifies the product list (`fps_data.js`, 930 recipes) by the formula's factors
+  → phase 0 (8 takes, formula check) + 142 strata (`--coarse` 72) × ISO 100/800/3200, each with its QR code (restore
+  via sq_test 41 is offline-tested only). Clamp = readout `sw·mh / (sh·mv)` in 1.7–2.0, NOT the `win` field.
+- **0.0.8test (11-16, live-verified on Bei's card, NOT published)**: 0.0.7test + H_BLV below; Bei's 12v2 recipe err −1.22→−0.11 (ISO 100), −1.03→+0.14 (3200). Any change to the BlackLevel rule must pass `tools/live/blk_replay.py` (431 takes). Unsolved: clamp-off RWZM formats ±0.6, irregular (LOG.md).
+- **H_BLV (11-16)**: the BlackLevel VALUE fix, hook 51 at `C02CA2A0` (bl FUN_c05a4bc0). Data only
+  (Bei: no formula in a consumer core): `ap_calc.c` fills per recipe `blv_bits` + `blv_tab[16]` (pedestal 1012..1027 →
+  add (ped−1024)/4 DN12, −0.375 for 12-bit 1:1, ×4 units at 14 bit); `ap.c` reads 0x300F0318, looks up, adds. Our recipes
+  only (picked, TAB3, depth matches). Phase-1 model: |err| mean 0.42→0.16, max 1.23→0.57 (stock FHD measured −0.61).
+  Tests `apply/test_blv.py` 10 + 13/13 mutants; apply 92 + blk-snap 18 OK. Live acceptance pending (stock baseline +
+  phase-0 + worst strata; Bei's bar: not worse than stock).
 - **0.0.6test candidate (11-10, offline; not deployed)**: exact merges (Bei: "2x2 3x3 6x6 ... the most important").
   quality.py / core.c `q_isp` (product list only): (E) a merge within 16 px / 4 rows / 1.5 % FOV of the RES records 1:1
   (RWZM off); (V) RWZM-on recipes crop 1..12 spare rows at the aspect-keeping ratio (else 1:1) when the margin holds;

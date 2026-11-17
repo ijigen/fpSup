@@ -46,6 +46,7 @@
 #include "pb_page.h"
 #include "slm_state.h"
 #include "slm_page.h"
+#include "slm_lv_page.h"                      /* ../menu: the live view's frame rate (0.0.7test) */
 
 typedef uint32_t u32;
 typedef uint16_t u16;
@@ -282,6 +283,9 @@ struct st {
     } boot;
     /* 0.0.3test (appended): the stock CinemaDNG bit depth (8 / 10 / 12), read once per layout like the medium */
     struct { u32 read_at, ok, bits; } bd;
+#ifdef AP_BLK_SNAP_TEST
+    struct ap_bs bs;                          /* BLK-SNAP TEST build: last (sq_test 50 returns its address) */
+#endif
 };
 #ifdef SL_STATE_RESERVE
 _Static_assert(sizeof(struct st) <= SL_STATE_RESERVE, "struct st outgrew STATE_RESERVE (build_slqs.py)");
@@ -2532,6 +2536,9 @@ USED int sq_test(u32 op, u32 a, u32 b, u32 c)
 #ifdef AP_REC_DELAY_TEST
     if (op == 49u) return (int)(uintptr_t)&st->rd;                     /* 0.0.2test TEST build: the REC-start delay */
 #endif
+#ifdef AP_BLK_SNAP_TEST
+    if (op == 50u) return a == 1u ? (int)st->bs.n : (int)(uintptr_t)&st->bs;   /* BLK-SNAP TEST build: the ring / records */
+#endif
     if (op == 44u) return (int)(uintptr_t)st->svc->find(st->svc, QSC_ID);   /* the container's api (or 0) */
     if (op == 45u) return (int)(uintptr_t)&st->f[F_QR];               /* the QR function's struct qsc_func */
     if (op == 46u) return (int)(uintptr_t)&st->boot;                  /* v0.7.35test: the boot apply state */
@@ -2608,6 +2615,9 @@ USED int sup_entry(void *block, const struct sl_svc *svc, const char *path)
     st->ap_init_rc = ap_init(st->ap_mem, sizeof st->ap_mem, svc);
 #ifdef AP_REC_DELAY_TEST
     if (st->ap_init_rc == AP_OK) ap_rd_attach(st->ap_mem, &st->rd);   /* the REC-start delay (TEST build) */
+#endif
+#ifdef AP_BLK_SNAP_TEST
+    if (st->ap_init_rc == AP_OK) ap_bs_attach(st->ap_mem, &st->bs);   /* the BlackLevel loop snapshot (TEST build) */
 #endif
     scan_install(st, svc);                            /* v0.7.32test: the read page's handler slots */
     st->pb_ui_result = UIA_NO_UI;

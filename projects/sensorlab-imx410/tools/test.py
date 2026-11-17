@@ -41,6 +41,7 @@ PY = [sys.executable, '-B']
 UNIT = [('site', 'sensorlab-imx410/site', 'test_site'),
         ('menu', 'sensorlab-imx410/menu', 'test_menu'),
         ('menu-page', 'sensorlab-imx410/menu', 'test_page'),
+        ('menu-lv-page', 'sensorlab-imx410/menu', 'test_lv_page'),      # 0.0.7test: the live view's frame rate
         ('menu-runtime', 'sensorlab-imx410/menu', 'test_runtime'),
         ('menu-runtime-mutations', 'sensorlab-imx410/menu', 'test_runtime_mutations'),
         ('pb-page', 'sensorlab-imx410/apply', 'test_pb_page'),
@@ -51,6 +52,9 @@ UNIT = [('site', 'sensorlab-imx410/site', 'test_site'),
         ('hirate-preview', 'sensorlab-imx410/apply', 'test_hirate_preview'),
         ('hirate-route', 'sensorlab-imx410/apply', 'test_hirate_route'),
         ('apply', 'sensorlab-imx410/apply', 'test_apply'),
+        ('blk-snap', 'sensorlab-imx410/apply', 'test_blk_snap'),       # 2026-11-16: the BLK-SNAP TEST build + decoder
+        ('blv', 'sensorlab-imx410/apply', 'test_blv'),                 # 2026-11-16: the BlackLevel value (H_BLV, data only)
+        ('blk-plan', 'sensorlab-imx410/tools/live', 'test_blk_plan'),  # 2026-11-16: the BLK-SNAP coverage plan
         ('lv-fit', 'sensorlab-imx410/apply', 'test_lv_fit'),
         ('lv-routes', 'sensorlab-imx410/apply', 'test_lv_routes'),
         ('lv-outer', 'sensorlab-imx410/apply', 'test_lv_outer'),
@@ -74,6 +78,8 @@ FAST = {
     'menu-page': ['test_page.PageStructure'],
     'apply': ['test_apply.CalcTests', 'test_apply.SourceTests', 'test_apply.PoolTests'],
     'lv-fit': ['test_lv_fit'],
+    'blv': ['test_blv'],
+    'blk-plan': ['test_blk_plan'],
     'lv-routes': ['test_lv_routes'],
     'lv-outer': ['test_lv_outer'],
     'ui-layers': ['test_ui_layers'],
@@ -94,6 +100,9 @@ MUTANTS = [
     ('qsc-page', 'qs-container', 'test_qs_page', lambda i, n: ['test_qs_page.py', '--mutate', f'--part={i}/{n}']),
     ('apply', 'sensorlab-imx410/apply', 'test_apply', lambda i, n: ['test_apply.py', '--mutate', f'--only={i}']),
     ('lv-fit', 'sensorlab-imx410/apply', None, lambda i, n: ['test_lv_fit.py', '--mutate']),
+    ('blk-snap', 'sensorlab-imx410/apply', None, lambda i, n: ['test_blk_snap.py', '--mutate']),
+    ('blv', 'sensorlab-imx410/apply', None, lambda i, n: ['test_blv.py', '--mutate']),
+    ('blk-plan', 'sensorlab-imx410/tools/live', None, lambda i, n: ['test_blk_plan.py', '--mutate']),
     ('core', CORE, 'test_core', lambda i, n: ['test_core.py', '--mutants-only', f'--part={i}/{n}']),
     ('menu', 'sensorlab-imx410/menu', None, lambda i, n: ['test_menu.py', '--mutate']),
 ]
@@ -111,6 +120,11 @@ MUT_TARGETS = {
     'lv-fit': ['sensorlab-imx410/apply/ap.c', 'sensorlab-imx410/apply/ap.h',
                'sensorlab-imx410/apply/test_lv_fit.py', 'sensorlab-imx410/apply/test_lv_routes.py',
                'sensorlab-imx410/apply/test_lv_outer.py'],
+    'blv': ['sensorlab-imx410/apply/ap.c', 'sensorlab-imx410/apply/ap_calc.c', 'sensorlab-imx410/apply/test_blv.py'],
+    'blk-plan': ['sensorlab-imx410/tools/live/blk_plan.py', 'sensorlab-imx410/tools/live/test_blk_plan.py',
+                 'sensorlab-imx410/preview/fps_data.js', 'sensorlab-imx410/preview/dcres.html'],
+    'blk-snap': ['sensorlab-imx410/apply/ap.c', 'sensorlab-imx410/apply/ap.h', 'sensorlab-imx410/apply/test_blk_snap.py',
+                 'sensorlab-imx410/tools/live/blk_snap.py'],
     'core': ['sensorlab-imx410/core/core.c', 'sensorlab-imx410/core/core.h', 'sensorlab-imx410/core/test_core.py'],
     'menu': ['sensorlab-imx410/menu/menu_lists.py', 'sensorlab-imx410/menu/slm_page.py',
              'sensorlab-imx410/menu/test_menu.py'],

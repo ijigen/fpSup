@@ -15,6 +15,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = pathlib.Path(os.environ.get('SL_ROOT', HERE.parents[2]))
 CORE = ROOT / 'projects' / 'sensorlab-imx410' / 'core'
 LDR = ROOT / 'fpSup' / 'loader-v4'
+FPSUP_UI = ROOT / 'fpSup' / 'fpsup-ui'          # fpui_load.h: the stock pack load + the texts bound again
 BUILD = HERE / 'build'
 CFLAGS = ['--target=armv7a-none-eabi', '-mcpu=cortex-a9', '-mthumb', '-mfloat-abi=soft', '-mfpu=none',
           '-mstackrealign', '-ffreestanding', '-fno-builtin', '-nostdlib', '-fno-jump-tables', '-fropi',
@@ -200,14 +201,14 @@ def arm(src_dir=HERE, out_dir=None, defines=()):
         unit = pathlib.Path(t) / 'ap_unit.c'
         unit.write_text(UNIT)
         obj = pathlib.Path(t) / 'ap_unit.o'
-        r = subprocess.run([clang, *CFLAGS, *dflags, '-I', str(src_dir), '-I', str(CORE), '-I', str(LDR), '-c', str(unit),
+        r = subprocess.run([clang, *CFLAGS, *dflags, '-I', str(src_dir), '-I', str(CORE), '-I', str(LDR), '-I', str(FPSUP_UI), '-c', str(unit),
                             '-o', str(obj)], capture_output=True, text=True)
         if r.returncode:
             raise BuildError('ARM compile failed:\n' + r.stderr[-6000:])
         img, funcs = link_flat(obj.read_bytes())
         # the unit alone (ap.c without core.c's bodies) must compile too: it is its own compilation unit
         alone = pathlib.Path(t) / 'ap_alone.o'
-        r = subprocess.run([clang, *CFLAGS, *dflags, '-I', str(src_dir), '-I', str(CORE), '-I', str(LDR), '-c',
+        r = subprocess.run([clang, *CFLAGS, *dflags, '-I', str(src_dir), '-I', str(CORE), '-I', str(LDR), '-I', str(FPSUP_UI), '-c',
                             str(pathlib.Path(src_dir) / 'ap.c'), '-o', str(alone)], capture_output=True, text=True)
         if r.returncode:
             raise BuildError('ap.c alone failed:\n' + r.stderr[-4000:])

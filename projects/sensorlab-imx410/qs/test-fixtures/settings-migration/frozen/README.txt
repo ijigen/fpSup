@@ -91,3 +91,6 @@ Source/evidence: validation/20261108-bitdepth-mov (offline candidate, not deploy
 2026-11-10 0.0.5test default build: first-frame purple fix = vertical margin, no extra rows (Bei 11-10): every recipe keeps >= 4.875 spare RWZM input rows below the record on its own readout (both RWZM ratios smaller by one factor / a shorter record in tol / both / the same at 3 % / not offered; RS and fps unchanged); old QR codes restore by their input fields (qr_diff / qr_map_rate). (No 0.0.4test fixture was frozen.)
 SHA256 dd00aea48cded59e570aeb04f22a8cdefe999c737cd8b620858d99a86255dd45; 210000 bytes.
 Source/evidence: validation/20261110-vertical-margin (offline candidate; the live 0/30 was the superseded extra-rows PURPLE build).
+
+2026-11-16 SensorLab-IMX410_v0.0.7test.BIN default build (candidate, not released): the pack loads go through fpui_load_now (texts bound again, "1474"); the live view's frame rate is SensorLab's own (slm_lv_page.py). sha256 66801912bd86960a862f44e6422b2156dea931ceac99c36f74ce87364eb66bd2. Re-freeze if the candidate changes before release.
+2026-11-16 QS-Share_v0.0.3test.BIN: the released file (fpsup-qs-share-v0.0.3test), sha256 bea67f6c11228be65ed2750243d27d00636b64b0a8ba3ea756b8d92c7e2c0b03.

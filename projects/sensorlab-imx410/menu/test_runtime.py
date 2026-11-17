@@ -345,6 +345,50 @@ class FirstMenu(unittest.TestCase):
     def container(self, c):
         return struct.unpack('<12I', bytes(c.mu.mem_read(S.sqt(c, 31), 48)))
 
+    def test_the_menu_pack_load_binds_the_texts_again(self):
+        """The stock pack load unbinds the texts already on screen and the GUI draws their keys ("1474" for
+        "Now Connecting...", camera 2026-11-15): the menu's own load goes through the shared fpui_load_now, which
+        marks the language stale and translates at once -- with no wait: this is the GUI's own thread."""
+        c = self.first()
+        c.layout()                                           # the first MENU after boot: the private menu registers
+        at = c.gui_trace.index('slm load')
+        self.assertEqual(c.gui_trace[at:at + 3], ['slm load', 'stale', 'apply'])
+        self.assertTrue(c.texts_bound)
+        self.assertEqual(c.sleeps, [])
+
+    def lv_state(self, c):
+        p = S.sqt(c, 25) + OWED_OFF + 4
+        result, on, bank, posts = struct.unpack('<4I', bytes(c.mu.mem_read(p, 16)))
+        return result, on, bank, posts, p + 16
+
+    def test_live_view_frame_rate_is_the_fps_rows_text_as_stock_digit_images(self):
+        """0.0.7test (Bei 11-15): the stock bitmap shows the carrier, the nearest stock rate.  The two CINE live-view
+        pages draw SLM_LvFpsS / SLM_LvFpsM instead, and they carry the FPS row's own text, digit by digit, as the
+        images stock itself uses for numbers in the live view (the decimal point is kigou_01)."""
+        import slm_lv_page as LV
+        c = self.first()
+        c.layout()                                           # the first MENU after boot
+        result, on, bank, posts, texts = self.lv_state(c)
+        self.assertEqual((result, on), (0, 1))
+        self.assertGreaterEqual(posts, 1)
+        fps = model(c)[1][2]
+        value = fps['rows'][fps['current']]['text']
+        self.assertRegex(value, r'^[0-9.]+$')
+        for i, (page, (var, prefix)) in enumerate(LV.PAGES.items()):
+            want = ''.join('<!%s%s,BOTTOM>' % (prefix, 'kigou_01' if ch == '.' else ch) for ch in value)
+            self.assertLess(len(want), 192)
+            at = texts + (bank * 2 + i) * 192
+            self.assertEqual(c.cstr(at, 192), want)
+            self.assertEqual(c.vars[var][0], 2)              # a string variable
+            self.assertEqual([v for n, v in c.posts if n == var][-1], want)   # ...and that bank is what was posted
+            # the page stock looks up by this name is now our copy, and it names the variable
+            table, count = c.w(S.Q1.F6.READER + 0xAC), c.w(S.Q1.F6.READER + 0xA8)
+            entry = next(table + k * 44 for k in range(count) if c.cstr(c.w(table + k * 44 + 4)) == page)
+            self.assertNotEqual(c.w(entry + 8), LV._set(page)['start'] - 0xC18C0460)
+        c.layout()                                           # the pages are installed once
+        self.assertEqual(self.lv_state(c)[:2], (0, 1))
+        self.assertEqual(self.lv_state(c)[2], bank ^ 1)      # the other bank each time: the GUI keeps the pointer
+
     def test_first_layout_writes_each_native_model_once_and_times_leave(self):
         c = self.first()
         self.assertEqual(self.lt(c), (0,) * 8)

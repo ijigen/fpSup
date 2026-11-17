@@ -78,6 +78,7 @@ SensorLab 拆掉自己的虛擬表 hook，改成：
 | **SensorLab 修過的 bug 搬進 consumer** | `lk_reg` 找不到時回 0xFFFFFFFF，會讀 base−0x288（RES-Custom P5）；高速格率 `+0xB0`；錄影預覽取樣（v0.7.12）；待機門檻（source ≤1710 列、可見寬 ≤2000，v0.7.1 凍結的教訓）。這些本來就是 consumer 也該修的 |
 | **列數** | 目前一個共用動態列、總共最多 6 列。`Sensor Lab` 要自己一列，或跟 Res Lab 共用動態列（§6 問題 2） |
 | **相容規則** | 每個新 section 都標 required、提高 `MINCORE`，舊 consumer 明確拒絕，不能靜默忽略 |
+| **DNG BlackLevel 表（11-16）** | SensorLab 的 H_BLV（`C02CA2A0`）修正 12-bit／clamp 下的黑位標籤。Bei 定：consumer 核心不含公式 → RCD 需一個 section 帶 `blv_bits` + `blv_tab[16]`（pedestal 1012..1027 → 加到 BlackLevel 分子的值），consumer 只查表套用；表由產生端（`ap_calc.c`）算。依據 `validation/20261116-blk-snap/LOG.md`，測試 `apply/test_blv.py` |
 | **查詢 API** | 給產生器問「生效中的是不是我的配方、第幾代」，讓 SensorLab 的回放／首幀 hook 能判斷 |
 
 ## 6. 開工前要 Bei 決定

@@ -384,7 +384,9 @@ class Page:
         nc = len(clips) - len(old_clips)
         for index, n, total in ((1, nc, np), (2, np, nk)):
             count, end, width = arrays[index]
-            assert n > 0
+            if not n:                     # a page edit with no new clip / property (slm_lv_page.py)
+                assert not total
+                continue
             self.insert(header, end, struct.pack('>I', total) + bytes(4 * (n - 1)))
             put(header, count, u32(header, count) + n)
 
@@ -418,9 +420,10 @@ def pages():
     return out
 
 
-def build():
+def build(pp=None):
+    """The FPUI block for `pp` (default: the menu pages)."""
     block = fpui.Block()
-    for slot, p in enumerate(pages()):
+    for slot, p in enumerate(pages() if pp is None else pp):
         inserts = {k: list(v) for k, v in p.extra.items()}
         extension_fields = {}
         for r in p.out:

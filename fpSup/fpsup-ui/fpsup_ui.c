@@ -30,13 +30,10 @@
 #define FPSUP_UI_LIB
 #include <stdint.h>
 #include "sloader4.h"
+#include "fpui_load.h"
 
 #define FPUI_MAGIC        0x53345446u     /* "FT4S" */
 #define FPUI_GUI_OBJECT   0xC37B7048u
-#define FPUI_NBR_LOAD     0xC05E84D9u     /* Thumb: (app, pack, len, &reader) */
-#define FPUI_LANG_STALE   0xC05DE6B1u     /* Thumb: (app) -- texts are translated again on the next GUI pass */
-#define FPUI_UI_BUSY      0xC05DCCB9u     /* Thumb: (app) -- 1 while the GUI is inside a screen change */
-#define FPUI_LANG_APPLY   0xC05DE5B9u     /* Thumb: (app) -- translate the stale texts now */
 #define FPUI_SLEEP_MS     0xC01F89C4u     /* ARM: tk_dly_tsk(ms); an error, not a wait, outside a task */
 #define FPUI_BUSY_POLLS   100u            /* x FPUI_BUSY_POLL_MS: at most half a second per load */
 #define FPUI_BUSY_POLL_MS 5u
@@ -62,10 +59,7 @@ struct fpui_file {
     uint32_t file_len;
 };
 
-typedef uint32_t (*fpui_fn1)(uint32_t);
 typedef uint32_t (*fpui_fn3)(uint32_t, uint32_t, uint32_t);
-typedef uint32_t (*fpui_fn4)(uint32_t, uint32_t, uint32_t, uint32_t);
-#define FPUI_FW(addr, type) ((type)(uintptr_t)(addr))
 
 static inline uint32_t fpui_rd(uintptr_t a) { return *(volatile const uint32_t *)a; }
 static inline void fpui_wr(uintptr_t a, uint32_t v) { *(volatile uint32_t *)a = v; }
@@ -179,28 +173,19 @@ static int fpui_open(const struct sl_svc *svc, const char *name)
     return fpui_show(name);
 }
 
-/* One stock pack load, the way stock's own wrapper leaves the UI (C05DAA40): the load
- * unbinds every resource already handed out (C05E0940), the localised texts among
- * them, and the GUI draws their keys at once ("1474" for "Now Connecting...";
- * camera 2026-11-15: C05E0940 alone turns an open menu into numbers).  So the
- * language is marked stale and translated again right after it.
- *
- * Stock does not translate while the GUI is in the middle of a screen change
- * (C05DCCB8, as C05DE718), and from this thread neither may we; the keys then stay
- * up until the GUI is done -- half a second of "1474" at a boot with an SSD
- * attached, where LOAD.LOG showed two such stretches (camera 2026-11-15).  So the
- * load itself waits for the GUI to be idle, a little: sleeping also hands it the
- * CPU the boot thread was keeping from it.  Where the sleep does not block the
- * loop is over at once, and the load goes ahead as before. */
+/* A pack load from the boot thread (fpui_load.h has the why of the translate).
+ * Stock does not translate while the GUI is in the middle of a screen change, and the
+ * keys then stay up until the GUI is done -- half a second of "1474" at a boot with an
+ * SSD attached, where LOAD.LOG showed two such stretches (camera 2026-11-15).  So the
+ * load itself waits for the GUI to be idle, a little: sleeping also hands it the CPU
+ * the boot thread was keeping from it.  Where the sleep does not block the loop is
+ * over at once, and the load goes ahead as before. */
 static uint32_t fpui_load(uintptr_t app, const uint8_t *pack, uint32_t len, uintptr_t *reader)
 {
-    uint32_t bad, i;
+    uint32_t i;
     for (i = 0; i < FPUI_BUSY_POLLS && FPUI_FW(FPUI_UI_BUSY, fpui_fn1)((uint32_t)app); i++)
         FPUI_FW(FPUI_SLEEP_MS, fpui_fn1)(FPUI_BUSY_POLL_MS);
-    bad = FPUI_FW(FPUI_NBR_LOAD, fpui_fn4)((uint32_t)app, (uint32_t)(uintptr_t)pack, len, (uint32_t)(uintptr_t)reader);
-    FPUI_FW(FPUI_LANG_STALE, fpui_fn1)((uint32_t)app);
-    if (!FPUI_FW(FPUI_UI_BUSY, fpui_fn1)((uint32_t)app)) FPUI_FW(FPUI_LANG_APPLY, fpui_fn1)((uint32_t)app);
-    return bad;
+    return fpui_load_now(app, pack, len, reader);
 }
 
 /* The pages and their state machine, moved to the front of the app's list. */

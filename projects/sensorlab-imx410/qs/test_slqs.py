@@ -977,7 +977,10 @@ class Build(unittest.TestCase):
         # v0.7.32test + 16 KiB for the QR scan (qrdec.c ~11 KiB, the read-page hooks and the restore check);
         # v0.7.36test + 4 KiB: the boot apply (poller, standby-screen hook) and the RES recorded-size line;
         # v0.0.5test + 2 KiB: the core's vertical margin (vmargin / q_margin) and the old-code QR rule (qr_diff / qr_map_rate)
-        self.assertLess(info['bytes'], 128 * 1024 + 0x800 + 0x5800 + len(slm_page.build()) + len(slm_page.pack()))
+        # 0.0.7test + 2 KiB and the live-view page edit: the live view's frame-rate text (slm_lv_page.py, slm_lv_post)
+        import slm_lv_page
+        self.assertLess(info['bytes'], 128 * 1024 + 0x800 + 0x5800 + 0x800 + len(slm_page.build()) + len(slm_page.pack())
+                        + len(slm_lv_page.build()))
         self.assertLessEqual(info['state_off'] + BS.STATE_RESERVE, info['dma_off'])
         self.assertEqual(info['code_off'] % 8, 0)                      # the image (and its tables) 8-aligned
         self.assertTrue(all(o < info['code'] for o in info['functions'].values()))
