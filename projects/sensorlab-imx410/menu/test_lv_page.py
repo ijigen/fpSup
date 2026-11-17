@@ -47,16 +47,20 @@ class LvPage(unittest.TestCase):
                     self.assertEqual(a[:36] + a[40:], b[:36] + b[40:])
             x, y, w, h = struct.unpack_from('>4f', next(a for a, _b in changed if u32(a, 0) == 0x10004), 32)
             obj, base, text, event = added
+            # the donor: the page's own string-variable text, the same records but for what the docstring lists
+            donor = next(o for o, (_par, nm) in sorted(p.objs.items()) if nm == LV.DONOR)
+            d_obj, d_base, d_text, d_event = [r for r in old if P.B.owner(r) == donor]
             self.assertEqual([u32(r, 0) for r in added], [0x10003, 0x10004, 0x10005, 0x10006])
             self.assertEqual((u32(obj, 20), u32(obj, 24), p.pool.text(u32(obj, 28))), (p.first, parent, var))
-            self.assertEqual(struct.unpack_from('>4f', base, 32), (x, y, w + LV.EXTRA_W, h))   # where stock drew it
+            dh = struct.unpack_from('>f', d_base, 44)[0]
+            # where stock drew it, as high as the donor (lower than the font: only the first image is drawn)
+            self.assertEqual(struct.unpack_from('>4f', base, 32), (x, y + h - dh, w + LV.EXTRA_W, dh))
+            self.assertEqual(struct.unpack_from('>4f', text, len(text) - 16), (0.0, 0.0, w + LV.EXTRA_W, dh))
+            self.assertEqual(text[41:45], d_text[41:45])                      # horz-align: the donor's
             self.assertEqual([P.B.owner(r) for r in added[1:]], [p.first] * 3)
             self.assertEqual(p.pool.text(u32(text, 8)), 'drawText')
             self.assertEqual(p.pool.text(u32(event, 8)), 'appVariableEvent')
             self.assertEqual((p.pool.text(u32(event, 36)), p.pool.text(u32(event, 41))), (var, 'text'))
-            # the donor: the page's own string-variable text, the same records but for what the docstring lists
-            donor = next(o for o, (_par, nm) in sorted(p.objs.items()) if nm == LV.DONOR)
-            d_obj, d_base, d_text, d_event = [r for r in old if P.B.owner(r) == donor]
             self.assertEqual(obj[:20] + obj[32:], d_obj[:20] + d_obj[32:])
             self.assertEqual(base[:20] + base[24:32], d_base[:20] + d_base[24:32])
             self.assertEqual(text[:20] + text[24:32] + text[37:41], d_text[:20] + d_text[24:32] + d_text[37:41])

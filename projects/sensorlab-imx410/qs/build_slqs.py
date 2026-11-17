@@ -39,7 +39,7 @@ SUP_ID = 'SL41'
 # 2026-11-07 (Bei): 'Sensor Lab-IMX410' 0.0.1test = the v0.7.39test content renamed (names_v4.py).  The card
 # file's version is what the loader compares (sloader4.c cand_cmp); the header's version word is informational
 # only (sups_list), so it stays a plain build number, not derived from the version string.
-VERSION = '0.0.9test'                      # a literal: preview/server.py and build_web.py read it with ast
+VERSION = '0.0.10test'                      # a literal: preview/server.py and build_web.py read it with ast
 if VERSION != N.version(SUP_ID):
     raise ImportError(f'build_slqs VERSION {VERSION} != names_v4 {N.version(SUP_ID)}')
 NAME = N.display(SUP_ID)

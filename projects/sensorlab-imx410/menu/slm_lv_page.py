@@ -20,7 +20,7 @@ patched in place):
     of LV_RemainingRecTimeString*.
 
 The copy is the stock records byte for byte except: the object id, the parent,
-the object name, the base rect, the drawText's rect / alignment / first text,
+the object name, the base rect, the drawText's rect / first text,
 and the variable name.  slm_runtime.h registers the two variables and writes
 them (slm_lv_post).
 
@@ -46,7 +46,7 @@ u32, put = B.u32, S.put
 PAGES = {'LV_CINE_MEDIUM': ('SLM_LvFpsS', 'font_S_'), 'LV_CINE_LARGE': ('SLM_LvFpsM', 'font_M_')}
 DONOR = 'RemainingTimeString'
 OFF_SCREEN = 4000.0
-EXTRA_W = 60.0                      # "119.880" in digit images is wider than the stock bitmap
+EXTRA_W = 20.0                      # the text ends (align 3, as every stock digit text) where the stock "FPS" ended
 TEXT_LEN = 192                      # slm_state.h SLM_LVTEXT: seven images and the unit
 
 
@@ -82,12 +82,16 @@ def edit(im, pool, name):
     put(obj, 20, oid); put(obj, 24, parent)
     p.text(obj, 28, var)
     put(base, 20, oid)
-    struct.pack_into('>4f', base, 32, x, y, w + EXTRA_W, h)
+    # the donor's own height (= its font size), the bottom edge where the stock bitmap's was.  A box lower than
+    # the font draws only the first image (live 11-17: "2" of 29.97 at the stock 35; whole at 38, SS3532).
+    dh = struct.unpack_from('>f', base, 44)[0]
+    struct.pack_into('>4f', base, 32, x, y - (dh - h), w + EXTRA_W, dh)
+    h = dh
     fields = {q: at for at, q, _k, _c in B.fields(im, bytes(text))}
     assert list(fields) == ['text', 'font-size', 'horz-align', 'rect'] and len(text) == 61, fields
     put(text, 20, oid)
     p.text(text, fields['text'], ' ', True)
-    put(text, fields['horz-align'], 0)                       # as the page's time-code digits: from the left
+    # horz-align stays the donor's (3: from the right, live 11-17), so the number ends where the stock "FPS" did
     struct.pack_into('>4f', text, fields['rect'], 0.0, 0.0, w + EXTRA_W, h)
     ev = {q: at for at, q, _k, _c in B.fields(im, bytes(event))}
     assert list(ev) == ['variable-name', 'property-name', 'decimal-places'] and len(event) == 50, ev

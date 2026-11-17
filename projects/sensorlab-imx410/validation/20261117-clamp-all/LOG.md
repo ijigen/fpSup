@@ -36,3 +36,20 @@ were still listed, so daemon_restart_log.ptp_claimant() returned None -- a gap i
 ## Not tested
 Lit-scene colour / linearity; frames past the first 40; takes over 3 s; heat; MOV; 8 / 10-bit; ISO other than 100 and
 3200; the 36 strata that already had the clamp (only 2 smoke recipes of them); the 106 fine strata not in the coarse plan.
+
+## 18:10-18:31 — the remaining failures are the Lossless sup's (0.3.2test), not Sensor Lab's
+- Garbage is in the SOURCE the encoder read, not a broken stream: A001_094 frame 7 (3952x874, tiles 512x448): the 8
+  tiles of row 1 are ~110 KB each (70 KB in a clean frame) and the 8 of row 2 ~300 KB; the garbage starts at row 397,
+  not on the tile boundary 448. A001_076 frame 8 (1312x874): rows 0-162 (~320 KB) look like compressed data.
+  In 094 the garbage has 12-byte structure (IFD-like).
+- Lossless counters after an f12v3 1:1 take (diag-f12v3b/lossless-status.txt): held 64, compressed 48, no benefit 16,
+  zero copy swapped 48, declined 0, undone 0, faults 0, stalls 0, tile grid 512x448.
+- **Lossless OFF (fpSup page, UI), same recipes, ISO 100, 40 frames each (lossless-off/results.jsonl): all pass** --
+  f12v3 1:1, 3x3fast 1:1, SQ 1024x1024 RWZM 12-bit and 14-bit AD (no zero rows, mean - tag -0.16 / -0.03).
+  Lossless set back to ON afterwards (screenshot 183119).
+- Which recipes: fast AD (11b) x vertical merge 3 x no RWZM (874 rows): f12v3, 3x3fast. Fine: 12v3 1:1 (12b, 874
+  rows), f12v2 1:1 (1312 rows), 2x2fast, 12fast. All at 23.976 fps (vmax 9101). SQ 1024x1024: tiles 512x512, 2x2, no
+  padding; zero rows per tile = row 1 and rows 3, 7, 11 ... 511.
+- Working guess, NOT proven: after a zero-copy swap Lossless keeps the frame's old allocation as its spare and the
+  firmware still uses that allocation in these modes, so the next compressed output lands in a live source frame.
+- Not done: a Lossless build without the swap; any Lossless change.
