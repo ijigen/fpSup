@@ -117,7 +117,8 @@ TEXTS=(' ',F.SUPMGR_TEXTS[5],F.SUPMGR_TEXTS[6],F.SUPMGR_TEXTS[7],'List full: dis
        'Recording busy','No LUT files',MP.PAGE,AEL_HINT,'Set up first: AEL',MP.GO_TEXT,'LUT (',Y.BACK_TEXT,
        'Convert again',                 # T_AGAIN: the chart row, a .JFT without its chart block (or none)
        'COLOR list needs COL-Share',    # T_NOCOLS: no COL-Share on the card -> no COLOR rows (Bei 2026-11-07 #2)
-       'No COLOR row: list full')       # T_NOROW: on, but the COLOR list has no row left for it (Bei 2026-11-10)
+       'No COLOR row: list full',       # T_NOROW: on, but the COLOR list has no row left for it (Bei 2026-11-10)
+       'submenu_width')                 # T_SUBW: the stock popup-width variable's name (color_ui.c SETTINGS_POPUP_W)
 TRANSITIONS=((MP.PAGE,F.HOME_PAGE,'Return'),(SETTINGS_PAGE,MP.PAGE,'Return'),
              (MP.PAGE,SETTINGS_PAGE,SETTINGS_PAGE))+F.open_transitions(MP.PAGE)
 

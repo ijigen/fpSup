@@ -512,6 +512,13 @@ class LibraryNativeTests(unittest.TestCase):
         # the page's Return waits for LC_Back, posted after the manager's focus (diagK3)
         self.assertNotEqual(c.vars['LC_Back'][1],back)
 
+    def test_settings_page_sets_the_stock_popup_width_itself(self):
+        # Bei 11-14 (SS__3481..3483): the firmware writes submenu_width only for requests in its
+        # submenu_width.csv, so the settings popups kept the last stock popup's width (227: labels squeezed)
+        c=self.cam();n=len(c.posts);c.edit('B.cube')
+        self.assertNotIn('submenu_width',c.vars)            # the stock variable: posted, never registered by us
+        self.assertIn(('submenu_width',583),c.posts[n:])
+
     def test_lists_are_own_csv_models_and_gamma_follows_blackmagic(self):
         c=self.cam()
         self.assertEqual(set(c.csv_models),{'LC_SPACE','LC_GAMMA','LC_GAMMA_BMD','LC_MATRIX','LC_MATRIX_C'})

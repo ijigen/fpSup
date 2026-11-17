@@ -572,5 +572,19 @@
    "RAW-View 改成把它的 COLOR 列交給 COL-Share，不再自己改清單，所以能和 LUT 裝在同一張卡。COL-Share 會自動附上。",
    "畫面顯示的內容不變。"
   ]
+ },
+ "fpsup-lut-v0.1.1test": {
+  "en": [
+   "Fixes the LUT settings page's popups (Color space, Gamma) being too narrow, with their labels squeezed, after an On / Off popup on the fpSup page.",
+   "Fixes “1474” appearing for about half a second when the camera is switched on with an SSD attached. All sups that add menu pages are rebuilt for this; update them together.",
+   "Upgrading from 0.1.0test: the LUT manager starts empty. Set each .cube's input and turn it on again; the .cube files themselves stay.",
+   "On the camera 2026-11-15: no 1474 at power-on with an SSD."
+  ],
+  "zh": [
+   "修正在 fpSup 頁開過開／關小框後，LUT 設定頁的選項框（Color space、Gamma）太窄、文字被壓縮。",
+   "修正插著 SSD 開機時畫面出現「1474」約半秒。所有會新增選單頁的 sup 都為此重建，請一起更新。",
+   "從 0.1.0test 升級：LUT manager 會從空的開始，每支 .cube 要重新設定輸入、再開啟一次；.cube 檔本身不會動。",
+   "2026-11-15 上機：插 SSD 開機沒有 1474。"
+  ]
  }
 }

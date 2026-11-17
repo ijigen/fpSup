@@ -51,11 +51,16 @@ _Static_assert(MV_COUNT <= sizeof(((struct lut4_state *)0)->ui_cache) / sizeof(u
                "ui_cache too small for MV_COUNT: mv_int/mv_str/mv_forget would write past it into struct lut_cols");
 /* color_ui.TEXTS */
 enum { T_BLANK, T_FOOTER, T_POPUP, T_PAGE_HINT, T_FULL, T_WRITE, T_BUSY, T_NONE, T_PAGE, T_AEL,
-       T_SETUP, T_GO, T_TITLE, T_BACK, T_AGAIN, T_NOCOLS, T_NOROW, T_COUNT };
+       T_SETUP, T_GO, T_TITLE, T_BACK, T_AGAIN, T_NOCOLS, T_NOROW, T_SUBW, T_COUNT };
 #define MV_HEADER_FOCUS 3451u
 #define MV_TAB_FOCUS    55u
 #define AEL_KEY         80u
 #define MENU_NOTICE     70u
+/* The stock popup width (px, app variable submenu_width).  The firmware sets it on a popup's request only when
+ * the request is in its submenu_width.csv (FUN_c04b6308 -> 0: nothing written), so a private page's popup kept the
+ * last stock popup's width -- 227 after the fpSup page's On / Off popup squeezed "Blackmagic Design" (Bei 11-14,
+ * SS__3481..3483); 583 is the width of the 11-12 screenshots (x 441..1024), where every label fit. */
+#define SETTINGS_POPUP_W 583u
 #define CHART_KEY       81u                /* the settings page's "Color chart" row: OK / Right (settings_y51.CHART_KEY) */
 /* How many LUTs may be on (Bei 2026-11-10): COL-Share's room for us -- 12 minus the other clients' rows
  * (RAW-View's one: 11) -- cols.c lut_room.  "LUT (on/room)" in the title; On past it says "List full". */
@@ -313,6 +318,7 @@ static void open_settings(struct lut4_state *s,u32 index) {
     for(u32 i=MV_TABS_AT;i<MV_TABS_AT+MV_TABS;i++)mv_int(s,i,0);
     mv_str(s,MV_OK,ctext(s,T_FOOTER));
     mv_str(s,MV_CHART_T,ctext(s,T_BLANK));
+    {const char *w=ctext(s,T_SUBW);if(w)FPUI_FW(FPUI_POST_INT,fpui_fn3)(0,(u32)(uintptr_t)w,SETTINGS_POPUP_W);}
     settings_refresh(s);
     mv_focus(s,fpui_first(s->ui,MV_SROW0));
     back_request(s,"");

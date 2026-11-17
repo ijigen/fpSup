@@ -34,7 +34,7 @@ SUPS = {
     # 2026-11-07 (Bei): the native COLOR list's added rows, shared by LUT / RAW-View (fpSup/colshare/DESIGN.md)
     'COLS': ('COL-Share', 'COL-Share', '0.0.1test'),
     # 2026-11-12 (Bei): LUT on the merge page (fpSup/lut/build_v4_lut.py)
-    'LUT4': ('LUT', 'LUT', '0.1.0test'),
+    'LUT4': ('LUT', 'LUT', '0.1.1test'),
 }
 
 DISPLAY_MAX = 23      # sloader4.c struct sup disp[24]
