@@ -51,6 +51,22 @@
    "2026-11-07 起上機，之後每次 Sensor Lab 上機都用它。"
   ]
  },
+ "fpsup-lossless-v0.3.7test": {
+  "en": [
+   "Small formats are now compressed: frames under 2 MiB uncompressed (for example 1024x678, 1024x1024, 1312x874, most Sensor Lab formats scaled with RWZM). Before, these were recorded uncompressed, some of them only in bright or high-ISO scenes.",
+   "Fixes repeated (stale) frames in Sensor Lab fast-readout formats with a 3-row vertical merge (12-bit fast V3, 3x3 fast, 3x6 fast and similar). These formats are now recorded uncompressed.",
+   "Fixes blank rows some raw readers showed on square formats (the tile layout is never exactly two tiles wide now).",
+   "Known issue: on an SD card the largest formats (6048 wide) are only partly compressed, and 6048-wide 12-bit fast keeps only 1-2 frames.",
+   "On the camera 2026-11-18 (SD card): 40 Sensor Lab recipes at ISO 100 and 3200, lens capped and with a lit scene; every clip decodes, no repeated frames. Not tested: bit-for-bit comparison with uncompressed frames, SSD, long takes, in-camera playback."
+  ],
+  "zh": [
+   "小格式現在會壓縮：未壓縮不到 2 MiB 的畫面（例如 1024×678、1024×1024、1312×874，多數經 RWZM 縮放的 Sensor Lab 格式）。原本這些格式不壓縮，其中一些只在亮場景或高 ISO 時不壓縮。",
+   "修正 Sensor Lab 高速讀出、垂直三合一格式（12-bit fast V3、3x3 fast、3x6 fast 等）出現重複（舊）畫面；這些格式現在一律不壓縮。",
+   "修正部分 RAW 讀取軟體在正方形格式出現空白列（tile 不再切成剛好兩塊寬）。",
+   "已知問題：SD 卡上最大的格式（6048 寬）只有部分畫面壓縮；6048 寬 12-bit fast 只留得下 1–2 幀。",
+   "2026-11-18 上機（SD 卡）：40 個 Sensor Lab 配方、ISO 100 與 3200，蓋鏡頭蓋與亮場景各一輪；每段都能解碼、沒有重複畫面。未測：與未壓縮幀逐位元比對、SSD、長時間錄影、機內回放。"
+  ]
+ },
  "fpsup-lossless-v0.3.2test": {
   "en": [
    "Compresses true 14-bit (Sensor Lab 1:1 AD14) as well as 10/12-bit. A take can mix compressed and uncompressed frames.",
@@ -585,6 +601,20 @@
    "修正插著 SSD 開機時畫面出現「1474」約半秒。所有會新增選單頁的 sup 都為此重建，請一起更新。",
    "從 0.1.0test 升級：LUT manager 會從空的開始，每支 .cube 要重新設定輸入、再開啟一次；.cube 檔本身不會動。",
    "2026-11-15 上機：插 SSD 開機沒有 1474。"
+  ]
+ },
+ "fpsup-sensor-lab-v0.0.10test": {
+  "en": [
+   "Fixes black-level flicker in 14-bit formats that are not 16:9: the video clamp is now on for every recipe, so the black level no longer jumps by one step from frame to frame.",
+   "Fixes the live-view frame-rate text being cut off after opening and closing MENU.",
+   "Known issue: OG 6x6 (2x2 + ISP 3x3) can place its first frame about 2 rows off.",
+   "On the camera 2026-11-17/18 (SD card): 40 recipes at ISO 100 and 3200, lens capped, at least 30 frames each: frame-to-frame black deviation at most 0.011 levels (12-bit), measured black within 0.27 of the DNG tag."
+  ],
+  "zh": [
+   "修正非 16:9 的 14-bit 格式黑位閃爍：所有配方都開 video clamp，黑位不再逐格跳一階。",
+   "修正開關 MENU 之後即時預覽的幀率文字被切掉。",
+   "已知問題：OG 6x6（2x2＋ISP 3x3）第一幀可能錯位約 2 列。",
+   "2026-11-17／18 上機（SD 卡）：40 個配方、ISO 100 與 3200、蓋鏡頭蓋、每段至少 30 格：逐格黑位偏差最多 0.011 階（12-bit），實測黑位與 DNG 標籤相差 0.27 以內。"
   ]
  },
  "fpsup-sensor-lab-v0.0.8test": {

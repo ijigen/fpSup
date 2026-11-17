@@ -72,6 +72,16 @@ python3 -B tools/merge-v4/publish_releases.py            # 每個提供中的版
 - push 時 workflow 新建三個 Release(都是 prerelease)。這次只推頁面、快照與 `names_v4.py` 三行;Lossless／Sensor Lab／QS-Share 的原始碼
   由各自那條線另外同步進 repo(快照 `manifest.json` 的 `source_sha256` 記的是建檔當時的本機原始碼)。
 
+**2026-11-18 Sensor Lab 0.0.10test、Lossless 0.3.7test**(Bei 11-18:「放上合併頁」):
+- 新快照 `inputs/v4-20261118/`(`build_inputs_v4.py --only sensor-lab,lossless`,在 repo 裡由 commit f239dc66 的原始碼建)。
+  Lossless_v0.3.7test.BIN sha256 0464758b… = 相機上驗收的那份(逐位元組相同);SensorLab-IMX410_v0.0.10test.BIN sha256 e249e93b…
+  與相機上那份只差卡上的設定記錄(0x346C8 起 41 個位元組)。0.0.9test、0.3.5test、0.3.6test 從未發布。
+- 內容與上機範圍:`version_notes.json`、快照 `manifest.json` 的 `validation`;紀錄在
+  `projects/sensorlab-imx410/validation/20261117-clamp-all/`、`20261117-lossless-stale/LOG.md`。
+- `VALIDATION_OF` 的 sensor-lab 更新、新增 lossless;測試釘選:`test_merge_v4.js`(0.0.10test)、`test_lazy_v4.js` 與
+  `test_version_history.py`(Lossless 0.3.7test)。Sensor Lab 網頁重建只動版本字樣。
+- 沒測:這兩個檔從合併頁下載、和其他 sup 合併成一張卡後上機(驗收時卡上只有 Sensor Lab、Lossless 與 USB shell 那組)。
+
 **2026-11-16 Sensor Lab 0.0.8test**(Bei 11-17:「這個版本上 github」;同一次也把 11-15 留下沒 commit 的 LUT 0.1.1test 先 commit):
 - 新快照 `inputs/v4-20261116/`(`build_inputs_v4.py --only sensor-lab`),SensorLab-IMX410_v0.0.8test.BIN sha256 6abc1e9b…
   = 原始碼 commit 0e6a18f9 在 repo 裡重建的位元組 = Bei 相機上驗證的那份(只差卡上的設定記錄)。0.0.7test 從未發布。
