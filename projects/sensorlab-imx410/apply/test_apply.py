@@ -118,6 +118,18 @@ def profile_rows():
 
 
 # ---- the recipes (Python ground truth) ----
+def clamp_rows(rows):
+    """0.0.9test: what the apply step records is smc.create's rows with the video clamp bits on (R38 +4 bit 3,
+    +0x18 bits 14-15: VIDEO_CLAMP_V3.md), whatever the readout's aspect -- written out here, not taken from ap_calc.c"""
+    r = bytearray(rows['R38'])
+    w4, w18 = struct.unpack_from('<I', r, 4)[0] | 0x8, struct.unpack_from('<I', r, 0x18)[0] | 0xC000
+    struct.pack_into('<I', r, 4, w4)
+    struct.pack_into('<I', r, 0x18, w18)
+    out = dict(rows)
+    out['R38'] = bytes(r)
+    return out
+
+
 @functools.lru_cache(None)
 def recipe(dcw, dch, rw, rh, merge, ad_bits, fps=Fraction(2997, 100), hbin=1, vbin=1):
     """(sel words, Python case, plan, rows, isp spec) for the quality `merge` at AD `ad_bits`, at the VMAX step of fps."""
@@ -133,6 +145,7 @@ def recipe(dcw, dch, rw, rh, merge, ad_bits, fps=Fraction(2997, 100), hbin=1, vb
     spec = rec_spec(spec)
     assert plan['soc']['vmax'] == v and plan['soc']['hmax'] == hm, (plan['soc'], v, hm)
     _, rows, _ = smc.create(plan)
+    rows = clamp_rows(rows)
     key = host().core_key_index(c['readout'][0].encode())
     assert key >= 0
     sel = dict(dcw=dcw, dch=dch, rw=rw, rh=rh, key=key, hbin=hbin, vbin=vbin, hm=hm, vmax=v,
@@ -1250,6 +1263,7 @@ class CalcTests(unittest.TestCase):
         spec = dataclasses.replace(spec, hirate=carrier_of(fps) in (6, 7),
                                    record_preview=fps > Fraction(120000, 1001) and CLK / (hm * v) > 99)
         _, rows, _ = smc.create(plan)
+        rows = clamp_rows(rows)
         ob = o.raw
         mode = ob[:25 * 4 + 0x20 + 100 + 0x28 + 0x38 + 0x14 + 0x68 + 0x288 + 8]
         at = 25 * 4

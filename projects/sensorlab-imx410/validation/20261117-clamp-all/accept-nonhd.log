@@ -1,0 +1,75 @@
+s-12---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.002  black: mean - tag -0.111, channel spread 0.024
+s-12---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.002  black: mean - tag +0.112, channel spread 0.045
+s-12---RWZM-iso100: FAIL decode,black  clip: 40 frames fetched  decode: 40 frames with flat rows inside the crop  steady: max deviation 0.003  black: mean - tag -64.391, channel spread 128.519
+s-12---RWZM-iso3200: FAIL decode,black  clip: 40 frames fetched  decode: 40 frames with flat rows inside the crop  steady: max deviation 0.003  black: mean - tag -64.211, channel spread 128.547
+s-12fast---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag -0.035, channel spread 0.009
+s-12fast---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag +0.079, channel spread 0.053
+s-12fast---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag -0.077, channel spread 0.233
+s-12fast---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag +0.043, channel spread 0.214
+s-12fastW---11-iso100: FAIL clip  clip: 0 frames fetched
+s-12fastW---11-iso3200: FAIL clip  clip: 0 frames fetched
+s-12fastW---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag +0.064, channel spread 0.405
+s-12fastW---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag +0.233, channel spread 0.422
+s-12h2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag -0.139, channel spread 0.209
+s-12h2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag -0.069, channel spread 0.215
+s-12h2v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag -0.128, channel spread 0.209
+s-12h2v3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag -0.039, channel spread 0.197
+s-12h3v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag -0.048, channel spread 0.195
+s-12h3v2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag +0.137, channel spread 0.184
+s-12v2---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag -0.090, channel spread 0.024
+s-12v2---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag +0.111, channel spread 0.025
+s-12v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag -0.147, channel spread 0.214
+s-12v2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag +0.046, channel spread 0.205
+s-12v3---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag -0.107, channel spread 0.024
+s-12v3---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag +0.121, channel spread 0.022
+s-12v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag -0.141, channel spread 0.215
+s-12v3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag +0.056, channel spread 0.202
+s-14---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.002  black: mean - tag -0.035, channel spread 0.032
+s-14---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag +0.171, channel spread 0.050
+s-14---RWZM-iso100: FAIL decode,black  clip: 40 frames fetched  decode: 40 frames with flat rows inside the crop  steady: max deviation 0.004  black: mean - tag -64.238, channel spread 128.449
+s-14---RWZM-iso3200: FAIL decode,black  clip: 40 frames fetched  decode: 40 frames with flat rows inside the crop  steady: max deviation 0.004  black: mean - tag -64.055, channel spread 128.478
+s-14v2---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag -0.021, channel spread 0.032
+s-14v2---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag +0.179, channel spread 0.034
+s-14v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.007  black: mean - tag +0.006, channel spread 0.172
+s-14v2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag +0.176, channel spread 0.188
+s-14v3---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag -0.021, channel spread 0.032
+s-14v3---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag +0.191, channel spread 0.030
+s-14v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.008  black: mean - tag +0.007, channel spread 0.173
+s-14v3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag +0.171, channel spread 0.183
+s-2x2---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag -0.058, channel spread 0.014
+s-2x2---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag +0.274, channel spread 0.017
+s-2x2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag -0.116, channel spread 0.209
+s-2x2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag +0.210, channel spread 0.201
+s-2x2fast---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.007  black: mean - tag -0.108, channel spread 0.014
+s-2x2fast---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.007  black: mean - tag +0.140, channel spread 0.037
+s-2x2fast---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag -0.165, channel spread 0.249
+s-2x2fast---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.008  black: mean - tag +0.124, channel spread 0.177
+s-3x3---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag -0.030, channel spread 0.025
+s-3x3---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.004  black: mean - tag +0.211, channel spread 0.020
+s-3x3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag -0.068, channel spread 0.196
+s-3x3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag +0.134, channel spread 0.181
+s-3x3fast---11-iso100: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 5 of 40 frames step > 0.15 DN12  black: not dark: not judged
+s-3x3fast---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.118  black: mean - tag +0.141, channel spread 0.054
+s-3x3fast---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.008  black: mean - tag +0.023, channel spread 0.184
+s-3x3fast---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag +0.105, channel spread 0.124
+s-3x6---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.008  black: mean - tag -0.002, channel spread 0.079
+s-3x6---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag -0.019, channel spread 0.155
+s-3x6fast---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.012  black: mean - tag -0.088, channel spread 0.156
+s-3x6fast---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag +0.171, channel spread 0.055
+s-f12h2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag -0.186, channel spread 0.253
+s-f12h2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag +0.074, channel spread 0.204
+s-f12h2v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag -0.180, channel spread 0.250
+s-f12h2v3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.010  black: mean - tag +0.133, channel spread 0.174
+s-f12h3v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  black: mean - tag +0.036, channel spread 0.182
+s-f12h3v2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.003  black: mean - tag +0.099, channel spread 0.129
+s-f12v2---11-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag -0.026, channel spread 0.006
+s-f12v2---11-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag +0.126, channel spread 0.030
+s-f12v2---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag -0.071, channel spread 0.229
+s-f12v2---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.005  black: mean - tag +0.105, channel spread 0.186
+s-f12v3---11-iso100: FAIL decode,steady  clip: 40 frames fetched  decode: 2 frames with flat rows inside the crop  steady: 36 of 40 frames step > 0.15 DN12  black: not dark: not judged
+s-f12v3---11-iso3200: FAIL decode,steady  clip: 40 frames fetched  decode: 2 frames with flat rows inside the crop  steady: 32 of 40 frames step > 0.15 DN12  black: not dark: not judged
+s-f12v3---RWZM-iso100: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.008  black: mean - tag -0.084, channel spread 0.230
+s-f12v3---RWZM-iso3200: pass  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.007  black: mean - tag +0.114, channel spread 0.182
+restored True
+9 failing takes
+exit 0

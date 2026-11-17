@@ -267,6 +267,13 @@ static int apc_build(u32 dcw, u32 dch, u32 rw, u32 rh, s32 key, s32 hbin, s32 vb
     if ((u32)w->plan.vmax != vmax || (u32)w->plan.hmax != hm) { o->detail = CORE_E_VMAX; return APC_E_CORE; }
     rc = core_smc_create(&w->plan, &o->mode);
     if (rc) { o->detail = rc; return APC_E_CORE; }
+    /* 0.0.9test (2026-11-17, Bei's SSD clips: 6048x2014 14-bit, half the frames one DN14 down): the formula sets the
+     * video clamp bits (R38 +4 bit 3, +0x18 bits 14-15) only for a 1.7..2.0 readout, as the stock table has them --
+     * stock's other modes are stills / LV modes.  Every recipe here records video, and without the clamp the black
+     * steps frame to frame under a fixed tag (Jose v0.6.1, open-gate/notes/VIDEO_CLAMP_V3.md: the same two bits on
+     * modes 3 / 98 / 139 / 121, 0 steps after).  The clamp regions' geometry stays the formula's. */
+    o->mode.r38[0x04] |= 0x08u;
+    o->mode.r38[0x19] |= 0xC0u;
     core_quality_spec(q, &w->spec);
     /* Canvas +B0 follows the native 100/120 carrier, including its 50/60 Hz engine. */
     w->spec.hirate = cr->rank >= 10000u;

@@ -28,7 +28,8 @@ SUPS = {
     # SL41 0.0.6test (2026-11-10): exact merges, 1x2 / 1x3 presets, first-frame purple fix, CinemaDNG 8 / 10-bit
     # SL41 0.0.7test (2026-11-15): the live view's frame rate drawn from SensorLab's own rate (never published)
     # SL41 0.0.8test (2026-11-16): the DNG BlackLevel value corrected (H_BLV: CRCT pedestal + 12-bit 1:1 truncation, data table)
-    'SL41': ('Sensor Lab-IMX410', 'SensorLab-IMX410', '0.0.8test'),
+    # SL41 0.0.9test (2026-11-17): the video clamp on for every recipe (14-bit 3:2 formats: the black stepped frame to frame)
+    'SL41': ('Sensor Lab-IMX410', 'SensorLab-IMX410', '0.0.9test'),
     'QSCT': ('QS-Share', 'QS-Share', '0.0.3test'),   # API 9
     # 2026-11-08 (Bei): Andy_hal9000's rear-wheel decoder v6 (fpSup/dialfix/reference/v6); the v1-based
     # DIALFIX.BIN was never released.  "test" until the sup form has been on the camera.

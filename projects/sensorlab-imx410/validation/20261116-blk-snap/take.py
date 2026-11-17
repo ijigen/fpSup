@@ -83,7 +83,8 @@ def newest_clip():
     best = (name, f'{y}{m}{d}')
     if LAST_CLIP.exists():
         k = json.loads(LAST_CLIP.read_text())
-        if k['name'] > best[0]:
+        # only while that clip is still on the card (11-17: Bei formatted it, numbering restarted at 001)
+        if k['name'] > best[0] and clip_exists(k['name'], k['date']):
             best = (k['name'], k['date'])
     reel, n = best[0].split('_')
     n = int(n)

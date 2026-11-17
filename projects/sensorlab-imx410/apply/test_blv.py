@@ -112,6 +112,20 @@ class BlvTests(unittest.TestCase):
                 with self.subTest(case=case, gain=hex(gain)):
                     self.expect(case, 1021, gain)
 
+    def test_every_recipe_has_the_video_clamp_bits(self):
+        """0.0.9test: a 3:2 readout (the formula leaves the bits off: stock's stills modes) records with them on"""
+        for args, hd in (((6048, 4040, 6048, 2020, '1x2', 14), False), ((6048, 4040, 6048, 4040, '1x1', 12), False),
+                         ((6048, 3402, 6048, 1700, '1x2', 12), True)):
+            sel, c, plan, rows, spec = T.recipe(*args, fps=Fraction(15))
+            raw = T.smc.create(plan)[1]['R38']
+            self.assertEqual(bool(raw[4] & 8) and (raw[0x19] & 0xC0) == 0xC0, hd, args)
+            cam = cam_for(None)
+            self.assertEqual(cam.apply(sel), T.AP_OK)
+            row = cam.row_via_lookup(3, cam.status()['mode_id'])
+            self.assertEqual(row[4] & 8, 8, args)
+            self.assertEqual(row[0x19] & 0xC0, 0xC0, args)
+            self.assertEqual(bytes(row[8:0x18]), bytes(raw[8:0x18]), 'the clamp geometry is the formula\'s')
+
     def test_bei_take_numbers(self):
         """12v2-like 1:1 12 bit, pedestal 1021: 255.992 -> 254.867 (data measured 254.776; 11-16 table)"""
         v = self.expect('12_1x1', 1021)
@@ -190,6 +204,8 @@ class BlvTests(unittest.TestCase):
 
 
 MUTANTS = [   # (file, old, new, the test that must fail)
+    ('ap_calc.c', '    o->mode.r38[0x04] |= 0x08u;\n', '', 'test_every_recipe_has_the_video_clamp_bits'),
+    ('ap_calc.c', '    o->mode.r38[0x19] |= 0xC0u;', '    o->mode.r38[0x19] |= 0x40u;', 'test_every_recipe_has_the_video_clamp_bits'),
     ('ap_calc.c', ' - (one ? 384 : 0);', ';', 'test_pedestal_and_truncation_per_recipe'),
     ('ap_calc.c', 'w->spec.bits == 14 ? dped * 1024 : dped * 256', 'w->spec.bits == 14 ? dped * 256 : dped * 256',
      'test_pedestal_and_truncation_per_recipe'),
