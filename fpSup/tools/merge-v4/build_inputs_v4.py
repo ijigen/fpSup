@@ -91,9 +91,12 @@ VALIDATION_OF = {
                   '0.4.0test: Bei\'s check passed.'),
     'raw-view': ('projects/rawview/build test_v4_cols_rawview; 0.4.0test was on the camera 2026-11-10 with the 4-row '
                  'COL-Share; with this COL-Share and LUT 0.1.0test on Bei\'s camera 2026-11-12: Bei\'s check passed.'),
-    'sensor-lab': ('projects/sensorlab-imx410/validation/20261105-cpux2-removed: v0.7.39test offline full suite and '
-                   'on the camera 2026-11-05 (boot apply, QS and RECIPE display, CPU x2 settings -> ISP HBIN 1); '
-                   '0.0.1test = the same body, only the header display name changed (2026-11-07, offline).'),
+    'sensor-lab': ('projects/sensorlab-imx410 full test tier 2026-11-16 (every mutation suite caught; test_site = the old '
+                   'published copy). 0.0.8test = 0.0.7test (live-view frame rate, never published) + H_BLV, the DNG BlackLevel '
+                   'value (validation/20261116-blk-snap/LOG.md). These bytes (sha256 6abc1e9b..., with the card\'s settings record '
+                   'spliced in) on Bei\'s camera 2026-11-16: boots, his 12v2 recipe -1.22 -> -0.11 (ISO 100), -1.03 -> +0.14 '
+                   '(ISO 3200); the same code as the BLK-SNAP test build that recorded ~450 lens-capped takes without a freeze. '
+                   'Not checked: the live-view frame-rate text by eye.'),
     'qs-share': ("projects/qs-container tests: 134 run, 133 pass, 1 skipped (2026-11-15). Change from 0.0.2test: the shared fpsup-ui only (a page pack load waits for the GUI to be idle, then marks the language stale and translates). On the camera 2026-11-15 (Bei) with this code under the 0.0.2test file name: booting with an SSD attached no longer shows 1474. Not on the camera under the 0.0.3test name."),
     'screenflip': ("fpSup/screenflip/test_v4_flip.py + test_v3_flip.py (the task is created with stksz 0x2000; v3's 40FLIP.BIN keeps 0x1000 and its bytes). On the camera 2026-11-11, loaded under Loader v4: 19 value changes from the TOOLS row (19 saves, 0 failed, file = table each time), 25 STILL/CINE switches (25 applies; 0x30190044 = 0x00333000 at 180, 0 at Off), no freeze; DISP switching checked by hand by Bei. Not checked: a non-Off value across a restart; the old 0x1000 stack's depth was never measured."),
     'dial-fix': ('fpSup/dialfix/test_dialfix.py: 9 unicorn tests (his v6 words = his AutoRun = clang of his .S; '

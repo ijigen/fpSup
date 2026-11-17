@@ -72,6 +72,13 @@ python3 -B tools/merge-v4/publish_releases.py            # 每個提供中的版
 - push 時 workflow 新建三個 Release(都是 prerelease)。這次只推頁面、快照與 `names_v4.py` 三行;Lossless／Sensor Lab／QS-Share 的原始碼
   由各自那條線另外同步進 repo(快照 `manifest.json` 的 `source_sha256` 記的是建檔當時的本機原始碼)。
 
+**2026-11-16 Sensor Lab 0.0.8test**(Bei 11-17:「這個版本上 github」;同一次也把 11-15 留下沒 commit 的 LUT 0.1.1test 先 commit):
+- 新快照 `inputs/v4-20261116/`(`build_inputs_v4.py --only sensor-lab`),SensorLab-IMX410_v0.0.8test.BIN sha256 6abc1e9b…
+  = 原始碼 commit 0e6a18f9 在 repo 裡重建的位元組 = Bei 相機上驗證的那份(只差卡上的設定記錄)。0.0.7test 從未發布。
+- 內容:DNG 黑位數值修正(H_BLV,`projects/sensorlab-imx410/validation/20261116-blk-snap/LOG.md`)+ 0.0.7test 的即時預覽幀率文字。
+  `VALIDATION_OF['sensor-lab']` 已更新;`test_merge_v4.js` 的版本釘選改成 0.0.8test;Sensor Lab 網頁(`sensor_lab_imx410/`)重建
+  只動版本字樣(計算核心沒變)。
+
 **2026-11-12 LUT 0.1.0test + COL-Share 0.0.1test + RAW-View 0.4.0test**(Bei 定;本機，未 commit、未發布):
 - 快照 `inputs/v4-20261112/`(`build_inputs_v4.py --only lut,col-share,raw-view`)。LUT 的 builder 是 `fpSup/lut/build_v4_lut.py`
   (空的清單；`UI/COLOR.BIN` 是 support file,一定跟著);COL-Share 是 `infra`(像 QS-Share,LUT 與 RAW-View 都 `requires` 它)。

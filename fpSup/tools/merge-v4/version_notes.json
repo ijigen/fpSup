@@ -586,5 +586,21 @@
    "從 0.1.0test 升級：LUT manager 會從空的開始，每支 .cube 要重新設定輸入、再開啟一次；.cube 檔本身不會動。",
    "2026-11-15 上機：插 SSD 開機沒有 1474。"
   ]
+ },
+ "fpsup-sensor-lab-v0.0.8test": {
+  "en": [
+   "Fixes green shadows in 12-bit recordings: the DNG black level is now written correctly for Sensor Lab formats (it was up to about 1.2 levels too high). Stock modes are unchanged.",
+   "The live view shows the frame rate Sensor Lab is recording, not the nearest stock rate.",
+   "Known issue: some formats that are not 16:9 and scale with RWZM can still be up to about 0.6 levels off in the deepest shadows.",
+   "Known issue: OG 6x6 (2x2 + ISP 3x3) can place its first frame about 2 rows off.",
+   "On the camera 2026-11-16: about 450 lens-capped takes over ISO 100–12800; the 6048x1700 12-bit recipe went from -1.2 to -0.1. The live-view frame-rate text ran throughout but was not checked by eye."
+  ],
+  "zh": [
+   "修正 12-bit 錄影暗部偏綠：Sensor Lab 格式寫進 DNG 的黑位改為正確值（原本最多高了約 1.2 階）。原廠模式不變。",
+   "即時預覽顯示 Sensor Lab 實際錄影的幀率，不再顯示最接近的原廠幀率。",
+   "已知問題：部分非 16:9、且用 RWZM 縮放的格式，最暗部仍可能偏差最多約 0.6 階。",
+   "已知問題：OG 6x6（2x2＋ISP 3x3）第一幀可能錯位約 2 列。",
+   "2026-11-16 上機：蓋鏡頭蓋錄約 450 段、ISO 100–12800；6048x1700 12-bit 配方由 -1.2 修到 -0.1。即時預覽的幀率文字全程有在跑，但沒有人眼確認過。"
+  ]
  }
 }
