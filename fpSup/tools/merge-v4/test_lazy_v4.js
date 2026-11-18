@@ -84,7 +84,7 @@ const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://') && !c
   p.change({id: 'lossless'}, true);
   await p.settle();
   assert.deepStrictEqual(siteFetches(p).map(c => c.url).sort(),
-    ['inputs/v4-20261027/EarlyFlush_v0.1.0.BIN', 'inputs/v4-20261118b/Lossless_v0.3.11test.BIN', 'inputs/v4-20261027/Stop-FX_v0.1.0.BIN'].sort());
+    ['inputs/v4-20261027/EarlyFlush_v0.1.0.BIN', 'inputs/v4-20261118c/Lossless_v0.3.15test.BIN', 'inputs/v4-20261027/Stop-FX_v0.1.0.BIN'].sort());
   assert(lossless.data != null && fcap.data != null);
 
   // 3. download: the zip, then one request per release asset, unreadable (no-cors); once per visit
@@ -94,7 +94,7 @@ const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://') && !c
   assert.strictEqual(p.clicked.length, 1);
   assert.deepStrictEqual(counted().map(c => c.url).sort(), [
     'https://github.com/ijigen/fpSup/releases/download/fpsup-fcap-v0.1.0/EarlyFlush_v0.1.0.BIN',
-    'https://github.com/ijigen/fpSup/releases/download/fpsup-lossless-v0.3.11test/Lossless_v0.3.11test.BIN',
+    'https://github.com/ijigen/fpSup/releases/download/fpsup-lossless-v0.3.15test/Lossless_v0.3.15test.BIN',
     'https://github.com/ijigen/fpSup/releases/download/fpsup-stopfx-v0.1.0/Stop-FX_v0.1.0.BIN']);
   assert(counted().every(c => c.opt.mode === 'no-cors'));
   p.click({id: 'dl', dataset: {}});
@@ -163,14 +163,14 @@ const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://') && !c
   assert(!p.el('tiles').innerHTML.includes('class="dls"'));
 
   // 6. the mirror's counts.json (GitHub's numbers + the mirror's own) is read first, from either site
-  const both = {github: {'fpsup-lossless-v0.3.11test/Lossless_v0.3.11test.BIN': 100, 'fpsup-lossless-v0.3.1test/Lossless_v0.3.1test.BIN': 20,
+  const both = {github: {'fpsup-lossless-v0.3.15test/Lossless_v0.3.15test.BIN': 100, 'fpsup-lossless-v0.3.1test/Lossless_v0.3.1test.BIN': 20,
                          'fpsup-res-custom-v0.1.0/OG3K.RCD': 5000},
-                mirror: {'fpsup-lossless-v0.3.11test/Lossless_v0.3.11test.BIN': 7, 'fpsup-nope-v1/X.BIN': 9}};
+                mirror: {'fpsup-lossless-v0.3.15test/Lossless_v0.3.15test.BIN': 7, 'fpsup-nope-v1/X.BIN': 9}};
   for (const host of ['ijigen.github.io', 'fpsup.ijigen.xyz']){
     p = boot({host, counts: both, api: () => { throw new Error('GitHub is not asked when the mirror answered'); }});
     await p.settle();
     const t = p.el('tiles').innerHTML;
-    assert(/title="all versions; v0\.3\.11test: 107; 7 of all through the mirror">↓ 127 downloads/.test(t), host + ': ' + (t.match(/class="dls"[^<]*<\/span>/) || [t.slice(0, 200)])[0]);
+    assert(/title="all versions; v0\.3\.15test: 107; 7 of all through the mirror">↓ 127 downloads/.test(t), host + ': ' + (t.match(/class="dls"[^<]*<\/span>/) || [t.slice(0, 200)])[0]);
     assert((t.match(/class="dls"/g) || []).length === 1 && !/5,000/.test(t), 'data files and unknown tags are not counted');
     assert(p.calls.some(c => c.url === (host === 'fpsup.ijigen.xyz' ? '/counts.json' : 'https://fpsup.ijigen.xyz/counts.json')));
   }
@@ -184,7 +184,7 @@ const siteFetches = p => p.calls.filter(c => !c.url.startsWith('https://') && !c
   p.click({id: 'dl', dataset: {}});
   assert.deepStrictEqual(p.calls.filter(c => c.url.startsWith('/count/')).map(c => c.opt.method + ' ' + c.url).sort(), [
     'POST /count/fpsup-fcap-v0.1.0/EarlyFlush_v0.1.0.BIN',
-    'POST /count/fpsup-lossless-v0.3.11test/Lossless_v0.3.11test.BIN',
+    'POST /count/fpsup-lossless-v0.3.15test/Lossless_v0.3.15test.BIN',
     'POST /count/fpsup-stopfx-v0.1.0/Stop-FX_v0.1.0.BIN']);
   assert(!p.calls.some(c => /github\.com/.test(c.url)), 'nothing on the mirror depends on GitHub');
   console.log('lazy fetch, sha256 gate, release counting, download counts, mirror counts: ok');

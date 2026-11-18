@@ -51,6 +51,36 @@
    "2026-11-07 起上機，之後每次 Sensor Lab 上機都用它。"
   ]
  },
+ "fpsup-sensor-lab-v0.0.11test": {
+  "en": [
+   "OG 4K clips (3952x2624) can now be played back in the camera. Before, anything larger than DCI 4K showed \"contents cannot be viewed\".",
+   "6K clips are still not played in the camera (playing them froze it). They open normally on a computer.",
+   "On an SD card OG 4K playback is not real time: the card is read at about 237 MB/s and 24 fps needs about 271 MB/s. With Lossless 0.3.15test the camera buffers first and then plays the buffered part smoothly.",
+   "Recording is unchanged from 0.0.10test.",
+   "On the camera 2026-11-18 (SD card): OG 4K 12-bit clips played, no freeze; the picture was checked by eye. Not tested: 14-bit OG 4K playback, SSD, HDMI, long clips, pause and seek."
+  ],
+  "zh": [
+   "OG 4K 片段（3952×2624）現在可以在機內回放。之前大於 DCI 4K 的片段都顯示「檔案內容不能檢視」。",
+   "6K 片段仍不在機內回放（回放會讓相機凍結）；在電腦上可正常開啟。",
+   "在 SD 卡上 OG 4K 回放達不到即時：讀卡約 237 MB/s，24 fps 需要約 271 MB/s。搭配 Lossless 0.3.15test 時相機會先緩衝，緩衝好的那段可以順播。",
+   "錄影部分與 0.0.10test 相同。",
+   "2026-11-18 上機（SD 卡）：OG 4K 12-bit 片段可回放、不凍結；畫面有肉眼確認。未測：14-bit OG 4K 回放、SSD、HDMI、長片段、暫停與快轉。"
+  ]
+ },
+ "fpsup-lossless-v0.3.15test": {
+  "en": [
+   "In-camera playback of clips the card cannot deliver fast enough (for example OG 4K from an SD card): the camera now fills its playback buffer before it starts, so the first seconds play smoothly instead of stalling right away. The start takes a little longer. Clips that are read fast enough start as before.",
+   "A clip longer than the buffer still falls behind after the buffered part on an SD card; the limit is the card's read speed, not the decoder.",
+   "Recording is unchanged from 0.3.7test. Playing OG 4K in the camera needs Sensor Lab 0.0.11test.",
+   "On the camera 2026-11-18 (SD card): an OG 4K 12-bit clip started with 31 of 32 buffer slots filled, no freeze; checked by eye. Not tested: pause, seek and resume, SSD, HDMI, 14-bit OG 4K, long clips."
+  ],
+  "zh": [
+   "機內回放讀卡跟不上的片段（例如 SD 卡上的 OG 4K）：相機現在會先把回放緩衝填滿再開始播，前幾秒可以順播，不會一開始就停頓。開播會多等一下。讀得夠快的片段照原本方式開播。",
+   "比緩衝長的片段，在 SD 卡上播完緩衝那段後仍會跟不上；限制在讀卡速度，不是解碼。",
+   "錄影部分與 0.3.7test 相同。機內回放 OG 4K 需要 Sensor Lab 0.0.11test。",
+   "2026-11-18 上機（SD 卡）：OG 4K 12-bit 片段在 32 格緩衝填了 31 格後開播、不凍結；有肉眼確認。未測：暫停、快轉與續播、SSD、HDMI、14-bit OG 4K、長片段。"
+  ]
+ },
  "fpsup-lossless-v0.3.11test": {
   "en": [
    "In-camera playback of compressed clips is faster: a frame is decoded in one pass with no extra copying, and the next frame file is read while the current one decodes. Measured on an SD card: about 4 ms a frame instead of 8.5 ms for 1024x678-class clips, about 10 ms for 2016-wide clips.",

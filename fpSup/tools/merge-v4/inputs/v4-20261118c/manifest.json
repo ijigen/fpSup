@@ -1,0 +1,86 @@
+{
+ "date": "2026-11-18",
+ "source_sha256": {
+  "fpSup/loader-v4/ports.py": "a66114a188c327cf4b06b1c825694d5f8238f2420f05f20a7043d9529dd4135b",
+  "fpSup/loader-v4/ports_jose.py": "d6584705d8f285e1f5b70dd98b555db58cf34d50e7c1401ec858b6cf7b1de0c2",
+  "fpSup/loader-v4/build_v4.py": "b6f2cbc8e17f3fefb1d376e07cc5bcf9b9eb9e8c1cc0f137dcfdb01c9d98e1d8",
+  "fpSup/loader-v4/names_v4.py": "606187badf55db405fbbdaf233c26bbdbc59477c15e0db4faa2bce42fb91e5c3",
+  "fpSup/fpsup-ui/fpui_stock.c": "2f53ac1f206d87dfa0a95e027ec981b6e6ba570296e6ae7b952b2a2333d5a1c4",
+  "fpSup/fpsup-ui/fpsup_ui.c": "d0fd35f094d31f7b2649ef3eda03350766ddd8206e55cdaa05e829c02793a050",
+  "fpSup/fpsup-ui/build_stock_section.py": "95e2440da119e751d9778d953eb4857f8eb309d3fbe08212dfeedfdcb11c55b9",
+  "fpSup/lossless/build_v4_lossless.py": "66f73a1709fc49a312a71bdcaa58b3aa85534644c81827758e6ad48072fca970",
+  "fpSup/lossless/native/menu_row4.c": "47f672c486bb3ea4dd1266f936f6ba34386373f299914d85c3073cf44d1e4d9e",
+  "fpSup/screenflip/build_v4_flip.py": "313f291409937ea5b7517a4cad97c1a8a528ed57ff8ec9fbb8101b696e9f629b",
+  "fpSup/screenflip/native/flip.c": "532aa89f9b353ae0a3af7b6750bc2d9991e3799baaa10133e2853ff738d9f349",
+  "projects/rawview/build/build_v4_rawview.py": "091957c38bd856ced2667637c731e576581d0dc026cdc4241dff158018ee9d50",
+  "projects/rawview/build/build_v3_rawview.py": "25a457d839b7501b9572cc32f884ed0e5bce67fbd76e995511299d6e942227d8",
+  "projects/open-gate/build/res-custom-v4/build_v4_rescustom.py": "265c7c129b99cc2db151a355d7e9140d577633d1d2aa2f640be55ec74c8cc8df",
+  "projects/open-gate/build/res-custom-v4/build_v3_rescustom.py": "8acce36a16cda48dc45701973bdad2dce87139327cbbe630cf79daf0e0470deb",
+  "projects/open-gate/build/res-custom-v4/ogc.c": "454c49f48acc5a450a3f77aa34ada09f29415a583a84f2ab2306da38e975577c",
+  "projects/open-gate/build/res-custom-v4/ogc_files.c": "e541fdb0429c567ae2c48b9d6fffc25966844d631e7422238055856e032f85d4",
+  "projects/sensorlab-imx410/qs/build_slqs.py": "5230c7b6ced041e751fcf0ab93583a58c85704defcd608eba556a883efbe14b4",
+  "projects/sensorlab-imx410/qs/slqs.c": "09bc846accaa6329a571a71001387da943987b010ba13ed8eccda6007d3c5f0f",
+  "projects/sensorlab-imx410/qs/qrdec.c": "0a3dd5dd7835341ce657c5ce72959468210f431148981fda51817c21462991a3",
+  "projects/sensorlab-imx410/core/core.c": "d9bf03e25894d6a766083e652d2a61ca442d2a1fe94bba145200426fdf279df1",
+  "projects/sensorlab-imx410/apply/ap.c": "6d03f7e2b0d8a341be8b17cff8124d0efb0a0ab5862425a9a0ce8e047d3ddfed",
+  "projects/sensorlab-imx410/apply/ap_calc.c": "1bd53ab8e2acd74fe61546f01f982b24f0bd5583da950f00e3d2454cb7485254",
+  "projects/qs-container/build_qsct.py": "9377797baa874554e5e1244e64c44b9c239dae300b564aff0b08bf05343a410b",
+  "projects/qs-container/qsct.c": "14d98edcc77caad0d5a9d4ffa50857acca54b2b353daaebeb58972d8735902f6",
+  "projects/qs-container/qsc.h": "e2f65355b05ae342cd143321aaa79bb7bf70cadf7e0739c87cb440b557d93dd7",
+  "projects/qs-container/editor_data.py": "b6cfadd91a1e1ca90f01fd45fa74d28fcceeb0a89fb84e56c7b45fc09d481729",
+  "projects/qs-container/editor_title.py": "9d30dc977f62077db2a0e09ac9c4df8a24103d172d5272cb6fcf7685d9d20da8",
+  "projects/qs-container/qs_page_data.py": "04bf69cb1289136e17862bdc1e70d8d64358d971e4a943adefe0027939269b4e",
+  "fpSup/dialfix/build_dialfix.py": "6622b7c4a31576bc0ac887f1e0e095ef070590913626e1a0f79c8c881cc0eae4",
+  "fpSup/dialfix/dialfix.c": "ac0b6ec7fedbc885d0ecb06711c113b7ecfd90ff9079975d0489e7440603cdca",
+  "fpSup/dialfix/reference/v6/dial2_fast.S": "b8cf2cb6f8b23e5b675b82f49dd27307904f95f1fa2ed8ba8a243cb89f62e447",
+  "fpSup/dialfix/reference/v6/AutoRun.txt": "8f89d1f0e97f1e4debe83e12397f73cda07b34fea45cdd0c70eb12011c576d86",
+  "fpSup/lut/build_v4_lut.py": "db24529c30004d07be44b576f0995e6b574f06801d39db5d045d094ead9cc162",
+  "fpSup/lut/build_sup.py": "b8c501340fcf44db5a532a76e3e3367b4a62373a177bf2b922bc9884afcecdb9",
+  "fpSup/lut/checker_q20.bin": "18f666aaf96b969669f3072572673fc1863895fcfe9448dd1d6d02a3573b283b",
+  "fpSup/lut/looks/make_looks.py": "16a0240424fc067a24b41413b657c6cbdb061ec800c820e87c4042f2f1bd8160",
+  "fpSup/lut/native/lut4.c": "c940f907193127cbb7abcb4688c65a5a2f1aa88d18826c0fd4f6a4287883f85e",
+  "fpSup/lut/native/lvb.c": "d470e2212586cddc6416e560157366ab9b3839d5c478fdf947cf5d5c83274f53",
+  "fpSup/lut/native/jfit.c": "28ee895fb736c430267db40dec3c1a8459f0049427a33e84366d3d857af11a07",
+  "fpSup/lut/native/conv.c": "238a4e89fe8746fa4e71afc7cdee8be8210ed191e0579ed48a74c9e4a712ef21",
+  "fpSup/lut/native/import.c": "361ce54780540b1fd44c7f29d831fe004b7671bb008dae9a01295dfeb58d2377",
+  "fpSup/lut/native/cols.c": "0372bf0aee85b7ebf6a55dbc713d6a03ba5c754b44a1f21b82486adc7fe5fe4f",
+  "fpSup/lut/color_ui.py": "9c04e1bc46506ab6a39a0d084d3f7e42a840a093e341c8eaad8b7dd1ef29f0a4",
+  "fpSup/colshare/build_colshare.py": "bb7ca3a232e47451040fc7de1a7bf443625ce46a78a8b06e1292a3c1ec1d9b40",
+  "fpSup/colshare/colshare.c": "8543a7a90d51a2b9aa39ceb78eb38f3d94a7a23054ad5b0e71f795e03606a081",
+  "fpSup/colshare/colshare_ui.py": "f26327725b83c4ba11238df04e3fe4d39c2a012e098ac288881d34abee92da9c"
+ },
+ "files": {
+  "Lossless_v0.3.15test.BIN": {
+   "size": 38080,
+   "sha256": "280f513395fad9a86ea85bc410f17b274e847d95b335f9bc89df7f42ab4ea61b"
+  },
+  "SensorLab-IMX410_v0.0.11test.BIN": {
+   "size": 215008,
+   "sha256": "211e96530efbcdc3ed5571691588e7338b27ad85508646aade1605da6441606b"
+  }
+ },
+ "products": {
+  "lossless": {
+   "file": "Lossless_v0.3.15test.BIN",
+   "version": "0.3.15test",
+   "name": "Lossless",
+   "release": "fpsup-lossless-v0.3.15test",
+   "build_label": {
+    "en": "Loader v4 test build",
+    "zh": "Loader v4 測試版"
+   }
+  },
+  "sensor-lab": {
+   "file": "SensorLab-IMX410_v0.0.11test.BIN",
+   "version": "0.0.11test",
+   "name": "Sensor Lab-IMX410",
+   "release": "fpsup-sensor-lab-v0.0.11test",
+   "build_label": {
+    "en": "Loader v4 test build",
+    "zh": "Loader v4 測試版"
+   }
+  }
+ },
+ "loader": "v4",
+ "validation": "fpSup/lossless tests 2026-11-18: test_play_decode 79, test_card_emulation + test_v4_lossless 46 in the full tree. 0.3.15test = 0.3.11test + a clip whose frames arrive slower than its frame rate (OG 4K from an SD card: 20.9 fps read, 23.974 played) starts playing when the player's buffer pool is full, not at five frames; other clips start as stock; recording code unchanged. These bytes (sha256 280f5133...) on Bei's camera 2026-11-18, SD, with Sensor Lab 0.0.11test and the other sups Bei carries: OG 4K 12-bit clip, 30 start asks held, started with 1 of 32 slots free, 63 frames, no freeze; Bei: looks ok (validation/20261118-og4k-play/LOG.md). Recording as accepted for 0.3.7test. Not checked: pause / seek / resume, clips longer than the pool (still fall behind on SD after the buffered part), fast clips on the camera with these bytes, missing frames, SSD, HDMI, 14-bit, the recording acceptance with these bytes, a pixel check of the played picture. projects/sensorlab-imx410 offline tiers 2026-11-18 in the full tree. 0.0.11test = 0.0.10test + in-camera playback admits rasters up to 3968 x 2634 (OG 4K 3952x2624); 6K stays refused (it froze the camera). This code on Bei's camera 2026-11-18, SD, with Lossless 0.3.11test .. 0.3.15test: OG 4K 12-bit clips play, no freeze, recording after playback fine; the played picture looked at by Bei (validation/20261118-og4k-play/LOG.md). Recording as accepted for 0.0.10test (validation/20261117-clamp-all). Not checked: the recording acceptance repeated with these bytes, 14-bit OG 4K playback, SSD, HDMI, long clips, pause / seek, a pixel check of the played picture."
+}

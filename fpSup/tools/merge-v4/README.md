@@ -72,6 +72,15 @@ python3 -B tools/merge-v4/publish_releases.py            # 每個提供中的版
 - push 時 workflow 新建三個 Release(都是 prerelease)。這次只推頁面、快照與 `names_v4.py` 三行;Lossless／Sensor Lab／QS-Share 的原始碼
   由各自那條線另外同步進 repo(快照 `manifest.json` 的 `source_sha256` 記的是建檔當時的本機原始碼)。
 
+**2026-11-18 Sensor Lab 0.0.11test、Lossless 0.3.15test**(Bei 11-18:「push吧」「做吧」):
+- 新快照 `inputs/v4-20261118c/`(`build_inputs_v4.py --only sensor-lab,lossless`,由 commit 60ac49aa 的原始碼建)。Lossless_v0.3.15test.BIN
+  sha256 280f5133… = 相機上驗證、Bei 看過回放的那份(逐位元組相同);SensorLab-IMX410_v0.0.11test.BIN sha256 211e9653… 與相機上那份只差
+  卡片設定紀錄(0x346C8 起 41 bytes)。Lossless 0.3.12test~0.3.14test 是過程中的測試版,從未發布。
+- 內容:Sensor Lab 機內回放放寬到 OG 4K(6K 仍擋);Lossless 對「讀卡跟不上格率」的片段先填滿回放緩衝再開播
+  (`projects/sensorlab-imx410/validation/20261118-og4k-play/LOG.md`)。
+- 同一次修掉 `build_inputs_v4.py` 的 `PRODUCTS['lossless']`:上一次(b4cf05d5)把驗證文字誤貼進這一格,`--only lossless` 已無法再建。
+- 沒測:暫停／快轉／續播、SSD、HDMI、14-bit OG 4K、長片段、用這兩份位元組重跑錄影驗收、由頁面合成的卡上機。
+
 **2026-11-18 Lossless 0.3.11test**(Bei 11-18:「放上合併頁」):
 - 新快照 `inputs/v4-20261118b/`(`build_inputs_v4.py --only lossless`,由 commit 83fa78e9 的原始碼建)。Lossless_v0.3.11test.BIN
   sha256 180a5f55… = 相機上量測、Bei 肉眼看過回放的那份(逐位元組相同)。0.3.8test~0.3.10test 是過程中的測試版,從未發布。

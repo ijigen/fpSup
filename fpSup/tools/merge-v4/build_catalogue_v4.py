@@ -40,7 +40,8 @@ INPUTS = [HERE / 'inputs' / 'v4-20261027', HERE / 'inputs' / 'v4-20261107', HERE
           HERE / 'inputs' / 'v4-20261115-lut',   # 20261115-lut: LUT 0.1.1test (popup width; fpsup-ui)
           HERE / 'inputs' / 'v4-20261116',   # 20261116: Sensor Lab 0.0.8test (the DNG BlackLevel value)
           HERE / 'inputs' / 'v4-20261118',   # 20261118: Sensor Lab 0.0.10test (clamp on everywhere) + Lossless 0.3.7test
-          HERE / 'inputs' / 'v4-20261118b']   # 20261118b: Lossless 0.3.11test (playback: one engine job a frame)
+          HERE / 'inputs' / 'v4-20261118b',   # 20261118b: Lossless 0.3.11test (playback: one engine job a frame)
+          HERE / 'inputs' / 'v4-20261118c']   # 20261118c: Sensor Lab 0.0.11test (OG 4K plays in the camera) + Lossless 0.3.15test (slow clips start with the pool full)
 sys.path.insert(0, str(FPSUP / 'fp_usb_shell'))
 from v3 import build_v3 as V3
 sys.path.insert(0, str(FPSUP / 'loader-v4'))
