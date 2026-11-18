@@ -1,4 +1,5 @@
 #include "play_decode.h"
+#include "tile_grid.h"
 
 #define ROOT_STOCK      8u            /* IFD0, where the recorder put it */
 #define TIFF_LE         0x002a4949u   /* "II*\0" */
@@ -13,6 +14,15 @@
 #define SLOT_BUFFER     0x14u
 #define SLOT_CAPACITY   0x18u
 #define SLOT_READ       0x1cu
+#define READER_PATH     0x80u         /* C05C0C38's object: the frame file's path */
+#define READER_VOLUME   0xb4u
+#define POOL_COUNT      0x04u         /* XC_CinemaDngPlay's pool: slots made */
+#define POOL_SLOTS      0x08u         /* the slot array, POOL_STRIDE B each */
+#define POOL_MADE       0x3cu         /* a byte: 1 once made */
+#define POOL_STRIDE     0x5ecu
+#define POOL_MAX        300u          /* the array C05C2D10 allocates: 0x6F090 B */
+#define ALIGN           0x400u
+#define BAND_TICKS      2000u         /* a 6048x4040 frame takes ~90 ms */
 
 #if defined(FPL_PLAY_DECODE_HOST_TEST)
 #define N (&fpl_play_test_natives)
@@ -20,6 +30,8 @@
 #define poke(a, v) N->write(a, v)
 #define scratch_get(o, n) N->alloc(o, n)
 #define scratch_put(o) N->release(o)
+#define buffer_get(n) N->buffer_get(n)
+#define buffer_put(a) N->buffer_put(a)
 #define dma(t, f, n) N->dma(t, f, n)
 #define engine_init(p) N->init(p)
 #define engine_flag() N->flag()
@@ -27,11 +39,12 @@
 #define engine_open() N->open()
 #define engine_submit(r) N->submit(r)
 #define engine_start() N->start()
-#define engine_wait(f, p) N->wait(f, p)
+#define engine_wait(f, p, t) ((void)(t), N->wait(f, p))
 #define engine_close() N->close()
 #define now_us() N->now()
 #define cache_sync() N->sync()
 #define first_frame(d, f, b, n, g) N->first_frame(d, f, b, n, g)
+#define file_read(v, p, f, b, n, g) N->file_read(v, p, f, b, n, g)
 #elif defined(__arm__) && UINTPTR_MAX == UINT32_MAX
 #define peek(a) (*(volatile const uint32_t *)(a))
 #define poke(a, v) (*(volatile uint32_t *)(a) = (v))
@@ -46,6 +59,16 @@ static uintptr_t scratch_get(uint32_t *obj, uint32_t bytes) {
 static void scratch_put(uint32_t *obj) {
     typedef void (*fn)(uint32_t *, uint32_t);
     ((fn)0xc001d7a0u)(obj, 2);
+}
+/* The player's own way (C05C2D10 / C05C2E90): the RAW pool's handle, a
+ * buffer of it by address. */
+static uintptr_t buffer_get(uint32_t bytes) {
+    typedef uintptr_t (*get_fn)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+    return ((get_fn)0xc001d1e8u)(((uint32_t (*)(uint32_t))0xc001cf78u)(10), bytes, 0, 0, 0);
+}
+static void buffer_put(uintptr_t address) {
+    typedef void (*put_fn)(uint32_t, uintptr_t);
+    ((put_fn)0xc001d2b8u)(((uint32_t (*)(uint32_t))0xc001cf78u)(10), address);
 }
 /* C00FBB90 {source, destination, bytes, flags 0}: synchronous, its own cache
  * maintenance and semaphore (frame_hold.c header_dma). */
@@ -63,9 +86,9 @@ static uint32_t dma(uintptr_t to, uintptr_t from, uint32_t bytes) {
 #define engine_open() ((fn0)0xc062fe71u)()
 #define engine_submit(r) ((fnp)0xc062fec1u)(r)                    /* C0630240 */
 #define engine_start() ((fn0)0xc062fed9u)()                       /* C06303F8 */
-static uint32_t engine_wait(uint32_t flag, uint32_t *pattern) {
+static uint32_t engine_wait(uint32_t flag, uint32_t *pattern, uint32_t ticks) {
     typedef uint32_t (*fn)(uint32_t, uint32_t, uint32_t, uint32_t *, uint32_t);
-    return ((fn)0xc0016c08u)(flag, 2, 1, pattern, WAIT_TICKS);   /* twai_flg */
+    return ((fn)0xc0016c08u)(flag, 2, 1, pattern, ticks);        /* twai_flg */
 }
 #define engine_close() ((fn0)0xc062fe81u)()
 #define now_us() ((fn0)0xc002b6e0u)()
@@ -83,6 +106,24 @@ static uint32_t first_frame(uintptr_t desc, uint32_t *file, uint8_t *buf, uint32
     uint32_t ok;
     ((ctor_fn)0xc0365e90u)(file, ((d_fn)0xc069b930u)(desc));
     ok = ((open_fn)0xc0365fb0u)(file, ((d_fn)0xc069b9b8u)(desc), 1);
+    if (ok) {
+        ok = ((read_fn)0xc0366060u)(file, buf, bytes, got);
+        ((close_fn)0xc0366020u)(file);
+    }
+    ((ctor_fn)0xc0365ed0u)(file, 2);                            /* destructor */
+    return ok;
+}
+/* A file read whole, the way C05C0C38 reads a frame: the volume's file
+ * object, open for reading, one read, close. */
+static uint32_t file_read(uint32_t volume, const char *path, uint32_t *file, uintptr_t buf,
+                          uint32_t bytes, uint32_t *got) {
+    typedef void (*ctor_fn)(uint32_t *, uint32_t);
+    typedef uint32_t (*open_fn)(uint32_t *, const char *, uint32_t);
+    typedef uint32_t (*read_fn)(uint32_t *, uintptr_t, uint32_t, uint32_t *);
+    typedef void (*close_fn)(uint32_t *);
+    uint32_t ok;
+    ((ctor_fn)0xc0365e90u)(file, volume);
+    ok = ((open_fn)0xc0365fb0u)(file, path, 1);
     if (ok) {
         ok = ((read_fn)0xc0366060u)(file, buf, bytes, got);
         ((close_fn)0xc0366020u)(file);
@@ -177,8 +218,46 @@ static uint32_t stock_strip(const struct ifd *f0) {
 }
 
 /* ---- clip open ---------------------------------------------------------- */
+/* A buffer moved up to 1 KiB: the address the allocator gave is the word
+ * below it. 0: not one we moved. */
+static uintptr_t given(uintptr_t a) {
+    uintptr_t raw;
+    if (!a || (a & (ALIGN - 1u))) return 0;
+    raw = peek(a - 4u);
+    if (raw >= a || (raw & 3u) || a - raw != ALIGN - (raw & (ALIGN - 1u))) return 0;
+    return raw;
+}
+static uintptr_t moved_up(uintptr_t raw) {
+    uintptr_t a = raw + ALIGN - (raw & (ALIGN - 1u));    /* 4..0x400 B up */
+    poke(a - 4u, (uint32_t)raw);
+    return a;
+}
+
 void fpl_play_end(struct fpl_play *p) {
-    if (!p || !p->scratch) return;
+    if (!p) return;
+    if (p->pool && p->slots && peek(p->pool + POOL_COUNT) == p->slots &&
+        peek(p->pool + POOL_SLOTS) == p->slots_base) {
+        for (uint32_t n = 0; n < p->slots; ++n) {
+            uintptr_t slot = p->slots_base + n * POOL_STRIDE, a = peek(slot + SLOT_BUFFER);
+            uintptr_t raw = given(a);
+            if (!raw) { saturate(&p->not_ours); continue; }
+            poke(slot + SLOT_BUFFER, (uint32_t)raw);
+            poke(slot + SLOT_CAPACITY, peek(slot + SLOT_CAPACITY) + (uint32_t)(a - raw));
+            saturate(&p->restored);
+        }
+    }
+    p->pool = 0;
+    p->slots = 0;
+    for (uint32_t k = 0; k < 2; ++k) {               /* the spare, the one read ahead into */
+        uintptr_t *held = k ? &p->ahead : &p->spare, raw;
+        if (!*held) continue;
+        raw = given(*held);
+        if (raw) buffer_put(raw); else saturate(&p->spare_lost);
+        *held = 0;
+    }
+    p->spare_cap = p->ahead_cap = 0;
+    p->ahead_got = 0;
+    if (!p->scratch) return;
     scratch_put(p->obj);
     p->scratch = 0;
     p->scratch_bytes = 0;
@@ -193,6 +272,9 @@ uint32_t fpl_play_clip(struct fpl_play *p, uintptr_t desc, uint32_t size, uint32
     saturate(&p->clips);
     p->clip_size_was = size;
     p->scratch_want = 0;
+    p->hook_end_us = 0;
+    p->ahead_got = 0;
+    p->sums_stale = 1;                   /* the sums restart at this clip's first fast frame */
     if (busy || !desc) return size;
     for (uint32_t n = 0; n < FPL_PLAY_HEADER / 4u; ++n) p->header[n] = 0;
     if (!first_frame(desc, p->file, (uint8_t *)p->header, FPL_PLAY_HEADER, &got) ||
@@ -212,67 +294,285 @@ uint32_t fpl_play_clip(struct fpl_play *p, uintptr_t desc, uint32_t size, uint32
      * for DaVinci), so the first frame cannot say whether later ones are. */
     need = 2u * kib(pitch_of(f0.w, f0.bits) * MAX_TILE_H);
     p->scratch_want = need;
-    if (rd32(h + 4, 1) == ROOT_STOCK) {
-        saturate(&p->clips_first_stock);
-        return size;                     /* already a stock frame's size */
-    }
-    saturate(&p->clips_ours);
     /* the stock frame file: header, then the strip padded to 512 B */
     stock = f0.soff + ((f0.scnt + 0x1ffu) & ~0x1ffu);
+    /* ... and room for whole tiles below the last row: the engine writes
+     * them, and the one-job decode goes straight into a buffer of this
+     * size. The recorder's default grid; another grid's frames that do not
+     * fit go the row way. */
+    {
+        uint32_t tw, th, padded;
+        fpl_tile_grid(f0.w, f0.h, 0, &tw, &th);
+        padded = f0.soff + pitch_of(f0.w, f0.bits) * (ceil_div(f0.h, th) * th);
+        if (padded > stock) stock = padded;
+    }
     want = stock > size ? stock : size;
-    p->clip_size_set = want;
+    if (rd32(h + 4, 1) == ROOT_STOCK) saturate(&p->clips_first_stock);
+    else saturate(&p->clips_ours);
+    if (want != size) p->clip_size_set = want;
     return want;
 }
 
-void fpl_play_pool(struct fpl_play *p) {
+void fpl_play_pool(struct fpl_play *p, uintptr_t pool, uint32_t size) {
     if (!p || !p->scratch_want) return;
     if (p->scratch && p->scratch_bytes < p->scratch_want) fpl_play_end(p);
-    if (p->scratch) return;
-    p->scratch = scratch_get(p->obj, p->scratch_want);
-    if (!p->scratch || (p->scratch & 0x3ffu)) {
-        if (p->scratch) scratch_put(p->obj);
-        p->scratch = 0;
-        saturate(&p->scratch_failed);
-    } else {
-        p->scratch_bytes = p->scratch_want;
+    if (!p->scratch) {
+        p->scratch = scratch_get(p->obj, p->scratch_want);
+        if (!p->scratch || (p->scratch & 0x3ffu)) {
+            if (p->scratch) scratch_put(p->obj);
+            p->scratch = 0;
+            saturate(&p->scratch_failed);
+        } else {
+            p->scratch_bytes = p->scratch_want;
+        }
+    }
+    /* The spare, as the player is about to take its own: only when this call
+     * will make the pool (not made, no slots), and none is held. */
+    if (!pool || p->pool || p->spare || rd8(pool + POOL_MADE, 0) || peek(pool + POOL_COUNT) ||
+        size > 0xfffff000u - 0x1fffu)
+        return;
+    {
+        uint32_t cap = (size + 0x1fffu) & ~0xfffu;       /* C05C2D10's own size */
+        uintptr_t raw = buffer_get(cap);
+        if (!raw || (raw & 3u)) {
+            if (raw) buffer_put(raw);
+            saturate(&p->spare_failed);
+            return;
+        }
+        p->spare = moved_up(raw);
+        p->spare_cap = cap - (uint32_t)(p->spare - raw);
+        p->pool = pool;
+        raw = buffer_get(cap);                           /* and one to read ahead into */
+        if (!raw || (raw & 3u)) {
+            if (raw) buffer_put(raw);
+            saturate(&p->ahead_failed);
+            return;
+        }
+        p->ahead = moved_up(raw);
+        p->ahead_cap = cap - (uint32_t)(p->ahead - raw);
+        p->ahead_got = 0;
     }
 }
 
+void fpl_play_made(struct fpl_play *p) {
+    uint32_t n;
+    uintptr_t base;
+    if (!p || !p->pool || !p->spare || p->slots) return;
+    n = peek(p->pool + POOL_COUNT);
+    base = peek(p->pool + POOL_SLOTS);
+    if (!n || n > POOL_MAX || !base || (base & 3u)) return;   /* the spare stays unused */
+    for (uint32_t k = 0; k < n; ++k) {
+        uintptr_t slot = base + k * POOL_STRIDE, raw = peek(slot + SLOT_BUFFER), a;
+        uint32_t cap = peek(slot + SLOT_CAPACITY);
+        if (!raw || (raw & 3u) || cap <= ALIGN) continue;
+        a = moved_up(raw);
+        poke(slot + SLOT_BUFFER, (uint32_t)a);
+        poke(slot + SLOT_CAPACITY, cap - (uint32_t)(a - raw));
+    }
+    p->slots = n;
+    p->slots_base = (uint32_t)base;
+    cache_sync();
+}
+
 /* ---- a frame -------------------------------------------------------------- */
-/* C062FAD0's steps for ONE tile row, the height given as the tile's: init
- * with the decode flag, the request, OPEN, SUBMIT, START, wait for bit 2,
- * CLOSE. 0 = decoded. */
-static uint32_t decode_row(const struct ifd *f, uint32_t across, uintptr_t out,
-                           uintptr_t stream) {
+/* C062FAD0's steps for one band of `rows` rows (whole tiles) and `tiles`
+ * tiles: init with the decode flag, the request, OPEN, SUBMIT, START -- then,
+ * in band_finish, wait for bit 2, CLOSE. band_start: the flag, or negative
+ * (nothing left open). */
+static int32_t band_start(const struct ifd *f, uint32_t rows, uint32_t tiles, uintptr_t out,
+                          uintptr_t stream) {
     volatile uint32_t init[9], req[12];
-    uint32_t flag, pattern = 0, ok;
-    init[0] = f->w; init[1] = f->th; init[2] = format_code(f->bits);
+    uint32_t flag;
+    init[0] = f->w; init[1] = rows; init[2] = format_code(f->bits);
     init[3] = f->tw; init[4] = f->th;
     init[5] = (uint32_t)out;
     init[6] = (uint32_t)stream;
     init[7] = 0;
     init[8] = 1;                                     /* decode */
-    if (engine_init(init) != 1) return 1;
+    if (engine_init(init) != 1) return -1;
     for (uint32_t n = 0; n < 12; ++n) req[n] = 0;
-    req[0] = f->w; req[1] = f->th; req[2] = format_code(f->bits);
+    req[0] = f->w; req[1] = rows; req[2] = format_code(f->bits);
     req[3] = f->tw; req[4] = f->th;
     for (uint32_t n = 0; n < 4; ++n) req[5 + n] = peek(ENGINE_BLOCK + 4u * n);
     req[11] = DECODE_CALLBACK;
     flag = engine_flag();
-    if ((int32_t)flag < 0) return 1;
-    poke(TILE_COUNT_VAR, across);
+    if ((int32_t)flag < 0) return -1;
+    poke(TILE_COUNT_VAR, tiles);
     engine_clr(flag);
-    if (engine_open() != 0) return 1;
-    ok = engine_submit(req) == 0 && engine_start() == 0 &&
-         engine_wait(flag, &pattern) == 0 && (pattern & 2u);
+    if (engine_open() != 0) return -1;
+    if (engine_submit(req) != 0 || engine_start() != 0) {
+        engine_clr(flag);
+        engine_close();
+        return -1;
+    }
+    return (int32_t)flag;
+}
+static uint32_t band_finish(uint32_t flag, uint32_t ticks) {     /* 0 = decoded */
+    uint32_t pattern = 0, ok;
+    ok = engine_wait(flag, &pattern, ticks) == 0 && (pattern & 2u);
     engine_clr(flag);
     if (engine_close() != 0) ok = 0;
     return ok ? 0 : 1;
 }
+static uint32_t decode_band(const struct ifd *f, uint32_t rows, uint32_t tiles, uintptr_t out,
+                            uintptr_t stream, uint32_t ticks) {
+    int32_t flag = band_start(f, rows, tiles, out, stream);
+    return flag < 0 ? 1 : band_finish((uint32_t)flag, ticks);
+}
 
 static uint32_t refuse(struct fpl_play *p, uint32_t why) { saturate(&p->refused_by[why]); return why; }
 
+/* The header in front of the decoded strip: whole words through the cache,
+ * every line of [0, bytes) written whole (bytes is a multiple of 1 KiB), so
+ * the clean at the end puts exactly this in memory. */
+#if defined(FPL_PLAY_DECODE_HOST_TEST)
+static void head_copy(uintptr_t to, uintptr_t from, uint32_t bytes) {
+    for (uint32_t n = 0; n < bytes; n += 4) poke(to + n, peek(from + n));
+}
+#else
+static void head_copy(uintptr_t to, uintptr_t from, uint32_t bytes) {
+    uint32_t *d = (uint32_t *)to;
+    const uint32_t *s = (const uint32_t *)from;
+    for (uint32_t n = bytes >> 5; n; --n) {
+        uint32_t a = s[0], b = s[1], c = s[2], e = s[3], g = s[4], h = s[5], i = s[6], j = s[7];
+        d[0] = a; d[1] = b; d[2] = c; d[3] = e; d[4] = g; d[5] = h; d[6] = i; d[7] = j;
+        s += 8; d += 8;
+    }
+}
+#endif
+
+/* The whole frame in one job: the stream where it was read, the pixels into
+ * the spare at the same strip offset, then the two buffers change places.
+ * 0xffff: not this way (counted); else what fpl_play_frame returns. */
+#define NOT_FAST 0xffffu
+/* The file after the one `reader` names, into the second spare: the same
+ * path with its six digits one higher. Called while the engine runs. */
+static void read_ahead(struct fpl_play *p, uintptr_t reader) {
+    uint32_t n = 0, got = 0;
+    p->ahead_got = 0;
+    if (!reader || !p->ahead || !given(p->ahead)) { saturate(&p->ahead_none); return; }
+    while (n < FPL_PLAY_PATH - 1u && rd8(reader + READER_PATH + n, 0)) {
+        p->ahead_path[n] = (char)rd8(reader + READER_PATH + n, 0);
+        ++n;
+    }
+    p->ahead_path[n] = 0;
+    if (rd8(reader + READER_PATH + n, 0) || n < FPL_PLAY_DIGITS + 6u) {
+        saturate(&p->ahead_none);
+        return;
+    }
+    for (uint32_t k = FPL_PLAY_DIGITS + 6u; k-- > FPL_PLAY_DIGITS;) {     /* + 1, decimal */
+        char c = p->ahead_path[k];
+        if (c < '0' || c > '9') { saturate(&p->ahead_none); return; }
+        if (c != '9') { p->ahead_path[k] = (char)(c + 1); break; }
+        p->ahead_path[k] = '0';
+        if (k == FPL_PLAY_DIGITS) { saturate(&p->ahead_none); return; }  /* 999999 */
+    }
+    if (!file_read(peek(reader + READER_VOLUME), p->ahead_path, p->file, p->ahead, p->ahead_cap,
+                   &got) || !got || got >= p->ahead_cap) {
+        saturate(&p->ahead_none);                    /* the clip's last frame, or too long */
+        return;
+    }
+    p->ahead_got = got;
+    saturate(&p->ahead_read);
+}
+
+uint32_t fpl_play_read(struct fpl_play *p, uintptr_t slot, uintptr_t reader, uint32_t busy) {
+    uintptr_t buf;
+    uint32_t cap, n;
+    if (!p || !p->ahead_got) return 0;
+    if (busy || !slot || !reader || !p->ahead || !given(p->ahead)) { p->ahead_got = 0; return 0; }
+    for (n = 0; n < FPL_PLAY_PATH && p->ahead_path[n] &&
+                rd8(reader + READER_PATH + n, 0) == (uint8_t)p->ahead_path[n]; ++n) {}
+    buf = peek(slot + SLOT_BUFFER);
+    cap = peek(slot + SLOT_CAPACITY);
+    if (n >= FPL_PLAY_PATH || p->ahead_path[n] || rd8(reader + READER_PATH + n, 0) || !given(buf) || p->ahead_got >= cap) {
+        p->ahead_got = 0;                            /* another frame: the player reads it */
+        saturate(&p->ahead_missed);
+        return 0;
+    }
+    poke(slot + SLOT_BUFFER, (uint32_t)p->ahead);
+    poke(slot + SLOT_CAPACITY, p->ahead_cap);
+    poke(slot + SLOT_READ, p->ahead_got);
+    p->ahead = buf;
+    p->ahead_cap = cap;
+    p->ahead_got = 0;
+    saturate(&p->ahead_used);
+    return 1;
+}
+
+static uint32_t fast_frame(struct fpl_play *p, uintptr_t slot, uintptr_t buf, uint32_t cap,
+                           const struct ifd *f, uint32_t soff, uint32_t stream_at,
+                           uint32_t tiles, uint32_t padded_rows, uintptr_t reader) {
+    uint32_t t0, t1, t2, t3;
+    int32_t flag;
+    if (!p->spare || !p->slots) { saturate(&p->fast_no_spare); return NOT_FAST; }
+    if (!given(buf) || !given(p->spare) || (soff & (ALIGN - 1u)) || (stream_at & (ALIGN - 1u)) ||
+        soff < ALIGN) {
+        saturate(&p->fast_no_align);
+        return NOT_FAST;
+    }
+    if (p->spare_cap < soff || p->spare_cap - soff < pitch_of(f->w, f->bits) * padded_rows) {
+        saturate(&p->fast_no_room);
+        return NOT_FAST;
+    }
+    t0 = now_us();
+    if (p->sums_stale) {
+        p->sum_engine_us = p->sum_hook_us = p->sum_gap_us = p->timed = p->gaps = 0;
+        p->sum_read_us = p->sum_wait_us = 0;
+        p->max_gap_us = p->min_gap_us = 0;
+        p->sums_stale = 0;
+    }
+    if (p->hook_end_us && t0 - p->hook_end_us < 1000000u) {
+        p->last_gap_us = t0 - p->hook_end_us;
+        p->sum_gap_us += p->last_gap_us;
+        if (p->last_gap_us > p->max_gap_us) p->max_gap_us = p->last_gap_us;
+        if (!p->min_gap_us || p->last_gap_us < p->min_gap_us) p->min_gap_us = p->last_gap_us;
+        saturate(&p->gaps);
+    }
+    t1 = now_us();
+    flag = band_start(f, padded_rows, tiles, p->spare + soff, buf + stream_at);
+    if (flag < 0) {
+        p->hook_end_us = 0;
+        return refuse(p, FPL_PLAY_R_ENGINE);         /* the frame as it was read */
+    }
+    /* while the engine runs: the header in front of its output (other cache
+     * lines: the strip starts on a 1 KiB boundary), then the next file */
+    head_copy(p->spare, buf, soff);
+    poke(p->spare + 4, ROOT_STOCK);                  /* the player's tag reader starts there */
+    p->last_head_us = now_us() - t1;
+    read_ahead(p, reader);                           /* the next file, while the engine runs */
+    t3 = now_us();
+    if (band_finish((uint32_t)flag, BAND_TICKS) != 0) {
+        p->hook_end_us = 0;
+        return refuse(p, FPL_PLAY_R_ENGINE);         /* the frame as it was read */
+    }
+    t2 = now_us();
+    p->last_read_us = t3 - t1;
+    p->last_wait_us = t2 - t3;
+    p->sum_read_us += p->last_read_us;
+    p->sum_wait_us += p->last_wait_us;
+    poke(slot + SLOT_BUFFER, (uint32_t)p->spare);
+    poke(slot + SLOT_CAPACITY, p->spare_cap);
+    p->spare = buf;
+    p->spare_cap = cap;
+    cache_sync();
+    p->last_engine_us = t2 - t1;
+    p->hook_end_us = now_us();
+    p->last_us = p->hook_end_us - t0;
+    if (p->last_us > p->max_us) p->max_us = p->last_us;
+    p->sum_engine_us += p->last_engine_us;
+    p->sum_hook_us += p->last_us;
+    saturate(&p->timed);
+    saturate(&p->fast);
+    saturate(&p->decoded);
+    return FPL_PLAY_DECODED;
+}
+
 uint32_t fpl_play_frame(struct fpl_play *p, uintptr_t slot, uint32_t busy) {
+    return fpl_play_frame_at(p, slot, 0, busy);
+}
+
+uint32_t fpl_play_frame_at(struct fpl_play *p, uintptr_t slot, uintptr_t reader, uint32_t busy) {
     struct ifd f, f0;
     uintptr_t buf, strip, s_at, o_at;
     uint32_t cap, got, root, across, down, tiles, end, pitch, raw_row, rem, t0;
@@ -320,6 +620,11 @@ uint32_t fpl_play_frame(struct fpl_play *p, uintptr_t slot, uint32_t busy) {
         return refuse(p, FPL_PLAY_R_IFD0);
     pitch = pitch_of(f.w, f.bits);
     if (f0.soff > cap || cap - f0.soff < strip_bytes(&f0)) return refuse(p, FPL_PLAY_R_ROOM);
+    {
+        uint32_t r = fast_frame(p, slot, buf, cap, &f, f0.soff, row_at[0], tiles, down * f.th,
+                                reader);
+        if (r != NOT_FAST) return r;
+    }
     strip = buf + f0.soff;
     raw_row = pitch * f.th;
     /* Bottom up is safe only if no tile row's output reaches a stream above
@@ -340,7 +645,8 @@ uint32_t fpl_play_frame(struct fpl_play *p, uintptr_t slot, uint32_t busy) {
     for (uint32_t r = down; r-- > 0;) {
         if (dma(s_at, buf + row_at[r], row_at[r + 1] - row_at[r]) != 0)
             return refuse(p, FPL_PLAY_R_COPY);
-        if (decode_row(&f, across, o_at, s_at) != 0) return refuse(p, FPL_PLAY_R_ENGINE);
+        if (decode_band(&f, f.th, across, o_at, s_at, WAIT_TICKS) != 0)
+            return refuse(p, FPL_PLAY_R_ENGINE);
         if (dma(strip + r * raw_row, o_at, (r == down - 1u ? rem : f.th) * pitch) != 0)
             return refuse(p, FPL_PLAY_R_COPY);
     }
@@ -349,6 +655,8 @@ uint32_t fpl_play_frame(struct fpl_play *p, uintptr_t slot, uint32_t busy) {
     cache_sync();
     p->last_us = now_us() - t0;
     if (p->last_us > p->max_us) p->max_us = p->last_us;
+    p->hook_end_us = 0;
+    saturate(&p->rows);
     saturate(&p->decoded);
     return FPL_PLAY_DECODED;
 }

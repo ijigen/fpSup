@@ -79,6 +79,7 @@ SITES = {                           # site: (stock word, what it is)
     0xC0398D88: (0xE92D49F0, 'stop check entry: push {r4-r8, fp, lr}'),
     0xC03A5490: (0xEB0BD652, 'final flush: bl C069ADE0'),
     0xC05C0EA4: (0xE595201C, 'player frame read: ldr r2, [r5, #0x1c]'),
+    0xC05C0EA0: (0xEBF6946E, 'player frame f_read: bl C0366060'),
     0xC05BDDAC: (0xE58430A0, 'player clip size: str r3, [r4, #0xa0]'),
     0xC05C2E90: (0xE92D4070, 'player pool free: push {r4, r5, r6, lr}'),
     0xC05C2D10: (0xE92D44F0, 'player pool make: push {r4, r5, r6, r7, sl, lr}'),
@@ -116,7 +117,13 @@ FIELDS = ['magic', 'hold_live', 'rec_events', 'rec_admitted', 'rec_raw',
           'play.max_us', 'play.last_buf', 'play.last_cap', 'play.last_got',
           'play.clips', 'play.clips_ours', 'play.clip_size_was', 'play.clip_size_set',
           'play.clip_failed', 'play.scratch_bytes', 'play.scratch_failed',
-          'play.scratch_freed', 'play.scratch_want', 'play.clips_first_stock', 'take_frames']
+          'play.scratch_freed', 'play.scratch_want', 'play.clips_first_stock', 'take_frames',
+          'play.spare', 'play.spare_cap', 'play.spare_failed', 'play.spare_lost', 'play.slots', 'play.restored',
+          'play.not_ours', 'play.fast', 'play.rows', 'play.fast_no_spare', 'play.fast_no_align', 'play.fast_no_room',
+          'play.last_engine_us', 'play.last_head_us', 'play.sum_engine_us', 'play.sum_hook_us', 'play.sum_gap_us',
+          'play.ahead', 'play.ahead_read', 'play.ahead_used', 'play.ahead_missed', 'play.ahead_none', 'play.ahead_failed',
+          'play.last_read_us', 'play.last_wait_us', 'play.sum_read_us', 'play.sum_wait_us',
+          'play.timed', 'play.gaps', 'play.last_gap_us', 'play.min_gap_us', 'play.max_gap_us']
 FIELDS += ['pitch_test', 'hold.pitch_test', 'hold.pitch_forced', 'hold_b.pitch_forced',
            'hold_b.pitch_test', 'rec.facts.readiness', 'rec.facts.readiness_context']   # 2026-11-10 row-pitch test switch
 FIELDS += ['settings_on', 'settings_ok', 'saves', 'save_failed', 'save_last', 'trace_n', 'trace', 'elog_n', 'elog']          # card.c FPL_TRACE: per-arrival records
@@ -147,7 +154,7 @@ ENTRIES = {'OFF_INIT': 'fpl_card_init', 'OFF_REC': 'fpl_card_rec',
            'OFF_ARRIVE': 'fpl_card_arrive', 'OFF_STOP': 'fpl_card_stop',
            'OFF_FLUSH': 'fpl_card_flush', 'OFF_TASK': 'fpl_card_task',
            'OFF_PLAY': 'fpl_card_play', 'OFF_CLIP': 'fpl_card_clip',
-           'OFF_END': 'fpl_card_play_end', 'OFF_POOL': 'fpl_card_play_pool',
+           'OFF_END': 'fpl_card_play_end', 'OFF_POOL': 'fpl_card_play_pool', 'OFF_MADE': 'fpl_card_play_made', 'OFF_READ': 'fpl_card_read',
            'OFF_WRITTEN': 'fpl_card_written', 'OFF_EVENT': 'fpl_card_event',
            'OFF_DISCARD': 'fpl_card_discard',
            'OFF_OBSERVE': 'fpl_card_observe', 'OFF_OBSERVER': 'fpl_card_observer'}

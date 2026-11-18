@@ -1,0 +1,9 @@
+=== s-12v2---RWZM
+s-12v2---RWZM-iso3200: FAIL black  clip: 40 frames fetched  decode: 40 frames  steady: max deviation 0.006  fresh: no repeats  black: mean - tag +3.209, channel spread 2.600  note: 40 of 40 compressed
+pong seq=12141
+  producer 1024x678 12-bit, raster 1,041,420 B
+  clips opened 8, ours 0 (frame size 1,124,864 -> 1,164,288), header unread 0; scratch 0 B, failed 0, freed 3
+  playback: frames read 60, stock 3, decoded 57 (last 6.2 ms, max 6.8 ms); last slot buffer 0xD1D9EC00 capacity 1,170,560 read 1,124,864
+  playback, one job a frame: 57 frames (row by row 0); buffers aligned 0, put back 850, not ours 0; spare 0x00000000 0 B, failed 0, lost 0; not this way: no spare 0, not aligned 0, no room 0
+  playback, last fast frame: engine 5.65 ms, header copy 0.43 ms; this clip over 57 frames: engine 186.6 ms, our hook 225.5 ms, between hooks (the player's read and the rest) 298.7 ms over 56 gaps (last 4.3, shortest 3.9, longest 53.2 ms); engine busy 36% of the time
+=== s-2x2---11

@@ -19,7 +19,10 @@ SUPS = {
     # engine keeps 1 MiB before the end of its room, so they get an own output of raw + 1 MiB (Bei: do B).
     # LOSS 0.3.7test: that payload copied by the firmware's DMA (0.3.6test, a test build, copied by CPU and lost
     # every third frame at 1312x874 ISO 3200).
-    'LOSS': ('Lossless', 'Lossless', '0.3.7test'),   # 2026-11-10: 14 bit (Sensor Lab 1:1 true 14)
+    # LOSS 0.3.11test (2026-11-18): playback decodes a frame in ONE engine job with no bulk copy (the player's
+    # buffers aligned to 1 KiB, the pixels into a spare buffer that takes the frame's place) and reads the next
+    # frame file while the engine runs (C05C0EA0).  0.3.8test .. 0.3.10test: test builds on the way.
+    'LOSS': ('Lossless', 'Lossless', '0.3.11test'),   # 2026-11-10: 14 bit (Sensor Lab 1:1 true 14)
     'ULWR': ('Unlock Writer', 'UnlockWriter', '0.1.0test'),
     'STFX': ('Stop-FX', 'Stop-FX', '0.1.0'),
     'GYR2': ('Gyro2', 'Gyro2', '0.2.1'),   # last release v0.2.0 (build 6, on main's releases/)

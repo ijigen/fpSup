@@ -40,7 +40,33 @@
  * reach a stream not yet read. One tile row's stream and output fit the
  * scratch. The engine's outer routine C062FAD0 cannot do a frame whose height
  * is not a whole number of tiles (tools/hwdecode); its steps are done here
- * for one tile row at a time. */
+ * for one tile row at a time.
+ *
+ * 2026-11-18, the whole frame in ONE engine job with no bulk copy (the row
+ * path above took 58.6 ms for a 3024x2010 frame the engine alone decodes in
+ * 22.7 ms -- tools/hwdecode -- and 8.5 ms for a 1 MiB frame):
+ *   aligned  when the player has made its pool (C05C2D10's return), every
+ *            buffer's address is moved up to the next 1 KiB (4..0x400 B; the
+ *            address the allocator gave is kept in the word below) and its
+ *            capacity cut by as much; fpl_play_end puts both back before the
+ *            player frees them (C001D2B8 frees by address);
+ *   spare    one more buffer of the same size from the same allocator, taken
+ *            before the player empties the pool, aligned the same way;
+ *   a frame  its stream is read by the engine where the player's read put it
+ *            (the strip offset is 1 KiB aligned in the file), decoded with the
+ *            tile-padded height into the spare at the same strip offset; the
+ *            header is copied in front of it, and the slot takes the spare
+ *            while the frame's old buffer becomes the spare (the player
+ *            reloads slot+0x14 after the site, C05C0F00).
+ *   ahead    while the engine decodes frame N, the next frame FILE is read
+ *            into a second spare (the player's path with its six digits at
+ *            +0x23 one higher, C06A0B08); when the player then comes to read
+ *            exactly that path (C05C0EA0, its f_read call), the slot takes
+ *            that buffer and the read is skipped. So a frame costs the longer
+ *            of its read and its decode, not their sum, and the engine is
+ *            never idle while a file is read. Any other path: read as stock.
+ * A frame the fast way cannot take (no spare, a strip not 1 KiB aligned, a
+ * buffer too small for the padded height) goes the row way. */
 
 enum fpl_play_refusal {
     FPL_PLAY_R_SLOT = 0,      /* no buffer */
@@ -60,6 +86,8 @@ enum fpl_play_refusal {
 #define FPL_PLAY_STOCK   0xfeu        /* returned: root at 8, left alone */
 #define FPL_PLAY_DECODED 0xffu        /* returned: decoded, root back at 8 */
 #define FPL_PLAY_HEADER  1024u        /* first-frame bytes read at clip open */
+#define FPL_PLAY_PATH    96u          /* a frame file's path, with its NUL */
+#define FPL_PLAY_DIGITS  0x23u        /* where C06A0B08 puts the six-digit frame number */
 
 struct fpl_play {
     uint32_t seen, stock, decoded;           /* frames: all, root at 8, done */
@@ -73,6 +101,27 @@ struct fpl_play {
     uint32_t clips_first_stock;              /* decodable clips opening on a stock frame */
     uintptr_t scratch;
     uint32_t obj[4];                         /* the scratch allocation record */
+    /* the whole frame in one job */
+    uintptr_t pool;                          /* the player's pool object; 0: none of ours */
+    uintptr_t pool_return;                   /* C05C2D10's caller, while it runs */
+    uintptr_t spare;                         /* aligned; 0: the row way only */
+    uint32_t spare_cap, spare_failed, spare_lost;
+    uint32_t slots, slots_base;              /* buffers aligned at pool make */
+    uint32_t restored, not_ours;             /* at the end: put back, left alone */
+    uint32_t fast, rows;                     /* frames decoded: one job, row by row */
+    uint32_t fast_no_spare, fast_no_align, fast_no_room;
+    uint32_t last_engine_us, last_head_us;   /* a fast frame: the job, the header copy */
+    /* this clip, frames decoded the fast way: the engine's time, our hook's,
+     * and the time between our hooks (the player's read and the rest) */
+    uint32_t sum_engine_us, sum_hook_us, sum_gap_us, timed, hook_end_us;
+    uint32_t sums_stale, gaps, last_gap_us, min_gap_us, max_gap_us;
+    /* the next file, read while the engine runs */
+    uintptr_t ahead;                         /* aligned; 0: no reading ahead */
+    uint32_t ahead_cap, ahead_got;           /* got: bytes of ahead_path in it; 0: none */
+    uint32_t ahead_read, ahead_used, ahead_missed, ahead_none, ahead_failed;
+    uint32_t last_read_us, last_wait_us;     /* a fast frame: the read ahead, the engine after it */
+    uint32_t sum_read_us, sum_wait_us;
+    char ahead_path[FPL_PLAY_PATH];
     uint32_t file[0x400 / 4];                /* the native file object */
     uint32_t header[FPL_PLAY_HEADER / 4];
 };
@@ -83,6 +132,8 @@ struct fpl_play_natives {
     void (*write)(uintptr_t, uint32_t);
     uintptr_t (*alloc)(uint32_t *obj, uint32_t bytes);     /* 1 KiB aligned */
     void (*release)(uint32_t *obj);
+    uintptr_t (*buffer_get)(uint32_t bytes);                /* as the player's: any address */
+    void (*buffer_put)(uintptr_t address);
     uint32_t (*dma)(uintptr_t to, uintptr_t from, uint32_t bytes);   /* 0 = done */
     uint32_t (*init)(volatile uint32_t *);                  /* 1 = latched */
     uint32_t (*flag)(void);
@@ -97,6 +148,9 @@ struct fpl_play_natives {
     /* the first frame of a clip: 1 = read; *got bytes into buf */
     uint32_t (*first_frame)(uintptr_t desc, uint32_t *file, uint8_t *buf,
                             uint32_t bytes, uint32_t *got);
+    /* a file read whole: 1 = read; *got bytes (at most `bytes`) into buf */
+    uint32_t (*file_read)(uint32_t volume, const char *path, uint32_t *file, uintptr_t buf,
+                          uint32_t bytes, uint32_t *got);
 };
 extern const struct fpl_play_natives fpl_play_test_natives;
 #endif
@@ -109,9 +163,19 @@ uint32_t fpl_play_clip(struct fpl_play *, uintptr_t desc, uint32_t size, uint32_
  * except after FPL_PLAY_R_ENGINE / a late FPL_PLAY_R_COPY, when some tile rows
  * are already written and the root still says compressed). */
 uint32_t fpl_play_frame(struct fpl_play *, uintptr_t slot, uint32_t busy);
-/* C05C2D10, the player making its buffer pool: the scratch the open clip
- * needs, taken first. */
-void fpl_play_pool(struct fpl_play *);
-/* C05C2E90, and every REC start: the scratch back to the pool. */
+/* The same, with the player's reader object (r4 at the site: the path being
+ * read at +0x80, its volume at +0xB4), so the next file can be read ahead. */
+uint32_t fpl_play_frame_at(struct fpl_play *, uintptr_t slot, uintptr_t reader, uint32_t busy);
+/* C05C0EA0, the player about to f_read the file `reader` names into `slot`.
+ * 1: the slot already holds that file (read ahead) -- the read is skipped. */
+uint32_t fpl_play_read(struct fpl_play *, uintptr_t slot, uintptr_t reader, uint32_t busy);
+/* C05C2D10's entry, the player about to make its buffer pool `pool` of
+ * buffers for `size` B files: the scratch and the spare the open clip needs,
+ * taken first. */
+void fpl_play_pool(struct fpl_play *, uintptr_t pool, uint32_t size);
+/* C05C2D10's return: the pool is made; its buffers aligned. */
+void fpl_play_made(struct fpl_play *);
+/* C05C2E90, and every REC start: the buffers' own addresses back in their
+ * slots, the spare and the scratch back to the pool. */
 void fpl_play_end(struct fpl_play *);
 #endif

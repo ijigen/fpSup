@@ -41,6 +41,9 @@
 .equ STOCK_FLUSH,  0xEB0BD652    /* bl C069ADE0                               */
 .equ SITE_PLAY,    0xC05C0EA4    /* the player's frame read, after its f_read */
 .equ STOCK_PLAY,   0xE595201C    /* ldr r2, [r5, #0x1c]                       */
+.equ SITE_READ,    0xC05C0EA0    /* the player's f_read of a frame file       */
+.equ STOCK_READ,   0xEBF6946E    /* bl C0366060                               */
+.equ REAL_READ,    0xC0366060
 .equ SITE_CLIP,    0xC05BDDAC    /* clip open: the first frame's size stored  */
 .equ STOCK_CLIP,   0xE58430A0    /* str r3, [r4, #0xa0]                       */
 .equ SITE_END,     0xC05C2E90    /* the player's pool freed: entry            */
@@ -89,7 +92,7 @@
 .equ SL_EXCL,      2
 .equ SL_SHARED_UI, 3
 .equ ENGINE,       0x300D0000    /* the lossless engine: claim_res id         */
-.equ CAVE_BYTES,   96
+.equ CAVE_BYTES,   104
 .equ REAL_PREPARE, 0xC03A2438
 
 /* An insertion site with a layer below: the site must already branch the
@@ -180,6 +183,12 @@ entry:
     cmp     r0, #0
     beq     out
     RESIDENT r1, discard_real
+    str     r0, [r1]
+    LDA     r1, SITE_READ
+    bl      below
+    cmp     r0, #0
+    beq     out
+    RESIDENT r1, read_real
     str     r0, [r1]
     LAYER   SITE_STOP,  STOCK_STOP,  0xEA000000, stop_resume,  stop_replay,  alt_stop
     LAYER   SITE_END,   STOCK_END,   0xEA000000, end_resume,   end_replay,   alt_end
@@ -295,6 +304,14 @@ entry:
     LDA     ip, OFF_POOL
     add     ip, r4, ip
     str     ip, [r0]
+    RESIDENT r0, w_made
+    LDA     ip, OFF_MADE
+    add     ip, r4, ip
+    str     ip, [r0]
+    RESIDENT r0, w_read
+    LDA     ip, OFF_READ
+    add     ip, r4, ip
+    str     ip, [r0]
     RESIDENT r0, w_written
     LDA     ip, OFF_WRITTEN
     add     ip, r4, ip
@@ -372,6 +389,11 @@ entry:
     ldr     r2, [r0]
     cmp     r2, r1
     bne     out
+    LDA     r0, SITE_READ
+    LDA     r1, STOCK_READ
+    ldr     r2, [r0]
+    cmp     r2, r1
+    bne     out
     LDA     r0, SITE_END
     LDA     r1, STOCK_END
     ldr     r2, [r0]
@@ -399,7 +421,7 @@ entry:
     ldr     r8, [r7]                    @ r8 = our cave block
     tst     r8, #3
     bne     out
-    add     r9, r8, #96
+    add     r9, r8, #104
     LDA     r10, CAVE_END
     cmp     r9, r10
     bhi     out                         @ the cave is full: arm nothing
@@ -447,6 +469,9 @@ entry:
     str     r0, [r8, #88]
     RESIDENT r1, discard_shim
     str     r1, [r8, #92]
+    str     r0, [r8, #96]
+    RESIDENT r1, read_shim
+    str     r1, [r8, #100]
 
     LDA     ip, F_DCACHE
     blx     ip
@@ -493,6 +518,10 @@ entry:
     LDA     r0, SITE_DISCARD
     add     r1, r8, #88
     mov     r2, #0xEB000000             @ bl: continue into the real cleanup
+    bl      encode
+    LDA     r0, SITE_READ
+    add     r1, r8, #96
+    mov     r2, #0xEB000000             @ bl: the read, or ours in its place
     bl      encode
 
     /* Last of all, the header template's observer (card.c fpl_card_observer):
@@ -657,6 +686,7 @@ discard_caller:
 play_shim:
     push    {r0, r1, r2, r3, ip, lr}
     mov     r0, r5
+    mov     r2, r4                      @ the reader: the path at +0x80
     ldr     r1, g_card
     ldr     ip, w_play
     blx     ip
@@ -664,6 +694,22 @@ play_shim:
 play_replay:
     ldr     r2, [r5, #0x1c]             @ STOCK_PLAY, executed here
     bx      lr
+
+/* C05C0EA0: bl C0366060(file, buffer, capacity, &read) -- r5 the slot, r4 the
+ * reader. When the slot already holds this file (read ahead while the engine
+ * decoded the frame before), the read is skipped: the site ignores r0. Else
+ * the real read (or the layer below), which returns to the site. */
+read_shim:
+    push    {r0, r1, r2, r3, ip, lr}
+    mov     r0, r5
+    ldr     r1, g_card
+    mov     r2, r4
+    ldr     ip, w_read
+    blx     ip
+    cmp     r0, #0
+    pop     {r0, r1, r2, r3, ip, lr}
+    bxne    lr
+    ldr     pc, read_real
 
 /* C05BDDAC: str r3, [r4, #0xa0] -- r3 the first frame file's size, r4 the
  * player, r6 the clip's file descriptor. The size stored is ours to say. */
@@ -696,13 +742,29 @@ end_replay:
  * displaced push and the original. */
 pool_shim:
     push    {r0, r1, r2, r3, ip, lr}
+    mov     r3, lr                      @ where the player goes on
+    mov     r2, r1                      @ the file size its buffers are for
+    mov     r1, r0                      @ its pool object
     ldr     r0, g_card
     ldr     ip, w_pool
     blx     ip
+    cmp     r0, #0
     pop     {r0, r1, r2, r3, ip, lr}
+    adrne   lr, pool_made               @ the original returns to us (2026-11-18)
 pool_replay:
     push    {r4, r5, r6, r7, sl, lr}    @ STOCK_POOL, executed here
     ldr     pc, pool_resume
+
+/* C05C2D10 has returned (void; sp as at its call): its buffers are made.
+ * Ours, which hands back the address the player called from. */
+pool_made:
+    push    {r4, lr}
+    ldr     r0, g_card
+    ldr     ip, w_made
+    blx     ip
+    mov     ip, r0
+    pop     {r4, lr}
+    bx      ip
 
 /* The CinemaDNG tag Subject's observer, vtable +0xC: r0 = the observer,
  * r1 = the DataPool. Called by FUN_c0055fe0 in the notifying task with no
@@ -737,6 +799,8 @@ w_play:      .word 0
 w_clip:      .word 0
 w_end:       .word 0
 w_pool:      .word 0
+w_made:      .word 0
+w_read:      .word 0
 w_written:   .word 0
 w_event:     .word 0
 w_discard:   .word 0
@@ -747,6 +811,7 @@ end_resume:  .word END_RESUME
 pool_resume: .word POOL_RESUME
 event_resume:.word EVENT_RESUME
 discard_real:.word REAL_DISCARD
+read_real:   .word REAL_READ
 #if V3
 play_next:   .word 0
 /* A layer below an insertion site: the stock instruction we would replay is
@@ -770,9 +835,9 @@ settings:
  * checked against the reference image by build_v3_lossless.py. */
 claims:
 #if V4
-    .word 10                            @ the string sites are the v4 core's
+    .word 11                            @ the string sites are the v4 core's
 #else
-    .word 13
+    .word 14
 #endif
     .word SITE_REC,     STOCK_REC,     SL_CHAIN
     .word SITE_ARRIVE,  STOCK_ARRIVE,  SL_EXCL     @ replaces blx r3: not a branch
@@ -784,6 +849,7 @@ claims:
     .word SITE_POOL,    STOCK_POOL,    SL_CHAIN
     .word SITE_EVENT,   STOCK_EVENT,   SL_CHAIN
     .word SITE_DISCARD, STOCK_DISCARD, SL_CHAIN
+    .word SITE_READ,    STOCK_READ,    SL_CHAIN
 #if !V4
     .word 0xC05E5B58,   0x3FFFF1B1,    SL_SHARED_UI   @ uishare string layers
     .word 0xC05E61C8,   0x428A6942,    SL_SHARED_UI

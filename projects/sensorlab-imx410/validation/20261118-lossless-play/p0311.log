@@ -1,0 +1,37 @@
+=== s-12v2---RWZM 09:54:33
+s-12v2---RWZM-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 2 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 40 of 40 compressed
+pong seq=13476
+screen LV_CINE_MEDIUM
+  clips opened 12, ours 0 (frame size 1,124,864 -> 1,164,288), header unread 0; scratch 0 B, failed 0, freed 3
+  playback: frames read 60, stock 3, decoded 57 (last 3.9 ms, max 8.8 ms); last slot buffer 0xD1EBCC00 capacity 1,170,624 read 1,124,864
+  playback, one job a frame: 57 frames (row by row 0); buffers aligned 0, put back 848, not ours 0; spare 0x00000000 0 B, failed 0, lost 0; not this way: no spare 0, not aligned 0, no room 0
+  playback, last fast frame: engine 3.78 ms, header copy 0.64 ms; this clip over 57 frames: engine 218.3 ms, our hook 224.9 ms, between hooks (the player's read and the rest) 67.6 ms over 56 gaps (last 0.3, shortest 0.3, longest 47.0 ms); engine job open 75% of the time
+  playback, reading ahead: files read while the engine ran 57, handed to the player 56, another frame asked 0, nothing to read 0, no buffer 0; last frame: read 3.76 ms, engine still busy after it 0.02 ms; this clip: reads 212.5 ms, waits 5.8 ms
+=== s-f12v3---11 09:56:41
+s-f12v3---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 4 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 0 of 40 compressed
+pong seq=26080
+screen LV_CINE_MEDIUM
+  clips opened 16, ours 0 (frame size 5,264,384 -> 5,394,432), header unread 0; scratch 0 B, failed 0, freed 6
+  playback: frames read 123, stock 66, decoded 57 (last 3.9 ms, max 8.8 ms); last slot buffer 0xD2B16C00 capacity 5,397,696 read 5,264,384
+  playback, one job a frame: 57 frames (row by row 0); buffers aligned 0, put back 1061, not ours 0; spare 0x00000000 0 B, failed 0, lost 0; not this way: no spare 0, not aligned 0, no room 0
+  playback, last fast frame: engine 3.78 ms, header copy 0.64 ms; this clip over 57 frames: engine 218.3 ms, our hook 224.9 ms, between hooks (the player's read and the rest) 67.6 ms over 56 gaps (last 0.3, shortest 0.3, longest 47.0 ms); engine job open 75% of the time
+  playback, reading ahead: files read while the engine ran 57, handed to the player 56, another frame asked 0, nothing to read 0, no buffer 0; last frame: read 3.76 ms, engine still busy after it 0.02 ms; this clip: reads 212.5 ms, waits 5.8 ms
+=== s-14---11 09:58:51
+s-14---11-iso3200: FAIL steady  clip: 34 frames fetched  decode: 34 frames  steady: 4 of 34 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 23 of 34 compressed
+pong seq=37530
+screen LV_CINE_MEDIUM
+  clips opened 18, ours 0 (frame size 18,231,808 -> 18,674,176), header unread 0; scratch 0 B, failed 0, freed 6
+  playback: frames read 123, stock 66, decoded 57 (last 3.9 ms, max 8.8 ms); last slot buffer 0xD2B16C00 capacity 5,397,696 read 5,264,384
+  playback, one job a frame: 57 frames (row by row 0); buffers aligned 0, put back 1061, not ours 0; spare 0x00000000 0 B, failed 0, lost 0; not this way: no spare 0, not aligned 0, no room 0
+  playback, last fast frame: engine 3.78 ms, header copy 0.64 ms; this clip over 57 frames: engine 218.3 ms, our hook 224.9 ms, between hooks (the player's read and the rest) 67.6 ms over 56 gaps (last 0.3, shortest 0.3, longest 47.0 ms); engine job open 75% of the time
+  playback, reading ahead: files read while the engine ran 57, handed to the player 56, another frame asked 0, nothing to read 0, no buffer 0; last frame: read 3.76 ms, engine still busy after it 0.02 ms; this clip: reads 212.5 ms, waits 5.8 ms
+=== s-12---11 10:01:07
+s-12---11-iso3200: FAIL steady  clip: 40 frames fetched  decode: 40 frames  steady: 7 of 40 frames step > 0.15 DN12  fresh: no repeats  black: not dark: not judged  note: 28 of 40 compressed
+pong seq=50097
+screen LV_CINE_MEDIUM
+  clips opened 20, ours 0 (frame size 15,639,552 -> 16,018,432), header unread 0; scratch 0 B, failed 0, freed 6
+  playback: frames read 123, stock 66, decoded 57 (last 3.9 ms, max 8.8 ms); last slot buffer 0xD2B16C00 capacity 5,397,696 read 5,264,384
+  playback, one job a frame: 57 frames (row by row 0); buffers aligned 0, put back 1061, not ours 0; spare 0x00000000 0 B, failed 0, lost 0; not this way: no spare 0, not aligned 0, no room 0
+  playback, last fast frame: engine 3.78 ms, header copy 0.64 ms; this clip over 57 frames: engine 218.3 ms, our hook 224.9 ms, between hooks (the player's read and the rest) 67.6 ms over 56 gaps (last 0.3, shortest 0.3, longest 47.0 ms); engine job open 75% of the time
+  playback, reading ahead: files read while the engine ran 57, handed to the player 56, another frame asked 0, nothing to read 0, no buffer 0; last frame: read 3.76 ms, engine still busy after it 0.02 ms; this clip: reads 212.5 ms, waits 5.8 ms
+done 10:03:28

@@ -36,10 +36,12 @@ SITES = {'rec': (0xC03A33C8, 0xEBFFFC1A), 'arrive': (0xC038BFF0, 0xE12FFF33),
          'stop': (0xC0398D88, 0xE92D49F0), 'flush': (0xC03A5490, 0xEB0BD652),
          'play': (0xC05C0EA4, 0xE595201C), 'clip': (0xC05BDDAC, 0xE58430A0),
          'end': (0xC05C2E90, 0xE92D4070), 'pool': (0xC05C2D10, 0xE92D44F0),
-         'event': (0xC038BD08, 0xE594300C), 'discard': (0xC037DEF8, 0xEB000042)}
+         'event': (0xC038BD08, 0xE594300C), 'discard': (0xC037DEF8, 0xEB000042),
+         'read': (0xC05C0EA0, 0xEBF6946E)}
 VENEER_AT = {'rec': 0, 'arrive': 8, 'stop': 16, 'flush': 24,      # the record at +32
-             'play': 48, 'clip': 56, 'end': 64, 'pool': 72, 'event': 80, 'discard': 88}
-CAVE_BYTES = 96
+             'play': 48, 'clip': 56, 'end': 64, 'pool': 72, 'event': 80, 'discard': 88,
+             'read': 96}
+CAVE_BYTES = 104
 CAVE_BUMP, CAVE_ARENA, CAVE_END = 0xC072E060, 0xC072E064, 0xC072EFB4
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import build_card  # noqa: E402
@@ -107,7 +109,7 @@ class CardCamera(T.Camera):
                         'ORIG_tk_cre_tsk': TASK_ID, 'ORIG_tk_sta_tsk': 0,
                         'ORIG_clip_volume': 1, 'ORIG_clip_path': 0x45100000,
                         'ORIG_f_ctor': 0, 'ORIG_f_open': 0, 'ORIG_f_dtor': 0,
-                        'ORIG_tag_add': 0}
+                        'ORIG_tag_add': 0, 'ORIG_read': 1}
         self.task_descriptors = []
         self.flush_result = (0, 0)
         self.irq_depth = 0
@@ -531,6 +533,19 @@ class CardEmulationTests(unittest.TestCase):
         self.assertEqual(cam.r(UC_ARM_REG_SP), T.STACK - 0x2000)
         self.assertEqual(bytes(cam.mu.mem_read(buf, len(frame))), frame, 'a stock frame changed')
 
+    def test_read_with_nothing_read_ahead_is_the_players_own_read(self):
+        from unicorn.arm_const import UC_ARM_REG_R5
+        cam = self.armed()
+        cam.by_addr[0xC0366060] = 'ORIG_read'      # after boot: the loader reads its file with it
+        slot = T.STACK - 0x3000
+        cam.mu.mem_write(slot, b'\0' * 0x14 + struct.pack('<III', 0x45200000, 0x100000, 0))
+        cam.mu.reg_write(UC_ARM_REG_R5, slot)
+        self.enter(cam, 'read', (0xF11E, 0x45200000, 0x100000, slot + 0x1c), r4=T.STACK - 0x3800)
+        (name, regs, sp, lr), = [o for o in cam.originals if o[0] == 'ORIG_read']
+        self.assertEqual(regs, (0xF11E, 0x45200000, 0x100000, slot + 0x1c))
+        self.assertEqual((sp, lr), (T.STACK - 0x2000, T.DONE))
+        self.assertEqual(cam.r(UC_ARM_REG_R5), slot)
+
     def test_stop_runs_the_displaced_push_and_continues_into_the_original(self):
         cam = self.armed()
         self.enter(cam, 'stop', (1, 0x77, 0, 0))
@@ -581,7 +596,22 @@ class CardEmulationTests(unittest.TestCase):
         self.assertEqual(sp, T.STACK - 0x2000 - 24)          # push {r4-r7, sl, lr}
         pushed = struct.unpack('<6I', cam.mu.mem_read(sp, 24))
         self.assertEqual(pushed[0], 0x44444444)
-        self.assertEqual(pushed[5], T.DONE)
+        # 2026-11-18: the original returns through pool_made (the player's
+        # buffers are aligned there), which goes on where the player called from
+        made = BLOCK + card_symbols()['pool_made']
+        self.assertEqual(pushed[5], made)
+        for again in range(2):
+            cam.mu.reg_write(UC_ARM_REG_SP, T.STACK - 0x2000)
+            cam.mu.reg_write(UC_ARM_REG_R4, 0x44444444)
+            cam.mu.emu_start(made, T.DONE, count=2_000_000)
+            self.assertEqual(cam.r(__import__('unicorn.arm_const').arm_const.UC_ARM_REG_PC), T.DONE, 'did not go back to the caller')
+            self.assertEqual(cam.r(UC_ARM_REG_SP), T.STACK - 0x2000)
+            self.assertEqual(cam.r(UC_ARM_REG_R4), 0x44444444)
+            # and the next pool make is taken the same way
+            self.enter(cam, 'pool', (0x66, 0x77, 0, 0))
+            (name, regs, sp, _lr), = [o for o in cam.originals if o[0] == 'ORIG_pool_resume']
+            self.assertEqual(regs[:2], (0x66, 0x77))
+            self.assertEqual(struct.unpack('<6I', cam.mu.mem_read(sp, 24))[5], made)
 
 
     # ---- the header template's observer (header_tag.h) -------------------

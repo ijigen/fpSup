@@ -100,6 +100,20 @@ def main():
     os.environ['BLK_BUILD'] = str(pathlib.Path(a.build).resolve())
     sys.argv = sys.argv[:1]
     import take as T
+    # 2026-11-18: every recipe change CALLS code at block + sq_test_off.  A Lossless build 4 KiB longer moved this
+    # block and two runs called into the old address: the shell task died and the camera had to be power cycled.
+    # The address is the loader's own (LOAD.LOG, written at this boot), never one remembered from another card.
+    log = a.out.resolve().parent / '.raw_accept_LOAD.LOG'
+    log.unlink(missing_ok=True)
+    subprocess.run([sys.executable, '-B', 'getfile.py', '\\fpSup\\LOAD.LOG', str(log), '--size', '65536', '--partial'],
+                   cwd=T.SHELL, capture_output=True, text=True)
+    rows = [l.split() for l in log.read_text(errors='replace').splitlines()] if log.exists() else []
+    at = [int(r[1], 16) for r in rows if len(r) >= 4 and r[0] == '0A' and r[3] == T.INFO['file']]
+    if len(at) != 1:
+        raise SystemExit(f"{T.INFO['file']} is not loaded exactly once this boot (LOAD.LOG: {at}): nothing called")
+    if at[0] != a.block:
+        raise SystemExit(f"--block 0x{a.block:08X} is not where {T.INFO['file']} is loaded (0x{at[0]:08X}): "
+                         f'nothing called')
     T.BLOCK = a.block; T.SQ = a.block + T.INFO['sq_test_off']
     a.out.mkdir(parents=True, exist_ok=True)
     res = a.out / 'results.jsonl'

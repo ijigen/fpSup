@@ -225,6 +225,26 @@ def main():
           f'{v["play.max_us"] / 1000:.1f} ms)' + (f', left alone {prefused}' if prefused else '')
           + f'; last slot buffer 0x{v["play.last_buf"]:08X} capacity {v["play.last_cap"]:,} '
           f'read {v["play.last_got"]:,}')
+    if 'play.fast' in v:
+        wall = v['play.sum_hook_us'] + v['play.sum_gap_us']
+        print(f'  playback, one job a frame: {v["play.fast"]} frames (row by row {v["play.rows"]}); buffers aligned '
+              f'{v["play.slots"]}, put back {v["play.restored"]}, not ours {v["play.not_ours"]}; spare '
+              f'0x{v["play.spare"]:08X} {v["play.spare_cap"]:,} B, failed {v["play.spare_failed"]}, lost '
+              f'{v["play.spare_lost"]}; not this way: no spare {v["play.fast_no_spare"]}, not aligned '
+              f'{v["play.fast_no_align"]}, no room {v["play.fast_no_room"]}')
+        print(f'  playback, last fast frame: engine {v["play.last_engine_us"] / 1000:.2f} ms, header copy '
+              f'{v["play.last_head_us"] / 1000:.2f} ms; this clip over {v["play.timed"]} frames: engine '
+              f'{v["play.sum_engine_us"] / 1000:.1f} ms, our hook {v["play.sum_hook_us"] / 1000:.1f} ms, between hooks '
+              f'(the player\'s read and the rest) {v["play.sum_gap_us"] / 1000:.1f} ms'
+              + (f' over {v["play.gaps"]} gaps (last {v["play.last_gap_us"] / 1000:.1f}, shortest '
+                 f'{v["play.min_gap_us"] / 1000:.1f}, longest {v["play.max_gap_us"] / 1000:.1f} ms)' if v.get('play.gaps') else '')
+              + (f'; engine job open {100 * v["play.sum_engine_us"] / wall:.0f}% of the time' if wall else ''))
+        if 'play.ahead_read' in v:
+            print(f'  playback, reading ahead: files read while the engine ran {v["play.ahead_read"]}, handed to the player '
+                  f'{v["play.ahead_used"]}, another frame asked {v["play.ahead_missed"]}, nothing to read '
+                  f'{v["play.ahead_none"]}, no buffer {v["play.ahead_failed"]}; last frame: read {v["play.last_read_us"] / 1000:.2f} ms, '
+                  f'engine still busy after it {v["play.last_wait_us"] / 1000:.2f} ms; this clip: reads '
+                  f'{v["play.sum_read_us"] / 1000:.1f} ms, waits {v["play.sum_wait_us"] / 1000:.1f} ms')
     print(f'  before file write (not a write-success count): IFDs completed {v["flush.applied"]}, header not the take\'s '
           f'{v["flush.tag_failed"]}, other length {v["flush.length_mismatch"]}; '
           f'promises a previous take left {v["stale_promises"]}')

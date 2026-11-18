@@ -28,6 +28,9 @@ HERE = Path(__file__).resolve().parent
 STOCK, DECODED = 0xFE, 0xFF
 SEEN, N_STOCK, N_DECODED, OOB, BAD_WRITES, OPENS, CLOSES, ALLOCS, RELEASES, DMAS, \
     SUBMITS, MISALIGNED, SCRATCH_BYTES, CLIPS_OURS, SYNCS, SCRATCH_FAILED, CLIP_FAILED = range(17)
+(FAST, ROWS, SLOTS_ALIGNED, RESTORED, NO_SPARE, NO_ALIGN, NO_ROOM, SPARE, ROWS_TOLD, TILE_VAR, PUTS,
+ SPARE_LOST, NOT_OURS, SPARE_FAILED, AHEAD_READ, AHEAD_USED, AHEAD_MISSED, AHEAD_NONE, FILE_READS,
+ READS_WHILE_ENGINE, AHEAD, AHEAD_GOT, AHEAD_FAILED) = range(17, 40)
 
 
 def build(directory, replace=None, name='play.dylib'):
@@ -52,10 +55,21 @@ def build(directory, replace=None, name='play.dylib'):
                                                      ct.c_uint32]
         getattr(lib, 'fpl_fixture_' + fn).restype = ct.c_uint32
     for fn, n, ret in (('knob', 2, False), ('run', 1, True), ('byte', 1, True), ('get', 1, True),
-                       ('reset', 0, False), ('end', 0, False), ('pool', 0, False)):
+                       ('reset', 0, False), ('end', 0, False), ('pool', 0, False),
+                       ('free_pool', 0, True), ('live', 0, True), ('slot', 2, True),
+                       ('slot_byte', 2, True), ('remake', 1, False)):
         f = getattr(lib, 'fpl_fixture_' + fn)
         f.argtypes = [ct.c_uint32] * n
         f.restype = ct.c_uint32 if ret else None
+    lib.fpl_fixture_open_pool.argtypes = [ct.c_char_p, ct.c_uint32, ct.c_uint32, ct.c_uint32,
+                                          ct.c_uint32]
+    lib.fpl_fixture_open_pool.restype = ct.c_uint32
+    lib.fpl_fixture_play.argtypes = [ct.c_uint32, ct.c_char_p, ct.c_uint32]
+    lib.fpl_fixture_play.restype = ct.c_uint32
+    lib.fpl_fixture_disk.argtypes = [ct.c_char_p, ct.c_char_p, ct.c_uint32]
+    lib.fpl_fixture_disk.restype = None
+    lib.fpl_fixture_play_path.argtypes = [ct.c_uint32, ct.c_char_p]
+    lib.fpl_fixture_play_path.restype = ct.c_uint32
     return lib
 
 
@@ -72,6 +86,32 @@ def ifd(entries, at, extra_at):
         else:
             body += struct.pack('<HHII', tag, typ, count, val)
     return struct.pack('<H', len(entries)) + body + b'\0\0\0\0', extra
+
+
+def default_grid(w, h):
+    """tile_grid.h's default (no force): the engine's soonest legal grid."""
+    best, pick = None, (512, 368)
+    for tw in range(32, 513, 32):
+        if w == 2 * tw:
+            continue
+        across = -(-w // tw)
+        for th in range(16, 513, 16):
+            down = -(-h // th)
+            if across * down > 160:
+                continue
+            cost = across * tw * down * th + across * down * 32250
+            if best is None or cost < best:
+                best, pick = cost, (tw, th)
+    return pick
+
+
+def clip_size(w=96, h=74, bits=12, strip=0x400, **_):
+    """What clip open asks the player's buffers to be for: the stock frame
+    file, and whole default tiles below the last row."""
+    pitch = ((w * bits // 8) + 3) & ~3
+    th = default_grid(w, h)[1]
+    stock = strip + ((raster_len(w, h, bits) + 0x1FF) & ~0x1FF)
+    return max(stock, strip + pitch * (-(-h // th) * th))
 
 
 def raster_len(w=96, h=74, bits=12, **_):
@@ -168,7 +208,8 @@ class PlayDecodeTests(unittest.TestCase):
     def test_a_clip_of_ours_asks_for_the_stock_frame_and_the_pool_takes_the_scratch(self):
         data, expected, pitch = frame()
         stock = 0x400 + ((len(expected) + 0x1FF) & ~0x1FF)
-        self.assertEqual(self.lib.fpl_fixture_clip(data, len(data), len(data), 0), stock)
+        self.assertGreater(clip_size(), stock, 'this frame has no padded tile rows')
+        self.assertEqual(self.lib.fpl_fixture_clip(data, len(data), len(data), 0), clip_size())
         self.assertEqual((self.get(CLIPS_OURS), self.get(ALLOCS)), (1, 0), 'taken at clip open')
         self.lib.fpl_fixture_end()                       # the player's old pool freed
         self.lib.fpl_fixture_pool()                      # and made
@@ -203,6 +244,10 @@ class PlayDecodeTests(unittest.TestCase):
         self.assertEqual(self.open_clip(data, 123456), 123456)
         self.assertEqual((self.get(CLIPS_OURS), self.get(ALLOCS)), (0, 1))
 
+    def test_a_clip_opening_on_a_stock_frame_gets_room_for_whole_tiles(self):
+        data, expected, pitch = frame(ours=False)
+        self.assertEqual(self.open_clip(data, len(data)), clip_size())
+
     def test_a_compressed_frame_after_a_stock_first_frame_is_decoded(self):
         self.open_clip(frame(ours=False)[0])
         data, expected, pitch = frame()
@@ -234,7 +279,7 @@ class PlayDecodeTests(unittest.TestCase):
     def test_no_scratch_at_clip_open_still_gives_the_stock_size(self):
         data, expected, pitch = frame()
         self.lib.fpl_fixture_knob(2, 1)
-        self.assertEqual(self.open_clip(data), 0x400 + ((len(expected) + 0x1FF) & ~0x1FF))
+        self.assertEqual(self.open_clip(data), clip_size())
         self.assertEqual(self.get(SCRATCH_FAILED), 1)
 
     # ---- frames of ours, decoded -------------------------------------------
@@ -276,8 +321,12 @@ class PlayDecodeTests(unittest.TestCase):
         data, expected, pitch = frame(w=88)
         raster = raster_len(w=88)
         self.assertGreater(raster, pitch * 74)
-        self.assertEqual(self.open_clip(data), 0x400 + ((raster + 0x1FF) & ~0x1FF))
+        self.assertEqual(self.open_clip(data), clip_size(w=88))
         self.assertEqual(self.get(CLIPS_OURS), 1, 'not taken for ours')
+        # a height that is whole tiles: exactly the stock file, the 12 B included
+        data, expected, pitch = frame(w=88, h=64)
+        self.assertEqual(default_grid(88, 64)[1], 64)
+        self.assertEqual(self.open_clip(data), 0x400 + ((raster_len(w=88, h=64) + 0x1FF) & ~0x1FF))
 
     def test_nothing_is_written_past_an_exact_capacity(self):
         data, expected, cap, strip = self.decode()
@@ -367,6 +416,409 @@ class PlayDecodeTests(unittest.TestCase):
         self.assertEqual(self.get(BAD_WRITES), 0)
 
 
+class OneJobTests(unittest.TestCase):
+    """The whole frame in one engine job, no bulk copy (2026-11-18): the
+    player's buffers moved up to 1 KiB when its pool is made, the stream read
+    where the player put it, the pixels decoded into a spare buffer that then
+    takes the frame's place in the slot."""
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix='fpl-play-one-')
+        cls.lib = build(cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def get(self, f): return self.lib.fpl_fixture_get(f)
+
+    def setUp(self):
+        self.lib.fpl_fixture_reset()
+
+    def pool(self, slots=3, step=0x780, **kw):
+        self.kw = kw
+        first = frame(ours=False, **{k: v for k, v in kw.items() if k in ('w', 'h', 'bits', 'strip')})[0]
+        self.want = self.lib.fpl_fixture_open_pool(first, len(first), len(first), slots, step)
+        return self.want
+
+    def play(self, k, **over):
+        data, expected, pitch = frame(**{**self.kw, **over})
+        self.data, self.expected = data, expected
+        return self.lib.fpl_fixture_play(k, data, len(data))
+
+    def slot_bytes(self, k, at, n):
+        return bytes(self.lib.fpl_fixture_slot_byte(k, at + i) for i in range(n))
+
+    def check(self, k, strip=0x400):
+        self.assertEqual(self.slot_bytes(k, strip, len(self.expected)), self.expected)
+        self.assertEqual(struct.unpack('<I', self.slot_bytes(k, 4, 4))[0], 8, 'root not on IFD0')
+        self.assertEqual(self.slot_bytes(k, 8, strip - 8), self.data[8:strip], 'header changed')
+        self.assertEqual((self.get(OOB), self.get(BAD_WRITES), self.get(MISALIGNED)), (0, 0, 0))
+        self.assertEqual(self.get(OPENS), self.get(CLOSES))
+
+    def test_the_pool_made_aligns_every_buffer_and_keeps_its_room(self):
+        self.pool(slots=3)
+        self.assertEqual(self.get(SLOTS_ALIGNED), 3)
+        cap = (self.want + 0x1FFF) & ~0xFFF
+        for k in range(3):
+            self.assertEqual(self.lib.fpl_fixture_slot(k, 0x14) & 0x3FF, 0)
+            self.assertEqual(self.lib.fpl_fixture_slot(k, 0x18), cap - (0x400 - 0x380))
+            self.assertGreaterEqual(self.lib.fpl_fixture_slot(k, 0x18), self.want)
+        self.assertEqual(self.get(SPARE) & 0x3FF, 0)
+        self.assertEqual(self.lib.fpl_fixture_live(), 5, 'three of the player, the spare, the one read ahead into')
+        self.assertEqual(self.get(AHEAD) & 0x3FF, 0)
+
+    def test_a_frame_is_decoded_in_one_job_and_the_buffers_change_places(self):
+        self.pool()
+        was, spare = self.lib.fpl_fixture_slot(1, 0x14), self.get(SPARE)
+        self.assertEqual(self.play(1), DECODED)
+        self.check(1)
+        self.assertEqual((self.get(FAST), self.get(ROWS)), (1, 0))
+        self.assertEqual((self.get(OPENS), self.get(SUBMITS), self.get(DMAS)), (1, 1, 0),
+                         'one job, no bulk copy')
+        self.assertEqual(self.get(SYNCS), 1)
+        self.assertEqual(self.lib.fpl_fixture_slot(1, 0x14), spare, 'the slot did not take the spare')
+        self.assertEqual(self.get(SPARE), was, 'the old buffer is not the spare')
+        # the engine was told the tile-padded height and every tile
+        tw, th = 32, 32
+        self.assertEqual(self.get(ROWS_TOLD), -(-74 // th) * th)
+        self.assertEqual(self.get(TILE_VAR), -(-96 // tw) * -(-74 // th))
+
+    def test_frame_after_frame_in_every_slot(self):
+        self.pool(slots=3)
+        for n in range(7):
+            k = n % 3
+            self.assertEqual(self.play(k, tile_len=24 + 4 * n), DECODED, n)
+            self.check(k)
+        self.assertEqual((self.get(FAST), self.get(ROWS)), (7, 0))
+
+    def test_an_allocator_that_gives_aligned_blocks(self):
+        self.pool(step=0)
+        self.assertEqual(self.play(0), DECODED)
+        self.check(0)
+        self.assertEqual(self.get(FAST), 1)
+        self.assertEqual(self.lib.fpl_fixture_free_pool(), 0)
+        self.assertEqual(self.lib.fpl_fixture_live(), 0)
+
+    def test_the_pool_freed_gets_every_address_the_allocator_gave(self):
+        self.pool(slots=3)
+        for k in (0, 2, 0, 1):
+            self.assertEqual(self.play(k), DECODED)
+        self.assertEqual(self.lib.fpl_fixture_free_pool(), 0, 'a moved address was freed')
+        self.assertEqual(self.lib.fpl_fixture_live(), 0, 'a buffer was not given back')
+        self.assertEqual((self.get(RESTORED), self.get(NOT_OURS), self.get(SPARE_LOST)), (3, 0, 0))
+        self.assertEqual(self.get(PUTS), 5)
+        self.assertEqual(self.get(SPARE), 0)
+
+    def test_the_end_puts_addresses_and_capacities_back_in_place(self):
+        # a REC start while the pool lives: each slot keeps ITS buffer
+        self.pool(slots=2)
+        self.assertEqual(self.play(0), DECODED)
+        now = [self.lib.fpl_fixture_slot(k, 0x14) for k in range(2)]
+        self.lib.fpl_fixture_end()
+        cap = (self.want + 0x1FFF) & ~0xFFF
+        for k in range(2):
+            self.assertEqual(self.lib.fpl_fixture_slot(k, 0x14), now[k] - 0x80)
+            self.assertEqual(self.lib.fpl_fixture_slot(k, 0x18), cap)
+        self.assertEqual(self.slot_bytes(0, 0x80 + 0x400, len(self.expected)), self.expected)
+        # and a frame after that goes the row way, into the buffer as it is
+        self.lib.fpl_fixture_end()
+        self.assertEqual(self.get(PUTS), 2, 'the spares freed twice')
+
+    def test_a_pool_already_made_is_not_moved_again(self):
+        # after a REC start gave everything back, the player's pool still made
+        self.pool(slots=2)
+        self.lib.fpl_fixture_end()
+        now = [self.lib.fpl_fixture_slot(k, 0x14) for k in range(2)]
+        live = self.lib.fpl_fixture_live()
+        self.lib.fpl_fixture_remake(self.want)
+        self.assertEqual([self.lib.fpl_fixture_slot(k, 0x14) for k in range(2)], now)
+        self.assertEqual((self.lib.fpl_fixture_live(), self.get(SPARE)), (live, 0))
+        self.assertEqual(self.play(0), DECODED)          # the row way
+        self.assertEqual((self.get(FAST), self.get(ROWS)), (0, 1))
+        self.assertEqual(self.lib.fpl_fixture_free_pool(), 0)
+
+    def test_a_stock_frame_is_left_and_nothing_changes_places(self):
+        self.pool()
+        was = self.lib.fpl_fixture_slot(0, 0x14)
+        self.assertEqual(self.play(0, ours=False), STOCK)
+        self.assertEqual(self.lib.fpl_fixture_slot(0, 0x14), was)
+        self.assertEqual(self.slot_bytes(0, 0, len(self.data)), self.data)
+
+    def test_no_spare_goes_the_row_way(self):
+        self.lib.fpl_fixture_knob(5, 1)
+        first = frame(ours=False)[0]
+        self.lib.fpl_fixture_open_pool(first, len(first), len(first), 0, 0x780)
+        self.assertEqual((self.get(SPARE), self.get(SPARE_FAILED), self.get(SLOTS_ALIGNED)), (0, 1, 0))
+
+    def test_a_strip_that_is_not_1_kib_aligned_goes_the_row_way(self):
+        self.pool(strip=0x600)
+        self.assertEqual(self.play(0), DECODED)
+        self.check(0, strip=0x600)
+        self.assertEqual((self.get(FAST), self.get(ROWS), self.get(NO_ALIGN)), (0, 1, 1))
+
+    def test_a_grid_whose_padded_height_does_not_fit_goes_the_row_way(self):
+        self.pool(w=96, h=66)                    # default grid: no padding to speak of
+        was = self.lib.fpl_fixture_slot(0, 0x14)
+        cap = self.lib.fpl_fixture_slot(0, 0x18)
+        th = 48
+        pitch = 144
+        while 0x400 + pitch * (-(-66 // th) * th) <= cap:
+            th += 16
+        self.assertEqual(self.play(0, th=th), DECODED)
+        self.check(0)
+        self.assertEqual((self.get(FAST), self.get(ROWS), self.get(NO_ROOM)), (0, 1, 1))
+        self.assertEqual(self.lib.fpl_fixture_slot(0, 0x14), was)
+
+    def test_an_engine_failure_leaves_the_frame_and_the_buffers(self):
+        self.pool()
+        was, spare = self.lib.fpl_fixture_slot(0, 0x14), self.get(SPARE)
+        self.lib.fpl_fixture_knob(1, 1)
+        self.assertEqual(self.play(0), R_ENGINE)
+        self.lib.fpl_fixture_knob(1, 0)
+        self.assertEqual((self.lib.fpl_fixture_slot(0, 0x14), self.get(SPARE)), (was, spare))
+        self.assertEqual(self.slot_bytes(0, 0, len(self.data)), self.data, 'the frame was changed')
+        self.assertEqual(self.get(OPENS), self.get(CLOSES))
+        self.assertEqual(self.play(0), DECODED)
+        self.check(0)
+
+    def test_a_pool_the_player_could_not_make_keeps_nothing_moved(self):
+        first = frame(ours=False)[0]
+        self.lib.fpl_fixture_open_pool(first, len(first), len(first), 0, 0x780)
+        self.assertEqual(self.get(SLOTS_ALIGNED), 0)
+        self.assertEqual(self.lib.fpl_fixture_free_pool(), 0)
+        self.assertEqual(self.lib.fpl_fixture_live(), 0, 'the spare was kept')
+
+    def test_14_bit_and_a_wide_frame(self):
+        self.pool(w=480, h=130, bits=14, tw=64, th=48)
+        self.assertEqual(self.play(2), DECODED)
+        self.check(2)
+        self.assertEqual(self.get(FAST), 1)
+
+
+def path(n):
+    return (r'\CINEMA\A001_398\A001_398_20261118_%06d.DNG' % n).encode()
+
+
+class ReadAheadTests(unittest.TestCase):
+    """While the engine decodes frame N the next frame file is read into a
+    second spare; the player's read of exactly that file is then skipped."""
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix='fpl-play-ahead-')
+        cls.lib = build(cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def get(self, f): return self.lib.fpl_fixture_get(f)
+
+    def setUp(self):
+        self.lib.fpl_fixture_reset()
+        self.files = {}
+
+    def clip(self, numbers, slots=3, stock=()):
+        first = frame(ours=False)[0]
+        self.lib.fpl_fixture_open_pool(first, len(first), len(first), slots, 0x780)
+        for n in numbers:
+            data, expected, pitch = frame(ours=n not in stock, tile_len=24 + 4 * (n % 5))
+            self.files[n] = (data, expected)
+            self.lib.fpl_fixture_disk(path(n), data, len(data))
+
+    def play(self, k, n):
+        return self.lib.fpl_fixture_play_path(k, path(n))
+
+    def check(self, k, n):
+        data, expected = self.files[n]
+        got = bytes(self.lib.fpl_fixture_slot_byte(k, 0x400 + i) for i in range(len(expected)))
+        self.assertEqual(got, expected, f'frame {n} in slot {k}')
+        self.assertEqual((self.get(OOB), self.get(BAD_WRITES), self.get(MISALIGNED)), (0, 0, 0))
+
+    def test_the_next_file_is_read_while_the_engine_runs_and_the_read_is_skipped(self):
+        self.clip([5, 6, 7])
+        self.assertEqual(self.play(0, 5), DECODED)
+        self.check(0, 5)
+        self.assertEqual((self.get(AHEAD_READ), self.get(FILE_READS), self.get(READS_WHILE_ENGINE)),
+                         (1, 1, 1), 'frame 6 was not read during frame 5\'s decode')
+        self.assertEqual(self.get(AHEAD_GOT), len(self.files[6][0]))
+        self.assertEqual(self.play(1, 6), DECODED)
+        self.check(1, 6)
+        self.assertEqual(self.get(AHEAD_USED), 1, 'the player read frame 6 again')
+        self.assertEqual(self.lib.fpl_fixture_slot(1, 0x1c), len(self.files[6][0]))
+        self.assertEqual(self.play(2, 7), DECODED)
+        self.check(2, 7)
+        self.assertEqual((self.get(AHEAD_USED), self.get(AHEAD_READ)), (2, 2))
+        self.assertEqual(self.get(AHEAD_GOT), 0, 'a file after the last one')
+        for k, n in ((0, 5), (1, 6)):
+            self.check(k, n)                          # earlier frames still whole
+
+    def test_a_long_run_through_few_slots(self):
+        self.clip(list(range(98, 102)), slots=2)      # 000099 -> 000100: a carry
+        for i, n in enumerate(range(98, 102)):
+            self.assertEqual(self.play(i % 2, n), DECODED, n)
+            self.check(i % 2, n)
+        self.assertEqual((self.get(AHEAD_USED), self.get(AHEAD_MISSED)), (3, 0))
+        self.assertEqual(self.lib.fpl_fixture_free_pool(), 0)
+        self.assertEqual(self.lib.fpl_fixture_live(), 0)
+
+    def test_another_frame_than_the_one_read_ahead_is_read_by_the_player(self):
+        self.clip([5, 6, 9])
+        self.assertEqual(self.play(0, 5), DECODED)     # 6 read ahead
+        self.assertEqual(self.play(1, 9), DECODED)     # the player jumps to 9
+        self.check(1, 9)
+        self.assertEqual((self.get(AHEAD_USED), self.get(AHEAD_MISSED)), (0, 1))
+        self.assertEqual(self.play(2, 6), DECODED)     # and back: read as stock, right
+        self.check(2, 6)
+
+    def test_the_same_frame_again_is_not_served_from_a_stale_read(self):
+        self.clip([5, 6])
+        self.assertEqual(self.play(0, 5), DECODED)
+        self.assertEqual(self.play(1, 5), DECODED)     # 5 again, not 6
+        self.check(1, 5)
+        self.assertEqual(self.get(AHEAD_USED), 0)
+
+    def test_a_stock_frame_read_ahead_is_handed_over_whole(self):
+        self.clip([5, 6, 7], stock=(6,))
+        self.assertEqual(self.play(0, 5), DECODED)
+        self.assertEqual(self.play(1, 6), STOCK)
+        data = self.files[6][0]
+        self.assertEqual(bytes(self.lib.fpl_fixture_slot_byte(1, i) for i in range(len(data))), data)
+        self.assertEqual(self.get(AHEAD_USED), 1)
+        self.assertEqual(self.play(2, 6), STOCK)       # the same file again: read, not served twice
+        self.assertEqual(bytes(self.lib.fpl_fixture_slot_byte(2, i) for i in range(len(data))), data)
+        self.assertEqual(self.get(AHEAD_USED), 1)
+        self.assertEqual(self.play(2, 7), DECODED)     # nothing was read ahead of a stock frame
+        self.check(2, 7)
+        self.assertEqual(self.get(AHEAD_USED), 1)
+
+    def test_a_new_clip_forgets_what_was_read_ahead(self):
+        self.clip([5, 6])
+        self.assertEqual(self.play(0, 5), DECODED)
+        self.assertGreater(self.get(AHEAD_GOT), 0)
+        first = frame(ours=False)[0]
+        self.lib.fpl_fixture_clip(first, len(first), len(first), 0)
+        self.assertEqual(self.get(AHEAD_GOT), 0)
+
+    def test_no_second_spare_still_decodes_in_one_job(self):
+        self.lib.fpl_fixture_knob(6, 2)                # the allocator's second block refused
+        self.clip([5, 6])
+        self.assertEqual((self.get(AHEAD), self.get(AHEAD_FAILED)), (0, 1))
+        self.assertEqual(self.play(0, 5), DECODED)
+        self.check(0, 5)
+        self.assertEqual((self.get(FAST), self.get(AHEAD_READ), self.get(FILE_READS)), (1, 0, 0))
+        self.assertEqual(self.play(1, 6), DECODED)
+        self.check(1, 6)
+        self.assertEqual(self.lib.fpl_fixture_free_pool(), 0)
+        self.assertEqual(self.lib.fpl_fixture_live(), 0)
+
+    def test_a_file_as_long_as_the_buffer_is_not_served(self):
+        self.clip([5])
+        cap = self.lib.fpl_fixture_slot(0, 0x18)
+        self.lib.fpl_fixture_disk(path(6), b'\x11' * cap, cap)
+        self.assertEqual(self.play(0, 5), DECODED)
+        self.assertEqual((self.get(AHEAD_GOT), self.get(AHEAD_NONE)), (0, 1))
+
+
+AHEAD_MUTATIONS = {
+    'reads the same file again': ("        if (c != '9') { p->ahead_path[k] = (char)(c + 1); break; }",
+                                  "        if (c != '9') { break; }"),
+    'no carry': ("        p->ahead_path[k] = '0';\n", ''),
+    'serves any path': ('rd8(reader + READER_PATH + n, 0) == (uint8_t)p->ahead_path[n]; ++n) {}',
+                        '1; ++n) {}\n    n = 0; while (p->ahead_path[n]) ++n;\n    if (rd8(reader + READER_PATH + n, 0)) n = 0;'),
+    'serves it twice': ('    p->ahead_got = 0;\n    saturate(&p->ahead_used);', '    saturate(&p->ahead_used);'),
+    'the slot keeps its buffer': ('    poke(slot + SLOT_BUFFER, (uint32_t)p->ahead);\n', ''),
+    'the bytes read not told': ('    poke(slot + SLOT_READ, p->ahead_got);\n', ''),
+    'the old buffer lost': ('    p->ahead = buf;\n', ''),
+    'read after the engine': ('''    read_ahead(p, reader);                           /* the next file, while the engine runs */
+    t3 = now_us();
+    if (band_finish((uint32_t)flag, BAND_TICKS) != 0) {''', '''    t3 = now_us();
+    if (band_finish((uint32_t)flag, BAND_TICKS) != 0 || (read_ahead(p, reader), 0)) {'''),
+    'kept across clips': ('    p->hook_end_us = 0;\n    p->ahead_got = 0;\n    p->sums_stale = 1;',
+                          '    p->hook_end_us = 0;\n    p->sums_stale = 1;'),
+    'a full buffer served': ('|| !got || got >= p->ahead_cap) {', '|| !got) {'),
+}
+
+
+class ReadAheadMutationTests(unittest.TestCase):
+    def test_every_mutation_is_caught(self):
+        with tempfile.TemporaryDirectory(prefix='fpl-play-ahead-mut-') as tmp:
+            for index, (name, seam) in enumerate(AHEAD_MUTATIONS.items()):
+                with self.subTest(mutation=name):
+                    lib = build(tmp, seam, f'a{index}.dylib')
+
+                    class Against(ReadAheadTests):
+                        @classmethod
+                        def setUpClass(cls):
+                            cls.lib = lib
+
+                        @classmethod
+                        def tearDownClass(cls):
+                            pass
+                    result = unittest.TestResult()
+                    unittest.defaultTestLoader.loadTestsFromTestCase(Against).run(result)
+                    self.assertFalse(result.wasSuccessful(), f'{name} was not caught')
+
+
+ONE_JOB_MUTATIONS = {
+    'the real height, not the padded one': ('tiles, down * f.th,\n', 'tiles, f.h,\n'),
+    'one tile row of tiles': ('fast_frame(p, slot, buf, cap, &f, f0.soff, row_at[0], tiles,',
+                              'fast_frame(p, slot, buf, cap, &f, f0.soff, row_at[0], across,'),
+    'no room check': ('p->spare_cap - soff < pitch_of(f->w, f->bits) * padded_rows',
+                      'p->spare_cap - soff < 1u'),
+    'no alignment check': ('(soff & (ALIGN - 1u)) || (stream_at & (ALIGN - 1u))', '0'),
+    'decodes over the stream': ('p->spare + soff, buf + stream_at);',
+                                'buf + soff, buf + stream_at);'),
+    'a short header': ('    head_copy(p->spare, buf, soff);', '    head_copy(p->spare, buf, soff - 0x100u);'),
+    'root left on the trailer': ('    poke(p->spare + 4, ROOT_STOCK);', ''),
+    'the slot keeps its buffer': ('    poke(slot + SLOT_BUFFER, (uint32_t)p->spare);\n', ''),
+    'the spare stays the spare': ('    p->spare = buf;\n', ''),
+    'no cache sync': ('    cache_sync();\n    p->last_engine_us', '    p->last_engine_us'),
+    'capacity not cut at alignment': ('        poke(slot + SLOT_CAPACITY, cap - (uint32_t)(a - raw));\n', ''),
+    'capacity not put back': (
+        '            poke(slot + SLOT_CAPACITY, peek(slot + SLOT_CAPACITY) + (uint32_t)(a - raw));\n', ''),
+    'addresses not put back': ('            poke(slot + SLOT_BUFFER, (uint32_t)raw);\n', ''),
+    'the spare freed by its moved address': ('        if (raw) buffer_put(raw); else', '        if (raw) buffer_put(*held); else'),
+    'the spare never freed': ('        if (raw) buffer_put(raw); else saturate(&p->spare_lost);',
+                              '        if (!raw) saturate(&p->spare_lost);'),
+    'the spare kept after the end': ('        *held = 0;\n', ''),
+    'only the spare given back': ('    for (uint32_t k = 0; k < 2; ++k) {               /* the spare,',
+                                  '    for (uint32_t k = 0; k < 1; ++k) {               /* the spare,'),
+    'aligned blocks left where they are': ('raw + ALIGN - (raw & (ALIGN - 1u));    /* 4..0x400 B up */',
+                                           '(raw + ALIGN - 1u) & ~(uintptr_t)(ALIGN - 1u);'),
+    'a spare for a pool already made': ('rd8(pool + POOL_MADE, 0) || peek(pool + POOL_COUNT) ||', ''),
+    'engine failure counted as decoded': (
+        '''    if (band_finish((uint32_t)flag, BAND_TICKS) != 0) {
+        p->hook_end_us = 0;
+        return refuse(p, FPL_PLAY_R_ENGINE);         /* the frame as it was read */''',
+        '''    if (band_finish((uint32_t)flag, BAND_TICKS) != 0) {
+        p->hook_end_us = 0;'''),
+    'no size for whole tiles': ('        if (padded > stock) stock = padded;', '        if (padded > stock + 0x100000u) stock = padded;'),
+}
+
+
+class OneJobMutationTests(unittest.TestCase):
+    def test_every_mutation_is_caught(self):
+        with tempfile.TemporaryDirectory(prefix='fpl-play-one-mut-') as tmp:
+            for index, (name, seam) in enumerate(ONE_JOB_MUTATIONS.items()):
+                with self.subTest(mutation=name):
+                    lib = build(tmp, seam, f'o{index}.dylib')
+                    failed = False
+                    for case in (OneJobTests, PlayDecodeTests):
+                        class Against(case):
+                            @classmethod
+                            def setUpClass(cls):
+                                cls.lib = lib
+
+                            @classmethod
+                            def tearDownClass(cls):
+                                pass
+                        result = unittest.TestResult()
+                        unittest.defaultTestLoader.loadTestsFromTestCase(Against).run(result)
+                        failed = failed or not result.wasSuccessful()
+                    self.assertTrue(failed, f'{name} was not caught')
+
+
 class PlayDecodeMutationTests(unittest.TestCase):
     MUTATIONS = {
         'top down': ('    for (uint32_t r = down; r-- > 0;) {',
@@ -381,21 +833,17 @@ class PlayDecodeMutationTests(unittest.TestCase):
         'ignores a gap in the tiles': ('        if (o != end || !n', '        if (!n'),
         'decodes while recording': ('    if (busy) return refuse(p, FPL_PLAY_R_BUSY);\n',
                                     '    (void)busy;\n'),
-        'decodes straight into the strip': ('        if (decode_row(&f, across, o_at, s_at) != 0)',
-                                            '        if (decode_row(&f, across, strip + r * raw_row, s_at) != 0)'),
+        'decodes straight into the strip': ('        if (decode_band(&f, f.th, across, o_at, s_at, WAIT_TICKS) != 0)',
+                                            '        if (decode_band(&f, f.th, across, strip + r * raw_row, s_at, WAIT_TICKS) != 0)'),
         'copies whole tile rows in': ('(r == down - 1u ? rem : f.th) * pitch',
                                       '(r == down - 1u ? rem + 2u : f.th) * pitch'),
-        'changes the size of a clip opening on a stock frame': (
-            '        saturate(&p->clips_first_stock);\n        return size;',
-            '        saturate(&p->clips_first_stock);'),
         'no scratch for a clip opening on a stock frame': (
-            '    p->scratch_want = need;\n    if (rd32(h + 4, 1) == ROOT_STOCK) {',
-            '    p->scratch_want = rd32(h + 4, 1) == ROOT_STOCK ? 0 : need;\n'
-            '    if (rd32(h + 4, 1) == ROOT_STOCK) {'),
-        'takes a second scratch': ('    if (p->scratch) return;\n    p->scratch = scratch_get',
-                                   '    p->scratch = scratch_get'),
-        'keeps a stale want across clips': ('    p->scratch_want = 0;\n    if (busy || !desc) return size;',
-                                            '    if (busy || !desc) return size;'),
+            '    p->scratch_want = need;\n',
+            '    p->scratch_want = rd32(h + 4, 1) == ROOT_STOCK ? 0 : need;\n'),
+        'takes a second scratch': ('    if (!p->scratch) {\n        p->scratch = scratch_get',
+                                   '    {\n        p->scratch = scratch_get'),
+        'keeps a stale want across clips': ('    p->scratch_want = 0;\n    p->hook_end_us = 0;',
+                                            '    p->hook_end_us = 0;'),
         'no clip check while recording': ('    if (busy || !desc) return size;',
                                           '    (void)busy;\n    if (!desc) return size;'),
     }

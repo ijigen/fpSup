@@ -994,9 +994,17 @@ USED void fpl_card_task(struct fpl_card *c) {
 
 /* C05C0EA4: a frame file the player has just read (play_decode.c). Never
  * while a take owns the engine. */
-USED void fpl_card_play(uintptr_t slot, struct fpl_card *c) {
+USED void fpl_card_play(uintptr_t slot, struct fpl_card *c, uintptr_t reader) {
     if (!card_valid(c)) return;
-    fpl_play_frame(&c->play, slot, c->hold_live);
+    fpl_play_frame_at(&c->play, slot, reader, c->hold_live);
+}
+
+/* C05C0EA0: the player about to f_read a frame file into `slot`; `reader`
+ * (its r4) names the file. Nonzero: the slot already holds it, read ahead
+ * while the engine decoded the frame before -- the shim skips the read. */
+USED uint32_t fpl_card_read(uintptr_t slot, struct fpl_card *c, uintptr_t reader) {
+    if (!card_valid(c)) return 0;
+    return fpl_play_read(&c->play, slot, reader, c->hold_live);
 }
 
 /* C05BDDAC: a clip opens; `size` is its first frame file's. */
@@ -1007,12 +1015,27 @@ USED uint32_t fpl_card_clip(struct fpl_card *c, uintptr_t player, uintptr_t desc
     return fpl_play_clip(&c->play, desc, size, c->hold_live);
 }
 
-/* C05C2D10: the player makes its buffer pool. */
-USED void fpl_card_play_pool(struct fpl_card *c) {
-    if (!card_valid(c) || c->hold_live) return;
+/* C05C2D10's entry: the player is about to make its buffer pool `pool` for
+ * files of `size` B; `back` is where it returns. Nonzero: the shim makes the
+ * function return through fpl_card_play_made. One caller at a time: the
+ * player's own lock is taken inside, and only its task makes the pool. */
+USED uint32_t fpl_card_play_pool(struct fpl_card *c, uintptr_t pool, uint32_t size,
+                                 uintptr_t back) {
+    if (!card_valid(c) || c->play.pool_return) return 0;
+    c->play.pool_return = back;
+    if (c->hold_live) return 1;
     /* a take that never finished may have left the engine open */
     if (c->hold.magic) c->engine_release = fpl_codec_job_release(&c->hold.job);
-    fpl_play_pool(&c->play);
+    fpl_play_pool(&c->play, pool, size);
+    return 1;
+}
+
+/* C05C2D10's return: the pool is made. Returns where the player goes on. */
+USED uintptr_t fpl_card_play_made(struct fpl_card *c) {
+    uintptr_t back = c->play.pool_return;
+    c->play.pool_return = 0;
+    if (!c->hold_live) fpl_play_made(&c->play);
+    return back;
 }
 
 /* C05C2E90: the player frees its buffers. */
