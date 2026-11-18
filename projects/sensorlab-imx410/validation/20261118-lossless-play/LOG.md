@@ -75,3 +75,11 @@ rec_hook OK.
 - A lit scene (larger files: the card read becomes the longer side), SSD, long clips, 24 Mpixel clips (they do
   not play at all, see above), clips recorded with a forced grid, REC right after playback (one take after
   each playback here was fine), in-camera playback while HDMI is connected.
+
+## 2026-11-18, later — by eye (Bei, on the camera, 0.3.11test)
+
+- Playback of the smaller formats: "looks ok" (Bei; which of play / pause / fast forward / reverse / clip change
+  he went through was not said).
+- OG 4K: the camera shows "the file's contents cannot be viewed" -- what the counters showed for the 15.6 / 18.2 MB
+  frames (clip opened, no frame read), and the same with 0.3.7test. Clips that play here are 5.3 MB a frame or
+  less; stock UHD 12 bit is about 12.4 MB a frame. Where the limit is was not looked for.
