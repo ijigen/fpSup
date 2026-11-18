@@ -94,8 +94,10 @@
 #define AP_PB_RING_CAP (0x6F090u / 0x5ECu) /* C05C2D10: descriptor allocation / descriptor stride = 300 */
 /* v0.7.24test: the largest raster the player is known to allocate for -- stock DCI4K 4112 x 2170.  Its FieldAngle work
  * area in the 48 MiB LVIEW pool grows with the raster (15 MB here, 40.5 MB at 6048 x 4040) and a failed allocation
- * asserts (C04371F0): a 6K clip froze the camera (Bei 11-02/11-03).  Larger clips are refused before any buffer. */
-#define AP_PB_MAX_AREA (4112u * 2170u)
+ * asserts (C04371F0): a 6K clip froze the camera (Bei 11-02/11-03).  Larger clips are refused before any buffer.
+ * 0.0.11test (Bei 11-18: "try it"): up to the APS-C 3:2 raster 3968 x 2634 (OG 4K, 3952 x 2624 recorded), which the
+ * DCI4K area turned away with "contents cannot be viewed".  An area, so any shape of that many pixels passes. */
+#define AP_PB_MAX_AREA (3968u * 2634u)
 #define AP_PB_RAW_SETUP 0xC31DECCCu   /* C01CDBE0's RAW-read setup base (r5 at C01CE450) */
 #define AP_TADD_STOCK 0x0282EB05u     /* Thumb add.w r2, r5, r2, lsl #2: the one K_TADD site's displaced word */
 #define AP_GLYPHS     8u

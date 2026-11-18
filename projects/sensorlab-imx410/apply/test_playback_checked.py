@@ -164,7 +164,8 @@ class CheckedPlayback(unittest.TestCase):
         import og4k_sizes as O
         em=O.NativeSizing(O.load_firmware());model=O.load_model()
         for raster,bits in (((2016,996),12),((2016,1330),8),((3024,2010),10),
-                            ((4112,2170),12),((4112,2170),14)):   # v0.7.24: the largest admitted
+                            ((4112,2170),12),((4112,2170),14),
+                            ((3968,2634),12),((3968,2634),14)):   # 0.0.11test: the largest admitted (OG 4K)
             with self.subTest(raster=raster,bits=bits):
                 c=SelectedCam();c.select(movie(raster,bits));self.assertEqual(c.prepare(),1)
                 _,canvas=c.profile()

@@ -1954,10 +1954,12 @@ class PlaybackV1Tests(unittest.TestCase):
         self.assertEqual(cam.call(PREP_DFA0, OBJ, 0x1D, 1), 1)
 
     def test_a_raster_past_stock_dci4k_is_refused_in_any_mode(self):
-        """v0.7.24test (6K froze the camera, Bei 11-03): with the admission guard off, a raster above 4112 x 2170
-        is still refused before FUN_c05be080 -- its FieldAngle work area would not fit the LVIEW pool."""
+        """v0.7.24test (6K froze the camera, Bei 11-03): with the admission guard off, a raster above the limit
+        is still refused before FUN_c05be080 -- its FieldAngle work area would not fit the LVIEW pool.
+        0.0.11test: the limit is the area of 3968 x 2634 (OG 4K), no longer stock DCI4K's."""
         for ras, crop, refused in (((6048, 4040), (6032, 4030), True), ((6064, 4050), (6048, 4040), True),
-                                   ((4112, 2172), (4096, 2162), True), ((4112, 2170), (4096, 2160), False),
+                                   ((3968, 2636), (3952, 2626), True), ((3968, 2634), (3952, 2624), False),
+                                   ((6064, 3412), (6048, 3402), True), ((4112, 2170), (4096, 2160), False),
                                    ((3024, 2014), (3008, 2004), False)):
             with self.subTest(ras=ras):
                 cam = self.cam(True)
