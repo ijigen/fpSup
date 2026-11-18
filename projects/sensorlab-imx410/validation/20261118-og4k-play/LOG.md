@@ -27,3 +27,17 @@ OG 4K, sizes between DCI 4K and OG 4K, uncompressed OG 4K only clips, long clips
 fast forward / reverse / clip change, playback right after a cold start, other sups absent.
 Offline: tools/test.py prelive -- apply and core tests and mutants pass; 6 settings-migration errors are
 the missing frozen fixtures (none exist for any 0.0.x version, same at 0.0.10test).
+
+## Why OG 4K playback is not real time on this SD card (same day, after Bei: "decoding does not keep up")
+
+A001_407 fetched frame by frame: 62 files, 43 compressed (9.39 MB each) and 19 uncompressed (15.64 MB each;
+recording cannot compress every OG 4K frame at this rate), 700.9 MB in all.
+Playback counters for the clip: our hooks 2147 ms + between hooks 816 ms = 2963 ms for the 62 frames
+(20.9 fps; the "69 ms a frame" above divided by the 43 compressed frames only and is wrong as a frame time).
+The card was being read for 2008 ms (our read-ahead, during the engine jobs) + most of the 816 ms (the
+player's own reads) = about 95 % of the time: 700.9 MB / 2.963 s = 237 MB/s.
+Real time (24 fps, 2.58 s) would need 271 MB/s from the card. The engine ran 2143 ms (72 %) and waited for
+data the rest of the time; it had work for only 43 of the 62 frames.
+So on this card the limit is the card read, not the decoder; a decode-ahead queue would not raise the engine's
+share here. Not measured: SSD (there the engine, 44.3 ms a compressed frame, 30.7 ms averaged over this mix,
+would be the limit and decoding ahead of the player would matter), another SD card, 14-bit.
