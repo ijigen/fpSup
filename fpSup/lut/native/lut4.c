@@ -22,6 +22,7 @@ typedef uint8_t u8;
 #define Q 1048576
 #define ONE 16777216u
 #define CURVE_N (27u*256u+1u)
+#define CURVES 7u                           /* the asset's curves: the six common Gammas, then Blackmagic Design Film */
 #define MAX_ASSET 0x400000u
 #define MAX_NODE (1024*Q)
 #define MAX_LINEAR (128*Q)
@@ -56,7 +57,7 @@ struct lut4_state {
     i32 file_status, last_error;
     u32 color, gamma, amount, rendered, outside1, outside3;
     struct sl_row rows[8];
-    const char *colors[8], *common[6], *blackmagic[2], *amounts[5], *file_choices[1];
+    const char *colors[8], *common[6], *blackmagic[1], *amounts[5], *file_choices[1];
     const char *color_groups[3], *gamma_groups[2], *bmd_group[1], *amount_groups[2];
     struct sl_row home;
     const void *ui;
@@ -126,7 +127,15 @@ static const char *string(struct lut4_state *s, u32 index) {
     const u32 *offsets=(const u32 *)((uintptr_t)s->block+s->cfg->strings_off);
     return (const char *)s->block+offsets[index];
 }
-static int supported(u32 color,u32 gamma) { return color<8 && color!=2 && gamma<6 && gamma!=4; }
+/* The models there are.  gamma: the global index (library4.h; the asset's and its curve table's) -- 0..5 the
+ * common six, 6 Blackmagic Design Film.  Blackmagic Design (colour 2) is the white-balanced sensor RGB with no
+ * colour matrix and takes Film alone, the one Gamma DaVinci Resolve has for a camera that is not Blackmagic's
+ * (2026-11-18, bmd_gen1/resolve_re/NOTES.md); no other colour takes Film.  4 (Rec.709) has no model yet. */
+static int supported(u32 color,u32 gamma) { return color<8 && (color==2 ? gamma==6 : gamma<6 && gamma!=4); }
+/* An entry's and the running gamma (lib_entry.gamma, s->gamma, the .JFT key) is the index within the colour's
+ * own list: Blackmagic's 0 is Film. */
+static u32 gamma_id(u32 color,u32 gamma) { return color==2u?gamma+6u:gamma; }
+static int usable(u32 color,u32 gamma) { return supported(color,gamma_id(color,gamma)); }
 static u32 hash(const u8 *p,u32 n) {
     u32 h=2166136261u;
     for(u32 i=0;i<n;i++) h=(h^((i>=16 && i<20)?0:p[i]))*16777619u;
@@ -138,7 +147,7 @@ static int validate(struct asset *a,u32 capacity) {
        !supported(a->color,a->gamma) || a->strength>100 || a->strength%25u ||
        (a->n1 && (a->n1<2 || a->n1>4096)) || (a->n3 && (a->n3<2 || a->n3>65)) ||
        (!a->n1 && !a->n3) || !a->title[0] || a->title[63]) return BAD_ASSET;
-    u32 m=sizeof *a, c=m+8*9*4, next=c+6*2*CURVE_N*4;
+    u32 m=sizeof *a, c=m+8*9*4, next=c+CURVES*2*CURVE_N*4;
     if(a->matrix_off!=m || a->curve_off!=c || a->one_off!=(a->n1?next:0)) return BAD_ASSET;
     next+=a->n1*3*4;
     if(a->three_off!=(a->n3?next:0)) return BAD_ASSET;
@@ -151,7 +160,7 @@ static int validate(struct asset *a,u32 capacity) {
     }
     const i32 *mat=(const i32 *)((uintptr_t)a+m);
     for(u32 i=0;i<8*9;i++) if(mat[i]<-16*Q || mat[i]>16*Q) return BAD_ASSET;
-    const i32 *nodes=(const i32 *)((uintptr_t)a+c+6*2*CURVE_N*4);
+    const i32 *nodes=(const i32 *)((uintptr_t)a+c+CURVES*2*CURVE_N*4);
     for(u32 i=0;i<(a->n1+a->n3*a->n3*a->n3)*3;i++)
         if(nodes[i]<-MAX_NODE || nodes[i]>MAX_NODE) return BAD_ASSET;
     return OK;
@@ -189,20 +198,23 @@ static int read_asset_path(struct lut4_state *s,const char *path) {
         FW(0xC0366020u,void (*)(void *))(io);
     }
     FW(0xC0365ED0u,void (*)(void *,u32))(io,2);
-    if(result==OK) { s->asset=a; s->color=a->color; s->gamma=a->gamma; s->amount=a->strength; }
+    if(result==OK) { s->asset=a; s->color=a->color; s->gamma=a->color==2u?a->gamma-6u:a->gamma; s->amount=a->strength; }
     return result;
 }
 
 static i32 curve(struct lut4_state *s,i32 value,u32 gamma) {
-    if(gamma==3 || !value) return value;
+    if(gamma==3) return value;
+    const i32 *t=(const i32 *)((u8 *)s->asset+s->asset->curve_off)+gamma*2u*CURVE_N;
+    /* 0 is not on the grid (it starts one step above and below): the middle of those two.  That is 0 for the six
+     * common curves, which are odd -- what this returned before Film, whose toe is 0.0354 at black. */
+    if(!value) return (i32)(((i64)t[0]+t[CURVE_N])/2);
     u32 mag=(u32)(value<0?-value:value);
     u32 e=0; for(u32 p=mag;p>1;p>>=1) e++;
     u32 base=1u<<e, index=e*256u, frac=0;
     if(e>=8) { u32 shift=e-8; index+=(mag-base)>>shift;
         frac=((mag-base)&((1u<<shift)-1u))<<(24-shift); }
     else index+=(mag-base)<<(8-e);
-    const i32 *t=(const i32 *)((u8 *)s->asset+s->asset->curve_off)+
-                (gamma*2u+(value<0?1u:0u))*CURVE_N;
+    if(value<0) t+=CURVE_N;
     i64 y=t[index];
     if(frac) y+=(((i64)t[index+1]-t[index])*frac)>>24;
     return (i32)y;
@@ -282,26 +294,26 @@ static void choices(struct lut4_state *s) {
     s->rows[3].choices=color==2?s->bmd_group:s->gamma_groups;
     s->rows[3].n_choices=(uint16_t)(color==2?1:2);
     s->rows[4].choices=color==2?s->blackmagic:s->common+(gamma/3u)*3;
-    s->rows[4].n_choices=(uint16_t)(color==2?2:3);
+    s->rows[4].n_choices=(uint16_t)(color==2?1:3);
     s->rows[6].choices=amount>=75?s->amounts+3:s->amounts;
     s->rows[6].n_choices=(uint16_t)(amount>=75?2:3);
     struct lib_entry *e=edited(s);
     s->rows[2].value=e && !(e->flags&LIB_SPACE)?string(s,53):0;
     s->rows[4].value=e && !(e->flags&LIB_GAMMA)?string(s,53):0;
-    if(e) s->file_choices[0]=string(s,(e->flags&LIB_READY)!=LIB_READY?53u:!supported(e->color,e->gamma)?54u:e->flags&1u?51u:52u);
+    if(e) s->file_choices[0]=string(s,(e->flags&LIB_READY)!=LIB_READY?53u:!usable(e->color,e->gamma)?54u:e->flags&1u?51u:52u);
     s->set_rows[1].choices=edit_color(s)==2?s->blackmagic:s->common;
-    s->set_rows[1].n_choices=(uint16_t)(edit_color(s)==2?2:6);
+    s->set_rows[1].n_choices=(uint16_t)(edit_color(s)==2?1:6);
     s->set_rows[0].value=e && !(e->flags&LIB_SPACE)?string(s,53):0;
     s->set_rows[1].value=e && !(e->flags&LIB_GAMMA)?string(s,53):0;
     lvb_refresh(s);                    /* every state change ends here: the ISP follows the active entry */
 }
 static USED int lut4_select(struct lut4_state *s,u32 color,u32 gamma) {
-    if(color>=8 || gamma>=(color==2?2u:6u)) return SL_BADARG;
+    if(color>=8 || gamma>=(color==2?1u:6u)) return SL_BADARG;
     s->color=color; s->gamma=gamma;
     choices(s);
-    if(s->file_status==OK) s->file_choices[0]=string(s,supported(color,gamma)?27u:30u);
+    if(s->file_status==OK) s->file_choices[0]=string(s,usable(color,gamma)?27u:30u);
     refresh(s);
-    return s->last_error=supported(color,gamma)?OK:MODEL_PENDING;
+    return s->last_error=usable(color,gamma)?OK:MODEL_PENDING;
 }
 static int color_set(void *arg,int v) {
     struct lut4_state *s=arg; u32 gamma=edit_gamma(s),before=edit_color(s);
@@ -336,8 +348,8 @@ static int gamma_group_set(void *arg,int v) {
     lut4_select(s,s->color,s->color==2?s->gamma:(u32)v*3); return OK;
 }
 /* The settings page (AEL on a manager row): the two rows the user asked for,
- * each choice by its own index -- color space (8) and Gamma (6, or the two
- * Blackmagic ones), the Gamma list following the color space. */
+ * each choice by its own index -- color space (8) and Gamma (6, or Blackmagic's
+ * one), the Gamma list following the color space. */
 static int set_color_get(void *arg) { return (int)edit_color(arg); }
 static int set_gamma_get(void *arg) { return (int)edit_gamma(arg); }
 static int set_color_set(void *arg,int v) {
@@ -348,7 +360,7 @@ static int set_color_set(void *arg,int v) {
 }
 static int set_gamma_set(void *arg,int v) {
     struct lut4_state *s=arg; struct lib_entry *e=edited(s);
-    if(!e || v<0 || v>=(e->color==2?2:6)) return SL_BADARG;
+    if(!e || v<0 || v>=(e->color==2?1:6)) return SL_BADARG;
     return library_update(s,s->edit_index,e->color,(u32)v,e->amount,e->flags|LIB_GAMMA);
 }
 static USED int lut4_strength(struct lut4_state *s,u32 amount) {
@@ -375,7 +387,7 @@ static int monitor_set(void *arg,int v) { return v<0?SL_BADARG:lut4_enable(arg,(
 static USED int lut4_status(struct lut4_state *s,struct lut4_status *out) {
     if(!out || ((uintptr_t)out&3)) return SL_BADARG;
     out->version=1; out->asset_status=s->file_status;
-    out->model_status=supported(s->color,s->gamma)?OK:MODEL_PENDING;
+    out->model_status=usable(s->color,s->gamma)?OK:MODEL_PENDING;
     if(s->library && (s->library->h.active>=s->library->h.count ||
        (s->library->entries[s->library->h.active].flags&LIB_READY)!=LIB_READY))out->model_status=MODEL_PENDING;
     out->live_view_connected=0; out->color=s->color; out->gamma=s->gamma; out->strength_percent=s->amount;
@@ -387,7 +399,7 @@ static int render_core(struct lut4_state *s,const i32 *xyz,i32 *out,u32 count) {
     if(s->file_status!=OK) return s->last_error=s->file_status;
     if(s->library && (s->library->h.active>=s->library->h.count ||
        (s->library->entries[s->library->h.active].flags&LIB_READY)!=LIB_READY)) return s->last_error=MODEL_PENDING;
-    if(!supported(s->color,s->gamma)) return s->last_error=MODEL_PENDING;
+    if(!usable(s->color,s->gamma)) return s->last_error=MODEL_PENDING;
     if(!xyz || !out || !count || count>4096 || ((uintptr_t)xyz&3) || ((uintptr_t)out&3)) return s->last_error=BAD_INPUT;
     uintptr_t first=(uintptr_t)xyz, dest=(uintptr_t)out, bytes=count*12u;
     if(first+bytes<first || dest+bytes<dest || (first!=dest && first<dest+bytes && dest<first+bytes)) return s->last_error=BAD_INPUT;
@@ -404,7 +416,7 @@ static int render_core(struct lut4_state *s,const i32 *xyz,i32 *out,u32 count) {
         for(u32 c=0;c<3;c++) {
             if(baseline[c]<0) baseline[c]=0; if(baseline[c]>Q) baseline[c]=Q;
             baseline[c]=curve(s,baseline[c],1);
-            look[c]=curve(s,look[c],s->gamma);
+            look[c]=curve(s,look[c],gamma_id(s->color,s->gamma));
         }
         if(s->amount) lookup(s,look);
         for(u32 c=0;c<3;c++) {
@@ -425,7 +437,7 @@ static USED int lut4_render(struct lut4_state *s,const i32 *xyz,i32 *out,u32 cou
     if(!s->cfg->library_off || s->asset || s->file_status!=OK || !s->library ||
        s->library->h.active>=s->library->h.count ||
        (s->library->entries[s->library->h.active].flags&LIB_READY)!=LIB_READY ||
-       !supported(s->color,s->gamma)) return render_core(s,xyz,out,count);   /* its own refusals */
+       !usable(s->color,s->gamma)) return render_core(s,xyz,out,count);   /* its own refusals */
     u32 k_color=s->color,k_gamma=s->gamma,k_amount=s->amount;
     if(!lut_borrow(s,&s->b_asset,s->cfg->asset_cap)) return s->last_error=library_busy()?RECORD_BUSY:NO_MEMORY;
     int rc=library_load_index(s,s->library->h.active);
@@ -473,7 +485,7 @@ USED int sup_entry(void *block,const struct sl_svc *svc,const char *path) {
     s->api.status=lut4_status; s->api.pick=lut4_pick;
     for(u32 i=0;i<8;i++) s->colors[i]=string(s,6+i);
     for(u32 i=0;i<6;i++) s->common[i]=string(s,14+i);
-    for(u32 i=0;i<2;i++) s->blackmagic[i]=string(s,20+i);
+    s->blackmagic[0]=string(s,20);           /* string 21 (Extended Video until 2026-11-18) is empty: the indices stay */
     for(u32 i=0;i<5;i++) s->amounts[i]=string(s,22+i);
     for(u32 i=0;i<3;i++) s->color_groups[i]=string(s,34+i);
     for(u32 i=0;i<2;i++) {

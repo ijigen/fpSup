@@ -176,7 +176,7 @@ static int library_apply(struct lut4_state *s,u32 index,const struct lib_entry *
     choices(s);refresh(s);return s->last_error=OK;
 }
 static int library_update(struct lut4_state *s,u32 index,u32 color,u32 gamma,u32 amount,u32 flags) {
-    if(!s->library || index>=s->library->h.count || color>=8u || gamma>=(color==2?2u:6u) ||
+    if(!s->library || index>=s->library->h.count || color>=8u || gamma>=(color==2?1u:6u) ||
        amount>100u || (amount%25u && amount%20u) || flags>LIB_ALL)return SL_BADARG;   /* 25 % steps, or the box's 20 % */
     struct lib_entry want;copy(&want,&s->library->entries[index],sizeof want);
     want.flags=(want.flags&~LIB_ENABLED)|(flags&LIB_ENABLED);want.amount=amount;
@@ -253,10 +253,15 @@ static void library_init(struct lut4_state *s) {
        (l->h.active!=LIB_NONE && l->h.active>=l->h.count) || l->h.checksum!=library_hash(l))return;
     for(u32 i=0;i<l->h.count;i++) {
         struct lib_entry *e=&l->entries[i];
-        if(!e->name[0] || e->name[63] || e->color>=8u || e->gamma>=(e->color==2?2u:6u) ||
+        /* until 2026-11-18 Blackmagic had a second Gamma, global 7 ("Extended Video"; never a model): DaVinci Resolve
+         * has Film alone for this camera, so a record saved with it reads as Film (6) and is not a bad library */
+        if(e->author_gamma==7u)e->author_gamma=6u;
+        if(e->user_gamma==7u)e->user_gamma=6u;
+        if(e->color==2u && e->gamma==1u)e->gamma=0u;
+        if(!e->name[0] || e->name[63] || e->color>=8u || e->gamma>=(e->color==2?1u:6u) ||
            e->amount>100u || (e->amount%25u && e->amount%20u) || e->flags>LIB_ALL)return;
         if(e->author_flags&~(LIB_READY|AUTH_CUSTOM) || e->user_flags&~LIB_READY || e->author_color>=8u ||
-           e->author_gamma>=8u || e->author_matrix>=MAT_N || e->user_color>=8u || e->user_gamma>=8u ||
+           e->author_gamma>=7u || e->author_matrix>=MAT_N || e->user_color>=8u || e->user_gamma>=7u ||
            e->user_matrix>=MAT_N || e->reserved0[0] || e->reserved0[1] || e->reserved0[2] ||
            e->reserved1[0] || e->reserved1[1])return;
         {const i32 *c=&e->cm[0][0];for(u32 j=0;j<18u;j++)if(c[j]<-16*(1<<20) || c[j]>16*(1<<20))return;}

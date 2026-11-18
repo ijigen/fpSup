@@ -136,7 +136,7 @@ def main(argv=None):
         sub.add_argument('output')
         sub.add_argument('--input-space', required=True, choices=list(COLOR_SPACES))
         sub.add_argument('--input-gamma', required=True, choices=list(GAMMAS),
-                         help='independent gamma; Blackmagic has its own restricted list')
+                         help='independent gamma; Blackmagic Design takes blackmagic-film alone')
         sub.add_argument('--strength', type=float, default=1.)
         sub.add_argument('--exposure', type=float, default=0., help='scene exposure adjustment in EV')
         if command == 'monitor-prepare':

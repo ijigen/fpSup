@@ -13,6 +13,9 @@ Panasonic: https://pro-av.panasonic.net/jp/cinema_camera_varicam_eva/support/pdf
 DWG/DI: https://documents.blackmagicdesign.com/InformationNotes/DaVinci_Resolve_17_Wide_Gamut_Intermediate.pdf
 BMD Gen5: local official reference transcription in
 bmcc6k/analysis-20260924/bmcc6k-liveview-rec709-20260924/reference/gen5_technical.txt.
+BMD Film (first generation) and the fp sensor "gamut": what DaVinci Resolve does with a
+non-Blackmagic CinemaDNG set to Blackmagic Design, read from Resolve itself
+(bmd_gen1/resolve_re/NOTES.md, 2026-11-18; not checked against a Resolve export).
 """
 from dataclasses import dataclass
 from functools import lru_cache
@@ -36,12 +39,19 @@ GAMUTS = {
     'bmwg5': (((.7177215, .3171181), (.2280410, .8615690),
                (.1005841, -.0820452)), (.3127170, .3290312)),
     'dwg': (((.8000, .3130), (.1682, .9877), (.0790, -.1155)), D65),
+    'fp-sensor': (None, D65),           # no primaries: FP_SENSOR_XYZ below
 }
 
 # ARRI's normative AWG4 matrix has higher precision than its rounded primaries.
 AWG4_XYZ = np.array([[.704858320407232064, .129760295170463003, .115837311473976537],
                     [.254524176404027025, .781477732712002049, -.036001909116029039],
                     [0., 0., 1.089057750759878429]])
+# Resolve's "Blackmagic Design" for a camera that is not Blackmagic's (the fp): the white-balanced sensor RGB,
+# no colour matrix.  Our pipeline reaches every gamut through XYZ (camera RGB -> lvb_xyz -> XYZ -> matrix[gamut]),
+# so this gamut's XYZ -> RGB is the inverse of lvb_xyz: the net camera RGB -> "gamut" is the identity.  The
+# integers are native/lvb.c lvb_xyz's Q20 rows (= probes/lv_fit.py M709 @ C2R rounded; the C is the reference).
+FP_SENSOR_XYZ_Q20 = ((570889, 124374, 301362), (238996, 755001, 54578), (76447, -296584, 1362098))
+FP_SENSOR_XYZ = np.array(FP_SENSOR_XYZ_Q20) / 2.**20
 BRADFORD = np.array([[.8951, .2664, -.1614], [-.7502, 1.7135, .0367],
                      [.0389, -.0685, 1.0296]])
 LOGC3 = dict(cut=.010591, a=5.555556, b=.052272, c=.247190,
@@ -50,6 +60,9 @@ LOGC4 = dict(a=(2.**18 - 16) / 117.45, b=(1023. - 95) / 1023, c=95. / 1023)
 LOGC4['s'] = (7 * np.log(2) * 2.**(7 - 14 * LOGC4['c'] / LOGC4['b'])
               / (LOGC4['a'] * LOGC4['b']))
 LOGC4['t'] = (2.**(14 * (-LOGC4['c'] / LOGC4['b']) + 6) - 64) / LOGC4['a']
+# Blackmagic Design Film, first generation (linear -> code): a fit to Resolve's "VFX IO/BMDFilm to Linear.cube"
+# (4096 points; largest difference 0.10 of a 10-bit code).  0 -> .03539, .18 -> .38356, 1 -> .67827, 5.766 -> 1.
+BMD_FILM = dict(a=.4292962, b=7.2818453, c=.2367946, d=.3021497, e=4.9676965, f=.0353847, cut=.0063636)
 GEN5 = dict(a=.08692876065491224, b=.005494072432257808, c=.5300133392291939,
             d=8.283605932402494, e=.09246575342465753, cut=.005)
 
@@ -82,6 +95,8 @@ def to_xyz_matrix(gamut):
     primaries, white = GAMUTS[gamut]
     if gamut == 'awg4':
         matrix = AWG4_XYZ.copy()
+    elif gamut == 'fp-sensor':
+        matrix = FP_SENSOR_XYZ.copy()
     else:
         p = np.array([xyz_white(xy) for xy in primaries]).T
         matrix = p * np.linalg.solve(p, xyz_white(white))
@@ -145,6 +160,13 @@ def transfer(values, curve, inverse=False):
         if inverse:
             return np.where(x >= p['d']*p['cut']+p['e'], np.exp((x-p['c'])/p['a'])-p['b'], (x-p['e'])/p['d'])
         return np.where(x >= p['cut'], p['a']*np.log(np.maximum(x, p['cut'])+p['b'])+p['c'], p['d']*x+p['e'])
+    if curve == 'bmd-film':              # the toe's line goes on below black, as the other log curves' do
+        p = BMD_FILM
+        if inverse:
+            return np.where(x > p['e']*p['cut']+p['f'],
+                            (10**((x-p['d'])/p['a'])-p['c'])/p['b'], (x-p['f'])/p['e'])
+        return np.where(x > p['cut'], p['a']*np.log10(p['b']*np.maximum(x, p['cut'])+p['c'])+p['d'],
+                        p['e']*x+p['f'])
     if curve == 'intermediate':
         if inverse:
             return np.where(x > .02740668, 2**(x/.07329248-7)-.0075, x/10.44426855)

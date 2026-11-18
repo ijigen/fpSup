@@ -524,12 +524,12 @@ class LibraryNativeTests(unittest.TestCase):
         self.assertEqual(set(c.csv_models),{'LC_SPACE','LC_GAMMA','LC_GAMMA_BMD','LC_MATRIX','LC_MATRIX_C'})
         rows=lambda n:c.csv_models[n].decode('utf-8-sig').split('\r\n')[1:-1]
         self.assertEqual([r.split(',')[1] for r in rows('LC_SPACE')],[v.label for v in P.COLOR_SPACES.values()])
-        self.assertEqual(len(rows('LC_GAMMA')),6);self.assertEqual(len(rows('LC_GAMMA_BMD')),2)
+        self.assertEqual(len(rows('LC_GAMMA')),6);self.assertEqual(len(rows('LC_GAMMA_BMD')),1)
         self.assertTrue(all(c.csv_models[n].endswith(b'\r\n') for n in c.csv_models))
         c.edit('B.cube')
         self.assertEqual((c.vars['LC_GammaX'][1],c.vars['LC_GammaM'][1]),(0,5))
         c.choose('Color space',2)
-        self.assertEqual((c.vars['LC_GammaX'][1],c.vars['LC_GammaM'][1]),(1,1))
+        self.assertEqual((c.vars['LC_GammaX'][1],c.vars['LC_GammaM'][1]),(1,0))       # Film alone (2026-11-18)
         self.assertEqual(c.vars['LC_Focus'][1],c.vars['LC_SRow0'][1])
 
     def test_every_color_space_and_its_gammas_by_index(self):
@@ -594,14 +594,20 @@ class LibraryNativeTests(unittest.TestCase):
         self.assertEqual(c.status()['asset'],-15)
         self.assertEqual((c.user_value(0,L.SPACE_SET),c.user_value(0,L.GAMMA_SET)),(2,None))   # blackmagic-design, unset
         self.assertEqual(c.record(0)['author'][2],L.GAMMAS_ALL.index('gamma24'))   # kept; it does not fit Blackmagic
-        again=without_jft(lambda:self.cam(c.saved_files()),'A.cube')   # Blackmagic: never converted
+        again=without_jft(lambda:self.cam(c.saved_files()),'A.cube')   # no .JFT: the pick parses the cube
         self.assertEqual(again.status()['asset'],-15)
         again.edit('A.cube');self.assertEqual(again.find_row('Color space')[1]['A'],'Blackmagic Design')
-        again.choose('Gamma',0)
-        # a pending model (Blackmagic) is refused as the cube is parsed (import.c: the asset's own check), no
-        # longer loaded and refused at render as a computer-prepared asset was (-12 then)
+        again.choose('Color space',6);again.choose('Gamma',4)
+        # a pending model (Rec.709's Gamma; Blackmagic until 2026-11-18) is refused as the cube is parsed (import.c:
+        # the asset's own check), no longer loaded and refused at render as a computer-prepared asset was (-12 then)
         self.assertEqual(self.pick(again,0),-11)
         self.assertEqual(again.render([[.1,.2,.3]])[0],-15)
+        # Blackmagic Design with its Gamma chosen is a model now: picked and rendered
+        again.choose('Color space',2);again.choose('Gamma',0)
+        self.assertEqual(again.find_row('Gamma')[1]['A'],'Blackmagic Design Film')
+        self.assertEqual(self.pick(again,0),0)
+        self.assertEqual((again.status()['color'],again.status()['gamma'],again.status()['model']),(2,0,0))
+        self.assertEqual(again.render([[.1,.2,.3]])[0],0)
 
     def test_pick_saves_across_boot_with_no_source_cube_write(self):
         c=self.cam();self.assertEqual(self.pick(c,1),0)

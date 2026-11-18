@@ -177,7 +177,7 @@ static void imp_author(struct lut4_state *s,struct lib_entry *e) {
         if((v=imp_key(buf,i,string(s,73))))
             for(u32 k=0;k<8u;k++){if(imp_is(v,string(s,77u+k))){e->author_color=k;e->author_flags|=LIB_SPACE;}}
         else if((v=imp_key(buf,i,string(s,74))))
-            for(u32 k=0;k<8u;k++){if(imp_is(v,string(s,85u+k))){e->author_gamma=k;e->author_flags|=LIB_GAMMA;}}
+            for(u32 k=0;k<8u;k++){if(imp_is(v,string(s,85u+k))){e->author_gamma=k==7u?6u:k;e->author_flags|=LIB_GAMMA;}}   /* 7: the retired Extended Video name = Film */
         else if((v=imp_key(buf,i,string(s,108))))
             for(u32 k=0;k<MAT_N;k++){if(imp_is(v,string(s,111u+k)))mode=k;}
         else if((v=imp_key(buf,i,string(s,109))) || (v=imp_key(buf,i,string(s,110)))) {
@@ -392,7 +392,7 @@ static int imp_asset(struct lut4_state *s,unsigned index) {
     u32 *h=(u32 *)a;
     h[0]=0x31554c46u;h[1]=1;h[2]=header;h[3]=total;h[4]=0;h[5]=n1;h[6]=n3;h[7]=27u*256u+1u;
     h[8]=header;h[9]=header+8u*9u*4u;h[10]=n1?at:0;h[11]=n3?at+12u*n1:0;
-    h[12]=e->color;h[13]=e->gamma;h[14]=e->amount;h[15]=1;
+    h[12]=e->color;h[13]=gamma_id(e->color,e->gamma);h[14]=e->amount;h[15]=1;
     for(u32 k=0;k<2u;k++) {
         i32 *t=(i32 *)(a+(k?100u:64u));
         for(u32 ch=0;ch<3u;ch++) {

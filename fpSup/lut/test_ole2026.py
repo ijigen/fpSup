@@ -72,7 +72,7 @@ class Ole2026Tests(unittest.TestCase):
     def test_candidate_cannot_enable_pending_raw_models_or_linear_cube_export(self):
         self.assertFalse(description()['resolve_pixel_match_verified'])
         self.assertFalse(description()['raw_menu_registration'])
-        self.assertFalse(Selection('blackmagic-design', 'blackmagic-film').numerical_reference_available)
+        self.assertFalse(Selection('rec709', 'rec709').numerical_reference_available)   # (Blackmagic Film has its model: 11-18)
         for size in (1, 66, True, 3.5):
             with self.assertRaises(ValueError): cube_bytes(size, 'bwg-film5', correction=True)
         for bad in ('p3-linear', None, 'bmd-raw-film'):

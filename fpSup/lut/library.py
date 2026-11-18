@@ -19,7 +19,7 @@ import struct
 import tempfile
 
 from cube import Cube
-from cinemadng import COLOR_SPACES, COMMON_GAMMAS, BLACKMAGIC_GAMMAS, Selection
+from cinemadng import COLOR_SPACES, COMMON_GAMMAS, BLACKMAGIC_GAMMAS, LEGACY_GAMMAS, Selection
 import cube_metadata as CM
 
 SCHEMA='fpsup-lut-library-1'
@@ -38,6 +38,12 @@ READY=SPACE_SET|GAMMA_SET|MATRIX_SET
 AUTH_CUSTOM=16                      # author_flags: the author's custom matrices parsed
 MATRICES=('standard','off','custom')   # the DNG profile the LUT was made on (user 2026-11-03)
 GAMMAS_ALL=(*COMMON_GAMMAS,*BLACKMAGIC_GAMMAS)
+LEGACY_GAMMA_INDEX=7                # 'blackmagic-extended-video' until 2026-11-18: read as Film (6), as native library_init
+
+
+def current_gamma(name):
+    """A gamma name as it is now: the retired Blackmagic one is Film (cinemadng.LEGACY_GAMMAS)."""
+    return LEGACY_GAMMAS.get(name,name)
 Q20=1<<20
 MATRIX_LIMIT=16                     # |coefficient| <= 16, as the asset's matrices
 ORIGIN_CAMERA=1                     # native/library4.h: a .cube in \\fpSup\\LUT\\ (every record, since 2026-11-06)
@@ -81,6 +87,7 @@ def author_settings(cube):
         if len(parts)!=2 or key in result:
             raise ValueError(f'line {line_no}: duplicate or invalid {parts[0]}')
         result[key]=None if parts[1]=='unset' and key in ('input_space','input_gamma','color_matrix') else parts[1]
+        if key=='input_gamma':result[key]=current_gamma(result[key])
     if result.get('input_space') is not None and result['input_space'] not in COLOR_SPACES:
         raise ValueError('author input color space is not supported')
     if result.get('input_gamma') is not None and result['input_gamma'] not in GAMMAS_ALL:
@@ -117,8 +124,8 @@ def resolved(entry):
     """Effective values: the user's override, else the author's, else unset -- native lib_resolve."""
     author=entry.get('author',{})
     override=entry.get('overrides',{})
-    us,ug,um=override.get('input_space'),override.get('input_gamma'),override.get('color_matrix')
-    au,ag,am=author.get('input_space'),author.get('input_gamma'),author.get('color_matrix')
+    us,ug,um=override.get('input_space'),current_gamma(override.get('input_gamma')),override.get('color_matrix')
+    au,ag,am=author.get('input_space'),current_gamma(author.get('input_gamma')),author.get('color_matrix')
     for v,ok in ((us,COLOR_SPACES),(au,COLOR_SPACES)):
         if v is not None and v not in ok:raise ValueError('unknown LUT input color space')
     for v in (ug,ag):
@@ -277,14 +284,14 @@ def checksum(data):
 
 
 def layer_fields(entry):
-    """native lib_entry +128..+256: author and user layers, gammas as the global index (6, 7 = Blackmagic)."""
+    """native lib_entry +128..+256: author and user layers, gammas as the global index (6 = Blackmagic Design Film)."""
     author,override=entry['author'],entry['overrides']
     spaces=list(COLOR_SPACES)
     af=(SPACE_SET if author.get('input_space') else 0)|(GAMMA_SET if author.get('input_gamma') else 0)| \
        (MATRIX_SET if author.get('color_matrix') else 0)|(AUTH_CUSTOM if ('matrix1' in author or 'matrix2' in author) else 0)
     uf=(SPACE_SET if 'input_space' in override else 0)|(GAMMA_SET if 'input_gamma' in override else 0)| \
        (MATRIX_SET if 'color_matrix' in override else 0)
-    ix=lambda seq,v:seq.index(v) if v is not None else 0
+    ix=lambda seq,v:seq.index(current_gamma(v)) if v is not None else 0
     cm=custom_matrices(author) if af&AUTH_CUSTOM else [[0]*9,[0]*9]
     return (af,ix(spaces,author.get('input_space')),ix(GAMMAS_ALL,author.get('input_gamma')),
             ix(MATRICES,author.get('color_matrix')),uf,ix(spaces,override.get('input_space')),
@@ -338,7 +345,7 @@ def binary(document):
         flags=int(entry['enabled']) | (SPACE_SET if value['input_space'] is not None else 0) | \
               (GAMMA_SET if value['input_gamma'] is not None else 0) | MATRIX_SET
         color=list(COLOR_SPACES).index(value['input_space']) if value['input_space'] is not None else \
-              (2 if (entry['overrides'].get('input_gamma') or entry['author'].get('input_gamma')) in BLACKMAGIC_GAMMAS else 6)
+              (2 if current_gamma(entry['overrides'].get('input_gamma') or entry['author'].get('input_gamma')) in BLACKMAGIC_GAMMAS else 6)
         gammas=BLACKMAGIC_GAMMAS if color==2 else COMMON_GAMMAS
         gamma=gammas.index(value['input_gamma']) if value['input_gamma'] in gammas else 0
         struct.pack_into('<4I',out,p+96,flags,color,gamma,value['strength_percent'])
@@ -383,9 +390,11 @@ def recover(document,bin_data,sources=None):
             if origin&ORIGIN_CAMERA:identity=by_name.get(data[p+32:p+96].split(b'\0')[0].decode('ascii','replace'),'camera:'+identity)
         if flags>(15 if version==3 else 7) or color>=len(COLOR_SPACES) or amount not in STRENGTHS:raise ValueError('invalid saved cube settings')
         gammas=BLACKMAGIC_GAMMAS if color==2 else COMMON_GAMMAS
+        if color==2 and gamma==1:gamma=0                 # the retired Extended Video: Film
         if gamma>=len(gammas) or identity in saved:raise ValueError('invalid saved gamma or duplicate identity')
         if version==3:
             _m,_af,_ac,_ag,_am,uf,uc,ug,um=struct.unpack_from('<9I',data,p+128)
+            if ug==LEGACY_GAMMA_INDEX:ug=GAMMAS_ALL.index('blackmagic-film')
             if uf&~(SPACE_SET|GAMMA_SET|MATRIX_SET) or uc>=len(COLOR_SPACES) or ug>=len(GAMMAS_ALL) or um>=len(MATRICES):
                 raise ValueError('invalid saved user layer')
         saved.append(identity)

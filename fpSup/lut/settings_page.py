@@ -11,7 +11,7 @@ did the same on the camera).  No stock CSV is borrowed or changed.
 
 Gamma follows the color space the stock way: the list's variants (B1_4_excl..)
 are chosen by its EXCL variable -- here LC_GammaX: 0 the six common Gammas,
-1 the two Blackmagic ones.  Offline only.
+1 Blackmagic's one (Film).  Offline only.
 """
 import struct
 import sys

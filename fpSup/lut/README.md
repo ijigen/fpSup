@@ -359,7 +359,7 @@ python3 -B fplut.py monitor-prepare look.cube out/monitor --input-space aces --i
 |---|---|---|
 | `aces` | ACES | AP0／D60；與 Resolve 名稱的對應尚待像素核對 |
 | `adobe-rgb` | Adobe RGB | Adobe RGB (1998)／D65 |
-| `blackmagic-design` | Blackmagic Design | CinemaDNG 專用模型待核實，不能用 BWG／Film Gen5 代替 |
+| `blackmagic-design` | Blackmagic Design | 白平衡後的感光元件 RGB，不乘色彩矩陣（2026-11-18，從 Resolve 本體讀出它對非 Blackmagic 相機的做法；未用 Resolve 匯出核對數值）。不是 BWG／Film Gen5 |
 | `p3-d60` | P3 D60 | P3 原色／D60 |
 | `p3-d65` | P3 D65 | P3 原色／D65 |
 | `rec2020` | Rec.2020 | BT.2020 原色／D65 |
@@ -368,12 +368,13 @@ python3 -B fplut.py monitor-prepare look.cube out/monitor --input-space aces --i
 
 非 Blackmagic 共用六項 Gamma：`adobe-rgb`（Adobe RGB）、`gamma24`（Gamma 2.4）、
 `gamma26`（Gamma 2.6）、`linear`（Linear）、`rec709`（Rec.709）、`srgb`（sRGB）。
-Blackmagic 只有 `blackmagic-film`（Blackmagic Design Film）及 `blackmagic-extended-video`
-（Blackmagic Design Extended Video）；跨組搭配會拒絕。
+Blackmagic 只有 `blackmagic-film`（Blackmagic Design Film，初代 Film 曲線）；跨組搭配會拒絕。
+2026-11-18（0.1.2test）起拿掉 `blackmagic-extended-video`：Resolve 對非 Blackmagic 相機沒有這一項。
+舊的 LUT.BIN、library.json 或 .cube 作者註解若記著它，一律讀成 Film。
 
 35 組標準模型 = 7 個非 Blackmagic 色域 × 5 條已實作曲線。Adobe RGB 曲線採官方的
 2.19921875 指數；Resolve 標示 Rec.709 的 Gamma 公式尚未確認，保留選單項但不偷換成 BT.709 OETF。
-兩組 Blackmagic 也保留並標明待核實。畫面中的灰字不作為啟用狀態證據。
+Blackmagic Design／Film 是第 36 組（0.1.2test）；未上機、未用 Resolve 匯出核對。畫面中的灰字不作為啟用狀態證據。
 [三張選單原圖與雜湊](../../projects/lut-sup/validation/20261016-cdng-menu-01/evidence.json)
 才是目前清單依據，不能把手冊較短的列舉當成完整清單。
 

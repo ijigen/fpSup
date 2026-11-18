@@ -17,7 +17,8 @@ enum { VIEW_LEGACY, VIEW_COLOR, VIEW_MANAGER, VIEW_PICKER, VIEW_SETTINGS };
 /* v3 (user 2026-11-03): the author's values and the user's are kept apart.
  * flags/color/gamma/matrix are the effective values, always lib_resolve() of
  * the two layers: the user's where user_flags has the bit, else the author's.
- * Gammas in the layers are the global index (6, 7 = Blackmagic); the effective
+ * Gammas in the layers are the global index (6 = Blackmagic Design Film; 7, read as 6,
+ * was its Extended Video until 2026-11-18); the effective
  * gamma is the index within its family, as before.  cm: the author's custom
  * ColorMatrix1 (A) / 2 (D65), XYZ -> camera before the body's calibration, Q20. */
 struct lib_entry {

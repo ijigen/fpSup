@@ -307,6 +307,11 @@ class NativeLutTests(unittest.TestCase):
                     self.assertEqual(rc,0)
                     # Q20 input quantization is included, as are matrix/curve/node approximations.
                     np.testing.assert_allclose(actual,expected,atol=4e-5,rtol=0)
+        # the 36th (2026-11-18): Blackmagic Design with its one Gamma, Film (test_bmd_film: what the model is)
+        self.assertEqual(c.invoke(3,2,0),0)
+        expected,_=Monitor(cube,'blackmagic-design',input_gamma='blackmagic-film').evaluate_xyz(xyz)
+        rc,actual=c.render(xyz)
+        self.assertEqual(rc,0);np.testing.assert_allclose(actual,expected,atol=4e-5,rtol=0)
         c.invoke(3,6,1)
         for amount in (0,25,50,75,100):
             self.assertEqual(c.invoke(4,amount),0)
@@ -318,8 +323,8 @@ class NativeLutTests(unittest.TestCase):
     def test_native_controls_reach_all_models_and_strengths_without_ui(self):
         c=self.cam()
         for ci,color in enumerate(COLOR_SPACES):
-            for gi in range(2 if color=='blackmagic-design' else 6):
-                expected=-12 if ci==2 or gi==4 else 0
+            for gi in range(1 if color=='blackmagic-design' else 6):      # Blackmagic: Film alone
+                expected=-12 if ci!=2 and gi==4 else 0
                 self.assertEqual(c.invoke(3,ci,gi),expected)
                 self.assertEqual((c.status()['color'],c.status()['gamma']),(ci,gi))
                 self.assertEqual(c.status()['model'],expected)
@@ -383,12 +388,13 @@ class NativeLutTests(unittest.TestCase):
         self.assertEqual(bytes(c.mu.mem_read(dest,24)),before)
         for args in [(source,source+4,1),(source,dest,4097),(source+1,dest,1)]:
             self.assertEqual(c.invoke(6,*args),-14)
-        for color,gamma in [(2,0),(2,1),(6,4)]:
+        for color,gamma in [(0,4),(6,4)]:               # Resolve's Rec.709 Gamma: the model still pending
             self.assertEqual(c.invoke(3,color,gamma),-12)
             self.assertEqual(c.status()['model'],-12)
             self.assertEqual(c.invoke(6,source,dest,1),-12)
             self.assertEqual(bytes(c.mu.mem_read(dest,24)),before)
         self.assertEqual(c.invoke(3,2,2),-3)
+        self.assertEqual(c.invoke(3,2,1),-3)            # Blackmagic's second Gamma is gone (2026-11-18)
         self.assertEqual(c.invoke(4,55),-3)
         self.assertEqual(c.invoke(5,2),-3)
 
@@ -471,7 +477,8 @@ class NativePackageTests(unittest.TestCase):
     def test_reject_unsupported_model_and_quantization_failures_before_output(self):
         with tempfile.TemporaryDirectory() as td:
             out=Path(td)/'out'
-            with self.assertRaises(ValueError): P.build(out,color='blackmagic-design',gamma='blackmagic-film')
+            with self.assertRaises(ValueError): P.build(out,color='rec709',gamma='rec709')
+            with self.assertRaises(ValueError): P.build(out,color='blackmagic-design',gamma='gamma24')
             self.assertFalse(out.exists())
         with self.assertRaises(ValueError): P.asset(Cube.parse(make_cube(fn=lambda r,g,b:(1025,g,b))))
         with self.assertRaises(ValueError): P.asset(Cube.parse(make_cube(headers='DOMAIN_MAX 0.0000001 1 1\n')))

@@ -118,7 +118,7 @@ static u32 mv_vslot(u32 group,u32 k) {
     if(group==MV_VERSION_X)return k?MV_VERSION_X+k-1u:MV_X0+11u;
     return k?group+k-1u:MV_X0+5u+(group-MV_VISIBLE)/MV_ROWS;
 }
-static int mv_ready(const struct lib_entry *e) { return (e->flags&LIB_READY)==LIB_READY && supported(e->color,e->gamma); }
+static int mv_ready(const struct lib_entry *e) { return (e->flags&LIB_READY)==LIB_READY && usable(e->color,e->gamma); }
 /* On as the manager shows it: enabled, set up and converted (user 11-05: "如果.cube沒有轉譯過，他應該就要是off");
  * an enabled cube whose .JFT is gone (or whose settings changed) shows Off, and On converts it again.  Display
  * only: the library's flag is left as it is (nothing written at open), the COLOR list already skips it. */
@@ -227,9 +227,9 @@ static void settings_refresh(struct lut4_state *s) {
     if(title!=e->name)s->ui_cache[MV_PAGE_TITLE]=0;           /* one buffer for every cube: post it again */
     mv_str(s,MV_PAGE_TITLE,title);
     mv_int(s,MV_SPACE_V,e->color);mv_int(s,MV_GAMMA_V,e->gamma);
-    mv_int(s,MV_GAMMA_X,bmd);mv_int(s,MV_GAMMA_M,bmd?1u:5u);
+    mv_int(s,MV_GAMMA_X,bmd);mv_int(s,MV_GAMMA_M,bmd?0u:5u);
     mv_str(s,MV_SPACE_T,e->flags&LIB_SPACE?s->colors[e->color<8u?e->color:0u]:string(s,53));
-    mv_str(s,MV_GAMMA_T,e->flags&LIB_GAMMA?(bmd?s->blackmagic[e->gamma&1u]:s->common[e->gamma<6u?e->gamma:0u])
+    mv_str(s,MV_GAMMA_T,e->flags&LIB_GAMMA?(bmd?s->blackmagic[0]:s->common[e->gamma<6u?e->gamma:0u])
            :string(s,53));
     /* the matrix row: Custom listed only with the author's matrices (LC_MATRIX_C) */
     u32 custom=!!(e->author_flags&AUTH_CUSTOM);
@@ -287,7 +287,7 @@ static void mark_lists(struct lut4_state *s) {
     const char *mats[3]={string(s,115),string(s,116),string(s,117)};
     s->ui_marks=model_texts(0x535F434Cu,0x45434150u,0u,s->colors,8,ac);
     s->ui_marks|=model_texts(0x475F434Cu,0x414D4D41u,0u,s->common,6,ag<6u?ag:LIB_NONE)<<4;
-    s->ui_marks|=model_texts(0x475F434Cu,0x414D4D41u,0x444D425Fu,s->blackmagic,2,ag!=LIB_NONE && ag>=6u?ag-6u:LIB_NONE)<<8;
+    s->ui_marks|=model_texts(0x475F434Cu,0x414D4D41u,0x444D425Fu,s->blackmagic,1,ag==6u?0u:LIB_NONE)<<8;
     s->ui_marks|=model_texts(0x4D5F434Cu,0x49525441u,0x58u,mats,2,am)<<12;
     s->ui_marks|=model_texts(0x4D5F434Cu,0x49525441u,0x435F58u,mats,3,am)<<16;
 }

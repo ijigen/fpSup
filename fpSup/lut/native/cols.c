@@ -29,7 +29,7 @@ static void lc_name(const char *name, char *out) {       /* the file name withou
 }
 static int lc_on(struct lut4_state *s, u32 i) {         /* a COLOR row if there is room: on, set up, converted */
     const struct lib_entry *e = &s->library->entries[i];
-    return (e->flags & 1u) && (e->flags & LIB_READY) == LIB_READY && supported(e->color, e->gamma) && conv_ok(s, i);
+    return (e->flags & 1u) && (e->flags & LIB_READY) == LIB_READY && usable(e->color, e->gamma) && conv_ok(s, i);
 }
 static u32 lc_rows(void *arg, struct cols_row *out, u32 max) {
     struct lut4_state *s = arg; struct lut_cols *L = &s->cols;

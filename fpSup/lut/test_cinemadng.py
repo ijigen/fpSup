@@ -24,19 +24,20 @@ class CinemaDngTests(unittest.TestCase):
         self.assertEqual([g['label'] for g in menu['common_gammas']],
                          ['Adobe RGB', 'Gamma 2.4', 'Gamma 2.6', 'Linear', 'Rec.709', 'sRGB'])
         self.assertEqual([g['label'] for g in menu['blackmagic_gammas']],
-                         ['Blackmagic Design Film', 'Blackmagic Design Extended Video'])
+                         ['Blackmagic Design Film'])          # the one Resolve has for this camera (2026-11-18)
         self.assertFalse(menu['resolve_pixel_match_verified'])
         self.assertFalse(menu['menu_option_enabled_state_verified'])
 
     def test_proprietary_and_rec709_models_never_silently_substituted(self):
-        for color, gamma in [('blackmagic-design', 'blackmagic-film'),
-                             ('blackmagic-design', 'blackmagic-extended-video'),
-                             ('aces', 'rec709')]:
+        for color, gamma in [('aces', 'rec709'), ('rec709', 'rec709')]:
             selection = Selection(color, gamma)
             self.assertFalse(selection.numerical_reference_available)
             with self.assertRaisesRegex(ValueError, 'not a substitute'):
                 selection.encoding()
-        for color, gamma in [('blackmagic-design', 'linear'), ('rec709', 'blackmagic-film')]:
+        # Blackmagic Design / Film has its model since 2026-11-18 (test_bmd_film); Extended Video is not listed
+        self.assertTrue(Selection('blackmagic-design', 'blackmagic-film').numerical_reference_available)
+        for color, gamma in [('blackmagic-design', 'linear'), ('rec709', 'blackmagic-film'),
+                             ('blackmagic-design', 'blackmagic-extended-video')]:
             with self.assertRaisesRegex(ValueError, 'not in'):
                 Selection(color, gamma)
 
@@ -60,14 +61,18 @@ class CinemaDngTests(unittest.TestCase):
                     continue
                 with self.subTest(color=color, gamma=gamma):
                     space = selection.encoding()
+                    # the sensor "gamut" (Blackmagic Design) is native/lvb.c's Q20 matrix inverted, not primaries and
+                    # a white: D65 grey comes out neutral to 2.5e-7 of a code (the matrix's rounding), not exactly
                     np.testing.assert_allclose(space.from_xyz(xyz_white(D65)*.18),
-                                               transfer(np.full(3, .18), space.curve), atol=2e-14)
+                                               transfer(np.full(3, .18), space.curve),
+                                               atol=2.5e-7 if space.gamut == 'fp-sensor' else 2e-14,
+                                               rtol=0 if space.gamut == 'fp-sensor' else 1e-7)
                     encoded = transfer(linear, space.curve)
                     recovered = transfer(space.from_xyz(space.to_xyz(encoded)), space.curve, inverse=True)
                     np.testing.assert_allclose(recovered, linear, atol=3e-13)
                     self.assertFalse(space.display_input)
                     count += 1
-        self.assertEqual(count, 35)
+        self.assertEqual(count, 36)                    # 35 standard + Blackmagic Design / Film (2026-11-18)
 
     def test_gamut_and_gamma_are_independent_and_white_choice_matters(self):
         cube = Cube.parse(make_cube())
@@ -105,9 +110,7 @@ class CinemaDngCliTests(unittest.TestCase):
             root = Path(directory)
             cube = root/'look.cube'
             cube.write_bytes(make_cube())
-            for color, gamma in [('blackmagic-design', 'blackmagic-film'),
-                                 ('blackmagic-design', 'blackmagic-extended-video'),
-                                 ('p3-d65', 'rec709'), ('blackmagic-design', 'gamma24')]:
+            for color, gamma in [('p3-d65', 'rec709'), ('blackmagic-design', 'gamma24'), ('rec709', 'blackmagic-film')]:
                 output = root/'assets'
                 with self.subTest(color=color, gamma=gamma), redirect_stderr(io.StringIO()):
                     self.assertEqual(main(['monitor-prepare', str(cube), str(output),

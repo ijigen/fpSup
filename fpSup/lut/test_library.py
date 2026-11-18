@@ -119,10 +119,17 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(L.validate(dict(schema=L.SCHEMA,active=None,luts=[]))['luts'],[])
 
     def test_pending_model_is_recorded_without_substitution(self):
-        doc=L.import_cubes(L.blank(),[self.cube()],input_space='blackmagic-design',input_gamma='blackmagic-film')
+        doc=L.import_cubes(L.blank(),[self.cube()],input_space='rec709',input_gamma='rec709')   # Resolve's Rec.709 Gamma: no model
         value=L.resolved(doc['luts'][0]);self.assertTrue(value['configured']);self.assertFalse(value['model_available'])
         data=L.binary(doc);flags,color,gamma,amount=struct.unpack_from('<4I',data,L.HEADER+96)
+        self.assertEqual((color,gamma),(6,4));self.assertEqual(flags,L.READY)
+
+    def test_blackmagic_film_is_recorded_within_its_own_list(self):
+        doc=L.import_cubes(L.blank(),[self.cube()],input_space='blackmagic-design',input_gamma='blackmagic-film')
+        value=L.resolved(doc['luts'][0]);self.assertTrue(value['configured']);self.assertTrue(value['model_available'])
+        data=L.binary(doc);flags,color,gamma,amount=struct.unpack_from('<4I',data,L.HEADER+96)
         self.assertEqual((color,gamma),(2,0));self.assertEqual(flags,L.READY)
+        self.assertEqual(struct.unpack_from('<I',data,L.HEADER+128+28)[0],6)      # the user's layer: the global index
 
     def test_binary_identity_flags_checksum_and_original_source(self):
         doc=L.import_cubes(L.blank(),[self.cube()],input_space='p3-d65',input_gamma='gamma26')

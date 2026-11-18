@@ -22,12 +22,14 @@ sys.path.insert(0,str(HERE))
 sys.path.insert(0,str(FPSUP/'loader-v4'))
 import build_v4 as B
 import names_v4 as NV                     # the card name, display name and version (Bei 2026-11-12: always versioned)
-from cinemadng import COLOR_SPACES, GAMMAS, COMMON_GAMMAS, BLACKMAGIC_GAMMAS, Selection, catalogue
+from cinemadng import COLOR_SPACES, GAMMAS, COMMON_GAMMAS, BLACKMAGIC_GAMMAS, LEGACY_GAMMAS, Selection, catalogue
 from color import from_xyz_matrix, transfer
 from cube import Cube
 
 Q=1<<20
 CURVE_N=27*256+1
+ASSET_GAMMAS=(*COMMON_GAMMAS,*BLACKMAGIC_GAMMAS)   # the asset's curves and its gamma field: the global index (native/lut4.c
+CURVES=len(ASSET_GAMMAS)                           # CURVES, supported()); 6 = Blackmagic Design Film, added 2026-11-18
 HEADER=256
 # The prepared table's capacity.  A library build borrows it from the firmware allocator for one load and
 # returns it (native/borrow.c, 2026-11-07: resident, it made MOV recording freeze); only the reference build
@@ -74,7 +76,7 @@ def asset(cube,color='rec709',gamma='gamma24',strength=100,source_identity=None)
     values.append(128.)
     grid=np.asarray(values[1:])
     assert len(grid)==CURVE_N
-    for key in COMMON_GAMMAS:
+    for key in ASSET_GAMMAS:
         curve=GAMMAS[key].curve
         for sign in (1,-1):
             result=np.zeros(CURVE_N) if curve is None else transfer(sign*grid,curve)
@@ -91,7 +93,7 @@ def asset(cube,color='rec709',gamma='gamma24',strength=100,source_identity=None)
     if total>CAPACITY: raise ValueError('prepared LUT exceeds 4 MiB resident limit')
     header=bytearray(HEADER)
     fields=[0x31554c46,1,HEADER,total,0,n1,n3,CURVE_N,matrix_off,curve_off,
-            one_off,three_off,list(COLOR_SPACES).index(color),list(COMMON_GAMMAS).index(gamma),strength,1]
+            one_off,three_off,list(COLOR_SPACES).index(color),ASSET_GAMMAS.index(gamma),strength,1]
     struct.pack_into('<16I',header,0,*fields)
     for offset,domain in ((64,cube.range1d),(100,cube.range3d)):
         quantized=quantize(domain,128).reshape(2,3)
@@ -137,6 +139,7 @@ def strings():
     return ['\\fpSup\\LUTDATA\\ACTIVE.LUT', 'LUT file / status','LUT color space','LUT gamma value',
             'LUT strength value','LUT monitoring', *[c.label for c in COLOR_SPACES.values()],
             *[GAMMAS[k].label for k in COMMON_GAMMAS], *[GAMMAS[k].label for k in BLACKMAGIC_GAMMAS],
+            '',                                       # 21: was 'Blackmagic Design Extended Video' (kept: the indices stay)
             '0%','25%','50%','75%','100%','ACTIVE.LUT; LV pending','LUT file missing',
             'LUT file invalid','Selected model pending',
             'LUT color family','LUT gamma family','LUT strength range',
@@ -150,7 +153,8 @@ def strings():
             '# FPSUP_METADATA_V1\n# FPSUP_SOURCE_ID ', '\n# FPSUP_USER_INPUT_COLOR_SPACE ',
             '\n# FPSUP_USER_INPUT_GAMMA ', '\n# FPSUP_OUTPUT_COLOR_SPACE rec709\n# FPSUP_OUTPUT_GAMMA gamma24\n#',
             'unset','# FPSUP_INPUT_COLOR_SPACE ','# FPSUP_INPUT_GAMMA ','','.cube',   # 75: was SOURCES\ (11-06)
-            *COLOR_SPACES, *COMMON_GAMMAS, *BLACKMAGIC_GAMMAS, '# FPSUP_METADATA_END\n',
+            *COLOR_SPACES, *COMMON_GAMMAS, *BLACKMAGIC_GAMMAS, *LEGACY_GAMMAS,   # 92: the retired name, read as Film (import.c)
+            '# FPSUP_METADATA_END\n',
             'Color space','Gamma',                    # 94, 95: the two settings rows (user 2026-10-24)
             'TITLE','LUT_1D_SIZE','LUT_3D_SIZE','DOMAIN_MIN','DOMAIN_MAX','LUT_1D_INPUT_RANGE','LUT_3D_INPUT_RANGE',
             'User monitoring LUT',                    # 96..103: native/import.c (no .rodata in the sup)

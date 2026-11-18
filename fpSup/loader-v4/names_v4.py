@@ -48,7 +48,9 @@ SUPS = {
     # 2026-11-07 (Bei): the native COLOR list's added rows, shared by LUT / RAW-View (fpSup/colshare/DESIGN.md)
     'COLS': ('COL-Share', 'COL-Share', '0.0.1test'),
     # 2026-11-12 (Bei): LUT on the merge page (fpSup/lut/build_v4_lut.py)
-    'LUT4': ('LUT', 'LUT', '0.1.1test'),
+    # LUT 0.1.2test (2026-11-18): the Blackmagic Design input converts -- sensor RGB with no matrix, Blackmagic Design Film
+    # (what Resolve does with a camera that is not Blackmagic's); Extended Video is gone from the list
+    'LUT4': ('LUT', 'LUT', '0.1.2test'),
 }
 
 DISPLAY_MAX = 23      # sloader4.c struct sup disp[24]
