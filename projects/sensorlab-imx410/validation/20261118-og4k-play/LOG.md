@@ -68,3 +68,5 @@ NOT tested: what Bei sees (smoothness, the longer wait before the start — comp
 pause / seek / resume / reverse; a clip longer than the pool (the stock refill after an underrun);
 fast clips (must start as stock: one host test only); clips with missing frames; SSD; HDMI; 14-bit;
 small formats; pixel check of the played picture; the deploy tool has no check for the 32-file limit yet.
+
+Bei, 2026-11-18 evening, played the OG 4K clip by hand on 0.3.15test: "感覺ok" (by eye; no timing, no pixel check).
