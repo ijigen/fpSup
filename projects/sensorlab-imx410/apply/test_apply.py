@@ -1337,6 +1337,24 @@ class CalcTests(unittest.TestCase):
             self.assertEqual(bool(is169), not rules, k)
             if rules:
                 self.assertEqual((bw, bh), rules[0][4:], k)
+        # 0.0.12test: 3:2 within 0.5 % is the whole LCD.  A box a few pixels narrower than 1620 (1616x1080 for OG 3.5K's
+        # 3584x2394) pinned the firmware's AF window to the top of the frame (validation/20261119-af)
+        for k in range(-160, 161):
+            if abs(k) == 50:
+                continue
+            an, ad = 3 * 100000 + k * 30, 2 * 100000
+            lib.apc_display_host(ctypes.c_uint64(an), ctypes.c_uint64(ad), o)
+            bw, bh = struct.unpack_from('<10I', o.raw, off)[7:9]
+            self.assertEqual((bw, bh), IC.lvout_rules(an / ad)[0][4:], k)
+            self.assertEqual((bw, bh) == (1620, 1080), abs(k) < 50, k)
+            if k <= -50:
+                self.assertTrue(bw < 1620 and bh == 1080, k)      # really narrower: bars left and right, as before
+            if k >= 50:
+                self.assertTrue(bw == 1620 and bh < 1080, k)
+        for (w, h), box in {(3584, 2394): (1620, 1080), (6032, 4030): (1620, 1080), (3024, 2004): (1620, 1074),
+                            (3008, 2010): (1620, 1080), (2016, 2016): (1072, 1080)}.items():
+            lib.apc_display_host(ctypes.c_uint64(w), ctypes.c_uint64(h), o)
+            self.assertEqual(struct.unpack_from('<10I', o.raw, off)[7:9], box, (w, h))
 
     def test_carrier_and_f32(self):
         lib = BA.host()

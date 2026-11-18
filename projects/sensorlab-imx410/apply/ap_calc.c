@@ -193,10 +193,28 @@ static void apc_box(u64 an, u64 ad, u32 *b)
     u64 x = 9u * an, y = 16u * ad, dd = x > y ? x - y : y - x;
     b[0] = 200u * dd < 16u * ad;
     apc_limit(an, ad, 1000u, &b[1], &b[2]);
-    if (2u * an >= 3u * ad) {                             /* a >= 1620 / 1080 */
+    /* The LCD's own shape (3:2) within 0.5 %: the whole LCD, 1620 x 1080.
+     *   name     the 3:2 snap of the LV box
+     *   purpose  a record a hair narrower than 3:2 (OG 3.5K 3584x2394 = 1.497, every OG 3.5K..6K and OG 3K 1x1) must
+     *            not get the pillarbox 1616 x 1080: the firmware's AF-frame conversion (FUN_c0686800) takes the picture
+     *            to fill the LCD's width, computes its height 1080 * 1620 / 1616 = 1082 > 1080, the unsigned letterbox
+     *            term wraps and the AF evaluation window is pinned to the top of the frame (standby AF misses)
+     *   basis    Bei's standby AF tests 2026-11-19 (OG 1K/2K/3K right, 3.5K..6K and 3K 1x1 wrong; RES-Custom's exact
+     *            3:2 3.5K / 4K right); AF window origin read on the camera: y0 = 2 at 1616x1080, 304 at 1620x1074 and
+     *            304 computed for stock (validation/20261119-af).  The tolerance is the 16:9 rule's 0.5 % above.
+     *   cost     the LV is drawn up to 0.5 % wider than the record's true shape (4 px of 1620 for 1.497) */
+    u64 x32 = 2u * an, y32 = 3u * ad, d32 = x32 > y32 ? x32 - y32 : y32 - x32;
+    if (200u * d32 < 3u * ad) {
+        b[3] = APC_LCD_W; b[4] = APC_LCD_H;
+    } else if (2u * an >= 3u * ad) {                      /* a >= 1620 / 1080 */
         b[3] = APC_LCD_W;
         b[4] = (u32)apc_div(apc_round(APC_LCD_W * ad, an), 2u) * 2u;
     } else {
+        /* narrower than 3:2: the height touches, bars left and right (Bei 2026-10-27, isp-lab lv_box).
+         * The width floored to a multiple of 16: NO RECORDED BASIS (isp_custom.py lv_box, 2026-10-27; the nearest
+         * rule, "visible width is a multiple of 16", is about the ISP's visible raster, and the stock LCD width 1620
+         * is not one).  Kept as it is for these formats; their standby AF is expected to miss the same way
+         * (not fixed here: square, 4:3-like DC). */
         b[3] = (u32)apc_div(apc_round(APC_LCD_H * an, ad), 16u) * 16u;
         b[4] = APC_LCD_H;
     }

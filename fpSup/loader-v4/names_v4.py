@@ -42,7 +42,8 @@ SUPS = {
     # SL41 0.0.9test (2026-11-17): the video clamp on for every recipe (14-bit 3:2 formats: the black stepped frame to frame)
     # SL41 0.0.10test (2026-11-17): the live view's frame-rate text drew only its first digit after MENU (text box lower than the font)
     # SL41 0.0.11test (2026-11-18): in-camera playback admits rasters up to 3968 x 2634 (OG 4K), not only up to stock DCI4K
-    'SL41': ('Sensor Lab-IMX410', 'SensorLab-IMX410', '0.0.11test'),
+    # SL41 0.0.12test (2026-11-19): a record within 0.5 % of 3:2 gets the whole LCD as its LV box (1616x1080 pinned the AF window to the top)
+    'SL41': ('Sensor Lab-IMX410', 'SensorLab-IMX410', '0.0.12test'),
     'QSCT': ('QS-Share', 'QS-Share', '0.0.3test'),   # API 9
     # 2026-11-08 (Bei): Andy_hal9000's rear-wheel decoder v6 (fpSup/dialfix/reference/v6); the v1-based
     # DIALFIX.BIN was never released.  "test" until the sup form has been on the camera.

@@ -64,3 +64,5 @@ unchanged; offline fixture only, not live-tested).
 2026-11-17: added SensorLab-IMX410_v0.0.9test.BIN 7f5f9390a820e2ac70e3c6db63ee38d83f0a2057f0dbfe11a6115ffc65d4217b (default build: 0.0.8test + the video clamp bits on for every recipe, apply/ap_calc.c; offline fixture, live check pending). 0.0.8test retained.
 
 2026-11-17: added SensorLab-IMX410_v0.0.10test.BIN e249e93bfb2fba6c20b9556381782a12f75ab4aa7745d4e17b7847f65b09334b (default build: 0.0.9test + the LV frame-rate text box as high as the donor font, menu/slm_lv_page.py). 0.0.9test retained.
+
+2026-11-19: added SensorLab-IMX410_v0.0.12test.BIN 01a239940761579ce14ef39ccca2346add3607e7d2267497e1bf93a27f62ddcd (default build from validation/20261119-af/default-build; the 3:2 LV box snap; offline fixture only).

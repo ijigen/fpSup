@@ -237,6 +237,12 @@ LCD_W, LCD_H = 1620, 1080                  # STILL's 3:2 template: the whole LCD
 
 def lv_box(a):
     """The LV buffer for record aspect a inside the 1620x1080 LCD, touching one side (user 10-27)."""
+    # 3:2 within 0.5 %: the whole LCD (2026-11-19).  A box a few pixels narrower than 1620 (1616x1080 for a record of
+    # 1.497) makes the firmware's AF-frame conversion underflow and pins the AF window to the top of the frame
+    # (projects/sensorlab-imx410/validation/20261119-af).  Exact rational form: sensorlab apply/ap_calc.c apc_box.
+    if abs(a / (LCD_W / LCD_H) - 1) < 0.005:
+        return (LCD_W, LCD_H)
+    # narrower than 3:2: the width floored to 16 has NO RECORDED BASIS (2026-10-27); kept
     return (LCD_W, round(LCD_W / a) // 2 * 2) if a >= LCD_W / LCD_H else (round(LCD_H * a) // 16 * 16, LCD_H)
 
 
