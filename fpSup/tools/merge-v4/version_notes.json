@@ -51,6 +51,20 @@
    "2026-11-07 起上機，之後每次 Sensor Lab 上機都用它。"
   ]
  },
+ "fpsup-lossless-v0.3.11test": {
+  "en": [
+   "In-camera playback of compressed clips is faster: a frame is decoded in one pass with no extra copying, and the next frame file is read while the current one decodes. Measured on an SD card: about 4 ms a frame instead of 8.5 ms for 1024x678-class clips, about 10 ms for 2016-wide clips.",
+   "Recording is unchanged from 0.3.7test.",
+   "Known issue: clips larger than about UHD (for example OG 4K, 3952x2624) still show \"contents cannot be viewed\" in the camera, as before. They open normally on a computer.",
+   "On the camera 2026-11-18 (SD card): playback of small and 2016-wide compressed clips and of an uncompressed clip; the picture was checked by eye. Not tested: bright scenes with larger files, SSD, long clips, playback with HDMI connected."
+  ],
+  "zh": [
+   "機內回放壓縮片段變快：每格一次解完、不再額外搬資料，並在解這一格時先讀下一格的檔案。SD 卡實測：1024×678 級片段每格約 4 ms（原本 8.5 ms），2016 寬片段每格約 10 ms。",
+   "錄影部分與 0.3.7test 相同。",
+   "已知問題：大於約 UHD 的片段（例如 OG 4K、3952×2624）機內仍顯示「檔案內容不能檢視」，和之前一樣；在電腦上可正常開啟。",
+   "2026-11-18 上機（SD 卡）：回放小格式與 2016 寬的壓縮片段、以及不壓縮的片段；畫面有肉眼確認。未測：檔案較大的亮場景、SSD、長片段、接 HDMI 時回放。"
+  ]
+ },
  "fpsup-lossless-v0.3.7test": {
   "en": [
    "Small formats are now compressed: frames under 2 MiB uncompressed (for example 1024x678, 1024x1024, 1312x874, most Sensor Lab formats scaled with RWZM). Before, these were recorded uncompressed, some of them only in bright or high-ISO scenes.",

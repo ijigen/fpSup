@@ -40,7 +40,7 @@ SUPPORT = {'lut': ['UI/COLOR.BIN']}
 # <base>_v<version>.BIN (the user 2026-10-25)
 PRODUCTS = {
     'res-custom': ('rescus', 'RCUS', 'RESCUS'),
-    'lossless': ('loss', 'LOSS', None),
+    'lossless': ("fpSup/lossless tests 2026-11-18: test_play_decode 60, test_codec_job 48, test_frame_hold 234, test_tile_grid 6, test_rec_workspace 17, test_rec_hook 14, test_v4_lossless 10, test_card_emulation 35 in the full tree. 0.3.11test = 0.3.7test + in-camera playback in one engine job a frame with the next file read meanwhile; recording code unchanged. These bytes (sha256 180a5f55...) on Bei's camera 2026-11-18, SD, on a card with Sensor Lab 0.0.10test and the other sups Bei carries (COL-Share, Desqueeze, Dial Fix, EarlyFlush, Gyro2, LUT, QS-Share, RAW-View, ScreenFlip, Stop-FX, StorageTest, TapToZoom, UnlockWriter, USB shell): 57 / 61 compressed frames a clip decoded the new way, none refused, every player buffer put back, an uncompressed clip untouched, a take after each playback fine; the picture looked at by Bei. Recording as accepted for 0.3.7test (80 lit and 80 dark takes, projects/sensorlab-imx410/validation/20261117-lossless-stale/LOG.md); four takes recorded with these bytes decode with no repeats. Not checked: the full recording acceptance with these bytes, bright scenes, SSD, long clips, HDMI, clips above UHD size (not viewable in the camera, as before) (validation/20261118-lossless-play/LOG.md)."),
     'fcap': ('ports', 'FCAP', None),
     'unlocked-writer': ('ports', 'ULWR', None),
     'stopfx': ('ports', 'STFX', None),
