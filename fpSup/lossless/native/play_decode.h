@@ -121,6 +121,16 @@ struct fpl_play {
     uint32_t ahead_read, ahead_used, ahead_missed, ahead_none, ahead_failed;
     uint32_t last_read_us, last_wait_us;     /* a fast frame: the read ahead, the engine after it */
     uint32_t sum_read_us, sum_wait_us;
+    /* 2026-11-18, a clip the card cannot deliver at its frame rate: the player
+     * starts when the pool is full, not at its own five frames (fpl_play_gate) */
+    uint32_t rate_num, rate_den;             /* the clip's FrameRate; den 0: not read yet, num 0: unknown */
+    uint32_t pace_last_us, pace_sum_us, pace_n;   /* frames reaching our hook: the time between them */
+    uint32_t gate_asked, gate_held, gate_let;     /* asked; a yes made a not yet; let through full */
+    uint32_t gate_free, gate_total, gate_slow;    /* the last answer of ours: slots free / made; 1: slow */
+    /* kept over a clip open, for a host: what the last ask of a buffering player saw */
+    uint32_t gate_waiting;                        /* held once: this start waits for the full pool */
+    uint32_t gate_state, gate_other, gate_fast;   /* the last state; asks in another state; not slow */
+    uint32_t gate_pace_n, gate_pace_us, gate_rate_num, gate_rate_den;
     char ahead_path[FPL_PLAY_PATH];
     uint32_t file[0x400 / 4];                /* the native file object */
     uint32_t header[FPL_PLAY_HEADER / 4];
@@ -169,6 +179,17 @@ uint32_t fpl_play_frame_at(struct fpl_play *, uintptr_t slot, uintptr_t reader, 
 /* C05C0EA0, the player about to f_read the file `reader` names into `slot`.
  * 1: the slot already holds that file (read ahead) -- the read is skipped. */
 uint32_t fpl_play_read(struct fpl_play *, uintptr_t slot, uintptr_t reader, uint32_t busy);
+/* C05BD984: the player (state at +0x450; 1 = buffering before it starts)
+ * asks its pool whether enough frames are ready, and C05C3168 said `stock`
+ * (five developed frames). For a clip of ours whose frames arrive slower
+ * than its frame rate (by 1 %, over the frames read so far), a yes while
+ * buffering becomes 0 until the pool has no free slot left to read into (or
+ * 64 frames wait, or the reader has ended). Once held, that start waits for
+ * the pool whatever the pace says later (2026-11-18, OG 4K from an SD card:
+ * 43.9 ms a frame at the first ask, 42.7 at the next, 47.7 over the clip).
+ * Never turns a 0 into a yes. Returns what the player is told. */
+uint32_t fpl_play_gate(struct fpl_play *, uintptr_t pool, uintptr_t player, uint32_t stock,
+                       uint32_t busy);
 /* C05C2D10's entry, the player about to make its buffer pool `pool` of
  * buffers for `size` B files: the scratch and the spare the open clip needs,
  * taken first. */

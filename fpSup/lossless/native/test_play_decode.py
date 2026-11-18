@@ -57,7 +57,8 @@ def build(directory, replace=None, name='play.dylib'):
     for fn, n, ret in (('knob', 2, False), ('run', 1, True), ('byte', 1, True), ('get', 1, True),
                        ('reset', 0, False), ('end', 0, False), ('pool', 0, False),
                        ('free_pool', 0, True), ('live', 0, True), ('slot', 2, True),
-                       ('slot_byte', 2, True), ('remake', 1, False)):
+                       ('slot_byte', 2, True), ('remake', 1, False), ('gate', 4, True),
+                       ('slot_last', 2, False), ('big_pool', 1, False)):
         f = getattr(lib, 'fpl_fixture_' + fn)
         f.argtypes = [ct.c_uint32] * n
         f.restype = ct.c_uint32 if ret else None
@@ -120,7 +121,7 @@ def raster_len(w=96, h=74, bits=12, **_):
 
 
 def frame(w=96, h=74, bits=12, tw=32, th=32, strip=0x400, ours=True, comp=7,
-          ifd0_w=None, gap_at=None, tiles_n=None, cut=0, tile_len=None):
+          ifd0_w=None, gap_at=None, tiles_n=None, cut=0, tile_len=None, rate=None):
     """A file in our layout; returns (bytes, expected strip bytes, pitch)."""
     across, down = -(-w // tw), -(-h // th)
     tiles = []
@@ -133,6 +134,8 @@ def frame(w=96, h=74, bits=12, tw=32, th=32, strip=0x400, ours=True, comp=7,
     head = bytearray(b'II*\0' + b'\0\0\0\0')
     e0 = [(256, 4, 1, ifd0_w or w), (257, 4, 1, h), (258, 3, 1, bits), (259, 3, 1, 1),
           (273, 4, 1, strip), (279, 4, 1, raster)]
+    if rate:
+        e0.append((51044, 10, 1, struct.pack('<ii', *rate)))
     blk, extra = ifd(e0, 8, 8 + 2 + 12 * len(e0) + 4)
     head += blk + extra
     head += b'\0' * (strip - len(head))
@@ -738,6 +741,221 @@ AHEAD_MUTATIONS = {
                           '    p->hook_end_us = 0;\n    p->sums_stale = 1;'),
     'a full buffer served': ('|| !got || got >= p->ahead_cap) {', '|| !got) {'),
 }
+
+
+GATE_HELD, GATE_LET, RATE_NUM, RATE_DEN, PACE_N = 40, 41, 42, 43, 44
+BUFFERING = 1
+
+
+class StartGateTests(unittest.TestCase):
+    """A clip of ours whose frames arrive slower than its frame rate starts
+    when the player's pool is full, not at the player's own five frames."""
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix='fpl-play-gate-')
+        cls.lib = build(cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def get(self, f): return self.lib.fpl_fixture_get(f)
+
+    def setUp(self):
+        self.lib.fpl_fixture_reset()
+        self.now = 5000
+
+    def clip(self, rate=(24, 1), slots=6):
+        self.rate = rate
+        first = frame(ours=False, rate=rate)[0]
+        self.lib.fpl_fixture_open_pool(first, len(first), len(first), slots, 0x780)
+
+    def arrive(self, frames, period_us, ours=True):
+        """`frames` frame files reach our hook, one every period_us."""
+        for n in range(frames):
+            data = frame(ours=ours and n > 0, rate=self.rate)[0]
+            self.lib.fpl_fixture_knob(7, self.now)
+            self.assertIn(self.lib.fpl_fixture_play(n % 2, data, len(data)), (STOCK, DECODED))
+            self.now += period_us
+
+    def gate(self, free, state=BUFFERING, stock=1, busy=0):
+        return self.lib.fpl_fixture_gate(state, free, stock, busy)
+
+    def test_a_slow_clip_waits_until_one_slot_is_left_free(self):
+        self.clip()
+        self.arrive(6, 48000)                        # 24 fps is 41667 us
+        self.assertEqual([self.gate(free) for free in (5, 3, 2, 1, 0)], [0, 0, 0, 1, 1])
+        self.assertEqual((self.get(GATE_HELD), self.get(GATE_LET)), (3, 2))
+
+    def test_a_clip_arriving_at_its_frame_rate_starts_as_the_player_says(self):
+        self.clip()
+        self.arrive(6, 41000)
+        self.assertEqual(self.gate(4), 1)
+        self.assertEqual(self.get(GATE_HELD), 0)
+
+    def test_half_a_percent_over_is_not_slow_and_two_percent_is(self):
+        self.clip()
+        self.arrive(8, 41900)
+        self.assertEqual(self.gate(4), 1)
+        self.setUp()
+        self.clip()
+        self.arrive(8, 42500)
+        self.assertEqual(self.gate(4), 0)
+
+    def test_a_start_once_held_waits_for_the_pool_whatever_the_pace_becomes(self):
+        self.clip()
+        self.arrive(6, 48000)
+        self.assertEqual(self.gate(4), 0)
+        self.arrive(12, 30000)                       # the average falls under the frame period
+        self.assertEqual([self.gate(free) for free in (3, 2, 1)], [0, 0, 1])
+        self.assertEqual(self.gate(4), 1, 'the next start is judged again')
+
+    def test_a_held_start_that_played_on_is_forgotten(self):
+        self.clip()
+        self.arrive(6, 48000)
+        self.assertEqual(self.gate(4), 0)
+        self.assertEqual(self.gate(4, state=3), 1)   # playing: the player started another way
+        self.arrive(12, 30000)
+        self.assertEqual(self.gate(4), 1)
+
+    def test_a_no_from_the_player_stays_a_no(self):
+        self.clip()
+        self.arrive(6, 48000)
+        self.assertEqual(self.gate(0, stock=0), 0)
+        self.assertEqual(self.gate(1, stock=0), 0)
+
+    def test_only_a_buffering_player_is_held(self):
+        self.clip()
+        self.arrive(6, 48000)
+        self.assertEqual([self.gate(4, state=s) for s in (0, 2, 3, 4)], [1, 1, 1, 1])
+
+    def test_three_intervals_say_nothing(self):
+        self.clip()
+        self.arrive(4, 48000)
+        self.assertEqual(self.gate(4), 1)
+        self.arrive(1, 48000)
+        self.assertEqual(self.gate(4), 0)
+
+    def test_a_clip_without_a_frame_rate_is_left_alone(self):
+        self.clip(rate=None)
+        self.arrive(6, 48000)
+        self.assertEqual(self.gate(4), 1)
+        self.assertEqual(self.get(RATE_NUM), 0)
+
+    def test_a_fractional_frame_rate(self):
+        self.clip(rate=(24000, 1001))                # 41708 us a frame
+        self.arrive(6, 46000)
+        self.assertEqual((self.get(RATE_NUM), self.get(RATE_DEN)), (24000, 1001))
+        self.assertEqual(self.gate(4), 0)
+
+    def test_a_frame_rate_with_a_long_denominator(self):
+        self.clip(rate=(14400000, 600661))           # Sensor Lab's 23.974: 41712 us a frame
+        self.arrive(6, 43890)                        # as measured, OG 4K from an SD card
+        self.assertEqual(self.gate(4), 0)
+        self.setUp()
+        self.clip(rate=(14400000, 600661))
+        self.arrive(6, 41900)
+        self.assertEqual(self.gate(4), 1)
+
+    def test_a_frame_rate_that_is_no_rate_is_not_used(self):
+        for rate in ((0, 1), (1, 0), (241, 1)):
+            with self.subTest(rate=rate):
+                self.setUp()
+                self.clip(rate=rate)
+                self.arrive(6, 5_000 if rate == (241, 1) else 480_000)
+                self.assertEqual(self.gate(4), 1)
+
+    def test_a_reader_that_has_ended_is_not_waited_for(self):
+        self.clip()
+        self.arrive(6, 48000)
+        self.assertEqual(self.gate(4), 0)
+        self.lib.fpl_fixture_slot_last(3, 1)
+        self.assertEqual(self.gate(4), 1)
+
+    def test_sixty_four_frames_waiting_are_enough(self):
+        self.clip()
+        self.arrive(6, 48000)
+        self.lib.fpl_fixture_big_pool(70)
+        self.assertEqual([self.gate(free) for free in (7, 6)], [0, 1])
+
+    def test_a_pause_is_not_the_pace(self):
+        self.clip()
+        self.arrive(3, 41000)
+        self.now += 2_000_000                        # paused on a frame
+        self.arrive(4, 41000)
+        self.assertEqual(self.gate(4), 1)
+
+    def test_while_a_take_is_live_the_player_is_left_alone(self):
+        self.clip()
+        self.arrive(6, 48000)
+        self.assertEqual(self.gate(4, busy=1), 1)
+
+    def test_a_new_clip_starts_its_pace_again(self):
+        self.clip()
+        self.arrive(6, 48000)
+        self.assertEqual(self.gate(4), 0)
+        self.lib.fpl_fixture_free_pool()
+        self.clip()
+        self.assertEqual(self.get(PACE_N), 0)
+        self.arrive(2, 48000)
+        self.assertEqual(self.gate(4), 1)
+
+    def test_stock_frames_count_for_the_pace_too(self):
+        self.clip()
+        self.arrive(6, 48000, ours=False)
+        self.assertEqual(self.gate(4), 0)
+
+
+GATE_MUTATIONS = {
+    'held in every state': ('    if (p->gate_state != PLAYER_BUFFERING) { saturate(&p->gate_other); p->gate_waiting = 0; return stock; }\n', ''),
+    'held when not slow': ('    if (!p->gate_slow && !p->gate_waiting) { saturate(&p->gate_fast); return stock; }\n', ''),
+    'a full pool still held': ('    if (free_n > 1u && total - free_n < GATE_FRAMES) {',
+                               '    if (free_n > 0u && total - free_n < GATE_FRAMES) {'),
+    'never held': ('        if (!ended) { saturate(&p->gate_held); p->gate_waiting = 1; return 0; }',
+                   '        if (!ended) { saturate(&p->gate_held); p->gate_waiting = 1; }'),
+    'a held start not remembered': ('        if (!ended) { saturate(&p->gate_held); p->gate_waiting = 1; return 0; }',
+                                    '        if (!ended) { saturate(&p->gate_held); return 0; }'),
+    'the reader\'s end not looked at': ('            ended = rd8(p->slots_base + n * POOL_STRIDE + SLOT_LAST, 0);',
+                                        '            ended = 0;'),
+    'no cap on the frames waiting': ('    if (free_n > 1u && total - free_n < GATE_FRAMES) {', '    if (free_n > 1u) {'),
+    'no margin': ('#define PACE_MARGIN     1010000u', '#define PACE_MARGIN     1000000u'),
+    'a wide margin': ('#define PACE_MARGIN     1010000u', '#define PACE_MARGIN     1030000u'),
+    'a held start judged again': ('    if (!p->gate_slow && !p->gate_waiting) {', '    if (!p->gate_slow) {'),
+    'held for ever once held': ('    p->gate_waiting = 0;\n    saturate(&p->gate_let);', '    saturate(&p->gate_let);'),
+    'held over a start that played': ('saturate(&p->gate_other); p->gate_waiting = 0; return stock; }', 'saturate(&p->gate_other); return stock; }'),
+    'pauses counted': ('        if (d < PACE_BREAK_US) {', '        if (d < 0xffffffffu) {'),
+    'the pace kept across clips': ('    p->pace_last_us = p->pace_sum_us = p->pace_n = 0;\n', ''),
+    'one interval is enough': ('#define PACE_MIN        4u', '#define PACE_MIN        1u'),
+    'a take ignored': ('    if (busy || !pool || !player || p->pool != pool || !p->slots) return stock;',
+                       '    if (busy > 1u || !pool || !player || p->pool != pool || !p->slots) return stock;'),
+    'the rate upside down': ('                p->rate_num = n; p->rate_den = d;', '                p->rate_num = d; p->rate_den = n;'),
+    'a long denominator refused': ('d <= 0x1000000u && n <= 240u * d', 'd <= 0x10000u && n <= 240u * d'),
+    'a long denominator cut off': ('                while (d > 0xffffu) { n >>= 1; d >>= 1; }', '                d &= 0xffffu;'),
+    'stock frames not timed': ('    pace(p, buf, got);\n    if (root == ROOT_STOCK) { saturate(&p->stock); return FPL_PLAY_STOCK; }',
+                               '    if (root == ROOT_STOCK) { saturate(&p->stock); return FPL_PLAY_STOCK; }\n    pace(p, buf, got);'),
+    'a rate read as an integer': ('        case 51044: if (type == 10 && count == 1) f->rate = v; break;',
+                                  '        case 51044: f->rate = 0; break;'),
+}
+
+
+class StartGateMutationTests(unittest.TestCase):
+    def test_every_mutation_is_caught(self):
+        with tempfile.TemporaryDirectory(prefix='fpl-play-gate-mut-') as tmp:
+            for index, (name, seam) in enumerate(GATE_MUTATIONS.items()):
+                with self.subTest(mutation=name):
+                    lib = build(tmp, seam, f'g{index}.dylib')
+
+                    class Against(StartGateTests):
+                        @classmethod
+                        def setUpClass(cls):
+                            cls.lib = lib
+
+                        @classmethod
+                        def tearDownClass(cls):
+                            pass
+                    result = unittest.TestResult()
+                    unittest.defaultTestLoader.loadTestsFromTestCase(Against).run(result)
+                    self.assertFalse(result.wasSuccessful(), f'{name} was not caught')
 
 
 class ReadAheadMutationTests(unittest.TestCase):

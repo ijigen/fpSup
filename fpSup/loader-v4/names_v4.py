@@ -22,7 +22,9 @@ SUPS = {
     # LOSS 0.3.11test (2026-11-18): playback decodes a frame in ONE engine job with no bulk copy (the player's
     # buffers aligned to 1 KiB, the pixels into a spare buffer that takes the frame's place) and reads the next
     # frame file while the engine runs (C05C0EA0).  0.3.8test .. 0.3.10test: test builds on the way.
-    'LOSS': ('Lossless', 'Lossless', '0.3.11test'),   # 2026-11-10: 14 bit (Sensor Lab 1:1 true 14)
+    # LOSS 0.3.12test (2026-11-18): a clip whose frames arrive slower than its frame rate (OG 4K from an SD card)
+    # starts playing when the player's buffer pool is full, not at the player's own five frames
+    'LOSS': ('Lossless', 'Lossless', '0.3.15test'),   # + Sensor Lab's 14400000/600661 frame rate read; slow = 1 % over; a held start stays held   # 2026-11-10: 14 bit (Sensor Lab 1:1 true 14)
     'ULWR': ('Unlock Writer', 'UnlockWriter', '0.1.0test'),
     'STFX': ('Stop-FX', 'Stop-FX', '0.1.0'),
     'GYR2': ('Gyro2', 'Gyro2', '0.2.1'),   # last release v0.2.0 (build 6, on main's releases/)

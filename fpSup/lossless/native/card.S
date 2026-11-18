@@ -44,6 +44,9 @@
 .equ SITE_READ,    0xC05C0EA0    /* the player's f_read of a frame file       */
 .equ STOCK_READ,   0xEBF6946E    /* bl C0366060                               */
 .equ REAL_READ,    0xC0366060
+.equ SITE_GATE,    0xC05BD984    /* the player: are enough frames ready to start? */
+.equ STOCK_GATE,   0xEB0015F7    /* bl C05C3168                               */
+.equ REAL_GATE,    0xC05C3168
 .equ SITE_CLIP,    0xC05BDDAC    /* clip open: the first frame's size stored  */
 .equ STOCK_CLIP,   0xE58430A0    /* str r3, [r4, #0xa0]                       */
 .equ SITE_END,     0xC05C2E90    /* the player's pool freed: entry            */
@@ -92,7 +95,7 @@
 .equ SL_EXCL,      2
 .equ SL_SHARED_UI, 3
 .equ ENGINE,       0x300D0000    /* the lossless engine: claim_res id         */
-.equ CAVE_BYTES,   104
+.equ CAVE_BYTES,   112
 .equ REAL_PREPARE, 0xC03A2438
 
 /* An insertion site with a layer below: the site must already branch the
@@ -189,6 +192,12 @@ entry:
     cmp     r0, #0
     beq     out
     RESIDENT r1, read_real
+    str     r0, [r1]
+    LDA     r1, SITE_GATE
+    bl      below
+    cmp     r0, #0
+    beq     out
+    RESIDENT r1, gate_real
     str     r0, [r1]
     LAYER   SITE_STOP,  STOCK_STOP,  0xEA000000, stop_resume,  stop_replay,  alt_stop
     LAYER   SITE_END,   STOCK_END,   0xEA000000, end_resume,   end_replay,   alt_end
@@ -312,6 +321,10 @@ entry:
     LDA     ip, OFF_READ
     add     ip, r4, ip
     str     ip, [r0]
+    RESIDENT r0, w_gate
+    LDA     ip, OFF_GATE
+    add     ip, r4, ip
+    str     ip, [r0]
     RESIDENT r0, w_written
     LDA     ip, OFF_WRITTEN
     add     ip, r4, ip
@@ -394,6 +407,11 @@ entry:
     ldr     r2, [r0]
     cmp     r2, r1
     bne     out
+    LDA     r0, SITE_GATE
+    LDA     r1, STOCK_GATE
+    ldr     r2, [r0]
+    cmp     r2, r1
+    bne     out
     LDA     r0, SITE_END
     LDA     r1, STOCK_END
     ldr     r2, [r0]
@@ -421,7 +439,7 @@ entry:
     ldr     r8, [r7]                    @ r8 = our cave block
     tst     r8, #3
     bne     out
-    add     r9, r8, #104
+    add     r9, r8, #112
     LDA     r10, CAVE_END
     cmp     r9, r10
     bhi     out                         @ the cave is full: arm nothing
@@ -472,6 +490,9 @@ entry:
     str     r0, [r8, #96]
     RESIDENT r1, read_shim
     str     r1, [r8, #100]
+    str     r0, [r8, #104]
+    RESIDENT r1, gate_shim
+    str     r1, [r8, #108]
 
     LDA     ip, F_DCACHE
     blx     ip
@@ -522,6 +543,10 @@ entry:
     LDA     r0, SITE_READ
     add     r1, r8, #96
     mov     r2, #0xEB000000             @ bl: the read, or ours in its place
+    bl      encode
+    LDA     r0, SITE_GATE
+    add     r1, r8, #104
+    mov     r2, #0xEB000000             @ bl: the player's own answer first, then ours
     bl      encode
 
     /* Last of all, the header template's observer (card.c fpl_card_observer):
@@ -711,6 +736,22 @@ read_shim:
     bxne    lr
     ldr     pc, read_real
 
+/* C05BD984: bl C05C3168(pool) -- r4 the player, the result in r0: nonzero
+ * lets a buffering player start. The player's own answer first (or the layer
+ * below), then ours, which may only turn a yes into a not yet. */
+gate_shim:
+    push    {r4, r5, r6, lr}
+    mov     r5, r0
+    ldr     ip, gate_real
+    blx     ip
+    mov     r3, r0
+    mov     r2, r4
+    mov     r1, r5
+    ldr     r0, g_card
+    ldr     ip, w_gate
+    blx     ip
+    pop     {r4, r5, r6, pc}
+
 /* C05BDDAC: str r3, [r4, #0xa0] -- r3 the first frame file's size, r4 the
  * player, r6 the clip's file descriptor. The size stored is ours to say. */
 clip_shim:
@@ -801,6 +842,7 @@ w_end:       .word 0
 w_pool:      .word 0
 w_made:      .word 0
 w_read:      .word 0
+w_gate:      .word 0
 w_written:   .word 0
 w_event:     .word 0
 w_discard:   .word 0
@@ -812,6 +854,7 @@ pool_resume: .word POOL_RESUME
 event_resume:.word EVENT_RESUME
 discard_real:.word REAL_DISCARD
 read_real:   .word REAL_READ
+gate_real:   .word REAL_GATE
 #if V3
 play_next:   .word 0
 /* A layer below an insertion site: the stock instruction we would replay is
@@ -835,9 +878,9 @@ settings:
  * checked against the reference image by build_v3_lossless.py. */
 claims:
 #if V4
-    .word 11                            @ the string sites are the v4 core's
+    .word 12                            @ the string sites are the v4 core's
 #else
-    .word 14
+    .word 15
 #endif
     .word SITE_REC,     STOCK_REC,     SL_CHAIN
     .word SITE_ARRIVE,  STOCK_ARRIVE,  SL_EXCL     @ replaces blx r3: not a branch
@@ -850,6 +893,7 @@ claims:
     .word SITE_EVENT,   STOCK_EVENT,   SL_CHAIN
     .word SITE_DISCARD, STOCK_DISCARD, SL_CHAIN
     .word SITE_READ,    STOCK_READ,    SL_CHAIN
+    .word SITE_GATE,    STOCK_GATE,    SL_CHAIN
 #if !V4
     .word 0xC05E5B58,   0x3FFFF1B1,    SL_SHARED_UI   @ uishare string layers
     .word 0xC05E61C8,   0x428A6942,    SL_SHARED_UI

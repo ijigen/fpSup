@@ -157,6 +157,7 @@ struct ifd {
     uint32_t w, h, bits, comp, tw, th;
     uint32_t toff_type, toff_n, toff, tcnt_type, tcnt_n, tcnt;
     uint32_t soff, scnt, soff_n, scnt_n;
+    uint32_t rate;                       /* where FrameRate's SRATIONAL lies; 0: none */
 };
 
 /* One IFD of [base, base + got). 0: not readable. */
@@ -182,6 +183,7 @@ static uint32_t read_ifd(uintptr_t base, uint32_t got, uint32_t at, struct ifd *
         case 325: f->tcnt_type = type; f->tcnt_n = count; f->tcnt = rd32(e + 8, local); break;
         case 273: f->soff = v; f->soff_n = count; break;
         case 279: f->scnt = v; f->scnt_n = count; break;
+        case 51044: if (type == 10 && count == 1) f->rate = v; break;
         default: break;
         }
     }
@@ -275,6 +277,9 @@ uint32_t fpl_play_clip(struct fpl_play *p, uintptr_t desc, uint32_t size, uint32
     p->hook_end_us = 0;
     p->ahead_got = 0;
     p->sums_stale = 1;                   /* the sums restart at this clip's first fast frame */
+    p->rate_num = p->rate_den = 0;
+    p->pace_last_us = p->pace_sum_us = p->pace_n = 0;
+    p->gate_waiting = 0;
     if (busy || !desc) return size;
     for (uint32_t n = 0; n < FPL_PLAY_HEADER / 4u; ++n) p->header[n] = 0;
     if (!first_frame(desc, p->file, (uint8_t *)p->header, FPL_PLAY_HEADER, &got) ||
@@ -568,6 +573,84 @@ static uint32_t fast_frame(struct fpl_play *p, uintptr_t slot, uintptr_t buf, ui
     return FPL_PLAY_DECODED;
 }
 
+/* ---- a clip slower than its frame rate: start with the pool full -------- */
+#define PLAYER_STATE    0x450u        /* XC_CinemaDngPlay: 1 = buffering before the start */
+#define PLAYER_BUFFERING 1u
+#define POOL_FREE       0x18u         /* the pool's free list: slots in it */
+#define SLOT_LAST       0x08u         /* a slot: the reader's "nothing after this" */
+#define GATE_FRAMES     64u           /* enough waiting, however many slots there are */
+#define PACE_MIN        4u            /* intervals before the pace says anything */
+#define PACE_BREAK_US   500000u       /* longer than this is a pause, not the pace */
+#define PACE_KEEP       4096u         /* intervals summed; then both are halved */
+#define PACE_MARGIN     1010000u      /* slow: 1 % over the frame period, in us */
+
+/* A frame file has reached our hook: the time since the one before, and (once
+ * a clip) the frame rate IFD0 gives. */
+static void pace(struct fpl_play *p, uintptr_t buf, uint32_t got) {
+    uint32_t t = now_us();
+    if (p->pace_last_us) {
+        uint32_t d = t - p->pace_last_us;
+        if (d < PACE_BREAK_US) {
+            p->pace_sum_us += d;
+            if (++p->pace_n >= PACE_KEEP) { p->pace_n >>= 1; p->pace_sum_us >>= 1; }
+        }
+    }
+    p->pace_last_us = t ? t : 1u;
+    if (!p->rate_den) {
+        struct ifd f0;
+        p->rate_den = 1;
+        p->rate_num = 0;
+        if (read_ifd(buf, got, ROOT_STOCK, &f0, 0) && f0.rate >= 8u && !(f0.rate & 1u) &&
+            got >= 8u && f0.rate <= got - 8u) {
+            uint32_t n = rd32(buf + f0.rate, 0), d = rd32(buf + f0.rate + 4u, 0);
+            /* Sensor Lab writes 14400000/600661: both halved until the
+             * denominator fits 16 bits (the pace's products stay in 32) */
+            if (n && d && d <= 0x1000000u && n <= 240u * d) {
+                while (d > 0xffffu) { n >>= 1; d >>= 1; }
+                p->rate_num = n; p->rate_den = d;
+            }
+        }
+    }
+}
+
+/* The frames of this clip reach us slower than its frame rate. */
+static uint32_t slow(const struct fpl_play *p) {
+    if (p->pace_n < PACE_MIN || !p->rate_num || p->rate_den > 0xffffu) return 0;
+    return (uint64_t)p->pace_sum_us * p->rate_num >
+           (uint64_t)(p->pace_n * p->rate_den) * PACE_MARGIN;
+}
+
+uint32_t fpl_play_gate(struct fpl_play *p, uintptr_t pool, uintptr_t player, uint32_t stock,
+                       uint32_t busy) {
+    uint32_t total, free_n;
+    if (!p || !stock) return stock;
+    saturate(&p->gate_asked);
+    if (busy || !pool || !player || p->pool != pool || !p->slots) return stock;
+    p->gate_state = peek(player + PLAYER_STATE);
+    if (p->gate_state != PLAYER_BUFFERING) { saturate(&p->gate_other); p->gate_waiting = 0; return stock; }
+    p->gate_pace_n = p->pace_n;
+    p->gate_pace_us = p->pace_sum_us;
+    p->gate_rate_num = p->rate_num;
+    p->gate_rate_den = p->rate_den;
+    p->gate_slow = slow(p);
+    if (!p->gate_slow && !p->gate_waiting) { saturate(&p->gate_fast); return stock; }
+    total = peek(pool + POOL_COUNT);
+    free_n = peek(pool + POOL_FREE);
+    p->gate_total = total;
+    p->gate_free = free_n;
+    if (total != p->slots || peek(pool + POOL_SLOTS) != p->slots_base || free_n > total)
+        return stock;
+    if (free_n > 1u && total - free_n < GATE_FRAMES) {
+        uint32_t ended = 0;
+        for (uint32_t n = 0; n < total && !ended; ++n)
+            ended = rd8(p->slots_base + n * POOL_STRIDE + SLOT_LAST, 0);
+        if (!ended) { saturate(&p->gate_held); p->gate_waiting = 1; return 0; }
+    }
+    p->gate_waiting = 0;
+    saturate(&p->gate_let);
+    return stock;
+}
+
 uint32_t fpl_play_frame(struct fpl_play *p, uintptr_t slot, uint32_t busy) {
     return fpl_play_frame_at(p, slot, 0, busy);
 }
@@ -587,6 +670,7 @@ uint32_t fpl_play_frame_at(struct fpl_play *p, uintptr_t slot, uintptr_t reader,
     if (!buf || (buf & 3u) || buf + cap < buf) return refuse(p, FPL_PLAY_R_SLOT);
     if (got < 16u || got > cap || rd32(buf, 0) != TIFF_LE) return refuse(p, FPL_PLAY_R_TIFF);
     root = rd32(buf + 4, 0);
+    pace(p, buf, got);
     if (root == ROOT_STOCK) { saturate(&p->stock); return FPL_PLAY_STOCK; }
     if (busy) return refuse(p, FPL_PLAY_R_BUSY);
 

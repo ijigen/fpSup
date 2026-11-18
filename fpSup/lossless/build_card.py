@@ -80,6 +80,7 @@ SITES = {                           # site: (stock word, what it is)
     0xC03A5490: (0xEB0BD652, 'final flush: bl C069ADE0'),
     0xC05C0EA4: (0xE595201C, 'player frame read: ldr r2, [r5, #0x1c]'),
     0xC05C0EA0: (0xEBF6946E, 'player frame f_read: bl C0366060'),
+    0xC05BD984: (0xEB0015F7, 'player start gate: bl C05C3168'),
     0xC05BDDAC: (0xE58430A0, 'player clip size: str r3, [r4, #0xa0]'),
     0xC05C2E90: (0xE92D4070, 'player pool free: push {r4, r5, r6, lr}'),
     0xC05C2D10: (0xE92D44F0, 'player pool make: push {r4, r5, r6, r7, sl, lr}'),
@@ -131,6 +132,10 @@ FIELDS += ['engine_release', 'hold.job.reused', 'hold_b.job.reused', 'tag_tiles'
            'tag_added', 'tag_add_result', 'tag_add_failed', 'tag_prepared', 'tag_prepare_failed',
            'tag_prepare_result', 'tag_head',
            'tag_want', 'tag_pending', 'tag_live', 'tag_index']   # header_tag.h
+FIELDS += ['play.rate_num', 'play.rate_den', 'play.pace_sum_us', 'play.pace_n', 'play.gate_asked',
+           'play.gate_held', 'play.gate_let', 'play.gate_free', 'play.gate_total', 'play.gate_slow',
+           'play.gate_state', 'play.gate_other', 'play.gate_fast', 'play.gate_pace_n', 'play.gate_pace_us',
+           'play.gate_rate_num', 'play.gate_rate_den', 'play.gate_waiting']   # 2026-11-18 start gate
 FIELDS += ['small_bytes', 'small_failed', 'hold.margin_jobs', 'hold_b.margin_jobs',
            'hold.copied_dma', 'hold_b.copied_dma', 'hold.dma_failed', 'hold_b.dma_failed']   # 2026-11-17 small rasters
 FIELDS += ['hold.late', 'hold.late_by', 'hold.late_passed', 'hold.late_dropped', 'hold.late_checked',
@@ -154,7 +159,7 @@ ENTRIES = {'OFF_INIT': 'fpl_card_init', 'OFF_REC': 'fpl_card_rec',
            'OFF_ARRIVE': 'fpl_card_arrive', 'OFF_STOP': 'fpl_card_stop',
            'OFF_FLUSH': 'fpl_card_flush', 'OFF_TASK': 'fpl_card_task',
            'OFF_PLAY': 'fpl_card_play', 'OFF_CLIP': 'fpl_card_clip',
-           'OFF_END': 'fpl_card_play_end', 'OFF_POOL': 'fpl_card_play_pool', 'OFF_MADE': 'fpl_card_play_made', 'OFF_READ': 'fpl_card_read',
+           'OFF_END': 'fpl_card_play_end', 'OFF_POOL': 'fpl_card_play_pool', 'OFF_MADE': 'fpl_card_play_made', 'OFF_READ': 'fpl_card_read', 'OFF_GATE': 'fpl_card_gate',
            'OFF_WRITTEN': 'fpl_card_written', 'OFF_EVENT': 'fpl_card_event',
            'OFF_DISCARD': 'fpl_card_discard',
            'OFF_OBSERVE': 'fpl_card_observe', 'OFF_OBSERVER': 'fpl_card_observer'}

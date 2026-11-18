@@ -141,7 +141,8 @@ static uint32_t f_wait(uint32_t flag, uint32_t *pattern) {
     return 0;
 }
 static uint32_t f_close(void) { closes++; return 0; }
-static uint32_t f_now(void) { return 1000; }
+static uint32_t clock_us = 1000;
+static uint32_t f_now(void) { return clock_us; }
 static void f_sync(void) { syncs++; }
 static uint32_t f_first(uintptr_t desc, uint32_t *file, uint8_t *buf, uint32_t bytes,
                         uint32_t *got) {
@@ -185,6 +186,7 @@ void fpl_fixture_reset(void) {
     heap_n = heap_step = heap_fail = puts = bad_puts = pooled = 0;
     disk_n = file_reads = file_read_while_engine = 0;
     heap_fail_call = 0;
+    clock_us = 1000;
 }
 /* The clip's first frame file, as C05BDD68 names it. */
 uint32_t fpl_fixture_clip(const uint8_t *file, uint32_t len, uint32_t size, uint32_t busy) {
@@ -217,6 +219,7 @@ uint32_t fpl_fixture_open_pool(const uint8_t *file, uint32_t len, uint32_t size,
     *(uint32_t *)(void *)at(POOL + 0x3c) = 0;
     fpl_play_pool(&play, POOL, want);
     *(uint32_t *)(void *)at(POOL + 8) = SLOTS;
+    memset(at(SLOTS), 0, slots * STRIDE);            /* as C05C2D10 clears each slot */
     for (uint32_t k = 0; k < slots; ++k) {
         uintptr_t a = f_buffer_get(cap);
         if (!a) break;
@@ -279,6 +282,22 @@ uint32_t fpl_fixture_play_path(uint32_t k, const char *path) {
     }
     return fpl_play_frame_at(&play, slot, READER, 0);
 }
+/* The player (state at +0x450) asks whether it may start; its pool has
+ * `free_n` slots in the free list and said `stock`. */
+#define PLAYER (MEM + 0xF000u)
+uint32_t fpl_fixture_gate(uint32_t state, uint32_t free_n, uint32_t stock, uint32_t busy) {
+    *(uint32_t *)(void *)at(PLAYER + 0x450) = state;
+    *(uint32_t *)(void *)at(POOL + 0x18) = free_n;
+    return fpl_play_gate(&play, POOL, PLAYER, stock, busy);
+}
+/* The reader's "nothing after this" on slot k. */
+void fpl_fixture_slot_last(uint32_t k, uint32_t v) { *at(SLOTS + k * STRIDE + 8) = (uint8_t)v; }
+/* A pool of n slots (no buffers behind them: for the start gate only). */
+void fpl_fixture_big_pool(uint32_t n) {
+    memset(at(SLOTS), 0, n * STRIDE);
+    *(uint32_t *)(void *)at(POOL + 4) = n;
+    play.slots = n;
+}
 uint32_t fpl_fixture_slot(uint32_t k, uint32_t field) { return rd(SLOTS + k * STRIDE + field); }
 uint32_t fpl_fixture_slot_byte(uint32_t k, uint32_t offset) {
     return *at(rd(SLOTS + k * STRIDE + 0x14) + offset);
@@ -309,6 +328,7 @@ void fpl_fixture_knob(uint32_t k, uint32_t v) {
     case 4: first_fails = v; break;
     case 5: heap_fail = v; break;
     case 6: heap_fail_call = v; break;               /* this call of the allocator fails */
+    case 7: clock_us = v; break;                     /* the microsecond clock */
     }
 }
 uint32_t fpl_fixture_run(uint32_t busy) { return fpl_play_frame(&play, SLOT, busy); }
@@ -356,6 +376,11 @@ uint32_t fpl_fixture_get(uint32_t f) {
     case 37: return (uint32_t)play.ahead;
     case 38: return play.ahead_got;
     case 39: return play.ahead_failed;
+    case 40: return play.gate_held;
+    case 41: return play.gate_let;
+    case 42: return play.rate_num;
+    case 43: return play.rate_den;
+    case 44: return play.pace_n;
     default: return 0xffffffffu;
     }
 }

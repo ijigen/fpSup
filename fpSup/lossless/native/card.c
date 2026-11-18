@@ -1030,6 +1030,13 @@ USED uint32_t fpl_card_play_pool(struct fpl_card *c, uintptr_t pool, uint32_t si
     return 1;
 }
 
+/* C05BD984: the player's pool said `stock` to "enough frames to start?". */
+USED uint32_t fpl_card_gate(struct fpl_card *c, uintptr_t pool, uintptr_t player,
+                            uint32_t stock) {
+    if (!card_valid(c)) return stock;
+    return fpl_play_gate(&c->play, pool, player, stock, c->hold_live);
+}
+
 /* C05C2D10's return: the pool is made. Returns where the player goes on. */
 USED uintptr_t fpl_card_play_made(struct fpl_card *c) {
     uintptr_t back = c->play.pool_return;

@@ -37,11 +37,11 @@ SITES = {'rec': (0xC03A33C8, 0xEBFFFC1A), 'arrive': (0xC038BFF0, 0xE12FFF33),
          'play': (0xC05C0EA4, 0xE595201C), 'clip': (0xC05BDDAC, 0xE58430A0),
          'end': (0xC05C2E90, 0xE92D4070), 'pool': (0xC05C2D10, 0xE92D44F0),
          'event': (0xC038BD08, 0xE594300C), 'discard': (0xC037DEF8, 0xEB000042),
-         'read': (0xC05C0EA0, 0xEBF6946E)}
+         'read': (0xC05C0EA0, 0xEBF6946E), 'gate': (0xC05BD984, 0xEB0015F7)}
 VENEER_AT = {'rec': 0, 'arrive': 8, 'stop': 16, 'flush': 24,      # the record at +32
              'play': 48, 'clip': 56, 'end': 64, 'pool': 72, 'event': 80, 'discard': 88,
-             'read': 96}
-CAVE_BYTES = 104
+             'read': 96, 'gate': 104}
+CAVE_BYTES = 112
 CAVE_BUMP, CAVE_ARENA, CAVE_END = 0xC072E060, 0xC072E064, 0xC072EFB4
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import build_card  # noqa: E402
@@ -545,6 +545,22 @@ class CardEmulationTests(unittest.TestCase):
         self.assertEqual(regs, (0xF11E, 0x45200000, 0x100000, slot + 0x1c))
         self.assertEqual((sp, lr), (T.STACK - 0x2000, T.DONE))
         self.assertEqual(cam.r(UC_ARM_REG_R5), slot)
+
+    def test_the_start_gate_asks_the_player_first_and_no_pool_of_ours_keeps_its_answer(self):
+        cam = self.armed()
+        pool, player = T.STACK - 0x3000, T.STACK - 0x3800
+        cam.mu.mem_write(pool, b'\0' * 0x40)
+        cam.mu.mem_write(player, b'\0' * 0x450 + struct.pack('<I', 1))
+        for answer in (1, 0):
+            with self.subTest(answer=answer):
+                cam.by_addr[0xC05C3168] = 'ORIG_gate'
+                cam.returns['ORIG_gate'] = answer
+                self.assertEqual(self.enter(cam, 'gate', (pool, 0xA1, 0xA2, 0xA3), r4=player), answer)
+                (name, regs, sp, _lr), = [o for o in cam.originals if o[0] == 'ORIG_gate']
+                self.assertEqual(regs[0], pool)
+                self.assertEqual(cam.r(UC_ARM_REG_R4), player)
+                self.assertEqual(cam.r(UC_ARM_REG_SP), T.STACK - 0x2000)
+                self.assertEqual(self.field(cam, 'play.gate_asked'), 1)   # a yes is ours to look at, a no is not
 
     def test_stop_runs_the_displaced_push_and_continues_into_the_original(self):
         cam = self.armed()

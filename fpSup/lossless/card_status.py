@@ -245,6 +245,18 @@ def main():
                   f'{v["play.ahead_none"]}, no buffer {v["play.ahead_failed"]}; last frame: read {v["play.last_read_us"] / 1000:.2f} ms, '
                   f'engine still busy after it {v["play.last_wait_us"] / 1000:.2f} ms; this clip: reads '
                   f'{v["play.sum_read_us"] / 1000:.1f} ms, waits {v["play.sum_wait_us"] / 1000:.1f} ms')
+    if 'play.gate_asked' in v:
+        n, d, k = v['play.rate_num'], v['play.rate_den'], v['play.pace_n']
+        print(f'  playback, start with the pool full: frame rate {n}/{d}'
+              + (f' ({1000 * d / n:.2f} ms a frame)' if n and d else ' (not read)')
+              + (f', frames arrived every {v["play.pace_sum_us"] / k / 1000:.2f} ms over {k} intervals' if k else ', no interval timed')
+              + f'; start asked {v["play.gate_asked"]}, held back {v["play.gate_held"]}, let through {v["play.gate_let"]}; '
+              f'last answer: slow {v["play.gate_slow"]}, {v["play.gate_free"]} of {v["play.gate_total"]} slots free')
+        if 'play.gate_state' in v:
+            gn, gk = v['play.gate_rate_num'], v['play.gate_pace_n']
+            print(f'  playback, the last ask while buffering: frame rate {gn}/{v["play.gate_rate_den"]}, '
+                  + (f'frames every {v["play.gate_pace_us"] / gk / 1000:.2f} ms over {gk} intervals' if gk else 'no interval timed')
+                  + f'; asks in another state {v["play.gate_other"]} (last state {v["play.gate_state"]}), not slow {v["play.gate_fast"]}')
     print(f'  before file write (not a write-success count): IFDs completed {v["flush.applied"]}, header not the take\'s '
           f'{v["flush.tag_failed"]}, other length {v["flush.length_mismatch"]}; '
           f'promises a previous take left {v["stale_promises"]}')

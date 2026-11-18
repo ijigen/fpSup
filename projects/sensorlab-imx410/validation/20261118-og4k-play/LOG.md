@@ -41,3 +41,30 @@ data the rest of the time; it had work for only 43 of the 62 frames.
 So on this card the limit is the card read, not the decoder; a decode-ahead queue would not raise the engine's
 share here. Not measured: SSD (there the engine, 44.3 ms a compressed frame, 30.7 ms averaged over this mix,
 would be the limit and decoding ahead of the player would matter), another SD card, 14-bit.
+
+## Lossless 0.3.12–0.3.15test: start with the pool full (Bei: "讓流程變得能夠提前準備還沒播放的壓縮資料")
+
+The stock player starts at 5 developed frames and refills the whole pool only after an underrun.
+Hook at `C05BD984` (`bl C05C3168`, the player's "enough to start" question): for a clip of ours, in
+state 1 (buffering before the start), whose frames reach our hook more than 1 % slower than the DNG
+frame rate (tag 51044), a "yes" is held until at most one slot is free, 64 frames are buffered, or a
+slot carries the end mark.  A held start stays held.  It never turns a "no" into a "yes".
+
+| version | on the camera (A001_407, OG 4K 12-bit, SD) |
+|---|---|
+| 0.3.12 / 0.3.13test | no hold: Sensor Lab's rate 14400000/600661 was refused by the range check |
+| 0.3.14test | held once, then let through at 42.67 ms a frame (margin was 3 %) |
+| 0.3.15test | **asked 40, held 30, let through 1 with 1 of 32 slots free**; frames every 45.45 ms against 41.71 ms; 63 frames read, 43 decoded in one job each, no freeze (`p0315.log`) |
+
+Host: `native/test_play_decode.py` 79 OK (with mutations), `test_card_emulation` + `test_v4_lossless`
+46 OK in the working tree; in the commit worktree 5 of those error on DNG samples that are private
+(same without this change).
+
+Not the sup: after the 0.3.15test deploy the shell did not answer (camera normal).  `\fpSup` held 33
+BINs (old versions never removed); Loader v4 takes 32 (`MAX_SUPS`), `USB-Shell` was the 33rd
+(`04 00000020`).  Old Lossless / Sensor Lab files moved to `card_old_bins/`; 19 BINs now.
+
+NOT tested: what Bei sees (smoothness, the longer wait before the start — computed ~1.3 s, not timed);
+pause / seek / resume / reverse; a clip longer than the pool (the stock refill after an underrun);
+fast clips (must start as stock: one host test only); clips with missing frames; SSD; HDMI; 14-bit;
+small formats; pixel check of the played picture; the deploy tool has no check for the 32-file limit yet.
