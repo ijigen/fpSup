@@ -51,6 +51,20 @@
    "2026-11-07 起上機，之後每次 Sensor Lab 上機都用它。"
   ]
  },
+ "fpsup-sensor-lab-v0.0.12test": {
+  "en": [
+   "Fixes autofocus missing in standby in OG 3.5K, 4K, 5K, 6K and in OG 3K with a 1x1 recipe. These formats are a hair narrower than 3:2, and their live-view box made the camera evaluate focus at the top of the frame instead of where you aim.",
+   "Still not fixed: formats really narrower than 3:2 (square, 4:3-like custom crops). Autofocus is expected to miss there in the same way. A fix for every shape is in progress.",
+   "The live view of the fixed formats is drawn 4 pixels wider (0.25 %). Recording and playback are unchanged from 0.0.11test.",
+   "On the camera 2026-11-19 (SD card): standby autofocus checked by hand in the fixed formats. Not tested: autofocus while recording, continuous AF, HDMI."
+  ],
+  "zh": [
+   "修正待機時自動對焦對不準：OG 3.5K、4K、5K、6K，以及 OG 3K 選 1x1 配方時。這些格式比 3:2 略窄，預覽框讓相機在畫面頂端評估對焦，而不是你對準的位置。",
+   "尚未修正：真正比 3:2 窄的格式（正方形、4:3 類的自訂裁切），預期一樣對不準；所有比例都通的修法正在做。",
+   "修正後這些格式的預覽畫面寬了 4 像素（0.25%）。錄影與回放和 0.0.11test 相同。",
+   "2026-11-19 上機（SD 卡）：修正的格式待機自動對焦有手動確認。未測：錄影中對焦、連續對焦、HDMI。"
+  ]
+ },
  "fpsup-sensor-lab-v0.0.11test": {
   "en": [
    "OG 4K clips (3952x2624) can now be played back in the camera. Before, anything larger than DCI 4K showed \"contents cannot be viewed\".",

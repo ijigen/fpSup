@@ -72,6 +72,13 @@ python3 -B tools/merge-v4/publish_releases.py            # 每個提供中的版
 - push 時 workflow 新建三個 Release(都是 prerelease)。這次只推頁面、快照與 `names_v4.py` 三行;Lossless／Sensor Lab／QS-Share 的原始碼
   由各自那條線另外同步進 repo(快照 `manifest.json` 的 `source_sha256` 記的是建檔當時的本機原始碼)。
 
+**2026-11-19 Sensor Lab 0.0.12test**(Bei 11-19:「上合併頁」):
+- 新快照 `inputs/v4-20261119/`(`build_inputs_v4.py --only sensor-lab`,由 commit 7aa2463b 的原始碼建)。SensorLab-IMX410_v0.0.12test.BIN
+  sha256 01a23994… = 預設建置;與相機上驗證的那份只差卡片設定紀錄(0x346F8 起 41 bytes)。
+- 內容:錄影比例在 3:2 的 0.5% 內時預覽框用整個螢幕 1620×1080,修好 OG 3.5K~6K、OG 3K 1x1 的待機自動對焦
+  (`projects/sensorlab-imx410/validation/20261119-af/LOG.md`)。0.0.11test 留在版本歷史。
+- 沒修:真正比 3:2 窄的格式(正方形、4:3 類)。沒測:錄影中對焦、連續對焦、HDMI、由頁面合成的卡上機。
+
 **2026-11-18 Sensor Lab 0.0.11test、Lossless 0.3.15test**(Bei 11-18:「push吧」「做吧」):
 - 新快照 `inputs/v4-20261118c/`(`build_inputs_v4.py --only sensor-lab,lossless`,由 commit 60ac49aa 的原始碼建)。Lossless_v0.3.15test.BIN
   sha256 280f5133… = 相機上驗證、Bei 看過回放的那份(逐位元組相同);SensorLab-IMX410_v0.0.11test.BIN sha256 211e9653… 與相機上那份只差
